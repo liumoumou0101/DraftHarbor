@@ -1,0 +1,67 @@
+{
+    "name": "draftharbor-desktop",
+    "version": "1.0.0",
+    "private": true,
+    "description": "稿湾：桌面优先、本地优先的 AI 长篇创作工作台。",
+    "author": "DraftHarbor contributors",
+    "license": "GPL-3.0-or-later",
+    "dependencies": {
+        "jszip": "^3.10.1"
+    },
+    "devDependencies": {
+        "electron": "^42.4.1",
+        "electron-builder": "^26.15.3",
+        "eslint": "^8.45.0",
+        "playwright": "^1.40.0"
+    },
+    "scripts": {
+        "desktop": "electron .",
+        "pack": "electron-builder --dir",
+        "dist": "electron-builder",
+        "packaged-smoke": "node tests/packaged-smoke.js",
+        "smoke": "node tests/smoke.js",
+        "desktop-mainline-test": "node tests/desktop-library.js && node tests/desktop-reader.js",
+        "writer-audit": "node tests/writer-button-audit.js",
+        "writer-layout-audit": "node tests/writer-layout-audit.js",
+        "writer-realistic-visual-audit": "node tests/writer-realistic-visual-audit.js",
+        "desktop-test": "npm run desktop-mainline-test",
+    "core-test": "node tests/core-project.js && node tests/core-generation.js && node tests/ai-task-contract.js && node tests/ai-task-runner.js && npm run storage-test",
+        "storage-test": "node tests/project-file-store.js && node tests/project-directory-api.js && node tests/workflow-store.js && node tests/workflow-engine-service.js && node tests/settings-service.js && node tests/compendium-service.js && node tests/prompt-service.js && node tests/workshop-service.js && node tests/project-migration-service.js",
+        "unit": "npm run core-test && node tests/context-prompt-core.js && node tests/protocol-handler.js && node tests/release-config.js",
+        "backup-test": "node tests/backup-api.js",
+        "ui": "npm run desktop-mainline-test",
+        "test": "npm run smoke && npm run unit && npm run desktop-mainline-test"
+    },
+    "main": "desktop/main.js",
+    "build": {
+        "appId": "io.github.liumoumou0101.draftharbor",
+        "productName": "DraftHarbor",
+        "asar": false,
+        "files": [
+            "desktop/**/*",
+            "src/**/*",
+            "desktop.html",
+            "assets/**/*",
+            "LICENSE",
+            "NOTICE",
+            "THIRD_PARTY_NOTICES.md",
+            "README.md",
+            "package.json"
+        ],
+        "directories": {
+            "output": "release"
+        },
+        "win": {
+            "icon": "desktop/icon.ico",
+            "target": [
+                "nsis",
+                "portable"
+            ]
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true,
+            "license": "LICENSE"
+        }
+    }
+}

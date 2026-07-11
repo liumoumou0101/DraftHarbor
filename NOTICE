@@ -1,0 +1,33 @@
+DraftHarbor / 稿湾
+Copyright (C) 2026 DraftHarbor contributors
+
+DraftHarbor is an independent desktop-first writing application distributed
+under the GNU General Public License version 3 or, at your option, any later
+version. See LICENSE for the complete terms.
+
+Project origin and acknowledgement
+----------------------------------
+
+DraftHarbor began as a personal fork of Writingway 2:
+https://github.com/aomukai/Writingway2
+
+The initial motivation was to improve support for newer DeepSeek models and
+Chinese long-form writing workflows. Continued development replaced the web
+runtime with an Electron desktop architecture, introduced new storage and
+service layers, redesigned the user interface and data model, and added an
+independent test and release system.
+
+We thank the Writingway 2 author and contributors for publishing their work
+and for the early product ideas around projects, scenes, compendium entries,
+workshop conversations and AI-assisted writing.
+
+Writingway 2 states in its README that it is released under the MIT License.
+Copyright in Writingway 2 remains with its original author and contributors.
+DraftHarbor is not an official release, translation or endorsed branch of
+Writingway 2. Questions about DraftHarbor should not be directed to the
+Writingway 2 maintainers.
+
+The DraftHarbor logo and application icon are newly generated original assets
+created for this project. They do not reuse the Writingway logo.
+
+Third-party software notices are listed in THIRD_PARTY_NOTICES.md.

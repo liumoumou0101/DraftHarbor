@@ -1,0 +1,30 @@
+{
+    "env": {
+        "browser": true,
+        "node": true,
+        "es2021": true
+    },
+    "extends": "eslint:recommended",
+    "parserOptions": {
+        "ecmaVersion": 2021,
+        "sourceType": "script"
+    },
+    "globals": {
+        "Dexie": "readonly",
+        "Alpine": "readonly",
+        "db": "readonly",
+        "window": "readonly"
+    },
+    "rules": {
+        "no-console": "off",
+        "no-unused-vars": [
+            "warn",
+            {
+                "argsIgnorePattern": "^_"
+            }
+        ],
+        "no-undef": "error",
+        "no-empty": "off",
+        "no-constant-condition": "off"
+    }
+}

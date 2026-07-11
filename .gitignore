@@ -1,0 +1,48 @@
+# Dependencies and package output
+node_modules/
+release/
+dist/
+build/
+
+# User projects, backups and local settings
+DraftHarbor Library/
+Writingway Library/
+projects/
+project-backups/
+*.writingway-project.zip
+.draftharbor-settings.json
+.writingway-settings.json
+
+# Models and large archives
+models/
+*.gguf
+*.safetensors
+*.pt
+*.bin
+*.zip
+*.7z
+*.tar
+*.tar.*
+
+# Updates, logs and test artifacts
+.update/
+*.log
+*.tmp
+*.temp
+playwright-report/
+test-results/
+.ai_state/
+
+# Python, editors and operating systems
+__pycache__/
+*.py[cod]
+.venv/
+env/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local AI/agent configuration
+.claude/
+.continue/
