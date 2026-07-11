@@ -10,7 +10,7 @@ const paths = require('../desktop/storage/library-paths');
 const CompendiumSchema = require('../src/core/knowledge/compendium-schema');
 
 (async () => {
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-compendium-test-'));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-compendium-test-'));
   let servers = null;
 
   try {

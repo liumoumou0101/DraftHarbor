@@ -6,7 +6,7 @@ const { chromium } = require('playwright');
 const { startDesktopServers } = require('../desktop/local-server');
 
 (async () => {
-    const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-reader-test-'));
+    const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-reader-test-'));
     const fixturePath = path.join(dataRoot, 'reader-fixture.md');
     let servers = null;
     let browser = null;

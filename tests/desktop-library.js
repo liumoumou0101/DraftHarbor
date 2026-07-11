@@ -36,7 +36,7 @@ async function submitNativeName(page, value) {
 }
 
 (async () => {
-    const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-library-test-'));
+    const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-library-test-'));
     const projectsDir = path.join(dataRoot, 'projects');
     const revealedPaths = [];
     let servers = null;
@@ -83,7 +83,7 @@ async function submitNativeName(page, value) {
 
         await page.evaluate(() => {
             window.__fullscreenClicked = false;
-            window.writingwayDesktop = {
+            window.draftHarborDesktop = {
                 toggleFullscreen: async () => {
                     window.__fullscreenClicked = true;
                     return true;

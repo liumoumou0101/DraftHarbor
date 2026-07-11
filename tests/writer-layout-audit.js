@@ -124,7 +124,7 @@ async function auditCurrentViewport(page, label) {
 }
 
 (async () => {
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-layout-audit-'));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-layout-audit-'));
   let servers = null;
   let browser = null;
 

@@ -1,5 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('writingwayDesktop', {
+contextBridge.exposeInMainWorld('draftHarborDesktop', {
   toggleFullscreen: () => ipcRenderer.invoke('draftharbor:toggle-fullscreen')
 });

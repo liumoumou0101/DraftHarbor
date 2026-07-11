@@ -27,7 +27,7 @@ function legacySnapshot(id, name, text) {
 }
 
 (async () => {
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-migration-test-'));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-migration-test-'));
   let servers = null;
 
   try {

@@ -1146,7 +1146,7 @@
                     source: 'project',
                     projectId: String(project.id),
                     title: documentData.title,
-                    fileName: `${documentData.title || 'project'}.writingway`,
+                    fileName: `${documentData.title || 'project'}.draftharbor`,
                     importedAt: snapshot.filesystemSavedAt || snapshot.exportedAt || new Date().toISOString(),
                     chapters: (documentData.chapters || []).map((chapter) => ({
                         id: chapter.id,
@@ -1188,7 +1188,7 @@
             source: 'project',
             projectId: String(project.id),
             title: project.name || '当前作品',
-            fileName: `${project.name || 'project'}.writingway`,
+            fileName: `${project.name || 'project'}.draftharbor`,
             importedAt: snapshot.filesystemSavedAt || snapshot.exportedAt || new Date().toISOString(),
             chapters: readerChapters
         };
@@ -1888,8 +1888,8 @@
     }
 
     async function toggleFullscreen() {
-        if (window.writingwayDesktop && typeof window.writingwayDesktop.toggleFullscreen === 'function') {
-            await window.writingwayDesktop.toggleFullscreen();
+        if (window.draftHarborDesktop && typeof window.draftHarborDesktop.toggleFullscreen === 'function') {
+            await window.draftHarborDesktop.toggleFullscreen();
             return;
         }
 

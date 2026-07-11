@@ -8,7 +8,7 @@ const promptService = require('../desktop/services/prompt-service');
 const PromptTemplateSchema = require('../src/core/prompt/prompt-template-schema');
 
 (async () => {
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-prompt-test-'));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-prompt-test-'));
   let servers = null;
   try {
     await projectService.createProject(dataRoot, {

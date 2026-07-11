@@ -9,6 +9,7 @@ DraftHarbor Library/
 Writingway Library/
 projects/
 project-backups/
+*.draftharbor-project.zip
 *.writingway-project.zip
 .draftharbor-settings.json
 .writingway-settings.json

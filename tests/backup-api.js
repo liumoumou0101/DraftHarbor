@@ -68,7 +68,7 @@ async function createBackup(payload, requestOptions) {
 }
 
 (async () => {
-    const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-backup-api-'));
+    const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-backup-api-'));
     let servers = null;
 
     try {

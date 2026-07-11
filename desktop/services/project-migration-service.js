@@ -246,8 +246,8 @@ async function exportProjectPackage(dataRoot, projectId) {
   const project = await projectStore.openProject(dataRoot, projectId);
   const projectPath = libraryPaths.projectDir(dataRoot, project.id);
   const zip = new JSZip();
-  zip.file('writingway-package.json', JSON.stringify({
-    format: 'writingway-project-directory',
+  zip.file('draftharbor-package.json', JSON.stringify({
+    format: 'draftharbor-project-directory',
     version: 1,
     exportedAt: new Date().toISOString(),
     projectId: project.id,
@@ -255,7 +255,7 @@ async function exportProjectPackage(dataRoot, projectId) {
   }, null, 2));
   await addDirectoryToZip(zip, projectPath);
   return {
-    filename: projectFilename(project, 'writingway-project.zip'),
+    filename: projectFilename(project, 'draftharbor-project.zip'),
     mimeType: 'application/zip',
     buffer: await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
   };
@@ -286,7 +286,7 @@ function findProjectRootPrefix(zip) {
 
 async function importProjectPackage(dataRoot, buffer, options = {}) {
   const zip = await JSZip.loadAsync(buffer);
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-import-package-'));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-import-package-'));
   try {
     const rootPrefix = findProjectRootPrefix(zip);
     await safeExtractZip(zip, tempDir, rootPrefix);

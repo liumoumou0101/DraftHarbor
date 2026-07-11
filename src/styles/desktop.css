@@ -376,26 +376,19 @@ background:
 }
 
 .desktop-brand-mark {
-    display: grid;
-    place-items: center;
     width: 42px;
     height: 42px;
     border-radius: 12px;
-    background: linear-gradient(135deg, #58b8aa, #315a8d);
-    color: #fff;
-    font-weight: 800;
-    letter-spacing: 0.03em;
+    overflow: hidden;
+    background: #111827;
     box-shadow: 0 12px 28px rgba(var(--desktop-accent-rgb), 0.22);
 }
 
 .desktop-brand-icon {
-    width: 25px;
-    height: 25px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.75;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .desktop-brand-text {
@@ -5261,7 +5254,6 @@ button:focus-visible {
 
 .desktop-brand-mark {
     border-radius: 14px;
-    background: linear-gradient(150deg, var(--desktop-accent-strong), var(--desktop-accent));
     box-shadow: 0 12px 28px rgba(var(--desktop-accent-rgb), 0.18);
 }
 
@@ -6909,7 +6901,7 @@ button:focus-visible {
 
 /* Phase 51: rail iconization. */
 .desktop-brand-mark {
-    color: #fff;
+    background: #111827;
 }
 
 .desktop-nav-item {
@@ -6956,8 +6948,7 @@ button:focus-visible {
 }
 
 [data-desktop-theme="mist-library"] .desktop-brand-mark {
-    background: linear-gradient(145deg, #7fa9a3, #426f70);
-    color: #fff;
+    background: #111827;
 }
 
 [data-desktop-theme="mist-library"] .desktop-nav-icon {
@@ -6978,13 +6969,11 @@ button:focus-visible {
 }
 
 [data-desktop-theme="morandi-ink"] .desktop-brand-mark {
-    background: linear-gradient(145deg, #d4ddb0, #7e8a5b);
-    color: #23251f;
+    background: #111827;
 }
 
 [data-desktop-theme="ash-rose"] .desktop-brand-mark {
-    background: linear-gradient(145deg, #e3b9ae, #9f746f);
-    color: #2c2022;
+    background: #111827;
 }
 
 /* Phase 52: manuscript paper heading and footer. */

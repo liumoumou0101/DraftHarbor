@@ -9,7 +9,7 @@ const WorkshopSchema = require('../src/core/workshop/workshop-schema');
 const WorkshopPrompt = require('../src/core/workshop/workshop-prompt');
 
 (async () => {
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-workshop-test-'));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-workshop-test-'));
   let servers = null;
   try {
     await projectService.createProject(dataRoot, { id: 'workshop-project', title: 'Workshop Project' });

@@ -10,7 +10,7 @@ const paths = require('../desktop/storage/library-paths');
 const WorkflowSchema = require('../src/core/workflow/workflow-schema');
 
 (async () => {
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-workflow-store-'));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-workflow-store-'));
 
   try {
     await projectService.createProject(dataRoot, {

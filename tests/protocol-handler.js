@@ -23,7 +23,7 @@ function legacySnapshot(id, name, text, exportedAt) {
 
 (async () => {
   const appRoot = path.resolve(__dirname, '..');
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-protocol-'));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-protocol-'));
   let handler = null;
 
   try {

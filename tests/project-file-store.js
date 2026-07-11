@@ -8,7 +8,7 @@ const projectStore = require('../desktop/storage/project-file-store');
 const projectService = require('../desktop/services/project-service');
 
 (async () => {
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-store-test-'));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-store-test-'));
 
   try {
     const created = await projectService.createProject(dataRoot, {

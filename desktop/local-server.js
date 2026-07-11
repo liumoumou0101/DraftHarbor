@@ -860,7 +860,7 @@ function runCommand(command, args, options = {}) {
 }
 
 async function extractArchive(archivePath, targetDir) {
-  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'writingway-llama-'));
+  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'draftharbor-llama-'));
   try {
     await runCommand('tar', ['-xf', archivePath, '-C', tempDir]);
     const entries = (await fsp.readdir(tempDir)).filter((entry) => entry !== '__MACOSX');
@@ -929,7 +929,7 @@ async function installLlamaCpp(dataRoot, variant) {
     throw new Error('Selected llama.cpp release asset is missing download metadata.');
   }
 
-  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'writingway-llama-download-'));
+  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'draftharbor-llama-download-'));
   try {
     const archivePath = path.join(tempDir, assetName);
     await downloadFile(assetUrl, archivePath, { 'User-Agent': 'DraftHarbor/1.0' });
@@ -953,7 +953,7 @@ async function installLlamaCpp(dataRoot, variant) {
 
 async function handleAppApi(request, response, appRoot, dataRoot, parsedUrl, integrations = {}) {
   if (request.method === 'GET' && parsedUrl.pathname === '/api/health') {
-    jsonResponse(response, 200, { ok: true, service: 'writingway-desktop-server', timestamp: new Date().toISOString() });
+    jsonResponse(response, 200, { ok: true, service: 'draftharbor-desktop-server', timestamp: new Date().toISOString() });
     return true;
   }
 
@@ -2114,7 +2114,7 @@ async function handleUpdaterApi(request, response, appRoot, dataRoot, parsedUrl)
     return;
   }
   if (request.method === 'GET' && parsedUrl.pathname === '/health') {
-    jsonResponse(response, 200, { ok: true, service: 'writingway-desktop-updater' }, true);
+    jsonResponse(response, 200, { ok: true, service: 'draftharbor-desktop-updater' }, true);
     return;
   }
   if (request.method === 'GET' && parsedUrl.pathname === '/update/status') {

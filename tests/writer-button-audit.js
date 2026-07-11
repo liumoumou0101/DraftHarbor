@@ -27,7 +27,7 @@ async function openNativeModelSettings(page) {
 }
 
 (async () => {
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-writer-audit-'));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-writer-audit-'));
   let servers = null;
   let browser = null;
 
@@ -274,16 +274,16 @@ async function openNativeModelSettings(page) {
     const packageDownloadPromise = page.waitForEvent('download');
     await page.click('[data-native-export-package]');
     const packageDownload = await packageDownloadPromise;
-    assert.ok(packageDownload.suggestedFilename().endsWith('.writingway-project.zip'), 'project package export should download');
+    assert.ok(packageDownload.suggestedFilename().endsWith('.draftharbor-project.zip'), 'project package export should download');
 
     await page.click('[data-native-panel-tab="search"]');
     await page.fill('[data-native-scene-editor]', 'Audit one. Audit two. Audit three.');
     await page.evaluate(() => {
-      window.__writingwayLastUtterance = null;
+      window.__draftHarborLastUtterance = null;
       Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
         speaking: false,
         getVoices: () => [{ name: 'Audit Voice', lang: 'zh-CN' }, { name: 'Second Voice', lang: 'en-US' }],
-        speak: (utterance) => { window.speechSynthesis.speaking = true; window.__writingwayLastUtterance = utterance; },
+        speak: (utterance) => { window.speechSynthesis.speaking = true; window.__draftHarborLastUtterance = utterance; },
         cancel: () => { window.speechSynthesis.speaking = false; },
         addEventListener: () => {},
         removeEventListener: () => {}
@@ -322,11 +322,11 @@ async function openNativeModelSettings(page) {
     await page.waitForSelector('[data-native-read-aloud]:not([disabled])');
     await page.waitForFunction(() => !document.querySelector('[data-native-read-aloud]').hidden);
     await page.evaluate(() => {
-      window.__writingwayLastUtterance = null;
+      window.__draftHarborLastUtterance = null;
       Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
         speaking: false,
         getVoices: () => [{ name: 'Audit Voice', lang: 'zh-CN' }, { name: 'Second Voice', lang: 'en-US' }],
-        speak: (utterance) => { window.speechSynthesis.speaking = true; window.__writingwayLastUtterance = utterance; },
+        speak: (utterance) => { window.speechSynthesis.speaking = true; window.__draftHarborLastUtterance = utterance; },
         cancel: () => { window.speechSynthesis.speaking = false; },
         addEventListener: () => {},
         removeEventListener: () => {}
@@ -338,7 +338,7 @@ async function openNativeModelSettings(page) {
     await page.click('[data-native-read-aloud]');
     await page.waitForFunction(() => document.querySelector('[data-native-read-aloud]').hidden);
     const ttsUtterance = await page.evaluate(() => {
-      var utterance = window.__writingwayLastUtterance;
+      var utterance = window.__draftHarborLastUtterance;
       if (!utterance) return null;
       return { text: utterance.text, rate: utterance.rate, voiceName: utterance.voice ? utterance.voice.name : null };
     });

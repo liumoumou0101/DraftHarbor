@@ -7,7 +7,7 @@ const settingsService = require('../desktop/services/settings-service');
 const SettingsSchema = require('../src/core/settings/settings-schema');
 
 (async () => {
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-settings-test-'));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-settings-test-'));
   let servers = null;
 
   try {

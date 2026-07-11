@@ -25,7 +25,7 @@ function legacySnapshot(id, name, text, exportedAt) {
 }
 
 (async () => {
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-project-api-test-'));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-project-api-test-'));
   let servers = null;
   const revealedPaths = [];
 

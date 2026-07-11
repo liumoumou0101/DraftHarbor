@@ -9,7 +9,7 @@ const WorkflowEngine = require('../src/core/workflow/workflow-engine');
 const { startDesktopServers } = require('../desktop/local-server');
 
 (async () => {
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-workflow-engine-'));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-workflow-engine-'));
   let servers = null;
 
   try {

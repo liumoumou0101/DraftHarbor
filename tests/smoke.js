@@ -6,7 +6,7 @@ const { startDesktopServers } = require('../desktop/local-server');
 
 (async () => {
     const projectRoot = path.resolve(__dirname, '..');
-    const dataRoot = process.env.APP_URL ? null : await fs.mkdtemp(path.join(os.tmpdir(), 'writingway-smoke-'));
+    const dataRoot = process.env.APP_URL ? null : await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-smoke-'));
     const servers = process.env.APP_URL ? null : await startDesktopServers({
         appRoot: projectRoot,
         dataRoot,

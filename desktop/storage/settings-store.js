@@ -4,7 +4,7 @@ const { normalizeDesktopSettings } = require('../../src/core/settings/settings-s
 const { writeJsonAtomic } = require('./atomic-write');
 
 function settingsPath(dataRoot) {
-  return path.join(dataRoot, '.writingway-settings.json');
+  return path.join(dataRoot, '.draftharbor-settings.json');
 }
 
 async function readSettings(dataRoot) {
