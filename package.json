@@ -1,6 +1,6 @@
 {
     "name": "draftharbor-desktop",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "private": true,
     "description": "稿湾：桌面优先、本地优先的 AI 长篇创作工作台。",
     "author": "DraftHarbor contributors",
@@ -20,14 +20,14 @@
         "dist": "electron-builder",
         "packaged-smoke": "node tests/packaged-smoke.js",
         "smoke": "node tests/smoke.js",
-        "desktop-mainline-test": "node tests/desktop-library.js && node tests/desktop-reader.js",
+        "desktop-mainline-test": "node tests/desktop-library.js && node tests/desktop-reader.js && node tests/summary-workflow.js",
         "writer-audit": "node tests/writer-button-audit.js",
         "writer-layout-audit": "node tests/writer-layout-audit.js",
         "writer-realistic-visual-audit": "node tests/writer-realistic-visual-audit.js",
         "desktop-test": "npm run desktop-mainline-test",
     "core-test": "node tests/core-project.js && node tests/core-generation.js && node tests/ai-task-contract.js && node tests/ai-task-runner.js && npm run storage-test",
         "storage-test": "node tests/project-file-store.js && node tests/project-directory-api.js && node tests/workflow-store.js && node tests/workflow-engine-service.js && node tests/settings-service.js && node tests/compendium-service.js && node tests/prompt-service.js && node tests/workshop-service.js && node tests/project-migration-service.js",
-        "unit": "npm run core-test && node tests/context-prompt-core.js && node tests/protocol-handler.js && node tests/release-config.js",
+        "unit": "npm run core-test && node tests/context-prompt-core.js && node tests/avoidance-rules.js && node tests/protocol-handler.js && node tests/release-config.js",
         "backup-test": "node tests/backup-api.js",
         "ui": "npm run desktop-mainline-test",
         "test": "npm run smoke && npm run unit && npm run desktop-mainline-test"
@@ -36,7 +36,7 @@
     "build": {
         "appId": "io.github.liumoumou0101.draftharbor",
         "productName": "DraftHarbor",
-        "asar": false,
+        "asar": true,
         "files": [
             "desktop/**/*",
             "src/**/*",

@@ -1,0 +1,96 @@
+            <section class="desktop-view desktop-view-reader" data-view-panel="reader">
+                <div class="desktop-reader-shell">
+                    <aside class="desktop-reader-sidebar">
+                        <div class="desktop-reader-sidebar-intro">
+                            <p class="desktop-section-kicker">Local Reader</p>
+                            <h2>本地阅读</h2>
+                            <p>导入 txt / md 后自动识别章节，并在本机保存阅读进度。</p>
+                        </div>
+
+                        <div class="desktop-reader-sidebar-group">
+                            <p class="desktop-reader-section-label">导入</p>
+                            <label class="desktop-reader-import">
+                                <span>选择小说文件</span>
+                                <input type="file" data-reader-file accept=".txt,.md,text/plain,text/markdown">
+                            </label>
+                            <p class="desktop-reader-hint">支持 .txt / .md 格式，文件不离开本机。</p>
+                        </div>
+
+                        <div class="desktop-reader-sidebar-group">
+                            <p class="desktop-reader-section-label">显示</p>
+                            <div class="desktop-reader-controls" aria-label="阅读设置">
+                                <label>
+                                    <span>字号</span>
+                                    <input type="range" data-reader-font-size min="15" max="26" step="1">
+                                </label>
+                                <label>
+                                    <span>行距</span>
+                                    <input type="range" data-reader-line-height min="1.45" max="2.2" step="0.05">
+                                </label>
+                                <label>
+                                    <span>版心宽度</span>
+                                    <input type="range" data-reader-width min="620" max="980" step="20">
+                                </label>
+                                <label>
+                                    <span>段落间距</span>
+                                    <input type="range" data-reader-paragraph-spacing min="0.4" max="1.6" step="0.1">
+                                </label>
+                                <label>
+                                    <span>字体</span>
+                                    <select data-reader-font-family>
+                                        <option value="system">系统默认</option>
+                                        <option value="serif">宋体/衬线</option>
+                                        <option value="yahei">微软雅黑</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    <span>主题</span>
+                                    <select data-reader-theme>
+                                        <option value="dark">深色</option>
+                                        <option value="paper">纸张</option>
+                                        <option value="sepia">护眼</option>
+                                    </select>
+                                </label>
+                                <label class="desktop-reader-check">
+                                    <input type="checkbox" data-reader-indent>
+                                    <span>段首缩进</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="desktop-reader-sidebar-group">
+                            <p class="desktop-reader-section-label">进度</p>
+                            <div class="desktop-reader-progress">
+                                <div>
+                                    <strong data-reader-progress-label>未导入</strong>
+                                    <span data-reader-progress-percent>0%</span>
+                                </div>
+                                <progress data-reader-progress value="0" max="100"></progress>
+                            </div>
+                        </div>
+
+                        <div class="desktop-reader-chapters" data-reader-chapters aria-label="章节列表"></div>
+                    </aside>
+
+                    <article class="desktop-reader-stage" data-reader-theme-panel>
+                        <header class="desktop-reader-header">
+                            <div>
+                                <p class="desktop-section-kicker" data-reader-source>Reader</p>
+                                <h2 data-reader-title>还没有导入本地小说</h2>
+                            </div>
+                            <div class="desktop-reader-actions">
+                                <button class="desktop-secondary-action" type="button" data-reader-prev>上一章</button>
+                                <button class="desktop-primary-action" type="button" data-reader-next>下一章</button>
+                            </div>
+                        </header>
+                        <div class="desktop-reader-reading-bar">
+                            <span data-reader-position-label>准备阅读</span>
+                            <span>←/→ 切换章节，Space / PageDown 向下阅读</span>
+                        </div>
+                        <div class="desktop-reader-content" data-reader-content>
+                            <p>选择左侧的 txt 或 md 文件后，这里会显示正文。阶段 1 先提供本地导入、章节识别、进度和排版控制。</p>
+                        </div>
+                    </article>
+                </div>
+            </section>
+

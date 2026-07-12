@@ -1,0 +1,57 @@
+            <section class="desktop-view desktop-workshop-view" data-view-panel="workshop">
+                <aside class="desktop-workshop-sidebar">
+                    <div>
+                        <p class="desktop-section-kicker">Workshop</p>
+                        <h2>讨论</h2>
+                        <p data-workshop-project-label>从书库打开项目后开始讨论。</p>
+                    </div>
+                    <div class="desktop-workshop-project-summary" data-workshop-project-summary hidden>
+                        <p class="desktop-workshop-project-summary-label">作品</p>
+                        <h3 data-workshop-project-name></h3>
+                        <p data-workshop-project-stats></p>
+                    </div>
+                    <button class="desktop-primary-action" type="button" data-workshop-new>新对话</button>
+                    <div class="desktop-compendium-status" data-workshop-status>未打开项目</div>
+                    <div class="desktop-workshop-session-list" data-workshop-session-list></div>
+                </aside>
+                <section class="desktop-workshop-chat">
+                    <header class="desktop-compendium-editor-header">
+                        <div>
+                            <p class="desktop-section-kicker">讨论</p>
+                            <h2 data-workshop-title>选择或新建对话</h2>
+                        </div>
+                        <div class="desktop-native-editor-actions">
+                            <button class="desktop-secondary-action" type="button" data-workshop-delete disabled>删除对话</button>
+                        </div>
+                    </header>
+                    <div class="desktop-workshop-messages" data-workshop-messages></div>
+                    <div class="desktop-workshop-empty-state" data-workshop-empty hidden>
+                        <div class="desktop-workshop-empty-content" data-workshop-empty-content></div>
+                    </div>
+                    <div class="desktop-workshop-output-panel" data-workshop-output-actions hidden>
+                        <p class="desktop-workshop-output-panel-label">输出转化</p>
+                        <div class="desktop-workshop-output-actions-inner">
+                            <button class="desktop-workshop-convert-action" type="button" data-workshop-to-compendium disabled>
+                                <span class="desktop-workshop-convert-icon">&#128196;</span>
+                                <span class="desktop-workshop-convert-label">转为资料</span>
+                                <span class="desktop-workshop-convert-hint">保存到资料库</span>
+                            </button>
+                            <button class="desktop-workshop-convert-action" type="button" data-workshop-to-summary disabled>
+                                <span class="desktop-workshop-convert-icon">&#128278;</span>
+                                <span class="desktop-workshop-convert-label">转为场景摘要</span>
+                                <span class="desktop-workshop-convert-hint">写入当前场景摘要</span>
+                            </button>
+                            <button class="desktop-workshop-convert-action" type="button" data-workshop-insert-draft disabled>
+                                <span class="desktop-workshop-convert-icon">&#128221;</span>
+                                <span class="desktop-workshop-convert-label">插入正文</span>
+                                <span class="desktop-workshop-convert-hint">追加到当前场景</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="desktop-workshop-input-row">
+                        <textarea data-workshop-input placeholder="输入想讨论的问题。可用 @[资料标题] 或 #[场景标题] 引用上下文。"></textarea>
+                        <button class="desktop-primary-action" type="button" data-workshop-send>发送</button>
+                    </div>
+                </section>
+            </section>
+

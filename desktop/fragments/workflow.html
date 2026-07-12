@@ -1,0 +1,37 @@
+            <section class="desktop-view desktop-workflow-view" data-view-panel="workflow">
+                <aside class="desktop-workflow-sidebar">
+                    <div>
+                        <p class="desktop-section-kicker">Workflow</p>
+                        <h2>创作流程</h2>
+                        <p data-workflow-project-label>从书库打开项目后启动。</p>
+                        <p class="desktop-workflow-sidebar-note">按步骤引导的写作流程：设定项目 Brief 后逐步生成正文内容。</p>
+                    </div>
+                    <label>
+                        <span>项目设定 (Brief)</span>
+                        <textarea data-workflow-brief rows="8" placeholder="写下本次工作流要遵守的题材、主线、角色、限制和目标。"></textarea>
+                    </label>
+                    <button class="desktop-primary-action" type="button" data-workflow-start>开始创作流程</button>
+                    <div class="desktop-compendium-status" data-workflow-status>未打开项目</div>
+                    <div class="desktop-workflow-run-list" data-workflow-run-list></div>
+                </aside>
+                <section class="desktop-workflow-main">
+                    <header class="desktop-compendium-editor-header">
+                        <div>
+                            <p class="desktop-section-kicker">流程看板</p>
+                            <h2 data-workflow-title>选择或开始创作流程</h2>
+                        </div>
+                    </header>
+
+                    <div class="desktop-workflow-steps" data-workflow-steps></div>
+                    <div class="desktop-workflow-stage-actions" data-workflow-stage-actions hidden></div>
+                    <div class="desktop-workflow-artifacts" data-workflow-artifacts></div>
+                    <details class="desktop-workflow-events-details" data-workflow-events-details open>
+                        <summary data-workflow-events-summary>
+                            <span class="desktop-workflow-events-title">事件日志</span>
+                            <span class="desktop-workflow-events-count" data-workflow-events-count></span>
+                        </summary>
+                        <div class="desktop-workflow-events" data-workflow-events></div>
+                    </details>
+                </section>
+            </section>
+

@@ -68,6 +68,7 @@ function projectToLegacySnapshot(project) {
     promptHistory: project.promptHistory || [],
     workshopSessions: project.workshopSessions || [],
     workflowRuns: project.workflowRuns || []
+    ,styleGuardRules: project.styleGuardRules || []
   };
 }
 
@@ -121,6 +122,7 @@ function legacySnapshotToProject(snapshot) {
     promptHistory: payload.promptHistory || [],
     workshopSessions: payload.workshopSessions || [],
     workflowRuns: payload.workflowRuns || []
+    ,styleGuardRules: payload.styleGuardRules || []
   });
 }
 

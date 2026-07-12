@@ -25,10 +25,12 @@ const CompendiumSchema = require('../src/core/knowledge/compendium-schema');
       category: 'characters',
       title: 'Ada',
       body: 'A careful navigator.',
-      tags: ['pilot', 'pilot', 'lead']
+      tags: ['pilot', 'pilot', 'lead'],
+      sourceReferences: [{ sceneId: 'scene-1', excerpt: 'Ada studies the broken compass.' }]
     });
     assert.strictEqual(normalized.type, 'character');
     assert.deepStrictEqual(normalized.tags, ['pilot', 'lead']);
+    assert.deepStrictEqual(normalized.sourceReferences.map((source) => source.sceneId), ['scene-1']);
 
     const saved = await compendiumService.saveEntry(dataRoot, 'knowledge-project', normalized);
     assert.strictEqual(saved.ok, true);
@@ -43,6 +45,7 @@ const CompendiumSchema = require('../src/core/knowledge/compendium-schema');
     const stored = await compendiumStore.readEntries(projectPath, 'knowledge-project');
     assert.strictEqual(stored.length, 1);
     assert.strictEqual(stored[0].body, 'A careful navigator.');
+    assert.strictEqual(stored[0].sourceReferences[0].excerpt, 'Ada studies the broken compass.');
 
     servers = await startDesktopServers({
       appRoot: path.resolve(__dirname, '..'),

@@ -185,6 +185,7 @@
             generationDefaults: normalizeGenerationDefaults(generationInput),
             localModelSettings: normalizeLocalModelSettings(localInput),
             appearance: normalizeAppearanceSettings(input.appearance || input.appearanceSettings || {}),
+            globalStyleGuardRules: Array.isArray(input.globalStyleGuardRules) ? input.globalStyleGuardRules : [],
             updatedAt: input.updatedAt || ''
         };
     }

@@ -1,0 +1,523 @@
+            <section class="desktop-view desktop-view-writer" data-view-panel="writer">
+                <div class="desktop-native-writer" data-native-writer>
+                    <aside class="desktop-native-outline">
+                        <div class="desktop-native-project">
+                            <div class="desktop-native-project-heading">
+                                <div>
+                                    <p class="desktop-section-kicker" data-native-project-source>项目</p>
+                                    <h2 data-native-project-title>未打开项目</h2>
+                                </div>
+                                <div class="desktop-native-empty-actions">
+                                    <button class="desktop-secondary-action" type="button" data-native-new-project title="新建作品">新建</button>
+                                    <button class="desktop-secondary-action" type="button" data-native-show-bookshelf title="返回书库">书库</button>
+                                </div>
+                            </div>
+                            <p data-native-project-meta>从书架打开项目后开始编辑。</p>
+                        </div>
+                        <div class="desktop-native-outline-actions">
+                            <button class="desktop-primary-action" type="button" data-native-add-scene>新场景</button>
+                            <button class="desktop-secondary-action" type="button" data-native-add-chapter>新章节</button>
+                        </div>
+                        <div class="desktop-native-scene-list" data-native-scene-list></div>
+                    </aside>
+                    <main class="desktop-native-editor">
+                        <header class="desktop-native-editor-header">
+                            <div>
+                                <p class="desktop-section-kicker" data-native-chapter-title>场景编辑</p>
+                                <h2 data-native-scene-title tabindex="0" title="双击或按 Enter 编辑场景标题">选择一个场景</h2>
+                            </div>
+                            <div class="desktop-native-editor-actions">
+                                <div class="desktop-native-status-cluster">
+                                    <span data-native-save-status></span>
+                                    <span class="desktop-native-editor-stats" data-native-editor-stats>0 字</span>
+                                </div>
+                                <div class="desktop-native-core-actions">
+                                    <button class="desktop-secondary-action desktop-native-toolbar-button" type="button" data-native-focus-mode title="专注模式">
+                                        <span class="desktop-native-tool-mark" aria-hidden="true">专</span>
+                                        <span class="desktop-native-tool-label">专注</span>
+                                    </button>
+                                    <button class="desktop-primary-action desktop-native-toolbar-button" type="button" data-native-save-scene title="保存当前场景">
+                                        <span class="desktop-native-tool-label">保存</span>
+                                    </button>
+                                </div>
+                                <div class="desktop-native-tool-actions">
+                                    <button class="desktop-secondary-action desktop-native-toolbar-button" type="button" data-native-read-aloud title="朗读当前场景">
+                                        <span class="desktop-native-tool-mark" aria-hidden="true">读</span>
+                                        <span class="desktop-native-tool-label">朗读</span>
+                                    </button>
+                                    <button class="desktop-secondary-action desktop-native-toolbar-button" type="button" data-native-stop-reading title="停止朗读" hidden>
+                                        <span class="desktop-native-tool-mark" aria-hidden="true">停</span>
+                                        <span class="desktop-native-tool-label">停止</span>
+                                    </button>
+                                    <button class="desktop-secondary-action desktop-native-toolbar-button" type="button" data-native-toggle-specials title="插入常用符号">
+                                        <span class="desktop-native-tool-mark" aria-hidden="true">「」</span>
+                                        <span class="desktop-native-tool-label">符号</span>
+                                    </button>
+                                    <button class="desktop-secondary-action desktop-native-toolbar-button" type="button" data-native-toggle-typography title="排版设置">
+                                        <span class="desktop-native-tool-mark" aria-hidden="true">Aa</span>
+                                        <span class="desktop-native-tool-label">排版</span>
+                                    </button>
+                                    <button class="desktop-secondary-action desktop-native-toolbar-button" type="button" data-native-style-guard title="避免写法">
+                                        <span class="desktop-native-tool-mark" aria-hidden="true">避</span><span class="desktop-native-tool-label">避用</span>
+                                    </button>
+                                </div>
+                                <div class="desktop-native-layout-actions">
+                                    <button class="desktop-secondary-action desktop-native-toolbar-button" type="button" data-native-toggle-outline title="显示或隐藏章节结构">
+                                        <span class="desktop-native-tool-mark" aria-hidden="true">纲</span>
+                                        <span class="desktop-native-tool-label">隐藏结构</span>
+                                    </button>
+                                    <button class="desktop-secondary-action desktop-native-toolbar-button" type="button" data-native-toggle-assistant title="显示或隐藏 Copilot">
+                                        <span class="desktop-native-tool-mark" aria-hidden="true">助</span>
+                                        <span class="desktop-native-tool-label">隐藏辅助</span>
+                                    </button>
+                                    <button class="desktop-secondary-action desktop-native-toolbar-button" type="button" data-native-assistant-placement title="切换 Copilot 位置">
+                                        <span class="desktop-native-tool-mark" aria-hidden="true">下</span>
+                                        <span class="desktop-native-tool-label">辅助在下</span>
+                                    </button>
+                                    <button class="desktop-mini-action desktop-native-toolbar-button" type="button" data-native-send-to-workshop title="发送到讨论" hidden>
+                                        <span class="desktop-native-tool-mark" aria-hidden="true">聊</span>
+                                        <span class="desktop-native-tool-label">发送到讨论</span>
+                                    </button>
+                                    <button class="desktop-mini-action desktop-native-toolbar-button" type="button" data-native-save-to-compendium title="保存为资料" hidden>
+                                        <span class="desktop-native-tool-mark" aria-hidden="true">料</span>
+                                        <span class="desktop-native-tool-label">保存为资料</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </header>
+                        <div class="desktop-native-editor-body">
+                            <div class="desktop-native-typography" data-native-typography hidden>
+                                <label>
+                                    字号
+                                    <input type="range" data-native-editor-font-size min="15" max="24" step="1">
+                                    <span data-native-editor-font-size-value>18</span>
+                                </label>
+                                <label>
+                                    行距
+                                    <input type="range" data-native-editor-line-height min="1.45" max="2.2" step="0.05">
+                                    <span data-native-editor-line-height-value>1.90</span>
+                                </label>
+                                <label>
+                                    宽度
+                                    <input type="range" data-native-editor-text-width min="620" max="1040" step="20">
+                                    <span data-native-editor-text-width-value>760</span>
+                                </label>
+                                <label>
+                                    段距
+                                    <input type="range" data-native-editor-paragraph-spacing min="0" max="1.5" step="0.1">
+                                    <span data-native-editor-paragraph-spacing-value>0</span>
+                                </label>
+                                <label>
+                                    字体
+                                    <select data-native-editor-font-family>
+                                        <option value="system">系统默认</option>
+                                        <option value="serif">宋体/衬线</option>
+                                        <option value="yahei">微软雅黑</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    目标字数
+                                    <input type="number" data-native-editor-word-goal min="0" max="999999" step="100" placeholder="0">
+                                </label>
+                            </div>
+                            <div class="desktop-native-specials" data-native-specials hidden>
+                                <button type="button" data-native-special-char="—">—</button>
+                                <button type="button" data-native-special-char="–">–</button>
+                                <button type="button" data-native-special-char="…">…</button>
+                                <button type="button" data-native-special-char="“">“</button>
+                                <button type="button" data-native-special-char="”">”</button>
+                                <button type="button" data-native-special-char="‘">‘</button>
+                                <button type="button" data-native-special-char="’">’</button>
+                                <button type="button" data-native-special-char="«">«</button>
+                                <button type="button" data-native-special-char="»">»</button>
+                                <button type="button" data-native-special-char="　">全角空格</button>
+                            </div>
+                            <div class="desktop-native-paper-heading" data-native-paper-heading aria-hidden="true">
+                                <span class="desktop-native-paper-chapter" data-native-paper-chapter>场景编辑</span>
+                                <strong data-native-paper-title>选择一个场景</strong>
+                                <span class="desktop-native-paper-rule"></span>
+                            </div>
+                            <textarea data-native-scene-editor spellcheck="false" placeholder="从左侧选择场景，或从书架打开一个项目。"></textarea>
+                            <div class="desktop-native-paper-footer" data-native-paper-footer aria-hidden="true">
+                                <span data-native-paper-stats>0 字</span>
+                                <span data-native-paper-position>未选择场景</span>
+                                <span data-native-paper-status>未保存</span>
+                            </div>
+                            <div class="desktop-native-generation-output" data-native-generation-output hidden>
+                                <div class="desktop-native-generation-output-header">
+                                    <div>
+                                        <strong>生成结果待确认</strong>
+                                        <span data-native-generation-output-status>确认后写入正文，撤回会恢复原文。</span>
+                                    </div>
+                                </div>
+                                <div class="desktop-native-generation-result" data-native-generation-result></div>
+                                <details data-native-reasoning hidden>
+                                    <summary>推理/思考</summary>
+                                    <pre data-native-reasoning-text></pre>
+                                </details>
+                                <div class="desktop-native-generation-actions">
+                                    <button class="desktop-primary-action" type="button" data-native-accept-generation>保留</button>
+                                    <button class="desktop-secondary-action" type="button" data-native-retry-generation>重试</button>
+                                    <button class="desktop-secondary-action" type="button" data-native-discard-generation>撤回</button>
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                    <aside class="desktop-native-assistant">
+                        <div class="desktop-native-assistant-header">
+                            <span class="desktop-native-assistant-header-label">Copilot</span>
+                            <span class="desktop-native-assistant-header-desc">AI / 资料 / 元数据 / 历史</span>
+                        </div>
+                        <div class="desktop-native-assistant-tabs">
+                            <button type="button" data-native-panel-tab="generate" class="is-active">AI</button>
+                            <button type="button" data-native-panel-tab="rewrite">改写</button>
+                            <button type="button" data-native-panel-tab="characters">人物</button>
+                            <button type="button" data-native-panel-tab="context">资料</button>
+                            <button type="button" data-native-panel-tab="metadata">元数据</button>
+                            <button type="button" data-native-panel-tab="structure">结构</button>
+                            <button type="button" data-native-panel-tab="search">查找</button>
+                            <button type="button" data-native-panel-tab="history">历史</button>
+                        </div>
+                        <section class="desktop-native-assistant-panel is-active" data-native-panel="generate">
+                            <div class="desktop-native-generation" data-native-generation>
+                                <div class="desktop-native-copilot-brief">
+                                    <span class="desktop-native-copilot-kicker">Assistant</span>
+                                    <strong data-native-copilot-greeting>今天要帮这场戏推进到哪里？</strong>
+                                    <p data-native-copilot-brief>选择一个创作动作，或直接写下下一段的方向。</p>
+                                </div>
+                                <div class="desktop-native-task-group desktop-native-copilot-tasks" data-native-gen-task-group>
+                                    <button type="button" class="is-active" data-native-gen-task="continue">
+                                        <strong>续写场景</strong>
+                                        <span>接着当前正文往下写</span>
+                                    </button>
+                                    <button type="button" data-native-gen-task="beat">
+                                        <strong>按节拍生成</strong>
+                                        <span>按你的剧情指令写一段</span>
+                                    </button>
+                                    <button type="button" data-native-gen-task="summary">
+                                        <strong>场景总结</strong>
+                                        <span>整理当前场景摘要</span>
+                                    </button>
+                                </div>
+                                <div class="desktop-native-copilot-context">
+                                    <div class="desktop-native-copilot-section-head">
+                                        <span>当前上下文</span>
+                                        <small data-native-copilot-context-note>未选择额外引用</small>
+                                    </div>
+                                    <dl>
+                                        <div>
+                                            <dt>场景</dt>
+                                            <dd data-native-copilot-scene>未选择场景</dd>
+                                        </div>
+                                        <div>
+                                            <dt>章节</dt>
+                                            <dd data-native-copilot-chapter>未选择章节</dd>
+                                        </div>
+                                        <div>
+                                            <dt>正文</dt>
+                                            <dd data-native-copilot-words>0 字</dd>
+                                        </div>
+                                    </dl>
+                                </div>
+                                <div class="desktop-native-copilot-suggestions">
+                                    <div class="desktop-native-copilot-section-head">
+                                        <span>建议</span>
+                                    </div>
+                                    <button type="button" data-native-copilot-suggestion="用具体动作和感官细节续写下一段，避免直接解释人物情绪。">增强画面感</button>
+                                    <button type="button" data-native-copilot-suggestion="提高这一场的紧张感，让人物目标、阻碍和风险更清楚。">提高张力</button>
+                                    <button type="button" data-native-copilot-suggestion="检查当前场景是否贴合前文连续性，并续写一段自然过渡。">贴合上下文</button>
+                                </div>
+                                <div class="desktop-native-prompt-toolbar">
+                                    <select data-native-prompt-template aria-label="正文提示词模板"></select>
+                                    <button class="desktop-secondary-action" type="button" data-native-manage-prompts>管理</button>
+                                </div>
+                                <div class="desktop-native-generation-input">
+                                    <textarea data-native-beat-input placeholder="输入这一段要发生什么，或写下续写方向"></textarea>
+                                    <div class="desktop-native-generation-actions">
+                                        <button class="desktop-secondary-action" type="button" data-native-preview-prompt>预览</button>
+                                        <button class="desktop-primary-action" type="button" data-native-generate>生成</button>
+                                        <button class="desktop-secondary-action" type="button" data-native-cancel-generation hidden>取消</button>
+                                    </div>
+                                </div>
+                                <div class="desktop-native-insert-options">
+                                    <span>写入位置</span>
+                                    <select data-native-generation-insert-mode>
+                                        <option value="append">追加到场景末尾</option>
+                                        <option value="cursor">插入光标处</option>
+                                        <option value="replace">替换选中文本</option>
+                                    </select>
+                                </div>
+                                <details class="desktop-native-model-settings" data-native-model-settings>
+                                    <summary>
+                                        <span>模型设置</span>
+                                        <small class="desktop-native-model-control-hint" data-native-model-control-hint></small>
+                                    </summary>
+                                    <div class="desktop-native-model-control" data-native-model-control>
+                                        <div class="desktop-native-model-control-row">
+                                            <label>
+                                                <span>Provider 配置</span>
+                                                <select data-native-profile-select>
+                                                </select>
+                                            </label>
+                                        </div>
+                                        <div class="desktop-native-model-control-row">
+                                            <label>
+                                                <span>模型选择</span>
+                                                <select data-native-model-select>
+                                                </select>
+                                            </label>
+                                            <label class="desktop-native-writer-check">
+                                                <input type="checkbox" data-native-thinking-toggle>
+                                                <span>深度思考</span>
+                                            </label>
+                                        </div>
+                                        <div class="desktop-native-model-control-row" data-native-custom-model-group hidden>
+                                            <label>
+                                                <span>自定义模型 ID</span>
+                                                <input type="text" data-native-custom-model placeholder="输入模型名称或 ID">
+                                            </label>
+                                        </div>
+                                        <div class="desktop-native-model-control-row desktop-native-sampling-row">
+                                            <label>
+                                                <span>温度</span>
+                                                <input type="number" data-native-temperature min="0" max="2" step="0.05">
+                                            </label>
+                                            <label>
+                                                <span>最大输出</span>
+                                                <input type="number" data-native-max-tokens min="1" max="200000" step="100">
+                                            </label>
+                                        </div>
+                                        <div class="desktop-native-model-control-row desktop-native-sampling-row">
+                                            <label class="desktop-native-writer-check">
+                                                <input type="checkbox" data-native-provider-defaults>
+                                                <span>使用服务商默认参数</span>
+                                            </label>
+                                            <span class="desktop-native-sampling-hint" data-native-sampling-hint></span>
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+                        </section>
+                        <section class="desktop-native-assistant-panel" data-native-panel="rewrite">
+                            <div class="desktop-native-rewrite">
+                                <div class="desktop-native-rewrite-original">
+                                    <label>
+                                        <span>选中原文</span>
+                                        <textarea readonly data-native-rewrite-original-text placeholder="在正文中选中文本后，原文会显示在这里。"></textarea>
+                                    </label>
+                                </div>
+                                <div class="desktop-native-task-group" data-native-rewrite-task-group>
+                                    <button type="button" class="is-active" data-native-rewrite-task="polish">润色</button>
+                                    <button type="button" data-native-rewrite-task="expand">扩写</button>
+                                    <button type="button" data-native-rewrite-task="shorten">精炼</button>
+                                    <button type="button" data-native-rewrite-task="style">风格改写</button>
+                                </div>
+                                <label>
+                                    <span>改写预设</span>
+                                    <select data-native-rewrite-preset>
+                                        <option value="balanced-polish">均衡润色</option>
+                                        <option value="tighten">压缩精炼</option>
+                                        <option value="expand">适度扩写</option>
+                                        <option value="show-dont-tell">少解释多呈现</option>
+                                        <option value="sensory">增强感官</option>
+                                        <option value="tension">提高紧张感</option>
+                                        <option value="pace-fast">加快节奏</option>
+                                        <option value="pace-slow">放慢节奏</option>
+                                        <option value="dialogue-natural">对白自然化</option>
+                                        <option value="subtext">增加潜台词</option>
+                                        <option value="emotion-deeper">加深情绪</option>
+                                        <option value="character-voice">强化角色声音</option>
+                                        <option value="literary">文学化</option>
+                                        <option value="webnovel">网文爽感</option>
+                                        <option value="cinematic">电影镜头感</option>
+                                        <option value="clarity">理清逻辑</option>
+                                        <option value="continuity">贴合上下文</option>
+                                        <option value="remove-cliche">去套路化</option>
+                                        <option value="grammar-copyedit">校对修正</option>
+                                        <option value="same-meaning-alt">换一种写法</option>
+                                        <option value="custom">自定义</option>
+                                    </select>
+                                    <small data-native-rewrite-preset-description></small>
+                                </label>
+                                <label>
+                                    <span>已保存的改写 Prompt</span>
+                                    <select data-native-rewrite-saved-prompt>
+                                        <option value="">不使用已保存的 Prompt...</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    <span>改写要求</span>
+                                    <textarea data-native-rewrite-instruction placeholder="选择一个预设模板或已保存的 Prompt，也可以直接手写改写要求。"></textarea>
+                                </label>
+                                <div class="desktop-native-rewrite-context-option">
+                                    <label class="desktop-native-writer-check">
+                                        <input type="checkbox" data-native-regenerate-use-context checked>
+                                        <span>重生成选区时包含前后文（约 8000 字符）</span>
+                                    </label>
+                                    <small>勾选后将发送选区前后各约 8000 字符作为上下文，提升重生成的连贯性。</small>
+                                </div>
+                                <div class="desktop-native-generation-actions">
+                                    <button class="desktop-secondary-action" type="button" data-native-preview-rewrite>预览</button>
+                                    <button class="desktop-primary-action" type="button" data-native-start-rewrite>改写选中文本</button>
+                                    <button class="desktop-secondary-action" type="button" data-native-regenerate-selection>重生成选区</button>
+                                </div>
+                            </div>
+                        </section>
+                        <section class="desktop-native-assistant-panel" data-native-panel="characters">
+                            <div class="desktop-native-character-panel">
+                                <div class="desktop-native-character-actions">
+                                    <button class="desktop-primary-action" type="button" data-native-new-character>新人物卡</button>
+                                    <button class="desktop-secondary-action" type="button" data-native-open-compendium>打开资料库</button>
+                                </div>
+                                <div class="desktop-native-character-list" data-native-character-list></div>
+                            </div>
+                        </section>
+                        <section class="desktop-native-assistant-panel" data-native-panel="context">
+                            <div class="desktop-native-context-panel">
+                                <div class="desktop-native-context-summary" data-native-context-summary></div>
+                                <div class="desktop-native-context-section">
+                                    <h3>资料引用</h3>
+                                    <div data-native-context-compendium></div>
+                                </div>
+                                <div class="desktop-native-context-section">
+                                    <h3>资料标签</h3>
+                                    <div data-native-context-compendium-tags></div>
+                                </div>
+                                <div class="desktop-native-context-section">
+                                    <h3>章节引用</h3>
+                                    <div data-native-context-chapters></div>
+                                </div>
+                                <div class="desktop-native-context-section">
+                                    <h3>场景引用</h3>
+                                    <div data-native-context-scenes></div>
+                                </div>
+                            </div>
+                        </section>
+                        <section class="desktop-native-assistant-panel" data-native-panel="metadata">
+                            <div class="desktop-native-metadata">
+                                <label>
+                                    <span>摘要</span>
+                                    <textarea data-native-scene-summary placeholder="这一场发生了什么"></textarea>
+                                </label>
+                                <div class="desktop-native-generation-actions">
+                                    <button class="desktop-secondary-action" type="button" data-native-generate-scene-summary>生成场景摘要</button>
+                                    <button class="desktop-secondary-action" type="button" data-native-generate-chapter-summary>生成章节摘要</button>
+                                </div>
+                                <label>
+                                    <span>标签</span>
+                                    <input type="text" data-native-scene-tags placeholder="逗号分隔">
+                                </label>
+                                <label>
+                                    <span>POV</span>
+                                    <input type="text" data-native-scene-pov placeholder="视角人物">
+                                </label>
+                                <label>
+                                    <span>时态</span>
+                                    <select data-native-scene-tense>
+                                        <option value="">未指定</option>
+                                        <option value="past">过去时</option>
+                                        <option value="present">现在时</option>
+                                    </select>
+                                </label>
+                            </div>
+                        </section>
+                        <section class="desktop-native-assistant-panel" data-native-panel="structure">
+                            <div class="desktop-native-structure-tools">
+                                <button class="desktop-secondary-action" type="button" data-native-rename-chapter>重命名章节</button>
+                                <button class="desktop-secondary-action" type="button" data-native-delete-chapter>删除章节</button>
+                                <button class="desktop-secondary-action" type="button" data-native-rename-scene>重命名场景</button>
+                                <button class="desktop-secondary-action" type="button" data-native-delete-scene>删除场景</button>
+                                <button class="desktop-secondary-action" type="button" data-native-move-scene-up>上移场景</button>
+                                <button class="desktop-secondary-action" type="button" data-native-move-scene-down>下移场景</button>
+                                <label class="desktop-native-export-option">
+                                    <input type="checkbox" data-native-export-include-scene-titles checked>
+                                    <span>导出包含场景标题</span>
+                                </label>
+                                <button class="desktop-secondary-action" type="button" data-native-export-md>导出 Markdown</button>
+                                <button class="desktop-secondary-action" type="button" data-native-export-txt>导出 TXT</button>
+                                <button class="desktop-secondary-action" type="button" data-native-export-html>导出 HTML</button>
+                                <button class="desktop-secondary-action" type="button" data-native-export-epub>导出 EPUB</button>
+                                <button class="desktop-secondary-action" type="button" data-native-export-package>导出项目包</button>
+                            </div>
+                        </section>
+                        <section class="desktop-native-assistant-panel" data-native-panel="search">
+                            <div class="desktop-native-outline-tools">
+                                <input type="search" data-native-search placeholder="搜索章节、场景、正文">
+                                <div class="desktop-native-search-navigate">
+                                    <span data-native-search-status></span>
+                                    <button type="button" data-native-search-prev disabled>上一个</button>
+                                    <button type="button" data-native-search-next disabled>下一个</button>
+                                </div>
+                                <input type="text" data-native-replace placeholder="替换为">
+                                <div class="desktop-native-replace-actions">
+                                    <button class="desktop-secondary-action" type="button" data-native-replace-current>替换当前</button>
+                                    <button class="desktop-secondary-action" type="button" data-native-replace-all>全部替换</button>
+                                </div>
+                            </div>
+                        </section>
+                        <section class="desktop-native-assistant-panel" data-native-panel="history">
+                            <div class="desktop-native-history-toolbar" data-native-history-toolbar></div>
+                            <div class="desktop-native-generation-history" data-native-generation-history></div>
+                        </section>
+                    </aside>
+                    <dialog class="desktop-native-prompt-dialog" data-native-prompt-dialog>
+                        <pre data-native-prompt-preview></pre>
+                        <button class="desktop-secondary-action" type="button" data-native-close-prompt>关闭</button>
+                    </dialog>
+                    <dialog class="desktop-native-prompt-dialog" data-prompt-manager-dialog>
+                        <form class="desktop-prompt-manager-shell" data-prompt-manager-form>
+                            <header class="desktop-prompt-manager-header">
+                                <div>
+                                    <p class="desktop-section-kicker">Prompt Library</p>
+                                    <h2>提示词管理</h2>
+                                </div>
+                                <span data-prompt-manager-status>当前模板</span>
+                            </header>
+                            <div class="desktop-prompt-manager-layout">
+                                <aside class="desktop-prompt-manager-sidebar">
+                                    <div class="desktop-prompt-manager-sidebar-head">
+                                        <span>已保存提示词</span>
+                                        <span data-prompt-manager-count>0</span>
+                                    </div>
+                                    <div class="desktop-prompt-manager-list" data-prompt-manager-list></div>
+                                </aside>
+                                <div class="desktop-prompt-manager-editor">
+                                    <div class="desktop-prompt-manager-grid">
+                                        <label>
+                                            <span>标题</span>
+                                            <input type="text" data-prompt-manager-title maxlength="120">
+                                        </label>
+                                        <label>
+                                            <span>分类</span>
+                                            <select data-prompt-manager-category>
+                                                <option value="prose">正文</option>
+                                                <option value="rewrite">改写</option>
+                                                <option value="summary">摘要</option>
+                                                <option value="workshop">讨论</option>
+                                                <option value="workflow">工作流</option>
+                                            </select>
+                                        </label>
+                                        <label class="desktop-form-wide desktop-prompt-manager-content-field">
+                                            <span>用户指令</span>
+                                            <textarea data-prompt-manager-content rows="8" placeholder="写给 AI 的正文要求，例如叙事口吻、信息取舍、输出格式。"></textarea>
+                                        </label>
+                                        <details class="desktop-prompt-manager-advanced desktop-form-wide" open>
+                                            <summary>高级：系统消息</summary>
+                                            <label>
+                                                <span>系统消息</span>
+                                                <textarea data-prompt-manager-system rows="4" placeholder="更底层的角色和行为约束。普通写作场景可以留空。"></textarea>
+                                            </label>
+                                        </details>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="desktop-native-generation-actions desktop-prompt-manager-footer">
+                                <button class="desktop-primary-action" type="submit">保存提示词</button>
+                                <button class="desktop-secondary-action" type="button" data-prompt-manager-new>新建</button>
+                                <button class="desktop-secondary-action" type="button" data-prompt-manager-delete>删除</button>
+                                <button class="desktop-secondary-action" type="button" data-prompt-manager-close>关闭</button>
+                            </div>
+                        </form>
+                    </dialog>
+                </div>
+            </section>

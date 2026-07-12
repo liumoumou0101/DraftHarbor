@@ -1,0 +1,830 @@
+    async function downloadNativeProjectPackage() {
+        const projectId = currentProjectId();
+        if (!projectId) {
+            setNativeSaveStatus('没有可导出的项目', 'error');
+            return;
+        }
+        if (nativeEditorState.dirty) {
+            await saveNativeScene();
+        } else {
+            flushNativeEditorFields();
+        }
+        triggerDownload(`/api/export-project-package?${new URLSearchParams({ projectId }).toString()}`);
+        setNativeSaveStatus('已开始导出项目包', 'ok');
+    }
+
+    function nativeGenerationHistory() {
+        const snapshot = nativeEditorState.snapshot;
+        if (!snapshot) return [];
+        return Array.isArray(snapshot.promptHistory) ? snapshot.promptHistory : [];
+    }
+
+    function selectedPromptTemplate() {
+        return promptState.prompts.find((prompt) => prompt.id === promptState.selectedId)
+            || promptState.prompts[0]
+            || { id: 'default-prose', title: '正文续写：均衡扩写', category: 'prose', content: '', systemContent: '' };
+    }
+
+    function isNativeDefaultPrompt(prompt) {
+        if (!prompt) return false;
+        return !!prompt.isDefault || String(prompt.id || '').indexOf('default-') === 0;
+    }
+
+    function promptCategoryLabel(category) {
+        const labels = {
+            prose: '正文',
+            rewrite: '改写',
+            summary: '摘要',
+            workshop: '讨论',
+            workflow: '工作流'
+        };
+        return labels[category] || '正文';
+    }
+
+    function promptManagerSummary(prompt) {
+        if (!prompt) return '选择或新建一个提示词';
+        if (isNativeDefaultPrompt(prompt)) return '内置模板，可另存为自定义提示词';
+        return `${promptCategoryLabel(prompt.category)}自定义模板`;
+    }
+
+    async function loadPrompts() {
+        const projectId = currentProjectId();
+        if (!projectId) {
+            promptState.prompts = [];
+            promptState.selectedId = 'default-prose';
+            renderNativeGeneration();
+            return;
+        }
+        try {
+            const response = await fetch(`/api/prompts?${new URLSearchParams({ projectId, category: 'prose' }).toString()}`, { cache: 'no-store' });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+            promptState.prompts = result.prompts || [];
+            if (!promptState.prompts.some((prompt) => prompt.id === promptState.selectedId)) {
+                promptState.selectedId = promptState.prompts[0] ? promptState.prompts[0].id : 'default-prose';
+            }
+            if (nativeEditorState.snapshot) nativeEditorState.snapshot.prompts = promptState.prompts.filter((prompt) => !isNativeDefaultPrompt(prompt));
+        } catch (error) {
+            console.warn('Failed to load prompts:', error);
+            promptState.prompts = [{ id: 'default-prose', title: '正文续写：均衡扩写', category: 'prose', content: '', systemContent: '' }];
+        }
+        renderNativeGeneration();
+    }
+
+    function renderPromptManager() {
+        const elements = nativeEditorElements();
+        const prompt = selectedPromptTemplate();
+        if (elements.promptManagerList) {
+            elements.promptManagerList.replaceChildren();
+            const prompts = promptState.prompts.length ? promptState.prompts : [prompt];
+            prompts.forEach((item) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.dataset.promptManagerSelect = item.id || '';
+                button.className = 'desktop-prompt-manager-item';
+                button.classList.toggle('is-active', item.id === prompt.id);
+                const title = document.createElement('strong');
+                title.textContent = item.title || '未命名提示词';
+                const meta = document.createElement('span');
+                meta.textContent = `${promptCategoryLabel(item.category)} · ${isNativeDefaultPrompt(item) ? '内置' : '自定义'}`;
+                button.append(title, meta);
+                elements.promptManagerList.appendChild(button);
+            });
+        }
+        if (elements.promptManagerCount) {
+            const customCount = promptState.prompts.filter((item) => !isNativeDefaultPrompt(item)).length;
+            elements.promptManagerCount.textContent = `${customCount} 个自定义`;
+        }
+        if (elements.promptManagerStatus) elements.promptManagerStatus.textContent = promptManagerSummary(prompt);
+        if (elements.promptManagerTitle) elements.promptManagerTitle.value = prompt.title || '';
+        if (elements.promptManagerCategory) elements.promptManagerCategory.value = prompt.category || 'prose';
+        if (elements.promptManagerSystem) elements.promptManagerSystem.value = prompt.systemContent || '';
+        if (elements.promptManagerContent) elements.promptManagerContent.value = prompt.content || '';
+        if (elements.promptManagerDelete) elements.promptManagerDelete.disabled = !prompt || isNativeDefaultPrompt(prompt);
+    }
+
+    async function savePromptTemplate(event) {
+        if (event) event.preventDefault();
+        const projectId = currentProjectId();
+        if (!projectId) return;
+        const elements = nativeEditorElements();
+        const current = selectedPromptTemplate();
+        const prompt = {
+            id: current && !isNativeDefaultPrompt(current) ? current.id : undefined,
+            category: elements.promptManagerCategory ? elements.promptManagerCategory.value : 'prose',
+            title: elements.promptManagerTitle ? elements.promptManagerTitle.value : '新提示词',
+            systemContent: elements.promptManagerSystem ? elements.promptManagerSystem.value : '',
+            content: elements.promptManagerContent ? elements.promptManagerContent.value : ''
+        };
+        const response = await fetch('/api/prompts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId, prompt })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) {
+            setNativeSaveStatus(`提示词保存失败：${result.error || response.status}`, 'error');
+            return;
+        }
+        promptState.selectedId = result.prompt.id;
+        await loadPrompts();
+        await loadRewritePrompts();
+        renderPromptManager();
+        setNativeSaveStatus('提示词已保存', 'ok');
+    }
+
+    async function deletePromptTemplate() {
+        const projectId = currentProjectId();
+        const prompt = selectedPromptTemplate();
+        if (!projectId || !prompt || isNativeDefaultPrompt(prompt)) return;
+        if (!window.confirm(`删除提示词“${prompt.title || '未命名'}”？`)) return;
+        const response = await fetch('/api/delete-prompt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId, promptId: prompt.id })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) {
+            setNativeSaveStatus(`提示词删除失败：${result.error || response.status}`, 'error');
+            return;
+        }
+        promptState.selectedId = 'default-prose';
+        await loadPrompts();
+        await loadRewritePrompts();
+        renderPromptManager();
+        setNativeSaveStatus('提示词已删除', 'ok');
+    }
+
+    function newPromptTemplate() {
+        promptState.selectedId = 'default-prose';
+        const elements = nativeEditorElements();
+        if (elements.promptManagerTitle) elements.promptManagerTitle.value = '新正文提示词';
+        if (elements.promptManagerCategory) elements.promptManagerCategory.value = 'prose';
+        if (elements.promptManagerSystem) elements.promptManagerSystem.value = '';
+        if (elements.promptManagerContent) elements.promptManagerContent.value = '';
+        if (elements.promptManagerDelete) elements.promptManagerDelete.disabled = true;
+        if (elements.promptManagerStatus) elements.promptManagerStatus.textContent = '正在创建自定义提示词';
+        if (elements.promptManagerList) {
+            elements.promptManagerList.querySelectorAll('[data-prompt-manager-select]').forEach((button) => {
+                button.classList.remove('is-active');
+            });
+        }
+    }
+
+    function renderNativeRewrite() {
+        const elements = nativeEditorElements();
+        const scene = currentNativeScene();
+        if (elements.rewriteTaskButtons && elements.rewriteTaskButtons.length) {
+            elements.rewriteTaskButtons.forEach((btn) => {
+                const task = btn.getAttribute('data-native-rewrite-task');
+                btn.classList.toggle('is-active', task === nativeEditorState.rewrite.rewriteTask);
+            });
+        }
+        if (elements.rewritePreset && elements.rewritePreset.value !== nativeEditorState.rewrite.preset) {
+            elements.rewritePreset.value = nativeEditorState.rewrite.preset;
+        }
+        if (elements.rewriteInstruction && elements.rewriteInstruction.value !== nativeEditorState.rewrite.instruction) {
+            elements.rewriteInstruction.value = nativeEditorState.rewrite.instruction;
+        }
+        if (elements.regenerateUseContext) {
+            if (elements.regenerateUseContext.checked !== nativeEditorState.rewrite.regenerateUseContext) {
+                elements.regenerateUseContext.checked = nativeEditorState.rewrite.regenerateUseContext;
+            }
+        }
+        var hasSelection = !!(elements.editor && elements.editor.selectionStart !== elements.editor.selectionEnd);
+        if (elements.rewriteOriginalText && hasSelection && elements.editor) {
+            var originalText = elements.editor.value.slice(elements.editor.selectionStart, elements.editor.selectionEnd);
+            if (elements.rewriteOriginalText.value !== originalText) {
+                elements.rewriteOriginalText.value = originalText;
+            }
+        } else if (elements.rewriteOriginalText && !hasSelection) {
+            if (elements.rewriteOriginalText.value) elements.rewriteOriginalText.value = '';
+        }
+        updateRewritePresetDescription();
+        renderRewriteSavedPrompts();
+        if (elements.previewRewrite) elements.previewRewrite.disabled = !scene || !hasSelection || nativeEditorState.generation.inProgress;
+        if (elements.startRewrite) elements.startRewrite.disabled = !scene || !hasSelection || nativeEditorState.generation.inProgress;
+        if (elements.regenerateSelection) elements.regenerateSelection.disabled = !scene || !hasSelection || nativeEditorState.generation.inProgress;
+    }
+
+    function renderNativeCharacters() {
+        const elements = nativeEditorElements();
+        if (elements.newCharacter) elements.newCharacter.disabled = !currentProjectId();
+        if (elements.openCompendium) elements.openCompendium.disabled = !currentProjectId();
+        if (!elements.characterList) return;
+        elements.characterList.replaceChildren();
+        const characters = (compendiumState.entries || [])
+            .filter((entry) => entry.type === 'character' || entry.category === 'character')
+            .sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'zh-CN'));
+        if (!characters.length) {
+            const empty = document.createElement('div');
+            empty.className = 'desktop-native-character-card';
+            empty.textContent = currentProjectId() ? '还没有人物卡。' : '打开项目后可创建人物卡。';
+            elements.characterList.appendChild(empty);
+            return;
+        }
+        characters.forEach((entry) => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'desktop-native-character-card';
+            const title = document.createElement('strong');
+            title.textContent = entry.title || '未命名人物';
+            const summary = document.createElement('span');
+            summary.textContent = entry.summary || entry.body || '暂无简介';
+            item.append(title, summary);
+            item.addEventListener('click', () => {
+                compendiumState.selectedId = entry.id;
+                setView('compendium');
+                renderCompendium();
+            });
+            elements.characterList.appendChild(item);
+        });
+    }
+
+    function nativeContextStorageKey() {
+        return currentProjectId() ? `draftharbor:nativeContext:${currentProjectId()}` : '';
+    }
+
+    function saveNativeContextPrefs() {
+        const key = nativeContextStorageKey();
+        if (!key) return;
+        try {
+            window.localStorage.setItem(key, JSON.stringify(nativeEditorState.context));
+        } catch (error) { /* ignore */ }
+    }
+
+    function loadNativeContextPrefs() {
+        const key = nativeContextStorageKey();
+        nativeEditorState.context = { compendiumIds: [], sceneModes: {} };
+        if (!key) return;
+        try {
+            const parsed = JSON.parse(window.localStorage.getItem(key) || '{}');
+            nativeEditorState.context = {
+                compendiumIds: Array.isArray(parsed.compendiumIds) ? parsed.compendiumIds : [],
+                compendiumTags: Array.isArray(parsed.compendiumTags) ? parsed.compendiumTags : [],
+                chapterModes: parsed.chapterModes && typeof parsed.chapterModes === 'object' ? parsed.chapterModes : {},
+                sceneModes: parsed.sceneModes && typeof parsed.sceneModes === 'object' ? parsed.sceneModes : {}
+            };
+        } catch (error) { /* ignore */ }
+    }
+
+    function renderNativeContext() {
+        const elements = nativeEditorElements();
+        const snapshot = nativeEditorState.snapshot;
+        if (!elements.contextCompendium || !elements.contextScenes) return;
+        elements.contextCompendium.replaceChildren();
+        if (elements.contextCompendiumTags) elements.contextCompendiumTags.replaceChildren();
+        if (elements.contextChapters) elements.contextChapters.replaceChildren();
+        elements.contextScenes.replaceChildren();
+        if (!snapshot || !snapshot.project) {
+            elements.contextCompendium.textContent = '打开项目后选择资料。';
+            if (elements.contextCompendiumTags) elements.contextCompendiumTags.textContent = '打开项目后选择资料标签。';
+            if (elements.contextChapters) elements.contextChapters.textContent = '打开项目后选择章节。';
+            elements.contextScenes.textContent = '打开项目后选择场景。';
+            renderNativeContextSummary();
+            return;
+        }
+        const compendium = compendiumState.entries || snapshot.compendium || [];
+        if (!compendium.length) {
+            elements.contextCompendium.textContent = '暂无资料。';
+        } else {
+            compendium.forEach((entry) => {
+                const label = document.createElement('label');
+                label.className = 'desktop-native-context-row';
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.checked = nativeEditorState.context.compendiumIds.includes(entry.id);
+                input.addEventListener('change', () => {
+                    const set = new Set(nativeEditorState.context.compendiumIds);
+                    if (input.checked) set.add(entry.id); else set.delete(entry.id);
+                    nativeEditorState.context.compendiumIds = Array.from(set);
+                    saveNativeContextPrefs();
+                    renderNativeContextSummary();
+                });
+                const text = document.createElement('span');
+                text.textContent = `${entry.title || '未命名资料'}${entry.type ? ` · ${entry.type}` : ''}`;
+                label.append(input, text);
+                elements.contextCompendium.appendChild(label);
+            });
+        }
+        const tagSet = new Set();
+        compendium.forEach((entry) => {
+            (entry.tags || []).forEach((tag) => {
+                const normalized = String(tag || '').trim();
+                if (normalized) tagSet.add(normalized);
+            });
+        });
+        if (elements.contextCompendiumTags) {
+            const tags = Array.from(tagSet).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+            if (!tags.length) {
+                elements.contextCompendiumTags.textContent = '暂无资料标签。';
+            } else {
+                tags.forEach((tag) => {
+                    const label = document.createElement('label');
+                    label.className = 'desktop-native-context-row';
+                    const input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.checked = nativeEditorState.context.compendiumTags.includes(tag);
+                    input.addEventListener('change', () => {
+                        const set = new Set(nativeEditorState.context.compendiumTags);
+                        if (input.checked) set.add(tag); else set.delete(tag);
+                        nativeEditorState.context.compendiumTags = Array.from(set);
+                        saveNativeContextPrefs();
+                        renderNativeContextSummary();
+                    });
+                    const text = document.createElement('span');
+                    text.textContent = tag;
+                    label.append(input, text);
+                    elements.contextCompendiumTags.appendChild(label);
+                });
+            }
+        }
+        if (elements.contextChapters) {
+            const chapters = [...(snapshot.chapters || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+            if (!chapters.length) {
+                elements.contextChapters.textContent = '暂无章节。';
+            } else {
+                chapters.forEach((chapter) => {
+                    const row = document.createElement('label');
+                    row.className = 'desktop-native-context-row';
+                    const select = document.createElement('select');
+                    select.value = nativeEditorState.context.chapterModes[chapter.id] || '';
+                    [['', '不引用'], ['summary', '摘要'], ['full', '全文']].forEach(([value, label]) => {
+                        const option = document.createElement('option');
+                        option.value = value;
+                        option.textContent = label;
+                        select.appendChild(option);
+                    });
+                    select.addEventListener('change', () => {
+                        if (select.value) nativeEditorState.context.chapterModes[chapter.id] = select.value;
+                        else delete nativeEditorState.context.chapterModes[chapter.id];
+                        saveNativeContextPrefs();
+                        renderNativeContextSummary();
+                    });
+                    const text = document.createElement('span');
+                    text.textContent = chapter.title || '未命名章节';
+                    row.append(select, text);
+                    elements.contextChapters.appendChild(row);
+                });
+            }
+        }
+        const scenes = [...(snapshot.scenes || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+        if (!scenes.length) {
+            elements.contextScenes.textContent = '暂无场景。';
+        } else {
+            scenes.forEach((scene) => {
+                const row = document.createElement('label');
+                row.className = 'desktop-native-context-row';
+                const select = document.createElement('select');
+                select.value = nativeEditorState.context.sceneModes[scene.id] || '';
+                [['', '不引用'], ['summary', '摘要'], ['full', '全文']].forEach(([value, label]) => {
+                    const option = document.createElement('option');
+                    option.value = value;
+                    option.textContent = label;
+                    select.appendChild(option);
+                });
+                select.addEventListener('change', () => {
+                    if (select.value) nativeEditorState.context.sceneModes[scene.id] = select.value;
+                    else delete nativeEditorState.context.sceneModes[scene.id];
+                    saveNativeContextPrefs();
+                    renderNativeContextSummary();
+                });
+                const text = document.createElement('span');
+                text.textContent = scene.title || '未命名场景';
+                row.append(select, text);
+                elements.contextScenes.appendChild(row);
+            });
+        }
+        renderNativeContextSummary();
+    }
+
+    function renderNativeContextSummary() {
+        const elements = nativeEditorElements();
+        const snapshot = nativeEditorState.snapshot;
+        if (!elements.contextSummary) return;
+        if (!snapshot || !snapshot.project) {
+            elements.contextSummary.textContent = '打开项目后选择引用的上下文。';
+            return;
+        }
+        const ctx = nativeEditorState.context;
+        const compendium = compendiumState.entries || snapshot.compendium || [];
+        const selectedEntryIds = new Set(ctx.compendiumIds || []);
+        const selectedTagSet = new Set(ctx.compendiumTags || []);
+        const tagMatchedIds = new Set();
+        const entryMap = new Map();
+        compendium.forEach((entry) => {
+            entryMap.set(entry.id, entry);
+            if (!selectedEntryIds.has(entry.id)) {
+                const tags = Array.isArray(entry.tags) ? entry.tags.map((t) => String(t || '').trim()).filter(Boolean) : [];
+                if (tags.some((t) => selectedTagSet.has(t))) tagMatchedIds.add(entry.id);
+            }
+        });
+        const chapterModes = ctx.chapterModes || {};
+        const sceneModes = ctx.sceneModes || {};
+        const selectedChapters = Object.entries(chapterModes).filter(([, mode]) => mode);
+        const selectedScenes = Object.entries(sceneModes).filter(([, mode]) => mode);
+        const parts = [];
+        const directCount = selectedEntryIds.size;
+        const tagCount = tagMatchedIds.size;
+        if (directCount > 0 || tagCount > 0) {
+            const names = [];
+            selectedEntryIds.forEach((id) => {
+                const entry = entryMap.get(id);
+                if (entry) names.push(entry.title || '未命名资料');
+            });
+            tagMatchedIds.forEach((id) => {
+                const entry = entryMap.get(id);
+                if (entry) names.push(entry.title || '未命名资料');
+            });
+            const label = [];
+            if (directCount > 0) label.push(`${directCount}条直接引用`);
+            if (tagCount > 0) label.push(`${tagCount}条标签匹配`);
+            const preview = names.slice(0, 3).join('、');
+            const suffix = names.length > 3 ? ` 等${names.length}条` : '';
+            parts.push(`资料: ${label.join('，')}（${preview}${suffix}）`);
+        }
+        if (selectedChapters.length > 0) {
+            const modeLabels = { summary: '摘要', full: '全文' };
+            const list = selectedChapters.map(([id, mode]) => {
+                const chapter = (snapshot.chapters || []).find((c) => c.id === id);
+                return `${chapter ? chapter.title || '未命名章节' : '未命名章节'}（${modeLabels[mode] || mode}）`;
+            }).join(', ');
+            parts.push(`章节引用: ${list}`);
+        }
+        if (selectedScenes.length > 0) {
+            const modeLabels = { summary: '摘要', full: '全文' };
+            const list = selectedScenes.map(([id, mode]) => {
+                const scene = (snapshot.scenes || []).find((s) => s.id === id);
+                return `${scene ? scene.title || '未命名场景' : '未命名场景'}（${modeLabels[mode] || mode}）`;
+            }).join(', ');
+            parts.push(`场景引用: ${list}`);
+        }
+        if (parts.length === 0) {
+            elements.contextSummary.textContent = '未选择引用上下文。';
+            return;
+        }
+        elements.contextSummary.textContent = parts.join(' | ');
+    }
+
+    function updateRewritePresetDescription() {
+        var elements = nativeEditorElements();
+        if (!elements.rewritePresetDescription) return;
+        var preset = nativeEditorState.rewrite.preset || 'balanced-polish';
+        var descriptions = {
+            'balanced-polish': '使语言更自然、流畅、有画面感，保留原意。长度接近原文。',
+            tighten: '压缩并精炼，删去重复拖沓，表达更干净有力。长度约原文 60%-80%。',
+            expand: '适度扩写，补足动作、心理和环境细节。长度约原文 1.3-1.8 倍。',
+            'show-dont-tell': '把直白说明改写为具体动作、感官细节和场景表现。',
+            sensory: '增强感官描写和空间感，优先使用视觉、声音、触感等细节。',
+            tension: '提高紧张感和压迫感，加强动作节奏和未知感。',
+            'pace-fast': '让节奏更快利落，减少解释，使用更短句子和直接冲突。',
+            'pace-slow': '放慢节奏，增加停顿、细微动作和情绪层次。',
+            'dialogue-natural': '对白更自然有角色感，减少书面腔，加入动作承载潜台词。',
+            subtext: '增加潜台词，把真实想法藏在措辞、停顿和反应里。',
+            'emotion-deeper': '通过身体反应、记忆闪回、细微动作表现情绪，避免堆砌标签。',
+            'character-voice': '贴合当前视角人物的性格、年龄和情绪，使角色声音更鲜明。',
+            literary: '语言更凝练，意象更准确，节奏有余韵，避免华丽堆砌。',
+            webnovel: '适合中文网文连载，节奏明确，情绪外放，冲突清楚。',
+            cinematic: '增强电影镜头感，用清晰画面调度和动作顺序呈现。',
+            clarity: '理清句子逻辑、人物指代和因果关系，让读者更容易理解。',
+            continuity: '更自然衔接上下文，注意代词、时间和叙述视角一致性。',
+            'remove-cliche': '去掉陈词滥调和套路化表达，换成更具体的表达。',
+            'grammar-copyedit': '只做校对级修改：错别字、病句、标点，尽量保留原句结构。',
+            'same-meaning-alt': '不改变原意，换一种更自然、更有可读性的写法。长度接近原文。',
+            custom: '手动输入改写要求。'
+        };
+        elements.rewritePresetDescription.textContent = descriptions[preset] || '';
+    }
+
+    function rewriteInstructionText() {
+        const preset = nativeEditorState.rewrite.preset || 'polish';
+        const custom = (nativeEditorState.rewrite.instruction || '').trim();
+        const presets = {
+            'balanced-polish': '重写选中文本，使语言更自然、流畅、有画面感，同时保留原意、事实信息、人物关系和叙事视角。不要扩写过多，长度尽量接近原文。',
+            tighten: '压缩并精炼选中文本，删去重复、拖沓、解释过度的句子，让表达更干净有力。保留关键动作、信息和情绪，长度约为原文的 60%-80%。',
+            expand: '适度扩写选中文本，补足必要的动作衔接、心理反应、环境细节和节奏停顿。不要改变剧情走向和人物意图，长度约为原文的 1.3-1.8 倍。',
+            'show-dont-tell': '把选中文本中的直白说明、总结性描述和情绪标签，改写成具体动作、感官细节、人物反应和可观察的场景表现。',
+            sensory: '增强选中文本的感官描写和空间感，优先使用视觉、声音、触感、气味或温度等细节，让场景更可感。',
+            tension: '提高选中文本的紧张感和压迫感。加强动作节奏、停顿、未知感、人物警觉或危险暗示。不要提前揭示答案。',
+            'pace-fast': '让选中文本节奏更快、更利落。减少解释和内心独白，使用更短的句子、更清晰的动作链和更直接的冲突推进。',
+            'pace-slow': '放慢选中文本叙事节奏，增加停顿、观察、细微动作和情绪层次，让读者更充分地感受到这一刻的重要性。',
+            'dialogue-natural': '重写选中文本中的对白，让台词更自然、有角色感，减少书面腔和信息直给，并加入适量动作或停顿承载潜台词。',
+            subtext: '增加潜台词。让人物少直接说出真实想法，把矛盾、犹豫、亲近或敌意藏在措辞、停顿、动作和反应里。',
+            'emotion-deeper': '加深人物情绪层次。通过身体反应、记忆闪回、细微动作或自我克制表现情绪，避免直接堆砌情绪标签。',
+            'character-voice': '让语言更贴合当前视角人物的性格、身份、年龄、经历和情绪状态。调整用词、观察重点和反应方式，使角色声音更鲜明。',
+            literary: '将选中文本重写得更文学化：语言更凝练，意象更准确，节奏更有余韵。避免华丽堆砌和空泛比喻。',
+            webnovel: '将选中文本重写得更适合中文网文连载：节奏明确，情绪更外放，冲突更清楚，句子更有推进力。',
+            cinematic: '增强电影镜头感。用清晰的画面调度、动作顺序、视线移动和环境反应呈现场景，直接写成小说正文。',
+            clarity: '理清句子逻辑、人物指代、动作先后和因果关系。不要改变剧情，只让读者更容易理解正在发生什么。',
+            continuity: '让选中文本更自然地衔接上下文。注意代词、时间、动作连续性、情绪延续和叙述视角一致性。',
+            'remove-cliche': '去掉陈词滥调、套路化形容和常见套话，换成更具体、更贴合当前场景和人物的表达。',
+            'grammar-copyedit': '只做校对级修改：修正错别字、病句、标点、重复和明显不顺的表达。尽量保留原句结构、风格和长度。',
+            'same-meaning-alt': '在不改变原意、不增删剧情信息的前提下，把选中文本换一种更自然、更有可读性的写法。长度接近原文。'
+        };
+        return custom || presets[preset] || presets['balanced-polish'];
+    }
+
+    async function loadRewritePrompts() {
+        const projectId = currentProjectId();
+        if (!projectId) {
+            rewritePromptState.prompts = [];
+            rewritePromptState.selectedId = '';
+            renderRewriteSavedPrompts();
+            return;
+        }
+        try {
+            const response = await fetch(`/api/prompts?${new URLSearchParams({ projectId, category: 'rewrite' }).toString()}`, { cache: 'no-store' });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+            rewritePromptState.prompts = result.prompts || [];
+            if (rewritePromptState.selectedId && !rewritePromptState.prompts.some(function (p) { return p.id === rewritePromptState.selectedId; })) {
+                rewritePromptState.selectedId = '';
+                nativeEditorState.rewrite.savedPromptId = '';
+            }
+        } catch (error) {
+            console.warn('Failed to load rewrite prompts:', error);
+            rewritePromptState.prompts = [];
+        }
+        renderRewriteSavedPrompts();
+    }
+
+    function renderRewriteSavedPrompts() {
+        var elements = nativeEditorElements();
+        if (!elements.rewriteSavedPrompt) return;
+        elements.rewriteSavedPrompt.replaceChildren();
+        var defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = '不使用已保存的 Prompt...';
+        elements.rewriteSavedPrompt.appendChild(defaultOption);
+        rewritePromptState.prompts.forEach(function (prompt) {
+            var option = document.createElement('option');
+            option.value = prompt.id;
+            option.textContent = prompt.title || '未命名 Prompt';
+            if (prompt.id === nativeEditorState.rewrite.savedPromptId) option.selected = true;
+            elements.rewriteSavedPrompt.appendChild(option);
+        });
+        if (elements.rewriteSavedPrompt.value !== (nativeEditorState.rewrite.savedPromptId || '')) {
+            elements.rewriteSavedPrompt.value = nativeEditorState.rewrite.savedPromptId || '';
+        }
+    }
+
+    function buildNativeRewritePrompt() {
+        const elements = nativeEditorElements();
+        const scene = currentNativeScene();
+        if (!scene || !elements.editor) return null;
+        const start = elements.editor.selectionStart || 0;
+        const end = elements.editor.selectionEnd || 0;
+        if (start === end) return null;
+        const selectedText = elements.editor.value.slice(start, end);
+        nativeEditorState.rewrite.originalText = selectedText;
+        nativeEditorState.rewrite.selectionStart = start;
+        nativeEditorState.rewrite.selectionEnd = end;
+        const instruction = rewriteInstructionText();
+        const avoidance = nativeAvoidanceInstruction();
+        return {
+            messages: [
+                {
+                    role: 'system',
+                    content: ['你是小说编辑助手。只输出改写后的正文，不要解释，不要加标题。', avoidance].filter(Boolean).join('\n\n')
+                },
+                {
+                    role: 'user',
+                    content: [
+                        `改写要求：${instruction}`,
+                        '',
+                        `当前场景上下文：\n${elements.editor.value.slice(Math.max(0, start - 1200), Math.min(elements.editor.value.length, end + 1200))}`,
+                        '',
+                        `需要改写的文本：\n${selectedText}`,
+                        '',
+                        '请只输出改写后的文本：'
+                    ].join('\n')
+                }
+            ],
+            asString() {
+                return this.messages.map((message) => `<|im_start|>${message.role}\n${message.content}<|im_end|>`).join('\n');
+            },
+            selection: { start, end, selectedText },
+            instruction
+        };
+    }
+
+    function buildNativeRegenerateSelectionPrompt() {
+        const elements = nativeEditorElements();
+        const scene = currentNativeScene();
+        if (!scene || !elements.editor) return null;
+        const start = elements.editor.selectionStart || 0;
+        const end = elements.editor.selectionEnd || 0;
+        if (start === end) return null;
+        const value = elements.editor.value || '';
+        const selectedText = value.slice(start, end);
+        nativeEditorState.rewrite.originalText = selectedText;
+        nativeEditorState.rewrite.selectionStart = start;
+        nativeEditorState.rewrite.selectionEnd = end;
+        var useContext = nativeEditorState.rewrite.regenerateUseContext !== false;
+        const instruction = (nativeEditorState.rewrite.instruction || '').trim() || '重新生成选中文段，使它自然衔接前后文，并保留当前剧情意图。';
+        const contextBefore = useContext ? value.slice(Math.max(0, start - 8000), start) : '[用户选择不发送上下文]';
+        const contextAfter = useContext ? value.slice(end, Math.min(value.length, end + 8000)) : '[用户选择不发送上下文]';
+        const contextInstruction = useContext
+            ? '必须使用前后文保持连续性，替换文本要能自然插回原位置。'
+            : '请根据用户要求重新生成选中文段。';
+        return {
+            messages: [
+                {
+                    role: 'system',
+                    content: ['你是小说共同写作助手。只输出用于替换选区的小说正文，不要解释，不要加标题，不要使用 Markdown。', nativeAvoidanceInstruction()].filter(Boolean).join('\n\n')
+                },
+                {
+                    role: 'user',
+                    content: [
+                        '请重新生成选中文段。',
+                        contextInstruction,
+                        '不要输出前文、后文、标签、分析或说明。',
+                        '',
+                        `用户要求：${instruction}`,
+                        '',
+                        `前文：\n${contextBefore}`,
+                        '',
+                        `需要替换的选中文段：\n${selectedText}`,
+                        '',
+                        `后文：\n${contextAfter}`,
+                        '',
+                        '替换后的正文：'
+                    ].join('\n')
+                }
+            ],
+            asString() {
+                return this.messages.map((message) => `<|im_start|>${message.role}\n${message.content}<|im_end|>`).join('\n');
+            },
+            selection: { start, end, selectedText },
+            instruction
+        };
+    }
+
+    function saveWriterModelOverride() {
+        try {
+            localStorage.setItem(WRITER_MODEL_KEY, JSON.stringify({
+                profileId: writerModelOverride.profileId || 'inherit',
+                model: writerModelOverride.model || 'inherit',
+                customModel: writerModelOverride.customModel || '',
+                thinking: !!writerModelOverride.thinking
+            }));
+        } catch (error) { /* ignore */ }
+    }
+
+    function loadWriterModelOverride() {
+        try {
+            var saved = JSON.parse(localStorage.getItem(WRITER_MODEL_KEY) || '{}');
+            if (saved && typeof saved === 'object') {
+                writerModelOverride.profileId = saved.profileId || 'inherit';
+                writerModelOverride.customModel = String(saved.customModel || '').trim();
+                if (saved.model === '__custom__') {
+                    writerModelOverride.model = '__custom__';
+                } else if (saved.model && saved.model !== 'inherit' && saved.model !== 'deepseek-v4-flash' && saved.model !== 'deepseek-v4-pro') {
+                    writerModelOverride.model = '__custom__';
+                    writerModelOverride.customModel = String(saved.model || '').trim();
+                } else if (saved.model === 'inherit' || saved.model === 'deepseek-v4-flash' || saved.model === 'deepseek-v4-pro') {
+                    writerModelOverride.model = saved.model;
+                }
+                writerModelOverride.thinking = !!saved.thinking;
+            }
+        } catch (error) { /* ignore */ }
+    }
+
+    function writerApiProfiles() {
+        const settings = settingsWithRuntimeProfiles();
+        return (settings.providerProfiles || []).filter((profile) => {
+            return profile && profile.id && profile.hasApiKey && modelCatalog().isApiCompatibleProvider(profile.provider);
+        });
+    }
+
+    function writerEffectiveProfile() {
+        const settings = settingsWithRuntimeProfiles();
+        const profiles = writerApiProfiles();
+        const selectedProfile = profiles.find((profile) => profile.id === writerModelOverride.profileId);
+        if (selectedProfile) {
+            return {
+                id: selectedProfile.id,
+                label: selectedProfile.name || selectedProfile.provider || 'API 配置组',
+                mode: 'api',
+                provider: selectedProfile.provider,
+                model: selectedProfile.model || ''
+            };
+        }
+        const provider = settings.providerSettings || {};
+        return {
+            id: 'inherit',
+            label: '继承全局',
+            mode: provider.mode || 'local',
+            provider: provider.provider || (provider.mode === 'local' ? 'lmstudio' : 'openai-compatible'),
+            model: provider.model || ''
+        };
+    }
+
+    function writerSelectedModelId(effectiveProfile) {
+        if (writerModelOverride.model === '__custom__') return writerModelOverride.customModel || '';
+        if (writerModelOverride.model && writerModelOverride.model !== 'inherit') return writerModelOverride.model;
+        return effectiveProfile.model || '';
+    }
+
+    function renderWriterModelControl() {
+        var elements = nativeEditorElements();
+        if (!elements.modelSelect || !elements.modelControl) return;
+        var catalog = modelCatalog();
+        var profiles = writerApiProfiles();
+        var effectiveProfile = writerEffectiveProfile();
+        if (writerModelOverride.profileId !== 'inherit' && !profiles.some((profile) => profile.id === writerModelOverride.profileId)) {
+            writerModelOverride.profileId = 'inherit';
+            writerModelOverride.model = 'inherit';
+            writerModelOverride.customModel = '';
+            writerModelOverride.thinking = false;
+            saveWriterModelOverride();
+            effectiveProfile = writerEffectiveProfile();
+        }
+
+        if (elements.profileSelect) {
+            elements.profileSelect.replaceChildren();
+            const inherit = document.createElement('option');
+            inherit.value = 'inherit';
+            inherit.textContent = '继承全局设置';
+            elements.profileSelect.appendChild(inherit);
+            profiles.forEach((profile) => {
+                const option = document.createElement('option');
+                option.value = profile.id;
+                option.textContent = `${profile.name || profile.provider} · ${catalog.getProviderMetadata(profile.provider).label || profile.provider}`;
+                elements.profileSelect.appendChild(option);
+            });
+            elements.profileSelect.value = writerModelOverride.profileId || 'inherit';
+        }
+
+        const canSelectModel = effectiveProfile.mode === 'api' && catalog.isApiCompatibleProvider(effectiveProfile.provider);
+        elements.modelControl.classList.toggle('is-disabled', !canSelectModel);
+        if (elements.modelControlHint) {
+            elements.modelControlHint.textContent = canSelectModel
+                ? `${catalog.getProviderMetadata(effectiveProfile.provider).label || effectiveProfile.provider} · 只显示已添加 API 可用的模型`
+                : '当前继承的是本地模型；如需切换云端模型，请先在设置中添加 API 配置组';
+        }
+
+        elements.modelSelect.replaceChildren();
+        const inheritModel = document.createElement('option');
+        inheritModel.value = 'inherit';
+        inheritModel.textContent = '继承该配置默认模型';
+        elements.modelSelect.appendChild(inheritModel);
+        if (canSelectModel) {
+            catalog.getProviderModels(effectiveProfile.provider).forEach((model) => {
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.label || model.id;
+                elements.modelSelect.appendChild(option);
+            });
+        }
+        elements.modelSelect.disabled = !canSelectModel;
+        elements.modelSelect.value = writerModelOverride.model || 'inherit';
+        if (elements.modelSelect.value !== (writerModelOverride.model || 'inherit')) {
+            elements.modelSelect.value = 'inherit';
+            writerModelOverride.model = 'inherit';
+            writerModelOverride.customModel = '';
+            writerModelOverride.thinking = false;
+            saveWriterModelOverride();
+        }
+
+        if (elements.customModelGroup) elements.customModelGroup.hidden = writerModelOverride.model !== '__custom__';
+        if (elements.customModelInput) {
+            elements.customModelInput.value = writerModelOverride.customModel || '';
+            elements.customModelInput.disabled = !canSelectModel || writerModelOverride.model !== '__custom__';
+        }
+
+        const selectedModel = writerSelectedModelId(effectiveProfile);
+        const thinkingAllowed = canSelectModel && catalog.isThinkingSupported(effectiveProfile.provider, selectedModel);
+        if (elements.thinkingToggle) {
+            elements.thinkingToggle.disabled = !thinkingAllowed;
+            if (!thinkingAllowed) writerModelOverride.thinking = false;
+            elements.thinkingToggle.checked = !!writerModelOverride.thinking && thinkingAllowed;
+        }
+
+        const settings = normalizeDesktopSettings(settingsState.settings || {});
+        const defaults = settings.generationDefaults || {};
+        const useProviderDefaults = !!defaults.useProviderDefaults;
+        const thinkingActive = !!writerModelOverride.thinking && canSelectModel && catalog.isThinkingSupported(effectiveProfile.provider, selectedModel || effectiveProfile.model);
+        const temperatureDisabled = useProviderDefaults || (effectiveProfile.provider === 'deepseek' && thinkingActive);
+        if (elements.writerTemperature) {
+            elements.writerTemperature.value = defaults.temperature === undefined ? 0.8 : defaults.temperature;
+            elements.writerTemperature.disabled = temperatureDisabled;
+        }
+        if (elements.writerMaxTokens) {
+            elements.writerMaxTokens.value = defaults.maxTokens || 2000;
+            elements.writerMaxTokens.disabled = useProviderDefaults;
+        }
+        if (elements.writerProviderDefaults) {
+            elements.writerProviderDefaults.checked = useProviderDefaults;
+        }
+        if (elements.writerSamplingHint) {
+            if (useProviderDefaults) {
+                elements.writerSamplingHint.textContent = '已交给服务商默认参数';
+            } else if (effectiveProfile.provider === 'deepseek' && thinkingActive) {
+                elements.writerSamplingHint.textContent = 'DeepSeek Thinking 不发送温度参数';
+            } else {
+                const maxTokens = defaults.maxTokens || 2000;
+                elements.writerSamplingHint.textContent = maxTokens <= 800 ? '输出偏短，适合短句测试' : `约 ${maxTokens} tokens`;
+            }
+        }
+    }

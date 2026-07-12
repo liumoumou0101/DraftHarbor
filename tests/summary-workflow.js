@@ -1,0 +1,84 @@
+const assert = require('assert');
+const fs = require('fs/promises');
+const os = require('os');
+const path = require('path');
+const { chromium } = require('playwright');
+const { startDesktopServers } = require('../desktop/local-server');
+
+function snapshot() {
+  return {
+    version: '2.1-summary-workflow-test',
+    exportedAt: '2026-07-11T00:00:00.000Z',
+    filesystemSavedAt: '2026-07-11T00:00:00.000Z',
+    project: { id: 'summary-project', name: 'Summary Project', created: '2026-07-11T00:00:00.000Z', modified: '2026-07-11T00:00:00.000Z' },
+    chapters: [{ id: 'summary-chapter', projectId: 'summary-project', title: 'Summary Chapter', order: 0 }],
+    scenes: [{ id: 'summary-scene', projectId: 'summary-project', chapterId: 'summary-chapter', title: 'Summary Scene', order: 0 }],
+    sceneContents: { 'summary-scene': 'The navigator finds the missing chart in the flooded archive.' },
+    compendium: [], prompts: [], codex: [], promptHistory: [], workshopSessions: []
+  };
+}
+
+(async () => {
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-summary-'));
+  let servers = null;
+  let browser = null;
+  try {
+    const projectsDir = path.join(dataRoot, 'projects');
+    await fs.mkdir(projectsDir, { recursive: true });
+    await fs.writeFile(path.join(projectsDir, 'Summary Project--summary-project.json'), JSON.stringify(snapshot()), 'utf8');
+    servers = await startDesktopServers({ appRoot: path.resolve(__dirname, '..'), dataRoot });
+    browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage({ viewport: { width: 1366, height: 850 } });
+    await page.goto(`${servers.appUrl}/desktop.html`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('.desktop-project-card');
+    await page.locator('.desktop-project-card').first().click();
+    await page.waitForFunction(() => document.querySelector('[data-native-project-title]').textContent.includes('Summary Project'));
+
+    await page.click('[data-view-target="settings"]');
+    await page.selectOption('[data-settings-mode]', 'api');
+    await page.selectOption('[data-settings-provider]', 'openai-compatible');
+    await page.fill('[data-settings-endpoint]', 'https://example.test/v1/chat/completions');
+    await page.fill('[data-settings-model]', 'summary-test-model');
+    await page.fill('[data-settings-api-key]', 'summary-test-key');
+    await page.locator('[data-settings-form] button[type="submit"]').click();
+    await page.waitForFunction(() => document.querySelector('[data-settings-status]').textContent.includes('设置已保存'));
+
+    await page.click('[data-view-target="writer"]');
+    await page.locator('[data-native-scene-id]').first().click();
+    await page.click('[data-native-panel-tab="metadata"]');
+    await page.waitForSelector('[data-native-generate-scene-summary]:not([disabled])');
+    await page.evaluate(() => {
+      window.__draftHarborGenerationStub = async (prompt, onToken) => {
+        for (const token of ['Scene', ' summary.']) onToken(token);
+      };
+    });
+    await page.click('[data-native-generate-scene-summary]');
+    await page.waitForFunction(() => document.querySelector('[data-native-scene-summary]').value === 'Scene summary.');
+    await page.click('[data-native-save-scene]');
+    await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('已保存'));
+
+    await page.locator('[data-native-scene-id]').first().click();
+    await page.click('[data-native-panel-tab="metadata"]');
+    await page.waitForSelector('[data-native-generate-chapter-summary]:not([disabled])');
+    await page.click('[data-native-generate-chapter-summary]');
+    await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('章节摘要已生成'));
+    await page.click('[data-native-save-scene]');
+    await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('已保存'));
+    const saved = await fetch(`${servers.appUrl}/api/get-project?projectId=summary-project`).then((response) => response.json());
+    assert.strictEqual(saved.project.scenes[0].summary, 'Scene summary.', 'scene summary should persist after save');
+    assert.strictEqual(saved.project.chapters[0].summary, 'Scene summary.', 'chapter summary should persist after save');
+
+    await page.evaluate(() => { window.__draftHarborGenerationStub = async () => { throw new Error('summary provider failure'); }; });
+    await page.click('[data-native-panel-tab="metadata"]');
+    await page.waitForSelector('[data-native-generate-chapter-summary]:not([disabled])');
+    await page.click('[data-native-generate-chapter-summary]');
+    await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('summary provider failure'));
+    const afterFailure = await fetch(`${servers.appUrl}/api/get-project?projectId=summary-project`).then((response) => response.json());
+    assert.strictEqual(afterFailure.project.chapters[0].summary, 'Scene summary.', 'failed generation must not overwrite a saved chapter summary');
+    console.log('Summary workflow test passed.');
+  } finally {
+    if (browser) await browser.close();
+    if (servers) servers.close();
+    await fs.rm(dataRoot, { recursive: true, force: true });
+  }
+})().catch((error) => { console.error('Summary workflow test failed:', error && error.stack ? error.stack : error); process.exit(1); });

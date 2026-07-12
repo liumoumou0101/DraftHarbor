@@ -1,0 +1,50 @@
+            <section class="desktop-view desktop-view-bookshelf is-active" data-view-panel="bookshelf">
+                <div class="desktop-placeholder-layout">
+                    <div class="desktop-placeholder-copy">
+                        <p class="desktop-section-kicker">作品工作台</p>
+                        <h2>书库</h2>
+                        <div class="desktop-library-overview">
+                            <p class="desktop-library-count" data-project-library-count>—</p>
+                            <p class="desktop-library-meta" data-project-library-meta>正在读取本地书库...</p>
+                        </div>
+                        <div class="desktop-action-group desktop-action-group-primary">
+                            <p class="desktop-action-group-label">创作入口</p>
+                            <button class="desktop-primary-action" type="button" data-open-new-project>新建作品</button>
+                            <button class="desktop-secondary-action" type="button" data-view-target="writer">打开写作器</button>
+                        </div>
+                        <div class="desktop-action-group">
+                            <p class="desktop-action-group-label">导入迁移</p>
+                            <button class="desktop-secondary-action" type="button" data-import-project-snapshot>导入旧 JSON</button>
+                            <button class="desktop-secondary-action" type="button" data-import-project-package>导入项目包</button>
+                            <button class="desktop-secondary-action" type="button" data-import-writingway1>导入 W1 文件夹</button>
+                        </div>
+                        <div class="desktop-action-group">
+                            <p class="desktop-action-group-label">维护</p>
+                            <button class="desktop-secondary-action" type="button" data-refresh-projects>刷新书库</button>
+                            <button class="desktop-secondary-action" type="button" data-open-project-folder>打开项目目录</button>
+                        </div>
+                        <input type="file" data-import-project-snapshot-file accept="application/json,.json" hidden>
+                        <input type="file" data-import-project-package-file accept=".zip,.draftharbor-project.zip,.writingway-project.zip,application/zip" hidden>
+                        <input type="file" data-import-writingway1-files webkitdirectory directory multiple hidden>
+                    </div>
+
+                    <div class="desktop-bookshelf-preview" aria-label="Bookshelf projects">
+                        <div class="desktop-library-toolbar" aria-label="Bookshelf filters">
+                            <div class="desktop-library-toolbar-group">
+                                <input type="search" data-project-search placeholder="搜索书名或文件名">
+                            </div>
+                            <div class="desktop-library-toolbar-group">
+                                <select data-project-sort aria-label="项目排序">
+                                    <option value="recent">最近保存</option>
+                                    <option value="name">书名</option>
+                                    <option value="words">字数</option>
+                                    <option value="chapters">章节数</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="desktop-library-status" data-project-library-status>正在读取项目...</div>
+                        <div class="desktop-project-grid" data-project-grid></div>
+                        <div class="desktop-shelf-status" data-project-library-meta-secondary></div>
+                    </div>
+                </div>
+            </section>

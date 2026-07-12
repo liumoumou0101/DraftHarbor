@@ -285,6 +285,53 @@ async function submitNativeName(page, value) {
         await page.locator('[data-settings-form] button[type="submit"]').click();
         await page.waitForFunction(() => document.querySelector('[data-settings-status]').textContent.includes('设置已保存'));
         await page.click('[data-view-target="writer"]');
+        await page.click('[data-native-style-guard]');
+        await page.waitForFunction(() => document.querySelector('[data-style-guard-modal]') && !document.querySelector('[data-style-guard-modal]').hidden);
+        await page.selectOption('[data-style-guard-scope]', 'global');
+        await page.fill('[data-style-guard-rules]', '冷月像银盘 | 避免陈旧比喻');
+        await page.locator('[data-style-guard-form] button[type="submit"]').click();
+        await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('全局避免写法规则'));
+        const globalRulesSettings = await fetch(`${servers.appUrl}/api/settings`).then((response) => response.json());
+        assert.strictEqual(globalRulesSettings.settings.globalStyleGuardRules[0].text, '冷月像银盘', 'global avoidance rules should persist in desktop settings');
+        await page.click('[data-view-target="compendium"]');
+        await page.waitForSelector('[data-compendium-ai-rewrite]:not([disabled])');
+        await page.click('[data-compendium-ai-rewrite]');
+        await page.waitForFunction(() => document.querySelector('[data-compendium-rewrite-modal]') && !document.querySelector('[data-compendium-rewrite-modal]').hidden);
+        await page.evaluate(() => {
+            const fields = document.querySelector('[data-compendium-rewrite-fields]');
+            Array.from(fields.options).forEach((option) => { option.selected = option.value === 'summary'; });
+            fields.dispatchEvent(new Event('change', { bubbles: true }));
+            window.__draftHarborGenerationStub = async (prompt, onToken) => onToken('{"summary":"AI refined navigator summary."}');
+        });
+        await page.click('[data-compendium-rewrite-generate]');
+        await page.waitForFunction(() => document.querySelector('[data-compendium-rewrite-preview]').value.includes('AI refined navigator summary.'));
+        await page.locator('[data-compendium-rewrite-form] button[type="submit"]').click();
+        await page.waitForFunction(() => document.querySelector('[data-compendium-status]').textContent.includes('字段补丁已应用'));
+        const rewrittenCompendiumResponse = await fetch(`${servers.appUrl}/api/compendium?projectId=${encodeURIComponent(draftProjectId)}&query=Ada%20Navigator`);
+        const rewrittenCompendiumBody = await rewrittenCompendiumResponse.json();
+        assert.strictEqual(rewrittenCompendiumBody.entries[0].summary, 'AI refined navigator summary.', 'AI rewrite should update the selected summary field');
+        assert.strictEqual(rewrittenCompendiumBody.entries[0].body, 'Ada remembers every route through the storm belt.', 'AI rewrite should preserve unselected card fields');
+        await page.click('[data-compendium-draw]');
+        await page.waitForFunction(() => document.querySelector('[data-compendium-draw-modal]') && !document.querySelector('[data-compendium-draw-modal]').hidden);
+        await page.evaluate(() => {
+            window.__draftHarborGenerationStub = async (prompt, onToken) => onToken('{"cards":[{"type":"character","title":"Locked Harbor Guide","summary":"First draw.","tags":["draw"],"body":"A guide knows every tide route."}]}');
+        });
+        await page.click('[data-compendium-draw-generate]');
+        await page.waitForFunction(() => document.querySelector('[data-compendium-draw-title]').value === 'Locked Harbor Guide');
+        await page.check('[data-compendium-draw-lock="title"]');
+        await page.evaluate(() => {
+            window.__draftHarborGenerationStub = async (prompt, onToken) => onToken('{"cards":[{"type":"character","title":"Different Title","summary":"Second draw.","tags":["rerolled"],"body":"A different body."}]}');
+        });
+        await page.click('[data-compendium-draw-generate]');
+        await page.waitForFunction(() => document.querySelector('[data-compendium-draw-summary]').value === 'Second draw.');
+        assert.strictEqual(await page.locator('[data-compendium-draw-title]').inputValue(), 'Locked Harbor Guide', 'locked draw fields should survive reroll');
+        await page.locator('[data-compendium-draw-form] button[type="submit"]').click();
+        await page.waitForFunction(() => document.querySelector('[data-compendium-status]').textContent.includes('已保存抽卡资料'));
+        const drawnCompendiumResponse = await fetch(`${servers.appUrl}/api/compendium?projectId=${encodeURIComponent(draftProjectId)}&query=Locked%20Harbor%20Guide`);
+        const drawnCompendiumBody = await drawnCompendiumResponse.json();
+        assert.strictEqual(drawnCompendiumBody.entries[0].title, 'Locked Harbor Guide', 'confirmed draw should save the locked title');
+        assert.strictEqual(drawnCompendiumBody.entries[0].summary, 'Second draw.', 'confirmed draw should save rerolled unlocked fields');
+        await page.click('[data-view-target="writer"]');
         await page.evaluate(() => {
             const settings = document.querySelector('[data-native-model-settings]');
             if (settings) settings.open = true;
@@ -316,6 +363,7 @@ async function submitNativeName(page, value) {
         const previewText = await page.locator('[data-native-prompt-preview]').innerText();
         assert.ok(previewText.includes('Write with luminous restraint.'), 'prompt preview should include selected system template');
         assert.ok(previewText.includes('Mention tactile details'), 'prompt preview should include selected user template');
+        assert.ok(previewText.includes('冷月像银盘'), 'global avoidance rules should be injected into prose prompts');
         assert.ok(previewText.includes('Ada remembers every route'), 'prompt preview should include always-in-context compendium entry');
         await page.evaluate(() => document.querySelector('[data-native-prompt-dialog]').close());
         await page.waitForFunction(() => !document.querySelector('[data-native-prompt-dialog]').open);
@@ -606,14 +654,28 @@ async function submitNativeName(page, value) {
         });
         await page.click('[data-native-save-to-compendium]');
         await page.waitForFunction(function () {
-            return document.querySelector('[data-native-save-status]').textContent.includes('片段已保存为资料');
+            return document.querySelector('[data-native-extract-modal]') && !document.querySelector('[data-native-extract-modal]').hidden;
+        });
+        await page.evaluate(function () {
+            window.__draftHarborGenerationStub = async function (prompt, onToken) {
+                onToken('{"cards":[{"type":"character","title":"Handoff Character","summary":"Extracted from selection.","tags":["handoff"],"body":"Handoff test text"}]}');
+            };
+        });
+        await page.click('[data-native-extract-generate]');
+        await page.waitForFunction(function () {
+            return document.querySelector('[data-native-extract-title]').value === 'Handoff Character';
+        });
+        await page.locator('[data-native-extract-form] button[type="submit"]').click();
+        await page.waitForFunction(function () {
+            return document.querySelector('[data-native-save-status]').textContent.includes('已保存资料卡');
         });
         var handoffCompendiumApiResponse = await fetch(servers.appUrl + '/api/compendium?projectId=' + encodeURIComponent(draftProjectId));
         var handoffCompendiumApiBody = await handoffCompendiumApiResponse.json();
-        var fragmentEntry = handoffCompendiumApiBody.entries.find(function (e) { return e.title.includes('来自'); });
-        assert.ok(fragmentEntry, 'writer handoff should save compendium entry with scene-derived title');
+        var fragmentEntry = handoffCompendiumApiBody.entries.find(function (e) { return e.title === 'Handoff Character'; });
+        assert.ok(fragmentEntry, 'writer extraction should save the confirmed card draft');
         assert.ok(fragmentEntry.body.includes('Handoff test'), 'saved compendium entry should contain the selected text');
-        assert.ok((fragmentEntry.tags || []).includes('writer-fragment'), 'saved compendium entry should have writer-fragment tag');
+        assert.ok((fragmentEntry.tags || []).includes('handoff'), 'saved compendium entry should keep AI draft tags');
+        assert.ok(fragmentEntry.sourceReferences && fragmentEntry.sourceReferences[0].excerpt.includes('Handoff test'), 'saved card should retain its source excerpt');
 
         // Writer handoff: Send to workshop
         await page.click('[data-view-target="writer"]');

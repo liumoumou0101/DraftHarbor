@@ -88,6 +88,7 @@
             promptHistory: [],
             workshopSessions: [],
             workflowRuns: []
+            ,styleGuardRules: []
         };
     }
 

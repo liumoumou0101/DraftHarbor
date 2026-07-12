@@ -1,0 +1,275 @@
+            <section class="desktop-view desktop-settings-view" data-view-panel="settings">
+                <div class="desktop-settings-header">
+                    <div>
+                        <p class="desktop-section-kicker">Settings</p>
+                        <h2>设置中心</h2>
+                        <p>管理 AI 连接、写作模型、生成偏好、外观、朗读与本地存储。</p>
+                    </div>
+                    <span class="desktop-settings-status" data-settings-status aria-live="polite">正在读取设置...</span>
+                </div>
+
+                <div class="desktop-settings-shell">
+                    <nav class="desktop-settings-categories" aria-label="设置分类导航">
+                        <button type="button" class="desktop-settings-cat-item is-active" data-settings-cat-target="provider">
+                            <strong>AI 连接</strong>
+                            <span data-settings-cat-summary="provider">读取中</span>
+                        </button>
+                        <button type="button" class="desktop-settings-cat-item" data-settings-cat-target="profiles">
+                            <strong>模型档案</strong>
+                            <span data-settings-cat-summary="profiles">读取中</span>
+                        </button>
+                        <button type="button" class="desktop-settings-cat-item" data-settings-cat-target="generation">
+                            <strong>生成参数</strong>
+                            <span data-settings-cat-summary="generation">读取中</span>
+                        </button>
+                        <button type="button" class="desktop-settings-cat-item" data-settings-cat-target="appearance">
+                            <strong>外观</strong>
+                            <span data-settings-cat-summary="appearance">读取中</span>
+                        </button>
+                        <button type="button" class="desktop-settings-cat-item" data-settings-cat-target="tts">
+                            <strong>朗读</strong>
+                            <span data-settings-cat-summary="tts">本机语音</span>
+                        </button>
+                        <button type="button" class="desktop-settings-cat-item" data-settings-cat-target="storage">
+                            <strong>存储与维护</strong>
+                            <span data-settings-cat-summary="storage">本地优先</span>
+                        </button>
+                    </nav>
+
+                    <form class="desktop-settings-grid" data-settings-form>
+                    <section class="desktop-settings-section" data-settings-section="provider">
+                        <div class="desktop-settings-section-heading">
+                            <div>
+                                <p class="desktop-section-kicker">AI Connection</p>
+                                <h3>默认 AI 连接</h3>
+                            </div>
+                            <span>写作页默认继承</span>
+                        </div>
+                        <p class="desktop-settings-desc">本地模型无需 API Key；云端模型需要兼容接口地址与密钥。</p>
+                        <label>
+                            <span>模式</span>
+                            <select data-settings-mode>
+                                <option value="local">本地模型</option>
+                                <option value="api">API / OpenAI-compatible</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Provider</span>
+                            <select data-settings-provider>
+                                <option value="lmstudio">LM Studio</option>
+                                <option value="ollama">Ollama</option>
+                                <option value="openai-compatible">OpenAI-compatible</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="openrouter">OpenRouter</option>
+                                <option value="anthropic">Anthropic</option>
+                                <option value="google">Google AI</option>
+                                <option value="deepseek">DeepSeek</option>
+                                <option value="nanogpt">NanoGPT</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Endpoint</span>
+                            <input type="url" data-settings-endpoint placeholder="http://localhost:8080 或 https://.../chat/completions">
+                        </label>
+                        <label>
+                            <span>Model</span>
+                            <input type="text" data-settings-model placeholder="模型名">
+                        </label>
+                        <label>
+                            <span>API Key</span>
+                            <input type="password" data-settings-api-key placeholder="留空表示保持现有密钥">
+                        </label>
+                    </section>
+
+                    <section class="desktop-settings-section" data-settings-section="profiles">
+                        <div class="desktop-settings-section-heading">
+                            <div>
+                                <p class="desktop-section-kicker">Model Profiles</p>
+                                <h3>写作模型档案</h3>
+                            </div>
+                            <span>可在写作页切换</span>
+                        </div>
+                        <p class="desktop-settings-desc">为 DeepSeek、OpenAI 等云端模型保存独立档案。只有密钥和接口完整的档案才会出现在写作页。</p>
+                        <div class="desktop-settings-profiles-list" data-settings-profiles-list></div>
+                        <div class="desktop-settings-profile-editor" data-settings-profile-editor hidden>
+                            <div class="desktop-settings-profile-editor-heading">
+                                <strong>配置模型档案</strong>
+                                <span>密钥只保存在本机设置中。</span>
+                            </div>
+                            <label>
+                                <span>名称</span>
+                                <input type="text" data-settings-profile-name placeholder="例如：我的 DeepSeek">
+                            </label>
+                            <label>
+                                <span>Provider</span>
+                                <select data-settings-profile-provider>
+                                    <option value="deepseek">DeepSeek</option>
+                                    <option value="openai">OpenAI</option>
+                                    <option value="openrouter">OpenRouter</option>
+                                    <option value="nanogpt">NanoGPT</option>
+                                    <option value="openai-compatible">OpenAI-compatible</option>
+                                    <option value="custom">Custom</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span>Endpoint</span>
+                                <input type="url" data-settings-profile-endpoint placeholder="https://.../chat/completions">
+                            </label>
+                            <label>
+                                <span>模型 (可选)</span>
+                                <input type="text" data-settings-profile-model placeholder="默认模型（可在写作页切换）">
+                            </label>
+                            <label>
+                                <span>API Key</span>
+                                <input type="password" data-settings-profile-api-key placeholder="留空表示保持现有密钥">
+                            </label>
+                            <div class="desktop-settings-actions">
+                                <button class="desktop-primary-action" type="button" data-settings-profile-save>保存配置组</button>
+                                <button class="desktop-secondary-action" type="button" data-settings-profile-cancel>取消</button>
+                                <button class="desktop-secondary-action" type="button" data-settings-profile-delete hidden>删除此配置组</button>
+                            </div>
+                        </div>
+                        <div class="desktop-settings-actions">
+                            <button class="desktop-secondary-action" type="button" data-settings-profile-add>新建 Provider 配置组</button>
+                        </div>
+                    </section>
+
+                    <section class="desktop-settings-section" data-settings-section="generation">
+                        <div class="desktop-settings-section-heading">
+                            <div>
+                                <p class="desktop-section-kicker">Generation</p>
+                                <h3>生成默认值</h3>
+                            </div>
+                            <span>写作任务的基础参数</span>
+                        </div>
+                        <label>
+                            <span>温度</span>
+                            <input type="number" data-settings-temperature min="0" max="2" step="0.05">
+                        </label>
+                        <label>
+                            <span>最大输出长度</span>
+                            <input type="number" data-settings-max-tokens min="1" max="200000" step="1">
+                        </label>
+                        <label class="desktop-settings-check">
+                            <input type="checkbox" data-settings-provider-defaults>
+                            <span>使用 provider 默认采样参数</span>
+                        </label>
+                    </section>
+
+                    <section class="desktop-settings-section" data-settings-section="appearance">
+                        <div class="desktop-settings-section-heading">
+                            <div>
+                                <p class="desktop-section-kicker">Appearance</p>
+                                <h3>桌面主题</h3>
+                            </div>
+                            <span>立即预览</span>
+                        </div>
+                        <p class="desktop-settings-desc">选择桌面配色主题，立即生效。</p>
+                        <label>
+                            <span>桌面主题</span>
+                            <select data-settings-theme>
+                                <option value="morandi-ink">墨灰书房</option>
+                                <option value="mist-library">雾光书库</option>
+                                <option value="ash-rose">灰玫瑰工作室</option>
+                            </select>
+                        </label>
+                        <div class="desktop-theme-grid">
+                            <button type="button" class="desktop-theme-card" data-settings-theme-choice="morandi-ink">
+                                <span class="desktop-theme-swatch">
+                                    <span class="desktop-theme-swatch-slice" style="background:#302f29"></span>
+                                    <span class="desktop-theme-swatch-slice" style="background:#b0b98a"></span>
+                                    <span class="desktop-theme-swatch-slice" style="background:#f1eadb"></span>
+                                </span>
+                                <span class="desktop-theme-label">Morandi Ink</span>
+                                <span class="desktop-theme-sub">墨灰书房</span>
+                            </button>
+                            <button type="button" class="desktop-theme-card" data-settings-theme-choice="mist-library">
+                                <span class="desktop-theme-swatch">
+                                    <span class="desktop-theme-swatch-slice" style="background:#f8f7f3"></span>
+                                    <span class="desktop-theme-swatch-slice" style="background:#5f8f8a"></span>
+                                    <span class="desktop-theme-swatch-slice" style="background:#fbf7ef"></span>
+                                </span>
+                                <span class="desktop-theme-label">Mist Library</span>
+                                <span class="desktop-theme-sub">雾光书库</span>
+                            </button>
+                            <button type="button" class="desktop-theme-card" data-settings-theme-choice="ash-rose">
+                                <span class="desktop-theme-swatch">
+                                    <span class="desktop-theme-swatch-slice" style="background:#c4a4a6"></span>
+                                    <span class="desktop-theme-swatch-slice" style="background:#7a826a"></span>
+                                    <span class="desktop-theme-swatch-slice" style="background:#e8dccf"></span>
+                                </span>
+                                <span class="desktop-theme-label">Ash Rose</span>
+                                <span class="desktop-theme-sub">灰玫瑰工作室</span>
+                            </button>
+                        </div>
+                        <div class="desktop-settings-actions">
+                            <button class="desktop-primary-action" type="button" data-settings-theme-save>保存外观</button>
+                        </div>
+                    </section>
+
+                    <section class="desktop-settings-section" data-settings-section="tts">
+                        <div class="desktop-settings-section-heading">
+                            <div>
+                                <p class="desktop-section-kicker">Read Aloud</p>
+                                <h3>朗读</h3>
+                            </div>
+                            <span>使用 Windows 本机语音</span>
+                        </div>
+                        <label>
+                            <span>声音</span>
+                            <select data-settings-tts-voice></select>
+                        </label>
+                        <div class="desktop-settings-actions">
+                            <button class="desktop-secondary-action" type="button" data-settings-tts-refresh-voices>刷新声音列表</button>
+                        </div>
+                        <label>
+                            <span>语速</span>
+                            <input type="range" data-settings-tts-rate min="0.5" max="2" step="0.1">
+                            <span data-settings-tts-rate-value>1.0</span>
+                        </label>
+                    </section>
+
+                    <section class="desktop-settings-section" data-settings-section="storage">
+                        <div class="desktop-settings-section-heading">
+                            <div>
+                                <p class="desktop-section-kicker">Storage &amp; Maintenance</p>
+                                <h3>存储与维护</h3>
+                            </div>
+                            <span>所有内容保存在本机</span>
+                        </div>
+                        <p class="desktop-settings-desc">作品与备份默认放在同一个书库目录下。更换书库位置不会自动搬移旧文件。</p>
+                        <div class="desktop-settings-path-card">
+                            <div>
+                                <strong>作品书库</strong>
+                                <span data-settings-project-location>正在读取...</span>
+                            </div>
+                            <div class="desktop-settings-actions">
+                                <button class="desktop-secondary-action" type="button" data-settings-open-project-location>打开目录</button>
+                                <button class="desktop-secondary-action" type="button" data-settings-choose-project-location>更换位置</button>
+                            </div>
+                        </div>
+                        <div class="desktop-settings-path-card">
+                            <div>
+                                <strong>备份目录</strong>
+                                <span data-settings-backup-location>正在读取...</span>
+                            </div>
+                            <div class="desktop-settings-actions">
+                                <button class="desktop-secondary-action" type="button" data-settings-open-backup-location>打开目录</button>
+                                <button class="desktop-secondary-action" type="button" data-settings-choose-backup-location>单独设置</button>
+                            </div>
+                        </div>
+                        <div class="desktop-settings-maintenance-note">
+                            <strong>发布版数据原则</strong>
+                            <span>项目、资料、讨论、工作流与备份都保存在本地；卸载应用前请保留作品书库。</span>
+                        </div>
+                    </section>
+                    <div class="desktop-settings-actions desktop-settings-global-actions">
+                        <button class="desktop-primary-action" type="submit">保存设置</button>
+                        <button class="desktop-secondary-action" type="button" data-settings-test>检查配置</button>
+                        <button class="desktop-secondary-action" type="button" data-settings-refresh>重新读取</button>
+                    </div>
+                    </form>
+                </div>
+
+            </section>

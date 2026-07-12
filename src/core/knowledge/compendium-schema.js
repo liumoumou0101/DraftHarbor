@@ -85,6 +85,27 @@
         return result;
     }
 
+    function normalizeSourceReferences(values) {
+        const seen = new Set();
+        return (Array.isArray(values) ? values : [])
+            .map((value) => {
+                const source = value && typeof value === 'object' ? value : {};
+                return {
+                    sceneId: cleanString(source.sceneId),
+                    excerpt: cleanString(source.excerpt),
+                    createdAt: normalizeTimestamp(source.createdAt, nowIso())
+                };
+            })
+            .filter((source) => source.sceneId || source.excerpt)
+            .filter((source) => {
+                const key = `${source.sceneId}\n${source.excerpt}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            })
+            .slice(0, 40);
+    }
+
     function typeFromCategory(value) {
         const text = cleanString(value).toLowerCase();
         const aliases = {
@@ -146,6 +167,7 @@
             tags: uniqueStrings(input.tags).slice(0, 40),
             aliases: uniqueStrings(input.aliases).slice(0, 40),
             relatedSceneIds: uniqueStrings(input.relatedSceneIds || input.sceneIds).slice(0, 80),
+            sourceReferences: normalizeSourceReferences(input.sourceReferences),
             imageUrl: cleanString(input.imageUrl),
             alwaysInContext,
             contextPolicy,
@@ -190,6 +212,7 @@
             alwaysInContext: normalized.alwaysInContext,
             contextPolicy: normalized.contextPolicy,
             characterProfile: normalized.characterProfile,
+            sourceReferences: normalized.sourceReferences,
             updatedAt: normalized.updatedAt
         };
     }
@@ -199,6 +222,7 @@
         createCompendiumEntry,
         normalizeCompendiumEntries,
         compendiumEntrySummary,
+        normalizeSourceReferences,
         typeFromCategory,
         normalizeContextPolicy
     };

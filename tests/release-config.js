@@ -30,7 +30,7 @@ assert.ok(!String(pkg.scripts['backup-test'] || '').includes('backup-browser'), 
 assert.ok(String(pkg.scripts.unit || '').includes('tests/protocol-handler.js'), 'unit tests should cover the direct protocol handler path');
 
 assert.ok(pkg.build, 'electron-builder config should exist');
-assert.strictEqual(pkg.build.asar, false, 'asar should stay disabled until an asar runtime verification exists');
+assert.strictEqual(pkg.build.asar, true, 'production packages should keep application sources in an ASAR archive');
 
 const files = pkg.build.files || [];
 for (const required of ['desktop/**/*', 'src/**/*', 'desktop.html', 'package.json']) {
@@ -64,11 +64,40 @@ assert.ok(!fileExists('tools/updater-server.py'), 'the inherited Python updater 
 assert.ok(!fileExists('logo.png') && !fileExists('favicon.ico'), 'former project brand assets should not be present');
 
 const localServer = fs.readFileSync(path.join(root, 'desktop/local-server.js'), 'utf8');
+assert.ok(localServer.split(/\r?\n/).length <= 800, 'local-server.js should remain a composition layer instead of growing into a new monolith');
+for (const modulePath of [
+  'desktop/controllers/update-controller.js',
+  'desktop/controllers/import-export-controller.js',
+  'desktop/controllers/backup-controller.js',
+  'desktop/controllers/generation-controller.js',
+  'desktop/controllers/runtime-controller.js',
+  'desktop/controllers/settings-controller.js',
+  'desktop/controllers/project-controller.js',
+  'desktop/controllers/knowledge-controller.js',
+  'desktop/controllers/workshop-controller.js',
+  'desktop/controllers/workflow-controller.js',
+  'desktop/protocol/protocol-router.js',
+  'desktop/protocol/http-test-adapter.js'
+]) {
+  assert.ok(fileExists(modulePath), `${modulePath} should keep its responsibility outside local-server.js`);
+}
+assert.ok(!localServer.includes('function createMockNodeRequest'), 'HTTP test adaptation should not live in local-server.js');
+assert.ok(!localServer.includes('async function getUpdateDownloadUrl'), 'update behavior should not live in local-server.js');
+assert.ok(!localServer.includes("parsedUrl.pathname === '/api/export-project-package'"), 'import/export routes should not live in local-server.js');
+assert.ok(!localServer.includes("parsedUrl.pathname === '/api/restore-backup'"), 'backup routes should not live in local-server.js');
+assert.ok(!localServer.includes("parsedUrl.pathname === '/api/settings/test-provider'"), 'generation provider routes should not live in local-server.js');
+assert.ok(!localServer.includes('parsedUrl.pathname ==='), 'product API routes should be owned by controllers, not local-server.js');
 assert.ok(!localServer.includes('const APP_PORT = 8000'), 'test HTTP adapter should not define a fixed app port');
 assert.ok(!localServer.includes('const UPDATER_PORT = 8001'), 'test HTTP adapter should not define a fixed updater port');
-assert.ok(localServer.includes('appUrl') && localServer.includes('updaterUrl'), 'startDesktopServers should return dynamic test adapter URLs');
+const httpTestServer = fs.readFileSync(path.join(root, 'desktop/protocol/http-test-server.js'), 'utf8');
+assert.ok(httpTestServer.includes('appUrl') && httpTestServer.includes('updaterUrl'), 'startDesktopServers should return dynamic test adapter URLs');
 
-const desktopShell = fs.readFileSync(path.join(root, 'src/desktop/desktop-shell.js'), 'utf8');
+const desktopShellDir = path.join(root, 'src/desktop/shell');
+const desktopShellFiles = listFiles(desktopShellDir);
+const desktopShell = desktopShellFiles.map((file) => fs.readFileSync(file, 'utf8')).join('\n');
+assert.ok(desktopShellFiles.length >= 10, 'desktop shell should be separated by product responsibility');
+assert.ok(desktopShellFiles.every((file) => fs.readFileSync(file, 'utf8').split(/\r?\n/).length <= 1400), 'no desktop shell module should become a replacement monolith');
+assert.ok(!fileExists('src/desktop/desktop-shell.js'), 'the former desktop shell monolith should stay retired');
 assert.ok(
   !desktopShell.includes('main.html?runtime=desktop&embedded=writer'),
   'desktop shell should no longer reference the legacy writer iframe entry'
@@ -76,20 +105,25 @@ assert.ok(
 assert.ok(desktopShell.includes('data-desktop-theme') || desktopShell.includes('desktopTheme'), 'desktop shell should apply the global desktop theme');
 
 const desktopHtml = fs.readFileSync(path.join(root, 'desktop.html'), 'utf8');
-assert.ok(!desktopHtml.includes('legacy-writer-frame'), 'desktop.html should not contain the legacy writer iframe');
-assert.ok(!desktopHtml.includes('data-native-open-legacy'), 'desktop.html should not contain the legacy writer button');
-assert.ok(desktopHtml.includes('data-settings-theme'), 'desktop.html should expose the desktop theme setting');
-assert.ok(desktopHtml.includes('data-settings-theme-choice="morandi-ink"'), 'desktop.html should include Morandi Ink as a selectable theme');
-assert.ok(desktopHtml.includes('data-native-paper-heading'), 'desktop.html should include the writer manuscript paper heading');
-assert.ok(desktopHtml.includes('data-native-paper-footer'), 'desktop.html should include the writer manuscript paper footer');
-assert.ok(desktopHtml.includes('data-native-copilot-greeting'), 'desktop.html should include the Copilot assistant brief');
-assert.ok(desktopHtml.includes('data-native-copilot-context-note'), 'desktop.html should include the Copilot context card');
-assert.ok(desktopHtml.includes('data-native-model-settings'), 'desktop.html should keep model controls in a collapsible settings section');
-assert.ok(desktopHtml.includes('data-settings-cat-target="storage"'), 'settings should expose storage and maintenance as a first-class category');
-assert.ok(desktopHtml.includes('data-settings-section="storage"'), 'settings should include resolved project and backup locations');
-assert.ok(desktopHtml.includes('desktop-recovery-safe-actions'), 'recovery should present safe restore actions before destructive replacement');
-assert.ok(desktopHtml.includes('desktop-recovery-danger-zone'), 'recovery should isolate replace-original in a danger zone');
-assert.ok(desktopHtml.includes('稿湾') && desktopHtml.includes('DraftHarbor'), 'desktop entry should expose the independent product identity');
+const desktopFragmentDir = path.join(root, 'desktop/fragments');
+const desktopFragments = listFiles(desktopFragmentDir).map((file) => fs.readFileSync(file, 'utf8')).join('\n');
+const desktopMarkup = `${desktopHtml}\n${desktopFragments}`;
+assert.ok(desktopHtml.split(/\r?\n/).length <= 100, 'desktop.html should remain a small composition shell');
+assert.ok(desktopHtml.includes('src/desktop/fragment-loader.js'), 'desktop.html should load view fragments before the desktop shell');
+assert.ok(!desktopMarkup.includes('legacy-writer-frame'), 'desktop markup should not contain the legacy writer iframe');
+assert.ok(!desktopMarkup.includes('data-native-open-legacy'), 'desktop markup should not contain the legacy writer button');
+assert.ok(desktopMarkup.includes('data-settings-theme'), 'desktop markup should expose the desktop theme setting');
+assert.ok(desktopMarkup.includes('data-settings-theme-choice="morandi-ink"'), 'desktop markup should include Morandi Ink as a selectable theme');
+assert.ok(desktopMarkup.includes('data-native-paper-heading'), 'desktop markup should include the writer manuscript paper heading');
+assert.ok(desktopMarkup.includes('data-native-paper-footer'), 'desktop markup should include the writer manuscript paper footer');
+assert.ok(desktopMarkup.includes('data-native-copilot-greeting'), 'desktop markup should include the Copilot assistant brief');
+assert.ok(desktopMarkup.includes('data-native-copilot-context-note'), 'desktop markup should include the Copilot context card');
+assert.ok(desktopMarkup.includes('data-native-model-settings'), 'desktop markup should keep model controls in a collapsible settings section');
+assert.ok(desktopMarkup.includes('data-settings-cat-target="storage"'), 'settings should expose storage and maintenance as a first-class category');
+assert.ok(desktopMarkup.includes('data-settings-section="storage"'), 'settings should include resolved project and backup locations');
+assert.ok(desktopMarkup.includes('desktop-recovery-safe-actions'), 'recovery should present safe restore actions before destructive replacement');
+assert.ok(desktopMarkup.includes('desktop-recovery-danger-zone'), 'recovery should isolate replace-original in a danger zone');
+assert.ok(desktopMarkup.includes('稿湾') && desktopMarkup.includes('DraftHarbor'), 'desktop entry should expose the independent product identity');
 for (const aiTaskScript of [
   'src/core/generation/ai-task-contract.js',
   'src/core/generation/ai-task-history.js',
@@ -100,12 +134,17 @@ for (const aiTaskScript of [
 assert.ok(
   desktopHtml.indexOf('ai-task-contract.js') < desktopHtml.indexOf('ai-task-history.js')
     && desktopHtml.indexOf('ai-task-history.js') < desktopHtml.indexOf('ai-task-runner.js')
-    && desktopHtml.indexOf('ai-task-runner.js') < desktopHtml.indexOf('desktop-shell.js'),
-  'AI task core modules should load in dependency order before desktop-shell.js'
+    && desktopHtml.indexOf('ai-task-runner.js') < desktopHtml.indexOf('shell-bootstrap.js'),
+  'AI task core modules should load before the desktop shell bootstrap'
 );
 assert.ok(desktopShell.includes('createAITaskRunner'), 'desktop rewrite flows should use the shared AI task runner');
 assert.ok(desktopShell.includes('setSettingsCategory'), 'settings category navigation should switch focused panels instead of only scrolling');
-assert.ok(localServer.includes('storageLocations'), 'settings API should return resolved project and backup locations');
+const desktopStyleFiles = listFiles(path.join(root, 'src/styles/desktop'));
+assert.ok(desktopStyleFiles.length >= 6, 'desktop styles should be split into ordered cascade layers');
+assert.ok(desktopStyleFiles.every((file) => fs.readFileSync(file, 'utf8').split(/\r?\n/).length <= 2000), 'no desktop style layer should become a replacement monolith');
+assert.ok(!fileExists('src/styles/desktop.css'), 'the former desktop stylesheet monolith should stay retired');
+const settingsController = fs.readFileSync(path.join(root, 'desktop/controllers/settings-controller.js'), 'utf8');
+assert.ok(settingsController.includes('storageLocations'), 'settings API should return resolved project and backup locations');
 
 assert.ok(!fileExists('tests/run-legacy-ui-tests.js'), 'legacy UI test runner should be removed');
 assert.ok(!fileExists('tests/backup-browser.js'), 'browser backup test should be removed');

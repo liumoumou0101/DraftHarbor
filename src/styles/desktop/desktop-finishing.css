@@ -1,0 +1,1114 @@
+.desktop-native-paper-footer[hidden] {
+    display: none;
+}
+
+.desktop-native-paper-heading {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    padding: clamp(22px, 3.2vh, 38px) clamp(36px, 5vw, 76px) 14px;
+    border-bottom: 0;
+    border-radius: 6px 6px 0 0;
+    text-align: center;
+    box-shadow: 0 18px 32px rgba(0, 0, 0, 0.18);
+}
+
+.desktop-native-paper-chapter {
+    color: color-mix(in srgb, var(--desktop-paper-text) 58%, var(--desktop-accent));
+    font-family: Georgia, "Times New Roman", "Noto Serif SC", serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.desktop-native-paper-heading strong {
+    max-width: min(100%, 720px);
+    color: var(--desktop-paper-text);
+    font-family: Georgia, "Times New Roman", "Noto Serif SC", serif;
+    font-size: clamp(26px, 3.2vw, 42px);
+    font-weight: 560;
+    line-height: 1.16;
+    overflow-wrap: anywhere;
+}
+
+.desktop-native-paper-rule {
+    width: min(132px, 34%);
+    height: 1px;
+    margin-top: 2px;
+    background:
+        linear-gradient(90deg, transparent, color-mix(in srgb, var(--desktop-paper-text) 28%, transparent), transparent);
+}
+
+.desktop-native-editor-body > textarea {
+    width: var(--native-paper-page-width);
+    height: 100%;
+    min-height: 0;
+    margin: 0 auto;
+    padding-block: calc(24px + var(--native-editor-paragraph-spacing, 0em));
+    border-top: 0;
+    border-bottom: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.desktop-native-paper-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    min-height: 42px;
+    padding: 8px clamp(34px, 5vw, 56px) 10px;
+    border-top: 0;
+    border-radius: 0 0 6px 6px;
+    box-shadow: var(--desktop-shadow-paper);
+    color: var(--desktop-paper-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+
+.desktop-native-paper-footer span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.desktop-native-paper-footer [data-tone="warn"] { color: #b78042; }
+.desktop-native-paper-footer [data-tone="busy"] { color: #5b88a8; }
+.desktop-native-paper-footer [data-tone="ok"],
+.desktop-native-paper-footer [data-tone="goal-met"] { color: color-mix(in srgb, var(--desktop-accent) 76%, var(--desktop-paper-text)); }
+.desktop-native-paper-footer [data-tone="error"] { color: #b95c52; }
+
+.desktop-native-editor-body.has-generation-output > textarea {
+    padding-bottom: max(250px, calc(24px + var(--native-editor-paragraph-spacing, 0em)));
+}
+
+.desktop-native-editor-body:has(.desktop-native-generation-output.is-inline-confirmation:not([hidden])) > textarea {
+    padding-bottom: max(132px, calc(24px + var(--native-editor-paragraph-spacing, 0em)));
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-editor-body,
+[data-desktop-theme="morandi-ink"] .desktop-native-editor-body,
+[data-desktop-theme="ash-rose"] .desktop-native-editor-body {
+    --native-paper-page-width: min(calc(100% - 56px), calc(var(--native-editor-text-width, 780px) + 132px));
+    padding-block: clamp(18px, 2.4vw, 34px);
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-paper-heading,
+[data-desktop-theme="mist-library"] .desktop-native-paper-footer,
+[data-desktop-theme="mist-library"] .desktop-native-editor-body > textarea {
+    background:
+        linear-gradient(90deg, rgba(128, 112, 94, 0.028) 0 1px, transparent 1px calc(100% - 1px), rgba(128, 112, 94, 0.024) calc(100% - 1px)),
+        linear-gradient(180deg, #fffdf8 0%, #fbf7ef 100%);
+    border-color: rgba(78, 68, 58, 0.12);
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-editor-body > textarea,
+[data-desktop-theme="morandi-ink"] .desktop-native-editor-body > textarea,
+[data-desktop-theme="ash-rose"] .desktop-native-editor-body > textarea {
+    width: var(--native-paper-page-width);
+    height: 100%;
+    margin: 0 auto;
+    padding-block: calc(24px + var(--native-editor-paragraph-spacing, 0em));
+    border-top: 0;
+    border-bottom: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+[data-desktop-theme="morandi-ink"] .desktop-native-paper-heading,
+[data-desktop-theme="morandi-ink"] .desktop-native-paper-footer,
+[data-desktop-theme="morandi-ink"] .desktop-native-editor-body > textarea {
+    background:
+        linear-gradient(90deg, rgba(90, 72, 48, 0.032) 0 1px, transparent 1px calc(100% - 1px), rgba(90, 72, 48, 0.028) calc(100% - 1px)),
+        linear-gradient(180deg, var(--desktop-paper-soft) 0%, var(--desktop-paper) 100%);
+}
+
+[data-desktop-theme="ash-rose"] .desktop-native-paper-heading,
+[data-desktop-theme="ash-rose"] .desktop-native-paper-footer,
+[data-desktop-theme="ash-rose"] .desktop-native-editor-body > textarea {
+    background:
+        linear-gradient(90deg, rgba(120, 72, 64, 0.035) 0 1px, transparent 1px calc(100% - 1px), rgba(120, 72, 64, 0.03) calc(100% - 1px)),
+        linear-gradient(180deg, var(--desktop-paper-soft) 0%, var(--desktop-paper) 100%);
+}
+
+@media (max-width: 1280px) {
+    .desktop-native-editor-body,
+    [data-desktop-theme="mist-library"] .desktop-native-editor-body,
+    [data-desktop-theme="morandi-ink"] .desktop-native-editor-body,
+    [data-desktop-theme="ash-rose"] .desktop-native-editor-body {
+        --native-paper-page-width: min(calc(100% - 32px), calc(var(--native-editor-text-width, 720px) + 86px));
+        padding-block: 14px;
+    }
+
+    .desktop-native-paper-heading {
+        padding: 18px 42px 11px;
+    }
+
+    .desktop-native-paper-heading strong {
+        font-size: clamp(22px, 3vw, 32px);
+    }
+
+    .desktop-native-paper-footer {
+        min-height: 36px;
+        padding-inline: 42px;
+    }
+
+    .desktop-native-editor-body > textarea {
+        padding-inline: 42px;
+    }
+}
+
+/* Phase 53: Copilot default page productization. */
+.desktop-native-copilot-brief,
+.desktop-native-copilot-context,
+.desktop-native-copilot-suggestions,
+.desktop-native-model-settings {
+    border: 1px solid var(--desktop-line);
+    border-radius: var(--desktop-radius-md);
+    background: color-mix(in srgb, var(--desktop-panel-soft) 72%, transparent);
+}
+
+.desktop-native-copilot-brief {
+    display: grid;
+    gap: 5px;
+    padding: 14px 14px 12px;
+}
+
+.desktop-native-copilot-kicker {
+    color: var(--desktop-accent);
+    font-size: 11px;
+    font-weight: 760;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.desktop-native-copilot-brief strong {
+    color: var(--desktop-text);
+    font-size: 16px;
+    line-height: 1.25;
+}
+
+.desktop-native-copilot-brief p {
+    margin: 0;
+    color: var(--desktop-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.desktop-native-copilot-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+    color: var(--desktop-text);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.desktop-native-copilot-section-head small {
+    color: var(--desktop-faint);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.desktop-native-copilot-tasks {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+}
+
+.desktop-native-copilot-tasks button {
+    display: grid;
+    gap: 3px;
+    width: 100%;
+    min-height: 56px;
+    padding: 10px 12px;
+    text-align: left;
+    border-radius: var(--desktop-radius-md);
+}
+
+.desktop-native-copilot-tasks button strong {
+    color: inherit;
+    font-size: 13px;
+    font-weight: 740;
+}
+
+.desktop-native-copilot-tasks button span {
+    color: var(--desktop-faint);
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.desktop-native-copilot-tasks button.is-active span {
+    color: color-mix(in srgb, var(--desktop-accent-strong) 52%, var(--desktop-muted));
+}
+
+.desktop-native-copilot-context {
+    padding: 12px 14px;
+}
+
+.desktop-native-copilot-context dl {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+}
+
+.desktop-native-copilot-context dl > div {
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr);
+    gap: 10px;
+    align-items: baseline;
+}
+
+.desktop-native-copilot-context dt {
+    color: var(--desktop-faint);
+    font-size: 11px;
+}
+
+.desktop-native-copilot-context dd {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--desktop-text);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.desktop-native-copilot-suggestions {
+    display: grid;
+    gap: 7px;
+    padding: 12px;
+}
+
+.desktop-native-copilot-suggestions button {
+    width: 100%;
+    min-height: 34px;
+    padding: 7px 10px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+    color: var(--desktop-muted);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.desktop-native-copilot-suggestions button:hover {
+    border-color: rgba(var(--desktop-accent-rgb), 0.34);
+    background: rgba(var(--desktop-accent-rgb), 0.1);
+    color: var(--desktop-text);
+}
+
+.desktop-native-model-settings {
+    overflow: hidden;
+}
+
+.desktop-native-model-settings summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 40px;
+    padding: 9px 12px;
+    color: var(--desktop-muted);
+    cursor: pointer;
+    list-style: none;
+}
+
+.desktop-native-model-settings summary::-webkit-details-marker {
+    display: none;
+}
+
+.desktop-native-model-settings summary span {
+    color: var(--desktop-text);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.desktop-native-model-settings summary::after {
+    content: "+";
+    color: var(--desktop-faint);
+    font-size: 14px;
+}
+
+.desktop-native-model-settings[open] summary::after {
+    content: "-";
+}
+
+.desktop-native-model-settings .desktop-native-model-control {
+    margin: 0;
+    border: 0;
+    border-top: 1px solid var(--desktop-line);
+    border-radius: 0;
+    background: transparent;
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-copilot-brief,
+[data-desktop-theme="mist-library"] .desktop-native-copilot-context,
+[data-desktop-theme="mist-library"] .desktop-native-copilot-suggestions,
+[data-desktop-theme="mist-library"] .desktop-native-model-settings {
+    border-color: rgba(69, 76, 78, 0.13);
+    background: rgba(255, 255, 255, 0.5);
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-copilot-suggestions button {
+    border-color: rgba(69, 76, 78, 0.12);
+    background: rgba(255, 255, 255, 0.58);
+    color: #5f686b;
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-copilot-suggestions button:hover {
+    border-color: rgba(63, 119, 113, 0.28);
+    background: rgba(95, 143, 138, 0.1);
+    color: #2f5f5b;
+}
+
+/* Phase 54: final writer toolbar polish. */
+.desktop-native-editor-header {
+    align-items: center;
+    min-height: 54px;
+}
+
+.desktop-native-editor-header > div:first-child {
+    min-width: 160px;
+}
+
+.desktop-native-editor-header .desktop-native-editor-actions {
+    gap: 7px;
+}
+
+.desktop-native-status-cluster,
+.desktop-native-core-actions,
+.desktop-native-tool-actions,
+.desktop-native-layout-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-height: 32px;
+    padding: 3px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--desktop-panel-soft) 58%, transparent);
+}
+
+.desktop-native-status-cluster {
+    gap: 5px;
+    padding-inline: 6px;
+}
+
+.desktop-native-tool-actions,
+.desktop-native-layout-actions {
+    opacity: 0.86;
+}
+
+.desktop-native-tool-actions:hover,
+.desktop-native-layout-actions:hover {
+    opacity: 1;
+}
+
+.desktop-native-editor-header .desktop-native-editor-actions .desktop-secondary-action,
+.desktop-native-editor-header .desktop-native-editor-actions .desktop-primary-action {
+    min-height: 26px;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: 6px;
+    box-shadow: none;
+    font-size: 11px;
+}
+
+.desktop-native-editor-header .desktop-native-editor-actions .desktop-secondary-action {
+    background: transparent;
+    color: var(--desktop-muted);
+}
+
+.desktop-native-editor-header .desktop-native-editor-actions .desktop-secondary-action:hover {
+    background: rgba(var(--desktop-accent-rgb), 0.1);
+    color: var(--desktop-text);
+}
+
+.desktop-native-editor-header .desktop-native-core-actions .desktop-primary-action {
+    background: color-mix(in srgb, var(--desktop-accent) 76%, var(--desktop-accent-strong));
+    color: #111;
+}
+
+.desktop-native-editor-header .desktop-native-editor-actions [data-native-save-status],
+.desktop-native-editor-header .desktop-native-editor-actions .desktop-native-editor-stats {
+    min-height: 24px;
+    padding: 3px 7px;
+    border: 0;
+    background: transparent;
+    color: var(--desktop-muted);
+}
+
+.desktop-native-editor-header .desktop-native-editor-actions [data-native-save-status]:empty {
+    display: none;
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-status-cluster,
+[data-desktop-theme="mist-library"] .desktop-native-core-actions,
+[data-desktop-theme="mist-library"] .desktop-native-tool-actions,
+[data-desktop-theme="mist-library"] .desktop-native-layout-actions {
+    border-color: rgba(69, 76, 78, 0.12);
+    background: rgba(255, 255, 255, 0.5);
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-editor-header .desktop-native-editor-actions .desktop-secondary-action {
+    color: #60696c;
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-editor-header .desktop-native-editor-actions .desktop-secondary-action:hover {
+    background: rgba(95, 143, 138, 0.1);
+    color: #2f5f5b;
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-editor-header .desktop-native-core-actions .desktop-primary-action {
+    background: #3f847d;
+    color: #fff;
+}
+
+@media (max-width: 1366px) {
+    .desktop-native-editor-header {
+        align-items: flex-start;
+    }
+
+    .desktop-native-editor-header .desktop-native-editor-actions {
+        justify-content: flex-end;
+        gap: 5px;
+    }
+
+    .desktop-native-status-cluster,
+    .desktop-native-core-actions,
+    .desktop-native-tool-actions,
+    .desktop-native-layout-actions {
+        min-height: 30px;
+    }
+
+    .desktop-native-editor-header .desktop-native-editor-actions .desktop-secondary-action,
+    .desktop-native-editor-header .desktop-native-editor-actions .desktop-primary-action {
+        padding-inline: 7px;
+    }
+}
+
+/* Phase 55: overlay and popover polish. */
+.desktop-native-typography,
+.desktop-native-specials {
+    top: 10px;
+    right: 18px;
+    left: auto;
+    z-index: 8;
+    border-color: var(--desktop-line-strong);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--desktop-panel) 97%, transparent);
+    box-shadow: 0 22px 48px rgba(0, 0, 0, 0.38);
+}
+
+.desktop-native-typography {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: min(380px, calc(100% - 36px));
+    padding: 10px;
+}
+
+.desktop-native-typography label {
+    grid-template-columns: 52px minmax(0, 1fr) 40px;
+    gap: 8px;
+    min-height: 32px;
+}
+
+.desktop-native-typography label:has(select),
+.desktop-native-typography label:has(input[type="number"]) {
+    grid-template-columns: 52px minmax(0, 1fr);
+}
+
+.desktop-native-typography label:has(select) select,
+.desktop-native-typography label:has(input[type="number"]) input {
+    grid-column: 2;
+}
+
+.desktop-native-typography select,
+.desktop-native-typography input[type="number"] {
+    min-height: 32px;
+    background-color: color-mix(in srgb, var(--desktop-panel-soft) 72%, transparent);
+}
+
+.desktop-native-specials {
+    max-width: min(340px, calc(100% - 36px));
+    padding: 10px;
+}
+
+.desktop-native-specials button {
+    min-width: 36px;
+    min-height: 32px;
+    border-color: var(--desktop-line);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--desktop-panel-soft) 70%, transparent);
+}
+
+.desktop-native-specials button:hover {
+    border-color: rgba(var(--desktop-accent-rgb), 0.38);
+    background: rgba(var(--desktop-accent-rgb), 0.12);
+}
+
+.desktop-native-specials button[data-native-special-char="　"] {
+    flex-basis: 100%;
+}
+
+.desktop-native-prompt-dialog {
+    border-color: var(--desktop-line-strong);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--desktop-panel) 98%, transparent);
+    box-shadow: 0 28px 72px rgba(0, 0, 0, 0.42);
+}
+
+.desktop-native-prompt-dialog::backdrop {
+    background: rgba(5, 7, 10, 0.54);
+    backdrop-filter: blur(6px);
+}
+
+.desktop-prompt-manager-grid {
+    gap: 14px;
+}
+
+.desktop-native-prompt-dialog .desktop-native-generation-actions {
+    margin-top: 14px;
+    justify-content: flex-end;
+}
+
+.desktop-modal-backdrop {
+    background: rgba(4, 6, 9, 0.56);
+    backdrop-filter: blur(6px);
+}
+
+.desktop-native-name-modal {
+    width: min(460px, 100%);
+    padding: 20px;
+}
+
+.desktop-native-name-modal .desktop-modal-header h2 {
+    font-size: 22px;
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-typography,
+[data-desktop-theme="mist-library"] .desktop-native-specials,
+[data-desktop-theme="mist-library"] .desktop-native-prompt-dialog {
+    border-color: rgba(69, 76, 78, 0.14);
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 24px 58px rgba(54, 51, 45, 0.16);
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-specials button,
+[data-desktop-theme="mist-library"] .desktop-native-typography select,
+[data-desktop-theme="mist-library"] .desktop-native-typography input[type="number"] {
+    border-color: rgba(69, 76, 78, 0.13);
+    background-color: rgba(255, 255, 255, 0.7);
+    color: #2f3436;
+}
+
+@media (max-width: 1366px) {
+    .desktop-native-typography,
+    .desktop-native-specials {
+        top: 10px;
+    }
+
+    .desktop-native-typography {
+        width: min(360px, calc(100% - 28px));
+    }
+
+    .desktop-native-specials {
+        max-width: min(310px, calc(100% - 28px));
+    }
+}
+
+/* Phase 56: prompt manager productization. */
+.desktop-native-prompt-dialog[data-prompt-manager-dialog] {
+    width: min(920px, calc(100vw - 48px));
+    padding: 0;
+    overflow: hidden;
+}
+
+.desktop-prompt-manager-shell {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    max-height: calc(100vh - 84px);
+}
+
+.desktop-prompt-manager-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 18px 18px 14px;
+    border-bottom: 1px solid var(--desktop-line);
+}
+
+.desktop-prompt-manager-header h2 {
+    margin: 3px 0 0;
+    font-size: 22px;
+    line-height: 1.15;
+}
+
+.desktop-prompt-manager-header [data-prompt-manager-status] {
+    max-width: 280px;
+    padding: 5px 9px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 999px;
+    color: var(--desktop-muted);
+    font-size: 12px;
+    text-align: right;
+}
+
+.desktop-prompt-manager-layout {
+    display: grid;
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+    min-height: 0;
+}
+
+.desktop-prompt-manager-sidebar {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 10px;
+    min-height: 0;
+    padding: 14px;
+    border-right: 1px solid var(--desktop-line);
+    background: color-mix(in srgb, var(--desktop-panel-soft) 58%, transparent);
+}
+
+.desktop-prompt-manager-sidebar-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--desktop-muted);
+    font-size: 12px;
+}
+
+.desktop-prompt-manager-list {
+    display: grid;
+    align-content: start;
+    gap: 7px;
+    min-height: 0;
+    overflow: auto;
+}
+
+.desktop-prompt-manager-item {
+    display: grid;
+    gap: 4px;
+    width: 100%;
+    padding: 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--desktop-text);
+    text-align: left;
+    cursor: pointer;
+}
+
+.desktop-prompt-manager-item strong {
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.desktop-prompt-manager-item span {
+    color: var(--desktop-muted);
+    font-size: 11px;
+}
+
+.desktop-prompt-manager-item:hover,
+.desktop-prompt-manager-item.is-active {
+    border-color: rgba(var(--desktop-accent-rgb), 0.34);
+    background: rgba(var(--desktop-accent-rgb), 0.11);
+}
+
+.desktop-prompt-manager-editor {
+    min-width: 0;
+    min-height: 0;
+    padding: 14px 16px 10px;
+    overflow: auto;
+}
+
+.desktop-prompt-manager-editor .desktop-prompt-manager-grid {
+    grid-template-columns: minmax(180px, 1fr) minmax(160px, 220px);
+    margin-bottom: 0;
+}
+
+.desktop-prompt-manager-content-field textarea {
+    min-height: 170px;
+}
+
+.desktop-prompt-manager-advanced {
+    padding: 10px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.desktop-prompt-manager-advanced summary {
+    color: var(--desktop-muted);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.desktop-prompt-manager-advanced label {
+    margin-top: 10px;
+}
+
+.desktop-prompt-manager-footer {
+    padding: 12px 18px 16px;
+    border-top: 1px solid var(--desktop-line);
+    background: color-mix(in srgb, var(--desktop-panel) 96%, transparent);
+}
+
+[data-desktop-theme="mist-library"] .desktop-prompt-manager-sidebar {
+    background: rgba(247, 244, 238, 0.76);
+}
+
+[data-desktop-theme="mist-library"] .desktop-prompt-manager-item:hover,
+[data-desktop-theme="mist-library"] .desktop-prompt-manager-item.is-active {
+    background: rgba(95, 143, 138, 0.12);
+}
+
+@media (max-width: 980px) {
+    .desktop-prompt-manager-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .desktop-prompt-manager-sidebar {
+        grid-template-rows: auto auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--desktop-line);
+    }
+
+    .desktop-prompt-manager-list {
+        display: flex;
+        overflow-x: auto;
+    }
+
+    .desktop-prompt-manager-item {
+        min-width: 180px;
+    }
+}
+
+/* Phase 57: compact continuous editor toolbar. */
+.desktop-native-editor-header .desktop-native-editor-actions {
+    gap: 0;
+    min-height: 34px;
+    padding: 3px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--desktop-panel-soft) 54%, transparent);
+}
+
+.desktop-native-status-cluster,
+.desktop-native-core-actions,
+.desktop-native-tool-actions,
+.desktop-native-layout-actions {
+    position: relative;
+    min-height: 28px;
+    padding: 0 5px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.desktop-native-core-actions::before,
+.desktop-native-tool-actions::before,
+.desktop-native-layout-actions::before {
+    content: "";
+    width: 1px;
+    height: 18px;
+    margin: 0 5px 0 1px;
+    background: var(--desktop-line);
+}
+
+.desktop-native-editor-header .desktop-native-toolbar-button {
+    position: relative;
+    display: inline-grid;
+    grid-auto-flow: column;
+    gap: 5px;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    min-height: 26px;
+    padding: 3px 7px;
+}
+
+.desktop-native-editor-header .desktop-native-editor-actions .desktop-mini-action.desktop-native-toolbar-button {
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--desktop-muted);
+    font-size: 11px;
+}
+
+.desktop-native-editor-header .desktop-native-editor-actions button[hidden] {
+    display: none !important;
+}
+
+.desktop-native-tool-mark {
+    min-width: 16px;
+    color: var(--desktop-muted);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+}
+
+.desktop-native-tool-label {
+    font-size: 11px;
+    line-height: 1;
+}
+
+.desktop-native-tool-actions .desktop-native-tool-label,
+.desktop-native-layout-actions .desktop-native-tool-label,
+.desktop-native-core-actions [data-native-focus-mode] .desktop-native-tool-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+.desktop-native-editor-header .desktop-native-editor-actions .desktop-secondary-action[aria-pressed="true"],
+.desktop-native-editor-header .desktop-native-editor-actions .desktop-secondary-action:hover,
+.desktop-native-editor-header .desktop-native-editor-actions .desktop-mini-action:hover {
+    background: rgba(var(--desktop-accent-rgb), 0.12);
+}
+
+.desktop-native-editor-header .desktop-native-editor-actions .desktop-secondary-action[aria-pressed="true"] .desktop-native-tool-mark,
+.desktop-native-editor-header .desktop-native-editor-actions .desktop-secondary-action:hover .desktop-native-tool-mark,
+.desktop-native-editor-header .desktop-native-editor-actions .desktop-mini-action:hover .desktop-native-tool-mark {
+    color: var(--desktop-accent-strong);
+}
+
+.desktop-native-editor-header .desktop-native-core-actions .desktop-primary-action {
+    min-width: 42px;
+    padding-inline: 10px;
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-editor-header .desktop-native-editor-actions {
+    border-color: rgba(69, 76, 78, 0.13);
+    background: rgba(255, 255, 255, 0.48);
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-core-actions::before,
+[data-desktop-theme="mist-library"] .desktop-native-tool-actions::before,
+[data-desktop-theme="mist-library"] .desktop-native-layout-actions::before {
+    background: rgba(69, 76, 78, 0.13);
+}
+
+@media (max-width: 1366px) {
+    .desktop-native-editor-header .desktop-native-editor-actions {
+        max-width: 100%;
+    }
+
+    .desktop-native-status-cluster,
+    .desktop-native-core-actions,
+    .desktop-native-tool-actions,
+    .desktop-native-layout-actions {
+        padding-inline: 3px;
+    }
+
+    .desktop-native-core-actions::before,
+    .desktop-native-tool-actions::before,
+    .desktop-native-layout-actions::before {
+        margin-inline: 3px;
+    }
+
+    .desktop-native-editor-header .desktop-native-toolbar-button {
+        min-width: 26px;
+        padding-inline: 6px;
+    }
+}
+
+/* Phase 59: quieter outline hierarchy and a single-line Copilot navigator. */
+.desktop-native-project {
+    padding: 13px 14px 11px;
+}
+
+.desktop-native-project-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.desktop-native-project-heading > div:first-child {
+    min-width: 0;
+}
+
+.desktop-native-project-heading h2 {
+    margin: 3px 0 4px;
+    overflow: hidden;
+    font-size: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.desktop-native-project .desktop-native-empty-actions {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 4px;
+    margin: 0;
+}
+
+.desktop-native-project .desktop-native-empty-actions button {
+    min-height: 28px;
+    padding: 4px 9px;
+    border-radius: 7px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--desktop-muted);
+    font-size: 11px;
+}
+
+.desktop-native-project .desktop-native-empty-actions button:hover {
+    border-color: rgba(var(--desktop-accent-rgb), 0.32);
+    background: rgba(var(--desktop-accent-rgb), 0.1);
+    color: var(--desktop-text);
+}
+
+.desktop-native-outline-actions {
+    gap: 6px;
+    padding: 8px 12px;
+}
+
+.desktop-native-outline-actions button {
+    min-height: 32px;
+    padding-block: 5px;
+    box-shadow: none;
+}
+
+.desktop-native-scene-list {
+    padding: 8px 12px 16px;
+}
+
+.desktop-native-chapter-group {
+    margin: 0;
+}
+
+.desktop-native-chapter-group + .desktop-native-chapter-group {
+    margin-top: 3px;
+}
+
+.desktop-native-chapter {
+    display: list-item;
+    min-height: 30px;
+    margin: 0;
+    padding: 5px 6px;
+    border-radius: 6px;
+    list-style-position: inside;
+}
+
+.desktop-native-chapter::marker {
+    color: var(--desktop-faint);
+    font-size: 10px;
+}
+
+.desktop-native-chapter:hover,
+.desktop-native-chapter.is-active {
+    background: rgba(var(--desktop-accent-rgb), 0.055);
+}
+
+.desktop-native-chapter > span:first-of-type {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.desktop-native-chapter .desktop-native-chapter-count {
+    float: right;
+    margin-left: 8px;
+}
+
+.desktop-native-scene {
+    min-height: 32px;
+    margin: 1px 0 2px 12px;
+    width: calc(100% - 12px);
+    padding: 6px 8px;
+}
+
+.desktop-native-scene > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.desktop-native-scene small {
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-width 0.14s ease, opacity 0.14s ease;
+    white-space: nowrap;
+}
+
+.desktop-native-scene:hover small,
+.desktop-native-scene.is-active small {
+    max-width: 74px;
+    opacity: 0.78;
+}
+
+.desktop-native-assistant-tabs,
+[data-desktop-theme="mist-library"] .desktop-native-assistant-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.desktop-native-assistant-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.desktop-native-assistant-tabs button,
+[data-desktop-theme="mist-library"] .desktop-native-assistant-tabs button {
+    min-width: 40px;
+    padding-inline: 7px;
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-project .desktop-native-empty-actions button {
+    border-color: rgba(69, 76, 78, 0.12);
+    background: rgba(255, 255, 255, 0.42);
+    color: #60696c;
+}
+
+[data-desktop-theme="mist-library"] .desktop-native-chapter:hover,
+[data-desktop-theme="mist-library"] .desktop-native-chapter.is-active {
+    background: rgba(95, 143, 138, 0.08);
+}
+
+@media (max-width: 1280px) {
+    .desktop-native-project {
+        padding-inline: 11px;
+    }
+
+    .desktop-native-project-heading h2 {
+        font-size: 16px;
+    }
+
+    .desktop-native-project .desktop-native-empty-actions button {
+        padding-inline: 7px;
+    }
+
+    .desktop-native-assistant-tabs,
+    [data-desktop-theme="mist-library"] .desktop-native-assistant-tabs {
+        padding-inline: 6px;
+    }
+
+    .desktop-native-assistant-tabs button,
+    [data-desktop-theme="mist-library"] .desktop-native-assistant-tabs button {
+        min-width: 34px;
+        padding-inline: 5px;
+    }
+}

@@ -137,6 +137,9 @@
             promptHistory: cleanArray(raw.promptHistory),
             workshopSessions: cleanArray(raw.workshopSessions),
             workflowRuns: cleanArray(raw.workflowRuns)
+            ,styleGuardRules: typeof window !== 'undefined' && window.DraftHarborAvoidanceRules
+                ? window.DraftHarborAvoidanceRules.normalizeRules(raw.styleGuardRules)
+                : cleanArray(raw.styleGuardRules)
         };
 
         return SceneOrdering.reindexProjectOrder(project);

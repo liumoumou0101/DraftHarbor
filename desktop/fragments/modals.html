@@ -1,0 +1,188 @@
+    <div class="desktop-modal-backdrop" data-project-edit-modal hidden>
+        <form class="desktop-modal" data-project-edit-form>
+            <header class="desktop-modal-header">
+                <div>
+                    <p class="desktop-section-kicker">Project Info</p>
+                    <h2>编辑作品信息</h2>
+                </div>
+                <button class="desktop-icon-action" type="button" data-close-project-editor aria-label="关闭">×</button>
+            </header>
+
+            <div class="desktop-form-grid">
+                <label>
+                    <span>书名</span>
+                    <input type="text" data-project-edit-name maxlength="120" required>
+                </label>
+                <label>
+                    <span>状态</span>
+                    <select data-project-edit-status>
+                        <option value="">未设置</option>
+                        <option value="构思中">构思中</option>
+                        <option value="连载中">连载中</option>
+                        <option value="修订中">修订中</option>
+                        <option value="已完成">已完成</option>
+                        <option value="暂停">暂停</option>
+                    </select>
+                </label>
+                <label class="desktop-form-wide">
+                    <span>标签</span>
+                    <input type="text" data-project-edit-tags placeholder="奇幻, 长篇, 第一人称">
+                </label>
+                <label class="desktop-form-wide">
+                    <span>简介</span>
+                    <textarea data-project-edit-description rows="5" maxlength="2000" placeholder="写一点给自己看的作品简介、主题方向或创作备注。"></textarea>
+                </label>
+                <label class="desktop-form-wide">
+                    <span>封面</span>
+                    <input type="file" data-project-edit-cover accept="image/png,image/jpeg,image/webp,image/gif">
+                </label>
+            </div>
+
+            <div class="desktop-cover-preview" data-project-edit-cover-preview></div>
+            <p class="desktop-modal-status" data-project-edit-status-message></p>
+
+            <footer class="desktop-modal-actions">
+                <button class="desktop-secondary-action" type="button" data-clear-project-cover>清除封面</button>
+                <span></span>
+                <button class="desktop-secondary-action" type="button" data-close-project-editor>取消</button>
+                <button class="desktop-primary-action" type="submit">保存</button>
+            </footer>
+        </form>
+    </div>
+
+    <div class="desktop-modal-backdrop" data-project-create-modal hidden>
+        <form class="desktop-modal" data-project-create-form>
+            <header class="desktop-modal-header">
+                <div>
+                    <p class="desktop-section-kicker">New Project</p>
+                    <h2>新建作品</h2>
+                </div>
+                <button class="desktop-icon-action" type="button" data-close-project-creator aria-label="关闭">×</button>
+            </header>
+
+            <div class="desktop-form-grid">
+                <label class="desktop-form-wide">
+                    <span>书名</span>
+                    <input type="text" data-project-create-name maxlength="120" required placeholder="例如：雾城长夜">
+                </label>
+                <label>
+                    <span>状态</span>
+                    <select data-project-create-status>
+                        <option value="构思中">构思中</option>
+                        <option value="连载中">连载中</option>
+                        <option value="修订中">修订中</option>
+                        <option value="">未设置</option>
+                    </select>
+                </label>
+                <label>
+                    <span>标签</span>
+                    <input type="text" data-project-create-tags placeholder="奇幻, 长篇">
+                </label>
+                <label class="desktop-form-wide">
+                    <span>简介</span>
+                    <textarea data-project-create-description rows="4" maxlength="2000" placeholder="先写一点作品方向，之后可以随时改。"></textarea>
+                </label>
+            </div>
+
+            <p class="desktop-modal-status" data-project-create-status-message></p>
+
+            <footer class="desktop-modal-actions">
+                <span></span>
+                <button class="desktop-secondary-action" type="button" data-close-project-creator>取消</button>
+                <button class="desktop-primary-action" type="submit">创建并打开</button>
+            </footer>
+        </form>
+    </div>
+
+    <div class="desktop-modal-backdrop" data-native-name-modal hidden>
+        <form class="desktop-modal desktop-native-name-modal" data-native-name-form>
+            <header class="desktop-modal-header">
+                <div>
+                    <p class="desktop-section-kicker" data-native-name-kicker>Writer</p>
+                    <h2 data-native-name-title>命名</h2>
+                </div>
+                <button class="desktop-icon-action" type="button" data-native-name-cancel aria-label="关闭">×</button>
+            </header>
+            <label class="desktop-form-wide">
+                <span data-native-name-label>名称</span>
+                <input type="text" data-native-name-input maxlength="160" required>
+            </label>
+            <p class="desktop-modal-status" data-native-name-status></p>
+            <footer class="desktop-modal-actions">
+                <span></span>
+                <button class="desktop-secondary-action" type="button" data-native-name-cancel>取消</button>
+                <button class="desktop-primary-action" type="submit" data-native-name-submit>确认</button>
+            </footer>
+        </form>
+    </div>
+
+    <div class="desktop-modal-backdrop" data-native-extract-modal hidden>
+        <form class="desktop-modal" data-native-extract-form>
+            <header class="desktop-modal-header">
+                <div>
+                    <p class="desktop-section-kicker">从正文提取</p>
+                    <h2>资料卡草稿</h2>
+                </div>
+                <button class="desktop-icon-action" type="button" data-native-extract-cancel aria-label="关闭">×</button>
+            </header>
+            <div class="desktop-form-grid">
+                <label>
+                    <span>提取类型</span>
+                    <select data-native-extract-type>
+                        <option value="character">人物</option><option value="location">地点</option><option value="organization">势力</option>
+                        <option value="item">物品</option><option value="lore">设定</option><option value="timeline">事件</option><option value="note">笔记</option>
+                    </select>
+                </label>
+                <label class="desktop-form-wide"><span>来源选区</span><textarea data-native-extract-source rows="4" readonly></textarea></label>
+                <label><span>标题</span><input data-native-extract-title maxlength="160" required></label>
+                <label><span>标签</span><input data-native-extract-tags placeholder="人物, 线索"></label>
+                <label class="desktop-form-wide"><span>摘要</span><textarea data-native-extract-summary rows="3"></textarea></label>
+                <label class="desktop-form-wide"><span>卡片内容</span><textarea data-native-extract-body rows="7"></textarea></label>
+            </div>
+            <p class="desktop-modal-status" data-native-extract-status></p>
+            <footer class="desktop-modal-actions">
+                <button class="desktop-secondary-action" type="button" data-native-extract-generate>AI 提取草稿</button>
+                <span></span>
+                <button class="desktop-secondary-action" type="button" data-native-extract-cancel>放弃</button>
+                <button class="desktop-primary-action" type="submit">确认保存资料卡</button>
+            </footer>
+        </form>
+    </div>
+
+    <div class="desktop-modal-backdrop" data-compendium-rewrite-modal hidden>
+        <form class="desktop-modal" data-compendium-rewrite-form>
+            <header class="desktop-modal-header"><div><p class="desktop-section-kicker">资料卡 AI 重写</p><h2>预览字段补丁</h2></div><button class="desktop-icon-action" type="button" data-compendium-rewrite-cancel aria-label="关闭">×</button></header>
+            <div class="desktop-form-grid">
+                <label class="desktop-form-wide"><span>重写字段</span><select data-compendium-rewrite-fields multiple size="6"><option value="summary">摘要</option><option value="body">正文</option><option value="tags">标签</option><option value="characterProfile.goal">人物目标</option><option value="characterProfile.motivation">人物动机</option><option value="characterProfile.voice">人物语气</option></select></label>
+                <label class="desktop-form-wide"><span>要求</span><textarea data-compendium-rewrite-instruction rows="3" placeholder="例如：更具体、更符合冷静克制的语气"></textarea></label>
+                <label class="desktop-form-wide"><span>AI 字段补丁（可手动编辑）</span><textarea data-compendium-rewrite-preview rows="10" placeholder="先选择字段并生成预览" spellcheck="false"></textarea></label>
+            </div>
+            <p class="desktop-modal-status" data-compendium-rewrite-status></p>
+            <footer class="desktop-modal-actions"><button class="desktop-secondary-action" type="button" data-compendium-rewrite-generate>生成补丁</button><span></span><button class="desktop-secondary-action" type="button" data-compendium-rewrite-cancel>放弃</button><button class="desktop-primary-action" type="submit">应用选定补丁</button></footer>
+        </form>
+    </div>
+
+    <div class="desktop-modal-backdrop" data-compendium-draw-modal hidden>
+        <form class="desktop-modal" data-compendium-draw-form>
+            <header class="desktop-modal-header"><div><p class="desktop-section-kicker">创作抽卡</p><h2>生成资料卡草稿</h2></div><button class="desktop-icon-action" type="button" data-compendium-draw-cancel aria-label="关闭">×</button></header>
+            <div class="desktop-form-grid">
+                <label><span>卡片类型</span><select data-compendium-draw-type><option value="character">人物</option><option value="organization">势力</option><option value="location">地点</option><option value="item">物品</option><option value="lore">设定</option><option value="timeline">事件</option></select></label>
+                <label class="desktop-form-wide"><span>灵感（可留空）</span><textarea data-compendium-draw-instruction rows="3" placeholder="例如：海港都市、隐秘债务、冷静但危险的配角"></textarea></label>
+                <fieldset class="desktop-form-wide"><legend>重抽时锁定</legend><label class="desktop-settings-check"><input type="checkbox" data-compendium-draw-lock="title"><span>标题</span></label><label class="desktop-settings-check"><input type="checkbox" data-compendium-draw-lock="summary"><span>摘要</span></label><label class="desktop-settings-check"><input type="checkbox" data-compendium-draw-lock="tags"><span>标签</span></label><label class="desktop-settings-check"><input type="checkbox" data-compendium-draw-lock="body"><span>正文</span></label></fieldset>
+                <label><span>标题</span><input data-compendium-draw-title maxlength="160" required></label><label><span>标签</span><input data-compendium-draw-tags></label>
+                <label class="desktop-form-wide"><span>摘要</span><textarea data-compendium-draw-summary rows="3"></textarea></label><label class="desktop-form-wide"><span>正文</span><textarea data-compendium-draw-body rows="7"></textarea></label>
+            </div>
+            <p class="desktop-modal-status" data-compendium-draw-status></p>
+            <footer class="desktop-modal-actions"><button class="desktop-secondary-action" type="button" data-compendium-draw-generate>抽取 / 重抽</button><span></span><button class="desktop-secondary-action" type="button" data-compendium-draw-cancel>放弃</button><button class="desktop-primary-action" type="submit">保存资料卡</button></footer>
+        </form>
+    </div>
+
+    <div class="desktop-modal-backdrop" data-style-guard-modal hidden>
+        <form class="desktop-modal" data-style-guard-form>
+            <header class="desktop-modal-header"><div><p class="desktop-section-kicker">避免写法</p><h2>项目写作偏好</h2></div><button class="desktop-icon-action" type="button" data-style-guard-cancel aria-label="关闭">×</button></header>
+            <label><span>作用范围</span><select data-style-guard-scope><option value="project">当前项目</option><option value="global">所有项目</option></select></label>
+            <label class="desktop-form-wide"><span>每行一条：表达式 <code>|</code> 原因（原因可省略）</span><textarea data-style-guard-rules rows="10" placeholder="例如：\n嘴角微微上扬 | 避免模板化微表情\n仿佛被命运推着走"></textarea></label>
+            <p class="desktop-modal-status" data-style-guard-status></p>
+            <footer class="desktop-modal-actions"><span>规则会用于续写、改写和摘要。</span><button class="desktop-secondary-action" type="button" data-style-guard-cancel>取消</button><button class="desktop-primary-action" type="submit">保存规则</button></footer>
+        </form>
+    </div>
