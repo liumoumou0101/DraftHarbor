@@ -614,7 +614,10 @@
             const response = await fetch('/api/settings/test-provider', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ settings: collectSettingsForm(), live: false })
+                // API Key is intentionally never returned to the page.  Sending the
+                // current form would therefore replace an already-saved key with an
+                // empty string and make a valid configuration look broken.
+                body: JSON.stringify({ live: false })
             });
             const result = await response.json().catch(() => ({}));
             if (!response.ok) {

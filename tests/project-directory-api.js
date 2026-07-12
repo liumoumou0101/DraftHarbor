@@ -108,6 +108,15 @@ function legacySnapshot(id, name, text, exportedAt) {
     assert.ok(createResponse.ok && createBody.ok, 'create-project should return ok');
     assert.strictEqual(createBody.project.version, '3.0-project-directory');
     assert.strictEqual(createBody.project.project.name, 'Created Through API');
+    assert.strictEqual(createBody.project.chapters.length, 1, 'new projects should start with one chapter');
+    assert.strictEqual(createBody.project.scenes.length, 1, 'new projects should start with one scene');
+    assert.strictEqual(createBody.project.chapters[0].title, '第 1 章');
+    assert.strictEqual(createBody.project.scenes[0].title, '场景 1');
+    assert.strictEqual(
+      createBody.project.scenes[0].chapterId,
+      createBody.project.chapters[0].id,
+      'the initial scene should belong to the initial chapter'
+    );
     assert.strictEqual(createBody.summary.source, 'project-directory');
     await fs.access(libraryPaths.manifestPath(libraryPaths.projectDir(dataRoot, createBody.project.project.id)));
 

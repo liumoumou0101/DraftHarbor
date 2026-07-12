@@ -44,11 +44,20 @@
         return date.toISOString();
     }
 
+    function localizedSystemTitle(value, kind, index) {
+        const fallback = kind === 'chapter' ? `第 ${index + 1} 章` : `场景 ${index + 1}`;
+        const title = cleanString(value, fallback) || fallback;
+        const legacyPattern = kind === 'chapter' ? /^chapter\s+(\d+)$/i : /^scene\s+(\d+)$/i;
+        const match = title.match(legacyPattern);
+        if (!match) return title;
+        return kind === 'chapter' ? `第 ${match[1]} 章` : `场景 ${match[1]}`;
+    }
+
     function normalizeChapter(raw, index, timestamp) {
         const id = cleanString(raw && raw.id, `chapter-${index + 1}`);
         return {
             id,
-            title: cleanString(raw && raw.title, `Chapter ${index + 1}`) || `Chapter ${index + 1}`,
+            title: localizedSystemTitle(raw && raw.title, 'chapter', index),
             summary: cleanString(raw && raw.summary),
             summaryUpdated: cleanString(raw && raw.summaryUpdated),
             summarySource: cleanString(raw && raw.summarySource),
@@ -65,7 +74,7 @@
         return {
             id,
             chapterId: cleanString(raw && raw.chapterId, fallbackChapterId),
-            title: cleanString(raw && raw.title, `Scene ${index + 1}`) || `Scene ${index + 1}`,
+            title: localizedSystemTitle(raw && raw.title, 'scene', index),
             summary: cleanString(raw && raw.summary),
             summaryUpdated: cleanString(raw && raw.summaryUpdated),
             summarySource: cleanString(raw && raw.summarySource),
@@ -103,7 +112,7 @@
 
         let chapters = rawChapters.map((chapter, index) => normalizeChapter(chapter, index, timestamp));
         if (chapters.length === 0) {
-            chapters = [normalizeChapter({ id: 'chapter-1', title: 'Chapter 1', order: 0 }, 0, timestamp)];
+            chapters = [normalizeChapter({ id: 'chapter-1', title: '第 1 章', order: 0 }, 0, timestamp)];
         }
 
         chapters = SceneOrdering.sortChapters(chapters);

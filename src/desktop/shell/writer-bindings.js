@@ -1,6 +1,7 @@
     function bindNativeEditor() {
         const elements = nativeEditorElements();
         if (typeof bindNativeSidebarResize === 'function') bindNativeSidebarResize();
+        if (typeof bindNativeGlobalPrompt === 'function') bindNativeGlobalPrompt();
         if (elements.saveButton) {
             elements.saveButton.addEventListener('click', () => {
                 saveNativeScene();

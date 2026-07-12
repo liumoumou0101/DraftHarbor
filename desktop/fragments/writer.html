@@ -246,6 +246,7 @@
                                 <div class="desktop-native-prompt-toolbar">
                                     <select data-native-prompt-template aria-label="正文提示词模板"></select>
                                     <button class="desktop-secondary-action" type="button" data-native-manage-prompts>管理</button>
+                                    <button class="desktop-secondary-action" type="button" data-native-manage-global-prompt>全局前缀</button>
                                 </div>
                                 <div class="desktop-native-generation-input">
                                     <textarea data-native-beat-input placeholder="输入这一段要发生什么，或写下续写方向"></textarea>
@@ -499,6 +500,30 @@
                             <button class="desktop-primary-action" type="button" data-native-summary-dialog-edit>前往编辑</button>
                             <button class="desktop-secondary-action" type="button" data-native-summary-dialog-close>关闭</button>
                         </div>
+                    </dialog>
+                    <dialog class="desktop-native-prompt-dialog desktop-native-global-prompt-dialog" data-native-global-prompt-dialog>
+                        <form data-native-global-prompt-form>
+                            <header class="desktop-native-summary-dialog-header">
+                                <div>
+                                    <p class="desktop-section-kicker">Global Prompt</p>
+                                    <h2>全局写作前缀</h2>
+                                </div>
+                                <span>所有 AI 写作请求</span>
+                            </header>
+                            <label class="desktop-native-writer-check">
+                                <input type="checkbox" data-native-global-prompt-enabled>
+                                <span>启用全局写作前缀</span>
+                            </label>
+                            <label class="desktop-native-global-prompt-field">
+                                <span>前缀内容</span>
+                                <textarea data-native-global-prompt-content rows="9" placeholder="作为所有 AI 请求的首条 system 指令，例如固定世界观、特殊词汇或跨模板规则。"></textarea>
+                            </label>
+                            <small data-native-global-prompt-status>关闭后不会发送；不会覆盖项目模板，而是优先于项目模板发送。</small>
+                            <div class="desktop-native-generation-actions">
+                                <button class="desktop-primary-action" type="submit">保存前缀</button>
+                                <button class="desktop-secondary-action" type="button" data-native-global-prompt-cancel>取消</button>
+                            </div>
+                        </form>
                     </dialog>
                     <dialog class="desktop-native-prompt-dialog" data-prompt-manager-dialog>
                         <form class="desktop-prompt-manager-shell" data-prompt-manager-form>

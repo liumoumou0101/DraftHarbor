@@ -153,11 +153,11 @@ async function buildEpub(project, options = {}) {
       '<!DOCTYPE html>',
       '<html xmlns="http://www.w3.org/1999/xhtml">',
       '<head>',
-      `<title>${escapeHtml(chapter.title || `Chapter ${chapterIndex + 1}`)}</title>`,
+      `<title>${escapeHtml(chapter.title || `第 ${chapterIndex + 1} 章`)}</title>`,
       '<link rel="stylesheet" type="text/css" href="stylesheet.css"/>',
       '</head>',
       '<body>',
-      `<h1>${escapeHtml(chapter.title || `Chapter ${chapterIndex + 1}`)}</h1>`
+      `<h1>${escapeHtml(chapter.title || `第 ${chapterIndex + 1} 章`)}</h1>`
     ];
     const chapterScenes = (normalized.scenes || []).filter((scene) => scene.chapterId === chapter.id);
     chapterScenes.forEach((scene, sceneIndex) => {
@@ -169,7 +169,7 @@ async function buildEpub(project, options = {}) {
     zip.file(`OEBPS/${filename}`, body.join('\n'));
     manifestItems.push(`<item id="${id}" href="${filename}" media-type="application/xhtml+xml"/>`);
     spineItems.push(`<itemref idref="${id}"/>`);
-    navPoints.push(`<navPoint id="navpoint-${chapterIndex + 1}" playOrder="${chapterIndex + 1}"><navLabel><text>${escapeHtml(chapter.title || `Chapter ${chapterIndex + 1}`)}</text></navLabel><content src="${filename}"/></navPoint>`);
+    navPoints.push(`<navPoint id="navpoint-${chapterIndex + 1}" playOrder="${chapterIndex + 1}"><navLabel><text>${escapeHtml(chapter.title || `第 ${chapterIndex + 1} 章`)}</text></navLabel><content src="${filename}"/></navPoint>`);
   });
   zip.file('OEBPS/stylesheet.css', 'body{font-family:serif;line-height:1.8;margin:2em;}h1{text-align:center;}h2{font-style:italic;}p{text-indent:1.5em;margin:1em 0;}.scene-break{text-align:center;text-indent:0;margin:2em 0;}');
   zip.file('OEBPS/content.opf', `<?xml version="1.0" encoding="UTF-8"?>

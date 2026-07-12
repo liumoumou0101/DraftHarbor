@@ -23,7 +23,7 @@
         const now = timestamp(input.createdAt || input.created);
         return {
             id: input.id || makeId('chapter'),
-            title: String(input.title || 'Chapter 1').trim() || 'Chapter 1',
+            title: String(input.title || '第 1 章').trim() || '第 1 章',
             summary: String(input.summary || ''),
             summaryUpdated: String(input.summaryUpdated || ''),
             summarySource: String(input.summarySource || ''),
@@ -40,7 +40,7 @@
         return {
             id: input.id || makeId('scene'),
             chapterId: String(input.chapterId || ''),
-            title: String(input.title || 'Scene 1').trim() || 'Scene 1',
+            title: String(input.title || '场景 1').trim() || '场景 1',
             summary: String(input.summary || ''),
             summaryUpdated: String(input.summaryUpdated || ''),
             summarySource: String(input.summarySource || ''),
@@ -59,7 +59,7 @@
         const now = timestamp(input.createdAt || input.created);
         const chapter = createChapter({
             id: input.chapterId || 'chapter-1',
-            title: input.chapterTitle || 'Chapter 1',
+            title: input.chapterTitle || '第 1 章',
             order: 0,
             createdAt: now,
             updatedAt: now
@@ -67,7 +67,7 @@
         const scene = createScene({
             id: input.sceneId || 'scene-1',
             chapterId: chapter.id,
-            title: input.sceneTitle || 'Scene 1',
+            title: input.sceneTitle || '场景 1',
             order: 0,
             createdAt: now,
             updatedAt: now

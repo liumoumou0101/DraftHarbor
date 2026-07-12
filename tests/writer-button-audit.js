@@ -88,6 +88,15 @@ async function openNativeModelSettings(page) {
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => document.querySelector('[data-native-project-title]').textContent.includes('Writer Audit Project'));
 
+    await page.click('[data-native-manage-global-prompt]');
+    await page.waitForFunction(() => document.querySelector('[data-native-global-prompt-dialog]').open);
+    await page.check('[data-native-global-prompt-enabled]');
+    await page.fill('[data-native-global-prompt-content]', 'Writer audit global prefix.');
+    await page.locator('[data-native-global-prompt-form] button[type="submit"]').click();
+    await page.waitForFunction(() => !document.querySelector('[data-native-global-prompt-dialog]').open);
+    const writerGlobalPrompt = await fetch(`${servers.appUrl}/api/settings`).then((response) => response.json());
+    assert.strictEqual(writerGlobalPrompt.settings.globalPrompt.content, 'Writer audit global prefix.', 'writer global prompt editor should save its content');
+
     await page.dblclick('[data-native-scene-title]');
     await page.keyboard.press('Control+A');
     await page.keyboard.type('Inline Audit Title');
