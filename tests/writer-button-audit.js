@@ -107,6 +107,15 @@ async function openNativeModelSettings(page) {
     await page.click('[data-native-toggle-outline]');
     await page.waitForFunction(() => !document.querySelector('[data-native-writer]').classList.contains('is-outline-collapsed'));
 
+    await page.evaluate(() => {
+      const handle = document.querySelector('[data-native-resize-outline]');
+      handle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 260 }));
+      document.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 330 }));
+      document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 330 }));
+    });
+    await page.waitForFunction(() => Number.parseFloat(document.querySelector('[data-native-writer]').style.getPropertyValue('--native-outline-width')) >= 210);
+    assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('draftharbor:nativeSidebarWidths')).outline >= 210), 'resized outline width should persist locally');
+
     await page.click('[data-native-toggle-assistant]');
     await page.waitForFunction(() => document.querySelector('[data-native-writer]').classList.contains('is-assistant-collapsed'));
     await page.click('[data-native-toggle-assistant]');
@@ -203,8 +212,27 @@ async function openNativeModelSettings(page) {
     await page.selectOption('[data-native-scene-tense]', 'present');
     await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('未保存'));
     await page.fill('[data-native-scene-editor]', 'Summary source text for the audit scene.');
+    await page.evaluate(async () => {
+      const response = await fetch('/api/prompts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: 'writer-audit-project',
+          prompt: {
+            category: 'summary',
+            title: 'Audit Summary Template',
+            systemContent: 'Use audit summary system rules.',
+            content: 'Use the audit summary structure.'
+          }
+        })
+      });
+      if (!response.ok) throw new Error(`summary template save failed: ${response.status}`);
+      await loadSummaryPrompts();
+    });
+    await page.selectOption('[data-native-summary-template]', { label: 'Audit Summary Template' });
     await page.evaluate(() => {
       window.__draftHarborGenerationStub = async (prompt, onToken) => {
+        window.__draftHarborLastSummaryPrompt = prompt.messages;
         for (const token of ['Generated', ' scene', ' summary.']) {
           await new Promise((resolve) => setTimeout(resolve, 2));
           onToken(token);
@@ -213,6 +241,28 @@ async function openNativeModelSettings(page) {
     });
     await page.click('[data-native-generate-scene-summary]');
     await page.waitForFunction(() => document.querySelector('[data-native-scene-summary]').value.includes('Generated scene summary.'));
+    const summaryPromptMessages = await page.evaluate(() => window.__draftHarborLastSummaryPrompt);
+    assert.ok(summaryPromptMessages.some((message) => message.content.includes('Use audit summary system rules.')), 'custom summary system template should be used');
+    assert.ok(summaryPromptMessages.some((message) => message.content.includes('Use the audit summary structure.')), 'custom summary instruction template should be used');
+    await page.waitForFunction(() => {
+      const dialog = document.querySelector('[data-native-summary-dialog]');
+      return dialog && dialog.open && document.querySelector('[data-native-summary-dialog-content]').value.includes('Generated scene summary.');
+    });
+    await page.click('[data-native-summary-dialog-close]');
+    await page.waitForFunction(() => !document.querySelector('[data-native-summary-dialog]').open);
+
+    await page.focus('[data-native-scene-editor]');
+    await page.evaluate(() => {
+      const editor = document.querySelector('[data-native-scene-editor]');
+      editor.setSelectionRange(0, 7);
+      editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 120, clientY: 160 }));
+    });
+    await page.waitForFunction(() => !document.querySelector('[data-native-context-menu]').hidden);
+    assert.strictEqual(await page.locator('[data-native-context-selection-actions]').isHidden(), false, 'selection actions should be shown in the writer context menu');
+    await page.click('[data-native-context-action="view-summary"]');
+    await page.waitForFunction(() => document.querySelector('[data-native-summary-dialog]').open);
+    await page.click('[data-native-summary-dialog-edit]');
+    await page.waitForFunction(() => document.querySelector('[data-native-panel="metadata"]').classList.contains('is-active'));
 
     await page.click('[data-native-panel-tab="structure"]');
     await page.click('[data-native-rename-scene]');
@@ -620,6 +670,8 @@ async function openNativeModelSettings(page) {
     assert.ok(summaryBeatPlaceholder.includes('无需输入'), 'summary placeholder should indicate no input needed');
     await page.click('[data-native-generate]');
     await page.waitForFunction(() => document.querySelector('[data-native-scene-summary]').value.includes('Generated scene summary for audit.'));
+    await page.waitForFunction(() => document.querySelector('[data-native-summary-dialog]').open);
+    await page.click('[data-native-summary-dialog-close]');
     await page.click('[data-native-gen-task="continue"]');
     await page.waitForFunction(() => document.querySelector('[data-native-gen-task="continue"]').classList.contains('is-active'));
 

@@ -54,6 +54,16 @@
         return true;
     }
 
+    function reasoningText(message) {
+        return message && (message.reasoning_content || message.reasoning || message.reasoningContent) || '';
+    }
+
+    function emitChatMessage(message, emit) {
+        const reasoning = reasoningText(message);
+        if (reasoning) emit(reasoning, { type: 'reasoning' });
+        if (message && message.content) emit(message.content, { type: 'content' });
+    }
+
     function numeric(value, fallback) {
         const parsed = Number(value);
         return Number.isFinite(parsed) ? parsed : fallback;
@@ -135,22 +145,30 @@
             body: JSON.stringify(request.body),
             signal: config.signal
         });
-        if (!response.ok) throw new Error(`API generation returned ${response.status}`);
+        if (!response.ok) {
+            let detail = '';
+            try {
+                const payload = await response.json();
+                detail = payload && payload.error && (payload.error.message || payload.error.code) || '';
+            } catch (_) { /* use the HTTP status when no JSON error is available */ }
+            throw new Error(`API generation returned ${response.status}${detail ? `: ${detail}` : ''}`);
+        }
 
         if (!response.body || typeof response.body.getReader !== 'function') {
             const payload = await response.json();
             const message = payload && payload.choices && payload.choices[0] ? payload.choices[0].message || {} : {};
-            if (message.reasoning_content) emit(message.reasoning_content, { type: 'reasoning' });
-            if (message.content) emit(message.content, { type: 'content' });
+            emitChatMessage(message, emit);
             return;
         }
 
         await consumeEventStream(response, (serialized) => {
-            const payload = JSON.parse(serialized);
-            const choice = payload && payload.choices && payload.choices[0];
-            const delta = choice && choice.delta ? choice.delta : {};
-            if (request.thinking && delta.reasoning_content) emit(delta.reasoning_content, { type: 'reasoning' });
-            if (delta.content) emit(delta.content, request.thinking ? { type: 'content' } : undefined);
+            try {
+                const payload = JSON.parse(serialized);
+                const choice = payload && payload.choices && payload.choices[0];
+                emitChatMessage(choice && choice.delta ? choice.delta : {}, emit);
+            } catch (_) {
+                // Keep a malformed compatibility-provider event from discarding later valid events.
+            }
         });
     }
 

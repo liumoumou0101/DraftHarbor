@@ -107,6 +107,10 @@
         prompts: [],
         selectedId: 'default-prose'
     };
+    const summaryPromptState = {
+        prompts: [],
+        selectedId: 'auto'
+    };
     const rewritePromptState = {
         prompts: [],
         selectedId: ''

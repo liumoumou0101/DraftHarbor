@@ -360,7 +360,7 @@
                 .sort((a, b) => (a.order || 0) - (b.order || 0));
             const summary = mode === 'full'
                 ? chapterScenes.map((item) => `${item.title || '未命名场景'}\n${nativeSceneContent(item.id)}`).join('\n\n')
-                : (chapter.summary || chapterScenes.map((item) => `${item.title || '未命名场景'}：${item.summary || nativeSceneContent(item.id).slice(0, 600)}`).join('\n'));
+                : ((!chapter.summaryStale && chapter.summary) || chapterScenes.map((item) => `${item.title || '未命名场景'}：${(!item.summaryStale && item.summary) || nativeSceneContent(item.id).slice(0, 600)}`).join('\n'));
             if (summary.trim()) {
                 sceneSummaryMap.set(chapter.title || chapter.id, {
                     title: chapter.title || '未命名章节',
@@ -373,7 +373,7 @@
             if (!referenced || referenced.id === scene.id) return;
             sceneSummaryMap.set(referenced.title || referenced.id, {
                 title: referenced.title || '未命名场景',
-                summary: mode === 'full' ? nativeSceneContent(referenced.id) : (referenced.summary || nativeSceneContent(referenced.id).slice(0, 600))
+                summary: mode === 'full' ? nativeSceneContent(referenced.id) : ((!referenced.summaryStale && referenced.summary) || nativeSceneContent(referenced.id).slice(0, 600))
             });
         });
         return window.DraftHarborPromptBuilder.buildFictionPrompt({
@@ -386,7 +386,7 @@
                 sceneSummaries: Array.from(sceneSummaryMap.values()),
                 compendiumEntries: Array.from(compendiumMap.values()),
                 systemPrompt: template.systemContent || '',
-                prosePrompt: [chapter && chapter.summary ? `Chapter context: ${chapter.summary}` : '', template.content || '', context.manualText || '', nativeAvoidanceInstruction()].filter(Boolean).join('\n\n')
+                prosePrompt: [chapter && chapter.summary && !chapter.summaryStale ? `Chapter context: ${chapter.summary}` : '', template.content || '', context.manualText || '', nativeAvoidanceInstruction()].filter(Boolean).join('\n\n')
             }
         });
     }
@@ -838,6 +838,15 @@
         });
     }
 
+    function cleanNativeSummaryText(value) {
+        let text = String(value || '');
+        // Some OpenAI-compatible endpoints place hidden reasoning in content instead
+        // of a dedicated reasoning stream. Keep only the visible answer in that case.
+        text = text.replace(/<(think|analysis)(?:\s[^>]*)?>[\s\S]*?<\/\1>/gi, '');
+        text = text.replace(/<(think|analysis)(?:\s[^>]*)?>[\s\S]*$/gi, '');
+        return text.replace(/<\/?(?:think|analysis)(?:\s[^>]*)?>/gi, '').trim();
+    }
+
     async function generateNativeSummary(scope) {
         if (settingsState.loading && settingsState.loadPromise) {
             await settingsState.loadPromise.catch(() => null);
@@ -851,14 +860,16 @@
         flushNativeEditorFields();
         let sourceText = '';
         let targetTitle = '';
+        let sourceInfo = null;
         if (scope === 'chapter') {
             const chapterScenes = (nativeEditorState.snapshot.scenes || [])
                 .filter((item) => item.chapterId === chapter.id)
                 .sort((a, b) => (a.order || 0) - (b.order || 0));
-            sourceText = chapterScenes.map((item) => {
-                const content = nativeSceneContent(item.id).trim();
-                return `${item.title || '未命名场景'}\n${item.summary || content}`;
-            }).join('\n\n');
+            const sourceBuilder = window.DraftHarborSummarySource;
+            sourceInfo = sourceBuilder && typeof sourceBuilder.buildChapterSummarySource === 'function'
+                ? sourceBuilder.buildChapterSummarySource({ scenes: chapterScenes, getContent: nativeSceneContent })
+                : { text: chapterScenes.map((item) => `${item.title || '未命名场景'}\n${(!item.summaryStale && item.summary) || nativeSceneContent(item.id)}`).join('\n\n'), compressed: false };
+            sourceText = sourceInfo.text;
             targetTitle = chapter.title || '当前章节';
         } else {
             sourceText = nativeSceneContent(scene.id).trim();
@@ -868,10 +879,13 @@
             setNativeSaveStatus('没有可总结的正文', 'error');
             return;
         }
+        const summaryTemplate = typeof selectedSummaryPromptTemplate === 'function'
+            ? selectedSummaryPromptTemplate(scope)
+            : { title: '默认摘要模板', systemContent: '', content: '' };
         const prompt = {
             messages: [
-                { role: 'system', content: ['你是小说编辑助手。请输出简洁、准确、可用于后续上下文检索的摘要。不要加入评价。', nativeAvoidanceInstruction()].filter(Boolean).join('\n\n') },
-                { role: 'user', content: `请为“${targetTitle}”生成 ${scope === 'chapter' ? '章节' : '场景'}摘要，控制在 120-220 字：\n\n${sourceText}` }
+                { role: 'system', content: ['你是小说编辑助手。请只输出简洁、准确、可用于后续上下文检索的摘要正文。不要加入评价，也不要输出思考过程、分析、推理步骤或 <think> 标签。', summaryTemplate.systemContent || '', nativeAvoidanceInstruction()].filter(Boolean).join('\n\n') },
+                { role: 'user', content: [summaryTemplate.content || `请为“${targetTitle}”生成 ${scope === 'chapter' ? '章节' : '场景'}摘要。`, `对象：“${targetTitle}”。摘要控制在 120-220 字。`, sourceInfo && sourceInfo.compressed ? '输入内容已按长度预算压缩；请仅依据提供内容概括，不要补写未提供的剧情。' : '', sourceText].filter(Boolean).join('\n\n') }
             ],
             asString() {
                 return this.messages.map((message) => `<|im_start|>${message.role}\n${message.content}<|im_end|>`).join('\n');
@@ -885,16 +899,18 @@
         renderNativeGeneration();
         setNativeSaveStatus(scope === 'chapter' ? '正在生成章节摘要...' : '正在生成场景摘要...', 'info');
         try {
-            await window.DraftHarborProviderStream.streamGeneration(prompt, (token) => {
+            await window.DraftHarborProviderStream.streamGeneration(prompt, (token, meta) => {
+                if (meta && meta.type && meta.type !== 'content') return;
                 summary += token;
                 if (scope === 'scene' && elements.summary) elements.summary.value = summary;
             }, nativeGenerationConfig(generation.abortController && generation.abortController.signal));
-            summary = summary.trim();
+            summary = cleanNativeSummaryText(summary);
             if (!summary) throw new Error('AI provider returned an empty response.');
             if (scope === 'chapter') {
                 chapter.summary = summary;
                 chapter.summaryUpdated = new Date().toISOString();
                 chapter.summarySource = 'ai';
+                chapter.summaryStale = false;
             } else {
                 scene.summary = summary;
                 scene.summaryUpdated = new Date().toISOString();
@@ -906,8 +922,12 @@
             // chapter-summary action can become disabled after a scene summary completes.
             nativeEditorState.activeSceneId = scene.id;
             nativeEditorState.activeChapterId = chapter.id;
-            markNativeDirty(scope === 'chapter' ? '章节摘要已生成，未保存' : '场景摘要已生成，未保存');
+            const status = scope === 'chapter'
+                ? `章节摘要已生成${sourceInfo && sourceInfo.compressed ? '（输入已压缩）' : ''}，未保存`
+                : '场景摘要已生成，未保存';
+            markNativeDirty(status);
             renderNativeEditor();
+            openNativeSummaryDialog(scope);
         } catch (error) {
             console.error('Native summary failed:', error);
             setNativeSaveStatus(`摘要生成失败：${error.message || error}`, 'error');
@@ -1022,6 +1042,7 @@
         await loadCompendium();
         await loadPrompts();
         await loadRewritePrompts();
+        await loadSummaryPrompts();
         await loadWorkshopSessions();
         await loadWorkflowRuns();
 

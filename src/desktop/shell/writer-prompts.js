@@ -25,6 +25,63 @@
             || { id: 'default-prose', title: '正文续写：均衡扩写', category: 'prose', content: '', systemContent: '' };
     }
 
+    function selectedSummaryPromptTemplate(scope) {
+        const prompts = summaryPromptState.prompts || [];
+        const defaultId = scope === 'chapter' ? 'default-summary-chapter' : 'default-summary-scene';
+        const selectedId = summaryPromptState.selectedId || 'auto';
+        return (selectedId !== 'auto' && prompts.find((prompt) => prompt.id === selectedId))
+            || prompts.find((prompt) => prompt.id === defaultId)
+            || prompts[0]
+            || { id: defaultId, title: '默认摘要模板', category: 'summary', systemContent: '', content: '' };
+    }
+
+    function defaultSummaryPromptTemplates() {
+        const schema = window.DraftHarborPromptTemplateSchema;
+        return schema && typeof schema.defaultPromptTemplates === 'function'
+            ? schema.defaultPromptTemplates('summary', currentProjectId())
+            : [];
+    }
+
+    async function loadSummaryPrompts() {
+        const projectId = currentProjectId();
+        if (!projectId) {
+            summaryPromptState.prompts = defaultSummaryPromptTemplates();
+            summaryPromptState.selectedId = 'auto';
+            renderSummaryPromptTemplates();
+            return;
+        }
+        try {
+            const response = await fetch(`/api/prompts?${new URLSearchParams({ projectId, category: 'summary' }).toString()}`, { cache: 'no-store' });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+            summaryPromptState.prompts = result.prompts || [];
+            if (summaryPromptState.selectedId !== 'auto' && !summaryPromptState.prompts.some((prompt) => prompt.id === summaryPromptState.selectedId)) {
+                summaryPromptState.selectedId = 'auto';
+            }
+        } catch (error) {
+            console.warn('Failed to load summary prompts:', error);
+            summaryPromptState.prompts = defaultSummaryPromptTemplates();
+        }
+        renderSummaryPromptTemplates();
+    }
+
+    function renderSummaryPromptTemplates() {
+        const elements = nativeEditorElements();
+        if (!elements.summaryTemplate) return;
+        elements.summaryTemplate.replaceChildren();
+        const automatic = document.createElement('option');
+        automatic.value = 'auto';
+        automatic.textContent = '自动（按场景/章节选择默认模板）';
+        elements.summaryTemplate.appendChild(automatic);
+        (summaryPromptState.prompts || []).forEach((prompt) => {
+            const option = document.createElement('option');
+            option.value = prompt.id;
+            option.textContent = prompt.title || '未命名摘要模板';
+            elements.summaryTemplate.appendChild(option);
+        });
+        elements.summaryTemplate.value = summaryPromptState.selectedId || 'auto';
+    }
+
     function isNativeDefaultPrompt(prompt) {
         if (!prompt) return false;
         return !!prompt.isDefault || String(prompt.id || '').indexOf('default-') === 0;
@@ -129,6 +186,7 @@
         promptState.selectedId = result.prompt.id;
         await loadPrompts();
         await loadRewritePrompts();
+        await loadSummaryPrompts();
         renderPromptManager();
         setNativeSaveStatus('提示词已保存', 'ok');
     }
@@ -151,6 +209,7 @@
         promptState.selectedId = 'default-prose';
         await loadPrompts();
         await loadRewritePrompts();
+        await loadSummaryPrompts();
         renderPromptManager();
         setNativeSaveStatus('提示词已删除', 'ok');
     }

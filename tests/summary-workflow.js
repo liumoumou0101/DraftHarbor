@@ -47,13 +47,21 @@ function snapshot() {
     await page.locator('[data-native-scene-id]').first().click();
     await page.click('[data-native-panel-tab="metadata"]');
     await page.waitForSelector('[data-native-generate-scene-summary]:not([disabled])');
+    await page.waitForFunction(() => Array.from(document.querySelector('[data-native-summary-template]').options).some((option) => option.value === 'default-summary-scene'));
     await page.evaluate(() => {
       window.__draftHarborGenerationStub = async (prompt, onToken) => {
+        window.__draftHarborLastSummaryPrompt = prompt.messages;
+        onToken('Hidden reasoning stream.', { type: 'reasoning' });
+        onToken('<think>Hidden content reasoning.</think>', { type: 'content' });
         for (const token of ['Scene', ' summary.']) onToken(token);
       };
     });
     await page.click('[data-native-generate-scene-summary]');
     await page.waitForFunction(() => document.querySelector('[data-native-scene-summary]').value === 'Scene summary.');
+    const scenePrompt = await page.evaluate(() => window.__draftHarborLastSummaryPrompt);
+    assert.ok(scenePrompt.some((message) => message.content.includes('角色目标与关系变化')), 'scene summary should use the default scene summary template');
+    await page.waitForFunction(() => document.querySelector('[data-native-summary-dialog]').open);
+    await page.click('[data-native-summary-dialog-close]');
     await page.click('[data-native-save-scene]');
     await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('已保存'));
 
@@ -62,11 +70,22 @@ function snapshot() {
     await page.waitForSelector('[data-native-generate-chapter-summary]:not([disabled])');
     await page.click('[data-native-generate-chapter-summary]');
     await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('章节摘要已生成'));
+    const chapterPrompt = await page.evaluate(() => window.__draftHarborLastSummaryPrompt);
+    assert.ok(chapterPrompt.some((message) => message.content.includes('下一章承接点')), 'chapter summary should use the default chapter summary template');
+    await page.waitForFunction(() => document.querySelector('[data-native-summary-dialog]').open);
+    await page.click('[data-native-summary-dialog-close]');
     await page.click('[data-native-save-scene]');
     await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('已保存'));
     const saved = await fetch(`${servers.appUrl}/api/get-project?projectId=summary-project`).then((response) => response.json());
     assert.strictEqual(saved.project.scenes[0].summary, 'Scene summary.', 'scene summary should persist after save');
     assert.strictEqual(saved.project.chapters[0].summary, 'Scene summary.', 'chapter summary should persist after save');
+
+    await page.fill('[data-native-scene-editor]', 'The navigator revises the flooded archive plan.');
+    await page.click('[data-native-save-scene]');
+    await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('已保存'));
+    const staleSaved = await fetch(`${servers.appUrl}/api/get-project?projectId=summary-project`).then((response) => response.json());
+    assert.strictEqual(staleSaved.project.scenes[0].summaryStale, true, 'editing scene content should mark its summary stale');
+    assert.strictEqual(staleSaved.project.chapters[0].summaryStale, true, 'editing scene content should mark the chapter summary stale');
 
     await page.evaluate(() => { window.__draftHarborGenerationStub = async () => { throw new Error('summary provider failure'); }; });
     await page.click('[data-native-panel-tab="metadata"]');

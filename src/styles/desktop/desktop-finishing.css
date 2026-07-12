@@ -160,6 +160,86 @@
     }
 }
 
+/* User-resizable writer sidebars. Double-click a divider to restore its default width. */
+.desktop-native-writer {
+    position: relative;
+}
+
+.desktop-native-outline,
+.desktop-native-assistant {
+    position: relative;
+}
+
+.desktop-native-sidebar-resizer {
+    position: absolute;
+    z-index: 12;
+    top: 0;
+    bottom: 0;
+    width: 10px;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+.desktop-native-sidebar-resizer::after {
+    position: absolute;
+    top: 50%;
+    width: 2px;
+    height: 42px;
+    border-radius: 999px;
+    background: transparent;
+    content: '';
+    transform: translateY(-50%);
+    transition: background 0.14s ease;
+}
+
+.desktop-native-sidebar-resizer:hover::after,
+.desktop-native-writer.is-sidebar-resizing .desktop-native-sidebar-resizer::after {
+    background: var(--desktop-accent);
+}
+
+.desktop-native-outline-resizer {
+    right: -5px;
+}
+
+.desktop-native-outline-resizer::after {
+    right: 4px;
+}
+
+.desktop-native-assistant-resizer {
+    left: -5px;
+}
+
+.desktop-native-assistant-resizer::after {
+    left: 4px;
+}
+
+@media (min-width: 1101px) {
+    .desktop-native-writer:not(.is-focus-mode):not(.is-assistant-bottom) {
+        grid-template-columns: var(--native-outline-width, clamp(238px, 17vw, 320px)) minmax(420px, 1fr) var(--native-assistant-width, clamp(340px, 24vw, 460px));
+    }
+
+    .desktop-native-writer.is-outline-collapsed:not(.is-assistant-bottom) {
+        grid-template-columns: minmax(420px, 1fr) var(--native-assistant-width, clamp(340px, 24vw, 460px));
+    }
+
+    .desktop-native-writer.is-assistant-collapsed:not(.is-assistant-bottom) {
+        grid-template-columns: var(--native-outline-width, clamp(238px, 17vw, 320px)) minmax(420px, 1fr);
+    }
+}
+
+.desktop-native-writer.is-outline-collapsed .desktop-native-outline-resizer,
+.desktop-native-writer.is-assistant-collapsed .desktop-native-assistant-resizer,
+.desktop-native-writer.is-focus-mode .desktop-native-sidebar-resizer,
+.desktop-native-writer.is-assistant-bottom .desktop-native-sidebar-resizer {
+    display: none;
+}
+
+@media (max-width: 1100px) {
+    .desktop-native-sidebar-resizer {
+        display: none;
+    }
+}
+
 /* Phase 53: Copilot default page productization. */
 .desktop-native-copilot-brief,
 .desktop-native-copilot-context,

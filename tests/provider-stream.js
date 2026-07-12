@@ -54,15 +54,18 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
         var chunkIndex = 0;
         var chunks = [
             { choices: [{ delta: { reasoning_content: 'Let me think about this...' } }] },
-            { choices: [{ delta: { reasoning_content: ' more reasoning.' } }] },
+            { choices: [{ delta: { reasoning: ' more reasoning.' } }] },
             { choices: [{ delta: { content: 'Here is the answer.' } }] },
             { choices: [{ delta: { content: ' And more text.' } }] }
         ];
 
         var stream = new ReadableStream({
             async pull(controller) {
-                if (chunkIndex < chunks.length) {
-                    var data = JSON.stringify(chunks[chunkIndex]);
+                if (chunkIndex === 1) {
+                    controller.enqueue(encoder.encode('data: {malformed compatibility event}\n\n'));
+                    chunkIndex++;
+                } else if (chunkIndex - (chunkIndex > 1 ? 1 : 0) < chunks.length) {
+                    var data = JSON.stringify(chunks[chunkIndex - (chunkIndex > 1 ? 1 : 0)]);
                     var line = 'data: ' + data + '\n\n';
                     controller.enqueue(encoder.encode(line));
                     chunkIndex++;
@@ -136,9 +139,10 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
 
     try {
         var openAITokens = [];
+        var openAIMeta = [];
         await providerStream.streamGeneration(
             { messages: [{ role: 'user', content: 'Test' }] },
-            function (token) { openAITokens.push(token); },
+            function (token, meta) { openAITokens.push(token); openAIMeta.push(meta); },
             {
                 mode: 'api',
                 provider: 'openai',
@@ -150,12 +154,34 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
             }
         );
         assert.strictEqual(openAITokens[0], 'Hello', 'non-deepseek should stream content');
+        assert.strictEqual(openAIMeta[0] && openAIMeta[0].type, 'content', 'all compatible providers should identify final content tokens');
         console.log('Provider stream non-DeepSeek test passed.');
     } finally {
         globalThis.fetch = originalFetch;
     }
 
-    // Test 3: Model catalog
+    // Test 3: Non-streaming OpenAI-compatible fallback and descriptive API errors
+    globalThis.fetch = async () => ({
+        ok: true,
+        body: null,
+        json: async () => ({ choices: [{ message: { reasoning: 'Internal analysis.', content: 'Final fallback answer.' } }] })
+    });
+    try {
+        var fallback = [];
+        await providerStream.streamGeneration(
+            { messages: [{ role: 'user', content: 'Test fallback' }] },
+            (token, meta) => fallback.push({ token, meta }),
+            { mode: 'api', provider: 'openai-compatible', model: 'test-model', endpoint: 'https://example.test/chat', apiKey: 'test-key' }
+        );
+        assert.deepStrictEqual(fallback, [
+            { token: 'Internal analysis.', meta: { type: 'reasoning' } },
+            { token: 'Final fallback answer.', meta: { type: 'content' } }
+        ], 'non-streaming fallback should preserve reasoning/content separation');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+
+    // Test 4: Model catalog
     var modelCatalog = require('../src/core/settings/model-catalog');
     assert.ok(modelCatalog, 'model-catalog should be requireable');
     assert.ok(modelCatalog.API_COMPATIBLE_PROVIDERS.length >= 5, 'should have API-compatible providers');

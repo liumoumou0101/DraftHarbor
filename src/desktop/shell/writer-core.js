@@ -24,9 +24,22 @@
             paperStatus: document.querySelector('[data-native-paper-status]'),
             editorBody: document.querySelector('.desktop-native-editor-body'),
             editor: document.querySelector('[data-native-scene-editor]'),
+            contextMenu: document.querySelector('[data-native-context-menu]'),
+            contextSelectionActions: document.querySelector('[data-native-context-selection-actions]'),
+            contextViewSummary: document.querySelector('[data-native-context-action="view-summary"]'),
             summary: document.querySelector('[data-native-scene-summary]'),
+            summaryLabel: document.querySelector('[data-native-summary-label]'),
+            summaryStale: document.querySelector('[data-native-summary-stale]'),
             generateSceneSummary: document.querySelector('[data-native-generate-scene-summary]'),
             generateChapterSummary: document.querySelector('[data-native-generate-chapter-summary]'),
+            summaryTemplate: document.querySelector('[data-native-summary-template]'),
+            summaryDialog: document.querySelector('[data-native-summary-dialog]'),
+            summaryDialogTitle: document.querySelector('[data-native-summary-dialog-title]'),
+            summaryDialogMeta: document.querySelector('[data-native-summary-dialog-meta]'),
+            summaryDialogContent: document.querySelector('[data-native-summary-dialog-content]'),
+            summaryDialogCopy: document.querySelector('[data-native-summary-dialog-copy]'),
+            summaryDialogEdit: document.querySelector('[data-native-summary-dialog-edit]'),
+            summaryDialogClose: document.querySelector('[data-native-summary-dialog-close]'),
             tags: document.querySelector('[data-native-scene-tags]'),
             pov: document.querySelector('[data-native-scene-pov]'),
             tense: document.querySelector('[data-native-scene-tense]'),
@@ -276,6 +289,7 @@
             if (elements.specials) elements.specials.hidden = true;
             if (elements.toggleSpecials) elements.toggleSpecials.setAttribute('aria-pressed', 'false');
         }
+        if (options.keep !== 'context-menu' && elements.contextMenu) elements.contextMenu.hidden = true;
     }
 
     function countNativeWords(text) {
@@ -314,8 +328,22 @@
         if (!snapshot || !scene) return;
 
         snapshot.sceneContents = snapshot.sceneContents || {};
-        if (elements.editor) snapshot.sceneContents[scene.id] = elements.editor.value;
-        if (elements.summary) scene.summary = elements.summary.value.trim();
+        if (elements.editor) {
+            const nextContent = elements.editor.value;
+            if (snapshot.sceneContents[scene.id] !== nextContent) markNativeSummaryStale(scene);
+            snapshot.sceneContents[scene.id] = nextContent;
+        }
+        if (elements.summary) {
+            const nextSummary = elements.summary.value.trim();
+            if (nextSummary !== scene.summary) {
+                scene.summary = nextSummary;
+                scene.summaryUpdated = new Date().toISOString();
+                scene.summarySource = 'manual';
+                scene.summaryStale = false;
+                markNativeChapterSummaryStale(scene.chapterId);
+            }
+        }
+        renderNativeSummaryStaleState();
         if (elements.tags) scene.tags = elements.tags.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean);
         if (elements.pov) scene.povCharacter = elements.pov.value.trim();
         if (elements.tense) scene.tense = elements.tense.value;
@@ -406,6 +434,26 @@
         updateNativeStats();
         setNativeSaveStatus(message, 'warn');
         scheduleNativeAutosave();
+    }
+
+    function markNativeChapterSummaryStale(chapterId) {
+        const snapshot = nativeEditorState.snapshot;
+        const chapter = snapshot && (snapshot.chapters || []).find((item) => item.id === chapterId);
+        if (chapter && chapter.summary) chapter.summaryStale = true;
+    }
+
+    function markNativeSummaryStale(scene) {
+        if (!scene) return;
+        if (scene.summary) scene.summaryStale = true;
+        markNativeChapterSummaryStale(scene.chapterId);
+    }
+
+    function renderNativeSummaryStaleState() {
+        const elements = nativeEditorElements();
+        const scene = currentNativeScene();
+        const stale = !!(scene && scene.summaryStale);
+        if (elements.summaryLabel) elements.summaryLabel.textContent = stale ? '摘要（待更新）' : '摘要';
+        if (elements.summaryStale) elements.summaryStale.hidden = !stale;
     }
 
     function scheduleNativeAutosave() {
@@ -721,6 +769,8 @@
             elements.summary.disabled = !activeScene;
             elements.summary.value = activeScene ? (activeScene.summary || '') : '';
         }
+        if (elements.summaryTemplate) elements.summaryTemplate.disabled = !activeScene;
+        renderNativeSummaryStaleState();
         if (elements.tags) {
             elements.tags.disabled = !activeScene;
             elements.tags.value = activeScene ? nativeSceneTags(activeScene).join(', ') : '';

@@ -296,7 +296,8 @@
             if (!window.DraftHarborProviderStream || typeof window.DraftHarborProviderStream.streamGeneration !== 'function') {
                 throw new Error('Provider stream is not loaded');
             }
-            await window.DraftHarborProviderStream.streamGeneration(prompt, (token) => {
+            await window.DraftHarborProviderStream.streamGeneration(prompt, (token, meta) => {
+                if (meta && meta.type && meta.type !== 'content') return;
                 assistantMessage.content += token;
                 renderWorkshop();
             }, runtimeProviderConfig());

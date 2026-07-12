@@ -361,7 +361,8 @@
             if (!window.DraftHarborProviderStream || typeof window.DraftHarborProviderStream.streamGeneration !== 'function') {
                 throw new Error('Native generation provider stream is not loaded.');
             }
-            await window.DraftHarborProviderStream.streamGeneration(prepared.prompt, (token) => {
+            await window.DraftHarborProviderStream.streamGeneration(prepared.prompt, (token, meta) => {
+                if (meta && meta.type && meta.type !== 'content') return;
                 workflowState.generatedText += token;
                 const currentRun = selectedWorkflowRun();
                 const existing = latestWorkflowArtifact(currentRun, 'generation_result');
