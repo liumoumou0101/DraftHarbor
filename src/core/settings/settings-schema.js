@@ -172,6 +172,14 @@
         };
     }
 
+    function normalizeGlobalPrompt(input = {}) {
+        const source = input && typeof input === 'object' ? input : {};
+        return {
+            enabled: !!source.enabled,
+            content: cleanString(source.content || source.prefix || '')
+        };
+    }
+
     function normalizeDesktopSettings(input = {}) {
         const providerInput = input.providerSettings || input.provider || input.ai || input;
         const generationInput = input.generationDefaults || input.generation || input;
@@ -185,6 +193,7 @@
             generationDefaults: normalizeGenerationDefaults(generationInput),
             localModelSettings: normalizeLocalModelSettings(localInput),
             appearance: normalizeAppearanceSettings(input.appearance || input.appearanceSettings || {}),
+            globalPrompt: normalizeGlobalPrompt(input.globalPrompt || input.globalPromptPrefix || {}),
             globalStyleGuardRules: Array.isArray(input.globalStyleGuardRules) ? input.globalStyleGuardRules : [],
             updatedAt: input.updatedAt || ''
         };
@@ -218,6 +227,7 @@
                 temperature: defaults.temperature,
                 maxTokens: defaults.maxTokens,
                 useProviderDefaults: defaults.useProviderDefaults,
+                globalPrompt: settings.globalPrompt.enabled ? settings.globalPrompt.content : '',
                 profileId: selectedProfile.id,
                 ...extras,
                 profileId: selectedProfile.id
@@ -235,6 +245,7 @@
             temperature: defaults.temperature,
             maxTokens: defaults.maxTokens,
             useProviderDefaults: defaults.useProviderDefaults,
+            globalPrompt: settings.globalPrompt.enabled ? settings.globalPrompt.content : '',
             ...extras
         };
     }
@@ -293,6 +304,7 @@
         providerDefaultModel,
         normalizeProviderSettings,
         normalizeProviderProfile,
+        normalizeGlobalPrompt,
         normalizeGenerationDefaults,
         normalizeLocalModelSettings,
         normalizeAppearanceSettings,

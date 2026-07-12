@@ -10,6 +10,8 @@
             temperature: document.querySelector('[data-settings-temperature]'),
             maxTokens: document.querySelector('[data-settings-max-tokens]'),
             providerDefaults: document.querySelector('[data-settings-provider-defaults]'),
+            globalPromptEnabled: document.querySelector('[data-settings-global-prompt-enabled]'),
+            globalPrompt: document.querySelector('[data-settings-global-prompt]'),
             test: document.querySelector('[data-settings-test]'),
             refresh: document.querySelector('[data-settings-refresh]'),
             ttsVoice: document.querySelector('[data-settings-tts-voice]'),
@@ -95,9 +97,11 @@
         if (elements.temperature) elements.temperature.value = defaults.temperature === undefined ? 0.8 : defaults.temperature;
         if (elements.maxTokens) elements.maxTokens.value = defaults.maxTokens || 300;
         if (elements.providerDefaults) elements.providerDefaults.checked = !!defaults.useProviderDefaults;
+        if (elements.globalPromptEnabled) elements.globalPromptEnabled.checked = !!(settings.globalPrompt && settings.globalPrompt.enabled);
+        if (elements.globalPrompt) elements.globalPrompt.value = settings.globalPrompt && settings.globalPrompt.content || '';
 
         const isBusy = settingsState.loading || settingsState.saving;
-        [elements.mode, elements.provider, elements.endpoint, elements.model, elements.apiKey, elements.temperature, elements.maxTokens, elements.providerDefaults, elements.test, elements.refresh, elements.theme, elements.themeSave].forEach((field) => {
+        [elements.mode, elements.provider, elements.endpoint, elements.model, elements.apiKey, elements.temperature, elements.maxTokens, elements.providerDefaults, elements.globalPromptEnabled, elements.globalPrompt, elements.test, elements.refresh, elements.theme, elements.themeSave].forEach((field) => {
             if (field) field.disabled = isBusy || (field === elements.apiKey && provider.mode === 'local');
         });
         renderSettingsProfiles();
@@ -470,6 +474,10 @@
                 temperature: elements.temperature ? Number(elements.temperature.value) : 0.8,
                 maxTokens: elements.maxTokens ? Number(elements.maxTokens.value) : 2000,
                 useProviderDefaults: !!(elements.providerDefaults && elements.providerDefaults.checked)
+            },
+            globalPrompt: {
+                enabled: !!(elements.globalPromptEnabled && elements.globalPromptEnabled.checked),
+                content: elements.globalPrompt ? elements.globalPrompt.value.trim() : ''
             },
             localModelSettings: {
                 ...(current.localModelSettings || {}),

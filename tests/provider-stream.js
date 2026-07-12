@@ -4,6 +4,7 @@ const providerStream = require('../src/core/generation/provider-stream');
 
 assert.strictEqual(typeof providerStream.streamGeneration, 'function', 'streamGeneration should be exported');
 assert.strictEqual(typeof providerStream.messagesToChatML, 'function', 'messagesToChatML should be exported');
+assert.strictEqual(typeof providerStream.prependGlobalPrompt, 'function', 'prependGlobalPrompt should be exported');
 assert.strictEqual(typeof providerStream.MODEL_CAPABILITIES, 'object', 'MODEL_CAPABILITIES should be exported');
 assert.strictEqual(typeof providerStream.getModelCapability, 'function', 'getModelCapability should be exported');
 
@@ -44,6 +45,7 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
         var body = JSON.parse(init.body);
         assert.ok(body.stream, 'request body should have stream: true');
         assert.strictEqual(body.model, 'deepseek-v4-pro', 'request body should use deepseek-v4-pro model');
+        assert.strictEqual(body.messages[0].content, 'Global project rule.', 'global prompt should be the first system message');
         assert.strictEqual(body.thinking.type, 'enabled', 'request body should have thinking enabled');
         assert.ok(!body.hasOwnProperty('temperature'), 'thinking mode should not send temperature');
         assert.ok(!body.hasOwnProperty('top_p'), 'thinking mode should not send top_p');
@@ -90,6 +92,7 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
                 enableThinking: true,
                 endpoint: 'https://api.deepseek.com/chat/completions',
                 apiKey: 'test-key',
+                globalPrompt: 'Global project rule.',
                 temperature: 0.8,
                 maxTokens: 300
             }
@@ -159,6 +162,11 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
     } finally {
         globalThis.fetch = originalFetch;
     }
+
+    assert.deepStrictEqual(providerStream.prependGlobalPrompt([{ role: 'user', content: 'Draft.' }], 'Always use the project canon.'), [
+        { role: 'system', content: 'Always use the project canon.' },
+        { role: 'user', content: 'Draft.' }
+    ], 'global prompt helper should prepend without altering the task messages');
 
     // Test 3: Non-streaming OpenAI-compatible fallback and descriptive API errors
     globalThis.fetch = async () => ({

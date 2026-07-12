@@ -54,6 +54,12 @@
         return true;
     }
 
+    function prependGlobalPrompt(messages, value) {
+        const prefix = String(value || '').trim();
+        if (!prefix) return messages;
+        return [{ role: 'system', content: prefix }, ...(Array.isArray(messages) ? messages : [])];
+    }
+
     function reasoningText(message) {
         return message && (message.reasoning_content || message.reasoning || message.reasoningContent) || '';
     }
@@ -177,7 +183,13 @@
         if (typeof runtime.__draftHarborGenerationStub === 'function') {
             return runtime.__draftHarborGenerationStub(prompt, onToken, settings);
         }
-        const messages = prompt && Array.isArray(prompt.messages) ? prompt.messages : null;
+        const rawPrompt = String(prompt && typeof prompt.asString === 'function' ? prompt.asString() : prompt || '');
+        const baseMessages = prompt && Array.isArray(prompt.messages) ? prompt.messages : null;
+        const messages = baseMessages
+            ? prependGlobalPrompt(baseMessages, settings.globalPrompt)
+            : (String(settings.globalPrompt || '').trim()
+                ? prependGlobalPrompt([{ role: 'user', content: rawPrompt }], settings.globalPrompt)
+                : null);
         const mode = settings.mode || settings.aiMode || 'local';
         if (mode === 'api') {
             const chatMessages = messages || [{ role: 'user', content: String(prompt || '') }];
@@ -185,9 +197,9 @@
         }
         const serialized = messages
             ? messagesToChatML(messages)
-            : String(prompt && typeof prompt.asString === 'function' ? prompt.asString() : prompt || '');
+            : rawPrompt;
         return requestLocal(serialized, onToken, settings);
     }
 
-    return Object.freeze({ MODEL_CAPABILITIES, getModelCapability, messagesToChatML, streamGeneration });
+    return Object.freeze({ MODEL_CAPABILITIES, getModelCapability, messagesToChatML, prependGlobalPrompt, streamGeneration });
 });
