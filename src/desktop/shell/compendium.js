@@ -7,6 +7,8 @@
             list: document.querySelector('[data-compendium-list]'),
             newButton: document.querySelector('[data-compendium-new]'),
             drawButton: document.querySelector('[data-compendium-draw]'),
+            agentButton: document.querySelector('[data-compendium-agent]'),
+            agentQaButton: document.querySelector('[data-compendium-agent-qa]'),
             form: document.querySelector('[data-compendium-form]'),
             editorTitle: document.querySelector('[data-compendium-editor-title]'),
             entryType: document.querySelector('[data-compendium-entry-type]'),
@@ -164,6 +166,16 @@
         if (elements.typeFilter && elements.typeFilter.value !== compendiumState.type) elements.typeFilter.value = compendiumState.type;
         if (elements.newButton) elements.newButton.disabled = !hasProject || compendiumState.loading;
         if (elements.drawButton) elements.drawButton.disabled = !hasProject || compendiumState.loading;
+        if (elements.agentButton) {
+            const available = typeof openCompendiumAgent === 'function';
+            elements.agentButton.hidden = !available;
+            elements.agentButton.disabled = !available || !hasProject || compendiumState.loading;
+        }
+        if (elements.agentQaButton) {
+            const available = typeof openCompendiumAgentQa === 'function';
+            elements.agentQaButton.hidden = !available;
+            elements.agentQaButton.disabled = !available || !hasProject || compendiumState.loading;
+        }
 
         const compendiumTools = document.querySelector('.desktop-compendium-tools');
         if (compendiumTools) compendiumTools.hidden = !hasProject;
@@ -450,6 +462,8 @@
         }
         if (elements.newButton) elements.newButton.addEventListener('click', createCompendiumEntry);
         if (elements.drawButton) elements.drawButton.addEventListener('click', openCompendiumDraw);
+        if (elements.agentButton && typeof openCompendiumAgent === 'function') elements.agentButton.addEventListener('click', openCompendiumAgent);
+        if (elements.agentQaButton && typeof openCompendiumAgentQa === 'function') elements.agentQaButton.addEventListener('click', openCompendiumAgentQa);
         if (elements.aiRewrite) elements.aiRewrite.addEventListener('click', openCompendiumRewrite);
         if (elements.form) elements.form.addEventListener('submit', saveCompendiumEntry);
         if (elements.deleteButton) elements.deleteButton.addEventListener('click', deleteCompendiumEntry);

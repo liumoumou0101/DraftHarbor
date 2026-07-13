@@ -41,6 +41,10 @@ async function updateSettings(dataRoot, patch = {}) {
     localModelSettings: {
       ...current.localModelSettings,
       ...(patch.localModelSettings || {})
+    },
+    compendiumAgent: {
+      ...current.compendiumAgent,
+      ...(patch.compendiumAgent || {})
     }
   });
 }
