@@ -327,7 +327,8 @@
 }
 
 .desktop-settings-section[hidden],
-.desktop-settings-profile-editor[hidden] {
+.desktop-settings-profile-editor[hidden],
+.desktop-settings-global-actions[hidden] {
     display: none !important;
 }
 
@@ -445,6 +446,15 @@
 .desktop-settings-profile-editor-heading span {
     color: var(--desktop-muted);
     font-size: 11px;
+}
+
+.desktop-settings-agent-api-editor {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.desktop-settings-agent-api-editor [data-settings-compendium-agent-api-status] {
+    margin: 0;
+    min-height: 1.3em;
 }
 
 .desktop-settings-path-card,

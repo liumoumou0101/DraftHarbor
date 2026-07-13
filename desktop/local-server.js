@@ -5,6 +5,16 @@ const path = require('path');
 const projectService = require('./services/project-service');
 const settingsService = require('./services/settings-service');
 const compendiumService = require('./services/compendium-service');
+let compendiumAgentService = null;
+let createCompendiumAgentRunnerService = null;
+let createCompendiumAgentQaService = null;
+try {
+  compendiumAgentService = require('./services/compendium-agent-service');
+  ({ createCompendiumAgentRunnerService } = require('./services/compendium-agent-runner-service'));
+  ({ createCompendiumAgentQaService } = require('./services/compendium-agent-qa-service'));
+} catch (_) {
+  // The compendium agent is an optional add-on. Core desktop features must boot without it.
+}
 const promptService = require('./services/prompt-service');
 const workshopService = require('./services/workshop-service');
 const projectMigrationService = require('./services/project-migration-service');
@@ -695,7 +705,16 @@ const handleProjectApi = createProjectController({
   legacySnapshotToProject, readJsonPayload, jsonResponse, readSettings, writeSettings,
   backupRoot, projectFilename, writeJsonAtomic, uniqueFilePath
 });
-const handleKnowledgeApi = createKnowledgeController({ compendiumService, promptService, readJsonPayload, jsonResponse });
+const compendiumAgentRunnerService = compendiumAgentService && createCompendiumAgentRunnerService
+  ? createCompendiumAgentRunnerService({ settingsService, compendiumAgentService })
+  : null;
+const compendiumAgentQaService = compendiumAgentService && createCompendiumAgentQaService
+  ? createCompendiumAgentQaService({ settingsService, compendiumAgentService })
+  : null;
+const handleKnowledgeApi = createKnowledgeController({
+  compendiumService, compendiumAgentService, compendiumAgentRunnerService, compendiumAgentQaService, promptService, readJsonPayload, jsonResponse,
+  readSettings, createPreRestoreBackup
+});
 const handleWorkshopApi = createWorkshopController({ workshopService, readJsonPayload, jsonResponse });
 const handleWorkflowApi = createWorkflowController({ workflowService, createPreRestoreBackup, readJsonPayload, jsonResponse });
 

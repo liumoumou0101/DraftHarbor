@@ -18,7 +18,9 @@
         bindRecovery();
         bindReader();
         bindSettings();
-        bindCompendium();
+         bindCompendium();
+         if (typeof bindCompendiumAgent === 'function') bindCompendiumAgent();
+         if (typeof bindCompendiumAgentQa === 'function') bindCompendiumAgentQa();
         bindCompendiumRewrite();
         bindCompendiumDraw();
         bindStyleGuard();

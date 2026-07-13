@@ -10,6 +10,16 @@
             temperature: document.querySelector('[data-settings-temperature]'),
             maxTokens: document.querySelector('[data-settings-max-tokens]'),
             providerDefaults: document.querySelector('[data-settings-provider-defaults]'),
+            compendiumAgentEnabled: document.querySelector('[data-settings-compendium-agent-enabled]'),
+            compendiumAgentProfile: document.querySelector('[data-settings-compendium-agent-profile]'),
+            compendiumAgentMaxCards: document.querySelector('[data-settings-compendium-agent-max-cards]'),
+            compendiumAgentApiProvider: document.querySelector('[data-settings-compendium-agent-api-provider]'),
+            compendiumAgentApiEndpoint: document.querySelector('[data-settings-compendium-agent-api-endpoint]'),
+            compendiumAgentApiModel: document.querySelector('[data-settings-compendium-agent-api-model]'),
+            compendiumAgentApiKey: document.querySelector('[data-settings-compendium-agent-api-key]'),
+            compendiumAgentApiSave: document.querySelector('[data-settings-compendium-agent-api-save]'),
+            compendiumAgentApiTest: document.querySelector('[data-settings-compendium-agent-api-test]'),
+            compendiumAgentApiStatus: document.querySelector('[data-settings-compendium-agent-api-status]'),
             test: document.querySelector('[data-settings-test]'),
             refresh: document.querySelector('[data-settings-refresh]'),
             ttsVoice: document.querySelector('[data-settings-tts-voice]'),
@@ -45,6 +55,10 @@
         return settings || {};
     }
 
+    function compendiumAgentFeatureAvailable() {
+        return !!(window.DraftHarborCompendiumAgentPolicy && typeof window.DraftHarborCompendiumAgentPolicy.normalizeCompendiumAgentSettings === 'function');
+    }
+
     function runtimeProviderConfig(extras = {}) {
         if (extras && extras.profileId && extras.profileId !== 'inherit'
             && window.DraftHarborSettingsSchema && typeof window.DraftHarborSettingsSchema.providerRuntimeConfig === 'function') {
@@ -75,6 +89,13 @@
         status.dataset.tone = tone;
     }
 
+    function setCompendiumAgentApiStatus(message, tone = 'info') {
+        const status = settingsElements().compendiumAgentApiStatus;
+        if (!status) return;
+        status.textContent = message || '';
+        status.dataset.tone = tone;
+    }
+
     function renderSettingsForm() {
         const elements = settingsElements();
         if (!elements.form) return;
@@ -82,6 +103,8 @@
         const provider = settings.providerSettings || {};
         const defaults = settings.generationDefaults || {};
         const local = settings.localModelSettings || {};
+        const agent = settings.compendiumAgent || {};
+        const agentAvailable = compendiumAgentFeatureAvailable();
 
         if (elements.mode) elements.mode.value = provider.mode || 'local';
         if (elements.provider) elements.provider.value = provider.provider || (provider.mode === 'local' ? 'lmstudio' : 'openai-compatible');
@@ -95,11 +118,24 @@
         if (elements.temperature) elements.temperature.value = defaults.temperature === undefined ? 0.8 : defaults.temperature;
         if (elements.maxTokens) elements.maxTokens.value = defaults.maxTokens || 300;
         if (elements.providerDefaults) elements.providerDefaults.checked = !!defaults.useProviderDefaults;
+        if (elements.compendiumAgentMaxCards) elements.compendiumAgentMaxCards.value = agent.maxCardsPerRun || 30;
+        if (elements.compendiumAgentProfile) {
+            elements.compendiumAgentProfile.replaceChildren();
+            const empty = document.createElement('option'); empty.value = ''; empty.textContent = '请选择专用 API 配置组'; elements.compendiumAgentProfile.appendChild(empty);
+            (settings.providerProfiles || []).filter((profile) => modelCatalog().isApiCompatibleProvider(profile.provider)).forEach((profile) => {
+                const option = document.createElement('option'); option.value = profile.id; option.textContent = `${profile.name || profile.provider} · ${profile.model || '默认模型'}${profile.hasApiKey ? '' : ' · 缺少密钥'}`; elements.compendiumAgentProfile.appendChild(option);
+            });
+            elements.compendiumAgentProfile.value = agent.providerProfileId || '';
+        }
+        document.querySelectorAll('[data-settings-cat-target="compendium-agent"], [data-settings-section="compendium-agent"]').forEach((element) => {
+            element.hidden = !agentAvailable;
+        });
 
         const isBusy = settingsState.loading || settingsState.saving;
-        [elements.mode, elements.provider, elements.endpoint, elements.model, elements.apiKey, elements.temperature, elements.maxTokens, elements.providerDefaults, elements.test, elements.refresh, elements.theme, elements.themeSave].forEach((field) => {
+        [elements.mode, elements.provider, elements.endpoint, elements.model, elements.apiKey, elements.temperature, elements.maxTokens, elements.providerDefaults, elements.compendiumAgentEnabled, elements.compendiumAgentProfile, elements.compendiumAgentMaxCards, elements.compendiumAgentApiProvider, elements.compendiumAgentApiEndpoint, elements.compendiumAgentApiModel, elements.compendiumAgentApiKey, elements.compendiumAgentApiSave, elements.compendiumAgentApiTest, elements.test, elements.refresh, elements.theme, elements.themeSave].forEach((field) => {
             if (field) field.disabled = isBusy || (field === elements.apiKey && provider.mode === 'local');
         });
+        renderCompendiumAgentApiEditor();
         renderSettingsProfiles();
         renderSettingsAppearance();
         renderSettingsStorage();
@@ -109,6 +145,7 @@
 
     function setSettingsCategory(target) {
         const allowed = new Set(['provider', 'profiles', 'generation', 'appearance', 'tts', 'storage']);
+        if (compendiumAgentFeatureAvailable()) allowed.add('compendium-agent');
         const next = allowed.has(target) ? target : 'provider';
         settingsState.activeSection = next;
         document.querySelectorAll('[data-settings-cat-target]').forEach((button) => {
@@ -119,6 +156,8 @@
         document.querySelectorAll('[data-settings-section]').forEach((section) => {
             section.hidden = section.dataset.settingsSection !== next;
         });
+        const globalActions = document.querySelector('.desktop-settings-global-actions');
+        if (globalActions) globalActions.hidden = next === 'compendium-agent';
     }
 
     function settingsProviderLabel(provider) {
@@ -138,8 +177,9 @@
         };
         const summaries = {
             provider: `${provider.mode === 'api' ? '云端' : '本地'} · ${settingsProviderLabel(provider.provider)}`,
-            profiles: profiles.length ? `${profiles.filter((profile) => profile.hasApiKey && modelCatalog().isApiCompatibleProvider(profile.provider)).length} 个可用于写作` : '尚未添加云端档案',
+            profiles: `${provider.mode === 'api' ? '默认连接' : '本地默认'}${profiles.length ? ` · ${profiles.length} 个独立档案` : ''}`,
             generation: defaults.useProviderDefaults ? '跟随模型默认值' : `${defaults.temperature ?? 0.8} · ${formatNumber(defaults.maxTokens || 2000)} tokens`,
+            'compendium-agent': settings.compendiumAgent && settings.compendiumAgent.enabled ? (settings.compendiumAgent.providerProfileId ? '专用配置组已选择' : '请选择配置组') : '未启用',
             appearance: themeLabels[(settings.appearance || {}).theme] || '墨灰书房',
             tts: settingsElements().ttsVoice && settingsElements().ttsVoice.value ? '已选择本机声音' : '本机语音',
             storage: settings.projectSaveLocation ? '自定义书库位置' : '默认本地书库'
@@ -234,10 +274,46 @@
         const settings = normalizeDesktopSettings(settingsState.settings);
         const profiles = settings.providerProfiles || [];
         elements.profilesList.replaceChildren();
+        const defaultProvider = settings.providerSettings || {};
+        const defaultItem = document.createElement('div');
+        defaultItem.className = 'desktop-settings-profile-item';
+        defaultItem.dataset.settingsDefaultWritingProfile = 'true';
+        const defaultInfo = document.createElement('div');
+        defaultInfo.className = 'desktop-settings-profile-info';
+        const defaultName = document.createElement('strong');
+        defaultName.textContent = '默认写作连接';
+        const defaultMeta = document.createElement('span');
+        let defaultEndpoint = defaultProvider.endpoint || '未设置接口地址';
+        try { defaultEndpoint = defaultProvider.endpoint ? new URL(defaultProvider.endpoint).host : defaultEndpoint; } catch (error) { /* keep original */ }
+        defaultMeta.textContent = `${defaultProvider.mode === 'api' ? settingsProviderLabel(defaultProvider.provider) : '本地模型'} · ${defaultProvider.model || '默认模型'} · ${defaultEndpoint}`;
+        const defaultBadges = document.createElement('div');
+        defaultBadges.className = 'desktop-settings-profile-badges';
+        const defaultBadge = document.createElement('span');
+        const defaultReady = defaultProvider.mode === 'local' || !!defaultProvider.hasApiKey;
+        defaultBadge.dataset.tone = defaultReady ? 'ok' : 'warn';
+        defaultBadge.textContent = defaultReady ? (defaultProvider.mode === 'local' ? '本地连接' : '密钥已保存') : '缺少密钥';
+        const defaultUseBadge = document.createElement('span');
+        defaultUseBadge.dataset.tone = 'info';
+        defaultUseBadge.textContent = '写作默认';
+        defaultBadges.append(defaultBadge, defaultUseBadge);
+        defaultInfo.append(defaultName, defaultMeta, defaultBadges);
+        const defaultActions = document.createElement('div');
+        defaultActions.className = 'desktop-settings-profile-actions';
+        const defaultEdit = document.createElement('button');
+        defaultEdit.type = 'button';
+        defaultEdit.className = 'desktop-secondary-action';
+        defaultEdit.textContent = '编辑默认连接';
+        defaultEdit.addEventListener('click', () => {
+            setSettingsCategory('provider');
+            setSettingsStatus('正在编辑默认写作连接', 'info');
+        });
+        defaultActions.appendChild(defaultEdit);
+        defaultItem.append(defaultInfo, defaultActions);
+        elements.profilesList.appendChild(defaultItem);
         if (!profiles.length) {
             const empty = document.createElement('div');
             empty.className = 'desktop-settings-profile-empty';
-            empty.innerHTML = '<strong>还没有云端模型档案</strong><span>添加 DeepSeek、OpenAI 或其他兼容接口后，可直接在写作页切换。</span>';
+            empty.innerHTML = '<strong>还没有独立模型档案</strong><span>可以继续添加 DeepSeek、OpenAI 或其他兼容接口，在写作页手动切换。</span>';
             elements.profilesList.appendChild(empty);
         } else {
             profiles.forEach((profile) => {
@@ -310,6 +386,86 @@
             endpoint: meta.defaultEndpoint || '',
             model: meta.defaultModelHint || ''
         };
+    }
+
+    function selectedCompendiumAgentProfile() {
+        const elements = settingsElements();
+        const settings = normalizeDesktopSettings(settingsState.settings || {});
+        const selectedId = elements.compendiumAgentProfile ? elements.compendiumAgentProfile.value : ((settings.compendiumAgent || {}).providerProfileId || '');
+        return (settings.providerProfiles || []).find((profile) => profile.id === selectedId) || null;
+    }
+
+    function renderCompendiumAgentApiEditor() {
+        const elements = settingsElements();
+        if (!elements.compendiumAgentApiProvider) return;
+        const profile = selectedCompendiumAgentProfile();
+        const provider = (profile && profile.provider) || 'deepseek';
+        const defaults = profileDefaults(provider);
+        elements.compendiumAgentApiProvider.value = provider;
+        if (elements.compendiumAgentApiEndpoint) elements.compendiumAgentApiEndpoint.value = (profile && profile.endpoint) || defaults.endpoint;
+        if (elements.compendiumAgentApiModel) elements.compendiumAgentApiModel.value = (profile && profile.model) || (provider === 'deepseek' ? 'deepseek-v4-flash' : defaults.model);
+        if (elements.compendiumAgentApiKey) {
+            elements.compendiumAgentApiKey.value = '';
+            elements.compendiumAgentApiKey.placeholder = profile && profile.hasApiKey ? '密钥已保存，留空表示保持不变' : 'API Key';
+        }
+        if (elements.compendiumAgentApiTest) elements.compendiumAgentApiTest.disabled = settingsState.loading || settingsState.saving || !profile || !profile.hasApiKey;
+    }
+
+    async function saveCompendiumAgentApiProfile() {
+        const elements = settingsElements();
+        const existing = selectedCompendiumAgentProfile();
+        const provider = elements.compendiumAgentApiProvider ? elements.compendiumAgentApiProvider.value : 'deepseek';
+        const endpoint = elements.compendiumAgentApiEndpoint ? elements.compendiumAgentApiEndpoint.value.trim() : '';
+        const model = elements.compendiumAgentApiModel ? elements.compendiumAgentApiModel.value.trim() : '';
+        const apiKey = elements.compendiumAgentApiKey ? elements.compendiumAgentApiKey.value.trim() : '';
+        if (!endpoint) throw new Error('请填写 API Endpoint');
+        if (!model) throw new Error('请填写模型名称');
+        if (!apiKey && !(existing && existing.hasApiKey)) throw new Error('请填写 API Key');
+        const profileId = (existing && existing.id) || `compendium-agent-${Date.now()}`;
+        const profileResponse = await fetch('/api/settings/provider-profiles', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ profile: { id: profileId, name: (existing && existing.name) || `资料库管家 · ${settingsProviderLabel(provider)}`, provider, endpoint, model, apiKey } })
+        });
+        const profileResult = await profileResponse.json().catch(() => ({}));
+        if (!profileResponse.ok || !profileResult.ok) throw new Error(profileResult.error || `HTTP ${profileResponse.status}`);
+        settingsState.settings = normalizeDesktopSettings(profileResult.settings || {});
+        settingsState.runtimeProviderProfiles = profileResult.runtimeProviderProfiles || null;
+        const current = normalizeDesktopSettings(settingsState.settings || {});
+        const settingsResponse = await fetch('/api/settings', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ settings: { compendiumAgent: {
+                ...(current.compendiumAgent || {}),
+                enabled: true,
+                providerProfileId: profileId,
+                model: '',
+                maxCardsPerRun: elements.compendiumAgentMaxCards ? Number(elements.compendiumAgentMaxCards.value) : 30
+            } } })
+        });
+        const settingsResult = await settingsResponse.json().catch(() => ({}));
+        if (!settingsResponse.ok || !settingsResult.ok) throw new Error(settingsResult.error || `HTTP ${settingsResponse.status}`);
+        settingsState.settings = normalizeDesktopSettings(settingsResult.settings || {});
+        settingsState.runtimeProviderProfiles = settingsResult.runtimeProviderProfiles || settingsState.runtimeProviderProfiles;
+        setSettingsStatus('资料库管家专用 API 已保存并启用', 'ok');
+        setCompendiumAgentApiStatus('已保存。资料库管家现在使用这组专用 API。', 'ok');
+        renderSettingsForm();
+        renderWriterModelControl();
+    }
+
+    async function testCompendiumAgentApiProfile() {
+        const profile = selectedCompendiumAgentProfile();
+        if (!profile) throw new Error('请先保存专用 API 配置');
+        setSettingsStatus('正在测试资料库管家专用 API...', 'info');
+        setCompendiumAgentApiStatus('正在发送最小测试请求…', 'info');
+        const response = await fetch('/api/settings/test-provider-profile', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ profileId: profile.id, live: true })
+        });
+        const result = await response.json().catch(() => ({}));
+        const detail = result.result || result;
+        if (!response.ok || !result.ok) throw new Error(detail.error || result.error || `HTTP ${response.status}`);
+        const detailText = detail.statusCode ? `连接成功（HTTP ${detail.statusCode}）` : '连接成功';
+        setSettingsStatus(`资料库管家专用 API ${detailText}`, 'ok');
+        setCompendiumAgentApiStatus(detailText, 'ok');
     }
 
     function openProviderProfileEditor(profile) {
@@ -470,6 +626,12 @@
                 temperature: elements.temperature ? Number(elements.temperature.value) : 0.8,
                 maxTokens: elements.maxTokens ? Number(elements.maxTokens.value) : 2000,
                 useProviderDefaults: !!(elements.providerDefaults && elements.providerDefaults.checked)
+            },
+            compendiumAgent: {
+                enabled: elements.compendiumAgentEnabled ? !!elements.compendiumAgentEnabled.checked : !!(current.compendiumAgent && current.compendiumAgent.enabled),
+                providerProfileId: elements.compendiumAgentProfile ? elements.compendiumAgentProfile.value : '',
+                model: (current.compendiumAgent && current.compendiumAgent.model) || '',
+                maxCardsPerRun: elements.compendiumAgentMaxCards ? Number(elements.compendiumAgentMaxCards.value) : 30
             },
             localModelSettings: {
                 ...(current.localModelSettings || {}),
@@ -714,6 +876,34 @@
                 }
                 if (elements.profileModel && (!elements.profileModel.value.trim() || modelCatalog().isKnownDefaultModelHint(elements.profileModel.value.trim()))) {
                     elements.profileModel.value = defaults.model;
+                }
+            });
+        }
+        if (elements.compendiumAgentProfile) elements.compendiumAgentProfile.addEventListener('change', renderCompendiumAgentApiEditor);
+        if (elements.compendiumAgentApiProvider) {
+            elements.compendiumAgentApiProvider.addEventListener('change', () => {
+                const defaults = profileDefaults(elements.compendiumAgentApiProvider.value || 'deepseek');
+                if (elements.compendiumAgentApiEndpoint) elements.compendiumAgentApiEndpoint.value = defaults.endpoint;
+                if (elements.compendiumAgentApiModel) elements.compendiumAgentApiModel.value = elements.compendiumAgentApiProvider.value === 'deepseek' ? 'deepseek-v4-flash' : defaults.model;
+            });
+        }
+        if (elements.compendiumAgentApiSave) {
+            elements.compendiumAgentApiSave.addEventListener('click', async () => {
+                try { await saveCompendiumAgentApiProfile(); }
+                catch (error) {
+                    const message = `保存失败：${error.message || error}`;
+                    setSettingsStatus(`专用 API ${message}`, 'error');
+                    setCompendiumAgentApiStatus(message, 'error');
+                }
+            });
+        }
+        if (elements.compendiumAgentApiTest) {
+            elements.compendiumAgentApiTest.addEventListener('click', async () => {
+                try { await testCompendiumAgentApiProfile(); }
+                catch (error) {
+                    const message = `连接失败：${error.message || error}`;
+                    setSettingsStatus(`专用 API ${message}`, 'error');
+                    setCompendiumAgentApiStatus(message, 'error');
                 }
             });
         }
