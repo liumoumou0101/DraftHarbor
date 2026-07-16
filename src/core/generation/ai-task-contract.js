@@ -5,7 +5,7 @@
         root.DraftHarborAITaskContract = factory();
     }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
-    const DOMAINS = Object.freeze(['prose', 'compendium', 'summary', 'style-guard']);
+    const DOMAINS = Object.freeze(['prose', 'compendium', 'summary', 'style-guard', 'workflow']);
     const ACTIONS = Object.freeze([
         'generate',
         'rewrite',
@@ -32,13 +32,15 @@
         prose: Object.freeze(['generate', 'rewrite', 'regenerate-selection']),
         compendium: Object.freeze(['draw', 'rewrite', 'extract', 'update']),
         summary: Object.freeze(['summarize']),
-        'style-guard': Object.freeze(['repair'])
+        'style-guard': Object.freeze(['repair']),
+        workflow: Object.freeze(['generate', 'rewrite', 'extract', 'summarize'])
     });
     const DOMAIN_OUTPUTS = Object.freeze({
         prose: Object.freeze(['text']),
         compendium: Object.freeze(['field-patch', 'card-drafts']),
         summary: Object.freeze(['summary']),
-        'style-guard': Object.freeze(['text'])
+        'style-guard': Object.freeze(['text']),
+        workflow: Object.freeze(['text', 'summary'])
     });
     const DOMAIN_ACTION_OUTPUTS = Object.freeze({
         prose: Object.freeze({
@@ -57,6 +59,12 @@
         }),
         'style-guard': Object.freeze({
             repair: Object.freeze(['text'])
+        }),
+        workflow: Object.freeze({
+            generate: Object.freeze(['text', 'summary']),
+            rewrite: Object.freeze(['text']),
+            extract: Object.freeze(['text', 'summary']),
+            summarize: Object.freeze(['summary'])
         })
     });
 
@@ -88,6 +96,19 @@
         return `ai-task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     }
 
+    function normalizeArtifactTypeRef(input) {
+        if (typeof input === 'string') {
+            const match = input.trim().match(/^(.+?)(?:@(\d+))?$/);
+            return { id: match ? cleanString(match[1]) : '', version: match && match[2] ? Number(match[2]) : 1 };
+        }
+        const source = input && typeof input === 'object' ? input : {};
+        const version = Number(source.version || source.schemaVersion || 1);
+        return {
+            id: cleanString(source.id || source.type || source.artifactType),
+            version: Number.isInteger(version) && version > 0 ? version : 1
+        };
+    }
+
     function normalizeAITask(input = {}) {
         const now = new Date().toISOString();
         return {
@@ -106,6 +127,11 @@
                 : [],
             providerProfileId: cleanString(input.providerProfileId),
             model: cleanString(input.model),
+            capabilityId: cleanString(input.capabilityId),
+            capabilityVersion: Number.isInteger(Number(input.capabilityVersion)) && Number(input.capabilityVersion) > 0
+                ? Number(input.capabilityVersion)
+                : 1,
+            outputArtifactType: normalizeArtifactTypeRef(input.outputArtifactType || input.artifactType),
             outputContract: cleanString(input.outputContract),
             activeAvoidanceRuleIds: uniqueStrings(input.activeAvoidanceRuleIds),
             beforeSnapshot: input.beforeSnapshot === undefined ? null : clonePlain(input.beforeSnapshot),
@@ -136,6 +162,10 @@
         const actionOutputs = DOMAIN_ACTION_OUTPUTS[task.domain] && DOMAIN_ACTION_OUTPUTS[task.domain][task.action];
         if (actionOutputs && !actionOutputs.includes(task.outputContract)) {
             errors.push(`output ${task.outputContract} is not supported for ${task.domain}/${task.action}`);
+        }
+        if (task.domain === 'workflow') {
+            if (!task.capabilityId) errors.push('workflow capabilityId is required');
+            if (!task.outputArtifactType.id) errors.push('workflow outputArtifactType is required');
         }
         return { ok: errors.length === 0, errors, task };
     }
@@ -176,6 +206,7 @@
         DOMAIN_OUTPUTS,
         DOMAIN_ACTION_OUTPUTS,
         normalizeAITask,
+        normalizeArtifactTypeRef,
         validateAITask,
         createAITask,
         taskTargetKey

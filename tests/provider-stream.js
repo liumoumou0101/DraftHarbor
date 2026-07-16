@@ -6,6 +6,9 @@ assert.strictEqual(typeof providerStream.streamGeneration, 'function', 'streamGe
 assert.strictEqual(typeof providerStream.messagesToChatML, 'function', 'messagesToChatML should be exported');
 assert.strictEqual(typeof providerStream.MODEL_CAPABILITIES, 'object', 'MODEL_CAPABILITIES should be exported');
 assert.strictEqual(typeof providerStream.getModelCapability, 'function', 'getModelCapability should be exported');
+assert.strictEqual(providerStream.STREAM_TIMEOUT_DEFAULTS.firstResponseMs, 600000, 'first response timeout should default to ten minutes');
+assert.strictEqual(providerStream.STREAM_TIMEOUT_DEFAULTS.idleMs, 120000, 'idle timeout should default to two minutes');
+assert.strictEqual(providerStream.STREAM_TIMEOUT_DEFAULTS.maxDurationMs, 0, 'active streams should have no total wall-clock limit by default');
 
 const flashCap = providerStream.getModelCapability('deepseek-v4-flash');
 assert.ok(flashCap, 'deepseek-v4-flash should have capability entry');
@@ -155,7 +158,139 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
         globalThis.fetch = originalFetch;
     }
 
-    // Test 3: Model catalog
+    // Test 3: active reasoning/content chunks renew the idle timeout.
+    globalThis.fetch = async (url, init) => {
+        var encoder = new TextEncoder();
+        var index = 0;
+        var chunks = ['思考一', '思考二', '正文一', '正文二'];
+        var stream = new ReadableStream({
+            async pull(controller) {
+                await new Promise((resolve) => setTimeout(resolve, 12));
+                if (index < chunks.length) {
+                    var key = index < 2 ? 'reasoning_content' : 'content';
+                    controller.enqueue(encoder.encode('data: ' + JSON.stringify({ choices: [{ delta: { [key]: chunks[index++] } }] }) + '\n\n'));
+                } else {
+                    controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                    controller.close();
+                }
+            }
+        });
+        return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    };
+    try {
+        var renewed = [];
+        await providerStream.streamGeneration(
+            { messages: [{ role: 'user', content: 'Timeout renewal test' }] },
+            function (token) { renewed.push(token); },
+            {
+                mode: 'api', provider: 'deepseek', model: 'deepseek-v4-pro', enableThinking: true,
+                endpoint: 'https://api.deepseek.com/chat/completions', apiKey: 'test-key',
+                firstResponseTimeoutMs: 30, idleTimeoutMs: 25, maxDurationMs: 250
+            }
+        );
+        assert.strictEqual(renewed.join(''), '思考一思考二正文一正文二', 'active chunks should keep the stream alive beyond one idle window');
+        console.log('Provider stream activity renewal test passed.');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+
+    // Test 4: no initial response fails with a stable timeout code.
+    globalThis.fetch = (url, init) => new Promise((resolve, reject) => {
+        init.signal.addEventListener('abort', () => reject(init.signal.reason || new Error('aborted')), { once: true });
+    });
+    try {
+        await assert.rejects(
+            providerStream.streamGeneration(
+                { messages: [{ role: 'user', content: 'No response test' }] },
+                function () {},
+                {
+                    mode: 'api', provider: 'deepseek', model: 'deepseek-v4-pro',
+                    endpoint: 'https://api.deepseek.com/chat/completions', apiKey: 'test-key',
+                    firstResponseTimeoutMs: 20, idleTimeoutMs: 20, maxDurationMs: 100
+                }
+            ),
+            function (error) { return error && error.code === 'stream_first_response_timeout'; }
+        );
+        console.log('Provider stream first response timeout test passed.');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+
+    // Test 5: a stream that becomes silent fails by idle timeout after its last chunk.
+    globalThis.fetch = async (url, init) => {
+        var encoder = new TextEncoder();
+        var sent = false;
+        var stream = new ReadableStream({
+            pull(controller) {
+                if (!sent) {
+                    sent = true;
+                    controller.enqueue(encoder.encode('data: ' + JSON.stringify({ choices: [{ delta: { content: 'first' } }] }) + '\n\n'));
+                    return;
+                }
+                return new Promise((resolve) => {
+                    init.signal.addEventListener('abort', () => {
+                        controller.error(init.signal.reason || new Error('aborted'));
+                        resolve();
+                    }, { once: true });
+                });
+            }
+        });
+        return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    };
+    try {
+        await assert.rejects(
+            providerStream.streamGeneration(
+                { messages: [{ role: 'user', content: 'Idle test' }] },
+                function () {},
+                {
+                    mode: 'api', provider: 'openai', model: 'gpt-4o-mini',
+                    endpoint: 'https://api.openai.com/v1/chat/completions', apiKey: 'test-key',
+                    firstResponseTimeoutMs: 30, idleTimeoutMs: 20, maxDurationMs: 120
+                }
+            ),
+            function (error) { return error && error.code === 'stream_idle_timeout'; }
+        );
+        console.log('Provider stream idle timeout test passed.');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+
+    // Test 6: an otherwise successful empty stream must not be accepted as generated content.
+    globalThis.fetch = async () => {
+        var encoder = new TextEncoder();
+        return new Response(new ReadableStream({ start(controller) { controller.enqueue(encoder.encode('data: [DONE]\n\n')); controller.close(); } }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    };
+    try {
+        await assert.rejects(
+            providerStream.streamGeneration(
+                { messages: [{ role: 'user', content: 'Empty response test' }] },
+                function () {},
+                { mode: 'api', provider: 'deepseek', model: 'deepseek-v4-flash', endpoint: 'https://example.invalid', apiKey: 'test-key' }
+            ),
+            function (error) { return error && error.code === 'provider_empty_response'; }
+        );
+        console.log('Provider stream empty response test passed.');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+
+    // Test 7: rate limits expose a stable code and retry hint without leaking response content.
+    globalThis.fetch = async () => new Response('', { status: 429, headers: { 'Retry-After': '3' } });
+    try {
+        await assert.rejects(
+            providerStream.streamGeneration(
+                { messages: [{ role: 'user', content: 'Rate limit test' }] },
+                function () {},
+                { mode: 'api', provider: 'deepseek', model: 'deepseek-v4-flash', endpoint: 'https://example.invalid', apiKey: 'test-key' }
+            ),
+            function (error) { return error && error.code === 'provider_http_429' && error.retryAfter === '3'; }
+        );
+        console.log('Provider stream rate limit test passed.');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+
+    // Test 8: Model catalog
     var modelCatalog = require('../src/core/settings/model-catalog');
     assert.ok(modelCatalog, 'model-catalog should be requireable');
     assert.ok(modelCatalog.API_COMPATIBLE_PROVIDERS.length >= 5, 'should have API-compatible providers');

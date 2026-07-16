@@ -2,11 +2,12 @@ const fs = require('fs/promises');
 const path = require('path');
 
 const { createProject: createProjectModel } = require('../../src/core/project/project-schema');
+const { normalizeProject } = require('../../src/core/project/project-normalize');
 const projectStore = require('../storage/project-file-store');
 const { projectDir, projectsRoot, sanitizePathSegment } = require('../storage/library-paths');
 
 async function createProject(dataRoot, input = {}) {
-  const project = createProjectModel(input);
+  const project = Array.isArray(input.chapters) || Array.isArray(input.scenes) ? normalizeProject(input) : createProjectModel(input);
   const result = await projectStore.createProject(dataRoot, project);
   return {
     ok: true,

@@ -7,7 +7,7 @@
             paragraphSpacing: document.querySelector('[data-reader-paragraph-spacing]'),
             fontFamily: document.querySelector('[data-reader-font-family]'),
             indent: document.querySelector('[data-reader-indent]'),
-            theme: document.querySelector('[data-reader-theme]'),
+            theme: document.querySelector('select[data-reader-theme]'),
             themePanel: document.querySelector('[data-reader-theme-panel]'),
             title: document.querySelector('[data-reader-title]'),
             source: document.querySelector('[data-reader-source]'),
@@ -18,7 +18,16 @@
             progressPercent: document.querySelector('[data-reader-progress-percent]'),
             positionLabel: document.querySelector('[data-reader-position-label]'),
             prev: document.querySelector('[data-reader-prev]'),
-            next: document.querySelector('[data-reader-next]')
+            next: document.querySelector('[data-reader-next]'),
+            migration: document.querySelector('[data-reader-migration]'),
+            migrationMessage: document.querySelector('[data-reader-migration-message]'),
+            migrationActions: document.querySelector('[data-reader-migration-actions]'),
+            migrationConfirm: document.querySelector('[data-reader-migration-confirm]'),
+            migrationAbandon: document.querySelector('[data-reader-migration-abandon]'),
+            shell: document.querySelector('[data-reader-shell]'),
+            library: document.querySelector('[data-reader-library]'),
+            leftDrawer: document.querySelector('[data-reader-left-drawer]'),
+            settingsDrawer: document.querySelector('[data-reader-settings-drawer]')
         };
     }
 
@@ -220,13 +229,20 @@
         if (readerState.fontFamily === 'serif') {
             return '"SimSun", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif';
         }
-        if (readerState.fontFamily === 'yahei') {
+        if (readerState.fontFamily === 'sans-serif') {
             return '"Microsoft YaHei", "Segoe UI", system-ui, sans-serif';
+        }
+        if (readerState.fontFamily === 'kai') {
+            return '"KaiTi", "STKaiti", "Kaiti SC", "Noto Serif CJK SC", serif';
         }
         return '"Microsoft YaHei", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
     }
 
     function updateReaderProgress() {
+        if (readerState.apiMode && typeof updateReaderWorkspaceProgress === 'function') {
+            updateReaderWorkspaceProgress();
+            return;
+        }
         const elements = readerElements();
         const chapters = readerState.document ? readerState.document.chapters || [] : [];
         if (!chapters.length) return;
@@ -242,6 +258,10 @@
 
     function saveReaderState() {
         try {
+            if (readerState.apiMode) {
+                localStorage.removeItem(READER_STORAGE_KEY);
+                return;
+            }
             localStorage.setItem(READER_STORAGE_KEY, JSON.stringify({
                 document: readerState.document,
                 chapterIndex: readerState.chapterIndex,
@@ -268,7 +288,7 @@
                 readerState.fontSize = Number(saved.fontSize) || readerState.fontSize;
                 readerState.lineHeight = Number(saved.lineHeight) || readerState.lineHeight;
                 readerState.theme = saved.theme || readerState.theme;
-                readerState.fontFamily = saved.fontFamily || readerState.fontFamily;
+                readerState.fontFamily = saved.fontFamily === 'yahei' ? 'sans-serif' : saved.fontFamily || readerState.fontFamily;
                 readerState.textWidth = Number(saved.textWidth) || readerState.textWidth;
                 readerState.paragraphSpacing = Number(saved.paragraphSpacing) || readerState.paragraphSpacing;
                 readerState.indent = typeof saved.indent === 'boolean' ? saved.indent : readerState.indent;
@@ -278,6 +298,48 @@
             }
         } catch (error) {
             console.warn('Failed to load reader state:', error);
+        }
+    }
+
+    async function migrateLegacyReaderState(externalAction = '') {
+        const raw = localStorage.getItem(READER_STORAGE_KEY);
+        if (!raw) return null;
+        const elements = readerElements();
+        try {
+            const response = await fetch('/api/reader/migration', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ legacyRaw: raw, externalAction })
+            });
+            const payload = await response.json();
+            const migration = payload && payload.migration;
+            if (!response.ok || !migration) throw new Error(payload.error || '旧阅读数据迁移失败');
+            if (elements.migration) elements.migration.hidden = migration.status === 'complete';
+            if (elements.migrationActions) elements.migrationActions.hidden = migration.status !== 'pending-external';
+            if (elements.migrationMessage) {
+                elements.migrationMessage.textContent = migration.status === 'pending-external'
+                    ? `检测到“${migration.externalSummary && migration.externalSummary.title || '旧外部文档'}”。确认加入新版书库，或仅放弃旧正文。`
+                    : migration.status === 'failed'
+                        ? '旧阅读数据暂未迁移，将在下次启动时重试。'
+                        : '';
+            }
+            if (migration.status === 'complete' && migration.canClearLegacyState) {
+                localStorage.removeItem(READER_STORAGE_KEY);
+            }
+            if (migration.status === 'complete' && typeof loadReaderLibrary === 'function') {
+                loadReaderLibrary().then(() => {
+                    if (migration.reason === 'external-imported' && migration.documentId && typeof openReaderLibraryDocument === 'function') {
+                        openReaderLibraryDocument(migration.documentId);
+                    }
+                });
+            }
+            return migration;
+        } catch (error) {
+            if (elements.migration) elements.migration.hidden = false;
+            if (elements.migrationActions) elements.migrationActions.hidden = true;
+            if (elements.migrationMessage) elements.migrationMessage.textContent = '旧阅读数据暂未迁移，将在下次启动时重试。';
+            console.warn('Failed to migrate legacy reader state:', error);
+            return null;
         }
     }
 
@@ -299,6 +361,7 @@
         if (elements.fontFamily) elements.fontFamily.value = readerState.fontFamily;
         if (elements.indent) elements.indent.checked = !!readerState.indent;
         if (elements.theme) elements.theme.value = readerState.theme;
+        if (typeof syncReaderSettingsControls === 'function') syncReaderSettingsControls();
         if (elements.themePanel) {
             elements.themePanel.dataset.readerTheme = readerState.theme;
             elements.themePanel.dataset.readerIndentEnabled = readerState.indent ? 'true' : 'false';
@@ -307,10 +370,18 @@
             elements.themePanel.style.setProperty('--reader-width', `${readerState.textWidth}px`);
             elements.themePanel.style.setProperty('--reader-paragraph-spacing', `${readerState.paragraphSpacing}em`);
             elements.themePanel.style.setProperty('--reader-font-family', readerFontStack());
+            elements.themePanel.style.setProperty('--reader-letter-spacing', `${readerState.letterSpacing || 0}em`);
+            elements.themePanel.style.setProperty('--reader-page-margin', `${readerState.pageMargin || 48}px`);
+            elements.themePanel.style.setProperty('--reader-text-align', readerState.textAlign || 'start');
         }
+        if (readerState.apiMode && typeof scheduleReaderReflow === 'function') scheduleReaderReflow();
     }
 
     function renderReader() {
+        if (readerState.apiMode && typeof renderReaderWorkspace === 'function') {
+            renderReaderWorkspace();
+            return;
+        }
         clampReaderChapter();
         applyReaderSettings();
         const elements = readerElements();
@@ -325,8 +396,21 @@
             if (elements.source) elements.source.textContent = 'Reader';
             if (elements.content) {
                 elements.content.replaceChildren();
-                const empty = document.createElement('p');
-                empty.textContent = '选择左侧的 txt 或 md 文件后，这里会显示正文。阶段 1 先提供本地导入、章节识别、进度和排版控制。';
+                const empty = document.createElement('div');
+                empty.className = 'desktop-reader-empty';
+                const kicker = document.createElement('p');
+                kicker.className = 'desktop-section-kicker';
+                kicker.textContent = 'DraftHarbor Reader';
+                const heading = document.createElement('h3');
+                heading.textContent = '让正文成为唯一焦点';
+                const detail = document.createElement('p');
+                detail.textContent = '从书库选择已导入文档，或打开左侧面板导入 txt / md 文件。';
+                const action = document.createElement('button');
+                action.type = 'button';
+                action.className = 'desktop-primary-action';
+                action.dataset.readerEmptyLibrary = '';
+                action.textContent = '打开书库';
+                empty.append(kicker, heading, detail, action);
                 elements.content.appendChild(empty);
             }
             if (elements.chapters) elements.chapters.replaceChildren();

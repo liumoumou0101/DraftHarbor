@@ -4,6 +4,8 @@
 
 状态：`未开始`、`进行中`、`待验收`、`已完成`、`阻塞`。
 
+当前主线（2026-07-17）：暂停新增大型能力，进入已完成功能的作者人工测试、缺陷修复和体验打磨；F-11 只保留为下一个大版本的实验研究目标。
+
 ## 当前阶段：正文与资料库联动
 
 | 编号 | 功能 | 状态 | 依赖 | 完成标准 | 下一步 |
@@ -192,11 +194,387 @@
 
 完成证据：2026-07-13：新增 `node tests/compendium-agent-qa-service.js`，覆盖中文本地排序、来源 ID 白名单、空结果不调用模型，以及密钥仅传入后台流适配器；`tests/compendium-agent-service.js` 覆盖扩展缺失时问答路由不被核心控制器认领。`npm run core-test`、`node tests/desktop-library.js` 与 `git diff --check` 通过。
 
+## 规划阶段：半自动小说工作流
+
+| 编号 | 功能 | 状态 | 依赖 | 完成标准 | 下一步 |
+| --- | --- | --- | --- | --- | --- |
+| F-09 | 半自动小说工作流 | 已完成 | 写作模块、资料库、上下文解析、AI 任务与 Provider、工作流存储、备份恢复 | 续写、从零创作和大段重写闭环通过真实 Provider 验收；写作、资料库和工作流双向转交；长篇生成具备细纲确认、版本、锁、恢复、幂等写回和可视化画布 | 2026-07-15：功能、真实长篇、恢复、百万字符压力、旧模板版本、桌面视觉和发布回归全部通过；进入作者人工打磨阶段 |
+
+### F-09 设计文档
+
+- 修订设计：[半自动小说工作流设计 0.2](SEMI_AUTOMATIC_WORKFLOW_DESIGN.md)
+- 开发计划：[F-09 半自动小说工作流开发计划 0.1](SEMI_AUTOMATIC_WORKFLOW_DEVELOPMENT_PLAN.md)
+- 写作区保留逐段生成和局部重写；工作流建设独立的长篇批次生成与大段重写能力，只共享 AI 基础设施。
+- 资料库复用资料卡协议、选择、抽卡、提取、字段重写、预览和确认流程；工作流策划稿与草稿通过统一项目资产索引被检索和定位，不强制转换成普通资料卡。
+- 大段生成默认先生成可直接修改的细纲并等待确认；用户可以关闭，已有已确认场景计划时不重复生成。
+- 第一阶段先实现引导式续写闭环；可视化画布在节点、产物和执行模型验证后开发。
+
+### F-09 产品边界
+
+- AI 结果一律先成为可编辑产物，未确认不得覆盖正式正文或正式资料。
+- 写作与工作流是两个独立生成引擎；不得复制写作区局部生成业务充当长篇生成器，也不得由工作流直接操作写作区 DOM。
+- 长篇生成在内部按场景或语义区块执行，支持滚动状态、部分失败恢复和整体审查。
+- 正式写回必须明确目标、创建备份并保证同一产物幂等；不建设实时双向同步。
+- 资料更新只能生成草稿或字段补丁建议，继续使用资料库既有预览、版本校验和确认规则。
+- 第一版不建设自主 Agent、无限循环、任意代码节点、向量数据库、后台常驻生成或无人确认批量写入。
+- 旧占位工作流数据必须保持可读，迁移策略确认前不得改变其持久化格式。
+
+### F-09 分阶段 Todo
+
+#### F-09.1 数据契约与迁移基础
+
+- [x] F-09.1A：定义版本化模板、节点、端口、能力注册、产物家族、不可变 Revision、分支和按范围绑定。
+- [x] F-09.1A：拆分节点执行、产物审阅、新鲜度、写回和归档状态；定义锁快照与事实来源等级。
+- [x] F-09.1B：实现运行摘要、运行状态、产物元数据、长文本、区块检查点、事件和账本分离的 v2 Store。
+- [x] F-09.1B：让工作流 Store 成为唯一写入所有者，项目整体保存不得覆盖工作流文件。
+- [x] F-09.1C：旧 0.1 运行只读兼容，并支持明确复制为新版运行；禁止原地迁移。
+- [x] F-09.1D：实现正文、资料库和工作流摘要适配器组成的派生资产查询，不建立权威索引副本。
+- [x] F-09.1E：扩展 AI 任务基础契约和 Provider 覆盖解析，把具体产物 schema 交给能力注册表。
+- [x] F-09.1E：长篇历史只保存元数据和产物引用，完整正文不重复进入项目历史与普通备份。
+- [x] F-09.1F：定义并实现带 `applicationId`、来源 Revision、备份和逐项结果的幂等写回账本。
+- [x] F-09.1F：场景保留轻量工作流来源引用，完整关系进入转交账本并可恢复。
+- [x] F-09.1G：核心、存储、迁移、备份、协议和桌面回归通过，记录隔离临时项目验收证据。
+
+#### F-09.2 续写垂直闭环
+
+- [x] 写作区可把选区、场景、章节或项目范围作为快照转交工作流；服务层已支持续写、替代、重写、提纲/人物提取和风格参考意图，界面入口留待 F-09.2G。
+- [x] 实现分层总结、原文大纲提取、批量人物提取与资料库去重预览；结果为工作流 JSON 草稿，不直接写入资料库。
+- [x] 实现续写方向、大纲、结构化场景计划和可选细纲确认；已确认场景计划默认直接复用。
+- [x] 实现方向锁、排除锁和事实约束的最小编译、权重提示和冲突检查。
+- [x] 实现按场景分批生成、滚动状态、失败恢复、版本比较和审查；审查报告覆盖重复片段、硬锁和大纲基础符合度，支持替代版本、文本比较及上游 Revision 变更后的过期判断。
+- [x] 实现工作流草稿转写作区，以及策划稿/草稿在资料库中的检索定位；支持批量、单场景和选定片段转写，并保留来源链与应用账本。
+- [x] 实现生成后资料更新建议；预览不写入，只有明确确认的建议才会进入资料库，已有资料仅更新受限字段。
+- [x] 实现续写引导界面：来源范围、正/负向锁、细纲开关、方向多选、阶段状态、产物编辑与版本、逐场生成、审查及写作区/资料库回流均已接通；可按需开启深度思考，并在浮动气泡中实时显示 Provider 返回的 reasoning 流。
+- [x] 使用用户确认的真实 Provider 和隔离长篇项目完成人工质量、成本与失败恢复验收；16,038 字符原文成功生成 11,879 字符续写并回流，成功调用费用 `$0.037547388`。验收后增加阶段输出预算、流活动续期超时、usage 记录和 AI 语义审查；详见 `docs/REAL_PROVIDER_ACCEPTANCE_2026-07-15.md`。
+
+#### F-09.3 从零创作与大段重写
+
+- [x] 实现结构化 Brief、创意方向、人物/世界观设计和从零创作模板。
+  - [x] 完成创作 Brief、故事蓝图/中央冲突、资料卡草稿包和聚合创作包核心契约；资料卡与人物八字段直接复用现有 `CompendiumSchema`。
+  - [x] 扩展共用场景计划的节奏、情绪、冲突强度、信息密度、目标字数和衔接字段，并完成方向、蓝图、资料草稿、计划和分场正文的 Prompt/解析服务。
+  - [x] 抽出续写与从零创作共用的引导运行内核，并接入 v2 Run/Artifact、编辑 Revision、批准/取消、规则+AI 语义审查和产品 API；续写已迁移到共用内核。
+  - [x] 接入桌面双模式引导界面：结构化 Brief、方向多选、蓝图/资料/细纲的可编辑 Revision、默认流式生成、思考气泡、自动审查，以及写作区和资料库确认回流均已打通；方向选择随批准 Revision 持久化，可刷新恢复。
+- [x] 实现重写计划、分区块重写、衔接修复和差异预览。
+  - [x] 完成重写 Brief、逐场景重写计划、保留/删除/压缩/扩写/换序等规则、重写结果和段落差异核心契约；大文本差异带复杂度上限和退化策略。
+  - [x] 接入 `rewrite-guided` v2 运行与产品 API，跑通来源快照、计划、分场景重写、衔接修复、差异产物、语义审查及按原场景更新回流；复用现有 Artifact Revision 和写作应用账本。
+  - [x] 接入桌面第三种“大段重写”入口、逐场景增删差异卡、场景勾选与确认更新；自动化验证未勾选场景保持原文，已勾选场景原位更新并保留来源链。
+- [x] 实现多版本比较和按场景采用。
+  - [x] 完成成组版本清单、版本对齐比较和跨版本场景选择契约；同一批场景 Revision 通过 `variantId` 组成整体版本，避免隐式混搭。
+  - [x] 完成文本版本创建、不可变批准子 Revision、逐场景差异读取和混合 Writer Transfer 选择服务，不修改现有 v2 存储布局。
+  - [x] 接入主版本自动捕获、替代版本准备/完成/批准、版本列表和逐场景比较产品 API；每个场景提供独立流式 Prompt。
+  - [x] 接入桌面替代版本流式生成、逐场景增删比较、主版/替代版单选、批准门禁和混合采用界面；自动化验证第一场采用替代版、第二场采用主版。
+  - [x] 完成续写、从零创作、大段重写三模板统一协议与磁盘布局验收：Run/Definition/State/Artifact/事件及兼容适配完全同构，v2 schema 版本和目录布局未变化。
+  - [x] 使用真实 DeepSeek Provider 完成从零创作与大段重写回归：14 次调用、约 5.8 分钟、费用 `$0.033394805`；生成 6,031 字符正文，重写为 4,047 字符并原位回流两场，盲评判定重写整体提升。详见 `docs/F093_REAL_PROVIDER_ACCEPTANCE_2026-07-15.md`。
+
+#### F-09.4 可视化画布
+
+- [x] 完成 F-09.4A 只读图视图：三种引导运行直接展示同一份 v2 Definition 快照，显示节点布局、连线、能力、运行状态、活动节点和产物数量；图中不提供编辑入口。
+- [x] 在已验证的图数据模型上实现节点库、连线和配置编辑。
+  - [x] F-09.4B1：从不可变运行快照创建独立内存草稿；支持拖动和坐标编辑、标题配置、复制、禁用、删除节点，以及新增/删除连线和丢弃草稿。
+  - [x] F-09.4B1：复用 v2 Definition DAG 校验，草稿存在自连接、缺失端点或循环时显示错误并阻止完成编辑；运行 Definition 不会被草稿修改。
+  - [x] F-09.4B2：注册三模板共用的 15 个真实能力和 14 种产物类型；节点库、画布端口和连线选择器读取同一核心目录。
+  - [x] F-09.4B2：支持从节点库添加节点、直接选择输出/输入端口建立连线，并拒绝未知能力、未知端口和不兼容产物类型。
+  - [x] F-09.4B2：自定义模板保存在全局书库目录，支持保存、显式版本递增、列表读取、重新载入为独立草稿和删除 API。
+- [x] 支持运行单节点、运行到确认点、重新运行过期节点和保存模板。
+  - [x] F-09.4C1：通过执行兼容性检查的自定义模板可创建新的真实 v2 Run；启动前备份，运行记录自定义模板 ID/版本，同时继续使用对应的三种引导执行器。
+  - [x] F-09.4C1：步骤视图和图视图读取新运行的同一 Definition，模板自定义节点标题和布局在两种视图中一致。
+  - [x] F-09.4C2：画布只允许执行当前 `ready` 节点；单节点运行与运行到确认点均复用现有流式生成和审批门禁，不允许跳过活动节点。
+  - [x] F-09.4C2：重跑节点会持久化重置自身及下游、保留旧产物并标记过期；新产物以旧批准 Revision 为父版本，不覆盖历史。
+  - [x] F-09.4C2：来源快照、初始 Brief 和转交节点禁止从重跑入口执行；过期数量在图、步骤卡和产物标签中一致显示。
+  - [x] F-09.4C3：全局模板 Store 保存不可变版本历史；列表、按版本读取和启动 API 均支持旧版本，画布可直接载入旧版草稿并从指定版本启动新运行。
+  - [x] F-09.4C3：完成真实桌面视觉审计并修正编辑态画布挤压、端口点击区域过小和英文内部校验错误；审计证据保存在 `docs/audits/F094_WORKFLOW_GRAPH_VISUAL_AUDIT_2026-07-15/`。
+- [x] 确认步骤模式和图视图读取同一运行及同一份工作流定义，没有单独维护画布副本。
+- [x] 第一版拒绝循环连接、未知端口和不兼容产物类型。
+  - [x] 已拒绝循环、自连接和缺失节点端点。
+  - [x] 已拒绝未知端口、未知能力和不兼容产物类型。
+
+#### F-09.5 发布收尾
+
+- [x] 保留 2026-07-15 两轮真实长篇验收结论；续写、从零创作和大段重写累计费用、耗时、质量与写回证据均已归档。
+- [x] 使用当前配置完成 DeepSeek V4 Flash 与 V4 Pro 在线冒烟；Pro reasoning 与正文分流正常，指标不包含 API Key。
+- [x] Provider 空响应和 HTTP 429 具备稳定错误码；首包超时、流活动续期和流中断空闲超时继续由默认测试覆盖。
+- [x] 新增百万字符综合压力验收：36 场景、500 事件、50 产物 Revision、8 模板版本通过读写与元数据隔离检查。
+- [x] 完整测试、备份、写作区审计、打包和安装包冒烟通过后，F-09 转为“已完成”；后续作者反馈作为质量打磨，不阻塞阅读模块改造。
+
+最终证据见 [F-09 最终验收](F09_FINAL_ACCEPTANCE_2026-07-15.md)。
+
+## 规划阶段：阅读功能改造
+
+| 编号 | 功能 | 状态 | 依赖 | 完成标准 | 下一步 |
+| --- | --- | --- | --- | --- | --- |
+| F-10 | 阅读体验改造 | 已完成 | 现有阅读器、项目章节/场景模型、文件导入转换、桌面导航与主题系统 | 项目正文和外部文档均可稳定阅读；章节导航、进度恢复、排版与长文性能通过桌面验收；阅读器可用稳定快照安全转交写作、资料库和工作流 | 2026-07-16：F-10.1—F-10.4D 全部通过，详见 `F10_FINAL_ACCEPTANCE_2026-07-16.md` |
+
+### F-10 已有基础与首轮边界
+
+- 已支持直接阅读当前项目、导入 Markdown/TXT、章节识别、上/下一章、章节目录和分章滚动位置恢复。
+- 已支持字号、行高、正文宽度、段间距、字体、首行缩进和纸张/棕褐主题，并通过 `tests/desktop-reader.js` 回归。
+- 第一版来源只覆盖当前项目、复制入本地书库的 TXT/Markdown 和粘贴文本；EPUB、DOCX、PDF、图片与高级字体管理后续单独增强。
+- 编辑模式只负责范围选择和显式跳转；Prompt、AI 生成、审核、备份和正式写入全部由目标模块接管。
+- 外部设定可在资料库生成一张或多张候选卡，但每张卡必须得到明确的通过、修改后通过或放弃决定，不能盲目批量写入。
+- 字体以稳定预设 ID 保存；字体或其他排版变化触发重新分页后，必须按章节/块/字符 locator 恢复原阅读位置。
+- 正式设计：[F-10 阅读体验改造正式设计 0.1](READING_MODULE_REDESIGN_DESIGN.md)。
+- 开发计划：[F-10 阅读体验改造开发计划 0.1](READING_MODULE_REDESIGN_DEVELOPMENT_PLAN.md)。
+- 前置分析：[F-10 阅读功能改造设计分析 0.2](READING_MODULE_REDESIGN_DISCOVERY.md)。
+
+### F-10 开发启动条件
+
+- 正式设计 0.1 已冻结 Reader Document v2、项目投影与外部文档所有权、不可变修订、稳定 locator、书库布局、转交快照和目标模块确认边界。
+- 分阶段开发计划 0.1 已定稿；开始产品代码前按计划启动检查表核对工作区、范围和测试夹具。
+- 开始开发时只启动 F-10.1 的纯核心 schema、locator 和导入契约；纯函数测试通过后才能接入 Reader Store。
+- F-10.1 的磁盘 Store、旧状态迁移、项目场景映射和长篇基础验收通过后，才能启动 F-10.2 与 F-10.3。
+- F-10.3 的不可变 envelope、新鲜度和目标来源条通过验收后，才能启动 F-10.4 的正式目标模块写入接入。
+
+### F-10.1 Reader Document 与本地书库基础
+
+#### F-10.1A 纯核心 schema 与导入草稿契约（已完成）
+
+- [x] 定义 Reader Document v2、不可变 Revision、Chapter、Block 和受控块类型。
+- [x] 定义项目、TXT、Markdown、粘贴文本来源及稳定文档身份规则。
+- [x] 定义导入草稿、章节识别预览、人工校正和确认入库协议。
+- [x] 定义全局偏好、单书覆盖、阅读状态和书签 schema。
+- [x] 覆盖未知版本/枚举、修订不可变、换行摘要、Markdown 安全降级和编码预览测试。
+- [x] 将纯核心测试接入 `npm run core-test`，通过定向与核心回归。
+
+完成证据：2026-07-15：新增 `reader-document-schema.js` 与 `reader-import.js`，正式 Revision 使用调用方注入摘要函数并深度冻结，支持 UTF-8/BOM、UTF-16 LE/BE、GB18030 手动选择、乱码确认门禁、Markdown 安全文本降级、章节校正、偏好/状态/书签契约；`npm run reader-core-test`、定向 ESLint、`npm run core-test` 与 `git diff --check` 通过。未新增 Reader Store、产品 API、桌面分页、转交 Store 或目标模块写入。
+
+#### F-10.1B 稳定 Locator 与范围解析（已完成）
+
+- [x] 定义 `ReaderLocatorV1`、UTF-16 offset、affinity 与 start/end 范围。
+- [x] 实现同 Revision 精确定位、项目场景定位、文本锚点与相邻块降级。
+- [x] 实现 `exact/approximate/unresolved` 结果与按 locator 计算的内容权重进度。
+- [x] 覆盖 emoji、组合字符、重复短句、章节/段落变动和非法范围。
+
+完成证据：2026-07-15：新增 `reader-locator.js` 与 `tests/reader-locator.js`，覆盖同修订块、项目场景字符范围、唯一文本锚点、块/相邻块摘要、章节降级的分层解析；重复短句不静默猜测，emoji/组合字符吸附到完整字素边界，跨块范围提取和长短章内容权重进度通过。定向 ESLint、`npm run reader-core-test`、`npm run core-test` 与 `git diff --check` 通过。未新增 Store、API、DOM 或分页逻辑。
+
+#### F-10.1C Reader 路径、Store 与唯一写入所有权（已完成）
+
+- [x] 增加 Reader Document、Revision、Chapter、State 与 Transfer 安全路径函数。
+- [x] 实现文档索引、元数据、不可变 Revision、按章内容和阅读状态 Store。
+- [x] 实现原子提交、过期写入拒绝、失败清理、损坏回退和索引重建。
+- [x] 验证项目保存不覆盖阅读书库，路径穿越和 ID 清理碰撞被拒绝。
+
+完成证据：2026-07-15：新增 Reader Document/State Store 与安全路径；正文按不可变 Revision/Chapter 分离，索引、文档和 Revision 元数据不含正文；提交顺序为章节 → Revision 元数据 → 文档元数据 → 索引。覆盖并发版本冲突、重复 Revision、篡改摘要回退、索引重建、原子临时文件、未提交目录、孤立 Revision、安全清理和项目保存隔离；损坏的正式文档只报告不删除。定向 ESLint、`npm run reader-storage-test`、`npm run core-test` 与 `git diff --check` 通过。未新增产品 API、完整导入服务、桌面分页或目标模块写入。
+
+#### F-10.1D 项目 Reader 投影与场景映射（已完成）
+
+- [x] 升级 `projectToReaderDocument`，保留 chapter/scene/block/UTF-16 character range。
+- [x] 从项目结构与内容生成可重建 Revision，不把项目正文写入 Reader Store。
+- [x] 支持无章节历史场景的稳定合成章节和项目变化后的 locator 恢复。
+- [x] 验证投影不写回项目文件、不改变项目更新时间且缓存可删除重建。
+
+范围门禁：F-10.1D 只实现项目派生投影与测试，不新增外部导入服务、产品 API、桌面分页或目标模块写入。
+
+启动记录：2026-07-15：已确认旧桌面阅读器仅消费兼容投影，不在本阶段切换 UI；v2 投影保持纯函数边界，不写 Reader Store 或项目文件。
+
+完成证据：2026-07-15：新增项目 Reader v2 纯投影与 `tests/reader-project-projection.js`；章节、场景标题、正文块、原场景 UTF-16 范围和摘要均进入可重建 Revision，块 ID 在前插不同段落后保持稳定，重复段落获得独立 ID，无章节/孤立历史场景进入稳定合成章节。覆盖 CRLF、emoji、多章多场景、空项目、其他场景修改后的精确恢复、当前段前插后的文本锚点恢复、输入对象与时间戳不变及重复重建摘要一致；旧桌面投影继续兼容。定向 ESLint、`npm run reader-core-test`、`npm run core-test`、`node tests/desktop-reader.js` 与 `git diff --check` 通过。未写 Reader Store、项目文件或新增产品 API。
+
+#### F-10.1E TXT/Markdown/粘贴导入（已完成）
+
+- [x] 建立受控文件与粘贴导入草稿服务，确认前不进入正式索引。
+- [x] 支持编码重试、格式切换、标题校正、章节拆分与合并。
+- [x] 确认时复制原始文件并提交 Reader Store；重导入追加子 Revision。
+- [x] 验证原文件删除后可重开，失败重导入不改变活动 Revision。
+
+范围门禁：F-10.1E 只实现导入服务与存储测试，不新增产品 API、旧状态迁移、桌面分页、目标模块写入或 EPUB/DOCX/PDF 解析。
+
+完成证据：2026-07-15：新增 `reader-library-service.js`、Revision 级原始源文件安全路径、章节拆分/合并核心操作和 `tests/reader-library-service.js`。受控导入限制为 TXT/Markdown、普通文件与 64 MiB；草稿、编码重试、格式切换和粘贴预览保持会话内状态，确认前不进入索引。确认时原子复制原始字节并提交正式 Document/Revision；重导入生成父子 Revision，乐观版本冲突或提交失败保持旧活动 Revision并保留草稿重试。覆盖 UTF-8/CRLF、GB18030/GBK 手动重试、Markdown 原始 HTML/远程图片仅作惰性文本、标题校正、章节拆分合并、超长行、空文本、大小限制、原文件删除后重开、粘贴选择性入库和失败源副本清理；Store 清理新增未引用源副本回收且保留已引用/损坏正式数据。定向 ESLint、`npm run reader-core-test`、`npm run reader-storage-test`、`npm run core-test` 与 `git diff --check` 通过。未新增 Controller/API、旧状态迁移或桌面 UI。
+
+#### F-10.1F 旧状态迁移、API 与阶段验收（已完成）
+
+- [x] 幂等迁移旧排版设置、项目阅读位置和需确认的旧外部正文。
+- [x] 增加 Reader 列表、元数据、按章读取、导入草稿、状态与迁移 API。
+- [x] 验证列表/导航接口不返回全文，未知路由与非法 ID 安全失败。
+- [x] 完成百万字符导入、重开、按章读取和索引隔离验收。
+
+范围门禁：F-10.1F 只收口 Reader 数据层、迁移和协议，不启动沉浸 UI、分页、选择转交、目标模块写入或增强格式解析。
+
+完成证据：2026-07-15：新增幂等 Reader 迁移服务、迁移标志、Reader Controller/协议、摘要列表/元数据、摘要校验的单章按需读取、偏好/状态与完整导入草稿 API。项目旧状态从 Project Store 重建并保存近似 locator，不复制项目正文；旧外部正文必须明确加入书库或放弃，损坏 JSON/磁盘失败可重试，中断后重复确认不创建重复 Revision，只有成功重开目标后才返回旧键可清理许可。兼容 Reader 显示非阻塞迁移选择并暂缓实际删除旧键。协议覆盖正文和源路径不泄露、未知路由、缺失/穿越 ID；百万字符验收使用 1,000,311 UTF-16 字符、100 章、1,000 块，5 次测量的预览 p95 29.34 ms、确认 p95 361.92 ms、单章读取 p95 1.47 ms、观测堆增长 23.45 MiB，详见 `F101_READER_PERFORMANCE_ACCEPTANCE_2026-07-15.md`。`npm run core-test`、`npm run reader-protocol-test`、`npm run reader-performance-acceptance`、`node tests/desktop-reader.js`、`node tests/release-config.js` 与 `git diff --check` 通过。未实现分页、翻页动画、选择转交或目标模块写入。
+
+F-10.1 阶段退出：Reader Document、Locator、项目投影、外部书库、导入、迁移、协议和百万字符数据预算全部通过；项目/外部正文所有权保持隔离。下一步进入 F-10.2A。
+
+### F-10.2A 桌面结构拆分与沉浸壳（已完成）
+
+- [x] 新增独立书库与阅读工作区模块；旧 `reader.js` 仅保留项目投影、本地导入与迁移兼容路径，新 Shell 模块缺失时受保护降级。
+- [x] 新增独立 `reader.css` 与 `reader-tokens` cascade layer，阅读视图在上下文条隐藏时占满主工作区。
+- [x] 实现中央正文舞台、顶部/底部控制条、书库/目录左抽屉、外观/布局右抽屉及遮罩显隐。
+- [x] 书库选择使用 Reader Store 摘要列表；目录使用无正文 `/api/reader/contents`，正文继续按章读取。
+- [x] 按 locator 恢复最近章节/块；抽屉打开聚焦关闭按钮，Esc 关闭后归还触发按钮，方括号与原方向键均可切章。
+- [x] 旧外部正文确认入库后切换到权威 Reader Store，并在迁移验证通过后清除旧 `localStorage` 键。
+- [x] 搜索、书签、范围选择、转交和分页入口保持明确占位/禁用，不提前实现 F-10.2D/F-10.3 业务。
+
+完成证据：2026-07-15：新增 `reader-library.js`、`reader-workspace.js`、独立 `reader.css`、章节摘要目录 API 和 `tests/reader-shell-structure.js`；扩展桌面回归覆盖书库选择、按章块渲染、目录、权威状态、设置抽屉、打开/关闭焦点与迁移接管。内置浏览器完成 1280×720 宽屏视觉检查并修复主网格空行。`npm run reader-shell-test`、`npm run reader-protocol-test`、`npm run reader-storage-test`、`node tests/release-config.js` 与 `git diff --check` 通过。未实现分页算法、虚拟窗口、搜索/书签全功能、范围选择、Transfer Store 或目标模块写入。
+
+F-10.2A 阶段退出：现有 Reader Store 数据可从书库进入单章阅读、通过目录切章并恢复 locator；沉浸壳不复制正文或分页业务。下一步进入 F-10.2B。
+
+### F-10.2B 流式、单页、双页与自动布局（已完成）
+
+- [x] 新增纯核心 `reader-layout.js`，四种布局共享 Reader Locator，不保存永久页码。
+- [x] 流式布局只保留锚点附近最多 73 个块节点，并用可重建占位高度移动有限 DOM 窗口。
+- [x] 单页按块/UTF-16 offset 切片；双页固定左→右，奇数尾页允许单页收尾。
+- [x] `auto` 根据可用宽度与最小页宽选择单双页，窄窗口降级不覆盖用户保存的 `auto`。
+- [x] 分页缓存键覆盖 Revision、Chapter、视口、实际可用字体及全部分页相关排版参数；损坏或删除后从权威章节重建。
+- [x] 窗口、字体和布局变化前捕获 locator，重排后恢复到包含同一 block/offset 的页或流式窗口。
+- [x] 快速连续翻页在下一帧合并为最终目标，只触发一次防抖后的权威位置写入。
+- [x] 方向键、PageUp/PageDown、Space 与可见上一页/下一页按钮提供等价路径；方括号继续只切章。
+
+完成证据：2026-07-16：新增 `reader-layout.js`、`reader-reading.js` 与 `tests/reader-layout.js`；扩展桌面回归覆盖四布局 locator 往返、连续翻页合并、缓存损坏重建、720px 自动单页和 73 块 DOM 上限。百万字符/1,000 块纯分页模型在测试预算 1.5 秒内完成。内置浏览器在 1280×820 验证双页、720×820 验证自动单页，并依据实际溢出检查收紧中文字符容量，最终页面 `scrollHeight === clientHeight`。`npm run reader-core-test`、`npm run reader-shell-test`、`npm run core-test`、`node tests/release-config.js` 与 `git diff --check` 通过。未实现 F-10.2C 动态效果/完整排版覆盖、F-10.2D 搜索书签或 F-10.3 选择转交。
+
+F-10.2B 阶段退出：四种布局在同一 locator 上往返，分页缓存可删除重建，长章不把全部块长期留在 DOM；下一步进入 F-10.2C。
+
+### F-10.2C 排版、主题与动态效果（已完成）
+
+- [x] 新增独立 `reader-settings.js`，统一读取/规范化全局偏好与单书 `preferenceOverrides`，打开已有覆盖的书籍时自动恢复本书设置。
+- [x] 字体预设改用稳定 `system/serif/sans-serif/kai` ID；旧 `yahei` 自动映射，实际字体回退状态可见，字体加载仅在解析字体变化时清缓存并受控重排一次。
+- [x] 补齐字号、行距、字距、段距、页边距、版心、自然/两端对齐和段首缩进；所有分页相关修改先捕获 locator，再重排恢复。
+- [x] 深色、纸张、护眼主题只使用本地 CSS 受控背景；正文前景/背景对比度分别约 13.90、13.17、11.81。
+- [x] 实现 `fade/slide/none`，减少动态效果可跟随系统或由用户明确覆盖；降级为 `none` 时键盘翻页仍完整。
+- [x] `curl` 因首发门禁未通过继续禁用：未引入正文截图、Canvas 权威渲染或第二套位置映射。
+- [x] 全局/单书覆盖、重载恢复、重置、字体 ID、完整排版、动效降级、键盘翻页和无远程主题资源均进入自动化。
+
+完成证据：2026-07-16：新增 `reader-settings.js` 并拆出偏好职责；扩展 `reader.html`、`reader-reading.js`、`reader.css` 与桌面回归。`npm run reader-shell-test`、`npm run core-test`、`npm run reader-storage-test`、`node tests/release-config.js` 与 `git diff --check` 通过。内置浏览器完成设置抽屉视觉检查，三主题对比度通过且控制台无错误/警告。未实现 F-10.2D 搜索/书签/可拖动进度、F-10.3 选择转交或增强格式解析。
+
+F-10.2C 阶段退出：全局与单书排版覆盖可稳定恢复和清除，三主题及普通/减少动态翻页路径通过；下一步进入 F-10.2D。
+
+### F-10.2D 搜索、书签、进度与输入（已完成）
+
+- [x] 新增纯核心 `reader-navigation.js` 与独立桌面导航模块；字面搜索逐章请求、分批显示，不把整本正文放进 DOM。
+- [x] 搜索支持显式取消、输入变化取消和最新请求获胜；旧请求不能晚到覆盖新结果，结果以稳定 Locator 导航。
+- [x] 实现书签创建、标题编辑、删除、重载恢复及 `exact/approximate/unresolved` 精确度提示。
+- [x] Reader State 写入改为串行合并草稿；位置、偏好和书签并发防抖不会互相覆盖，也不会在切书后写入错误文档。
+- [x] 底部内容权重进度改为可拖动控件；0%/100% 精确落在首尾，中间位置按章节字符权重选择章节和块 Locator。
+- [x] 方向键、PageUp/PageDown、Space、可见按钮和左右触控热区保持等价；已有文本选择时触控热区不翻页。
+- [x] 百万字符纯搜索受 500 条结果预算约束并在 1.5 秒测试预算内完成；取消搜索不追加晚到结果。
+
+完成证据：2026-07-16：新增 `src/core/document/reader-navigation.js`、`src/desktop/shell/reader-navigation.js` 与 `tests/reader-navigation.js`；扩展桌面回归覆盖取消/最新搜索、Locator 结果、书签增删改/重载/三种精确度、状态写入合并、进度首尾和触控选择优先级。内置浏览器检查搜索/书签面板、底部进度与空书库禁用状态，控制台无错误/警告。`npm run reader-core-test`、`npm run reader-shell-test`、`npm run core-test`、`node tests/release-config.js` 与 `git diff --check` 通过。未实现 F-10.2E 最终无障碍/缩放/真实长篇视觉验收或 F-10.3 选择转交。
+
+F-10.2D 阶段退出：搜索、书签、权重进度和键鼠触控路径均通过，位置/偏好/书签状态不会相互覆盖；下一步进入 F-10.2E。
+
+### F-10.2E 无障碍、视觉与长篇验收（已完成）
+
+- [x] 抽屉关闭态使用 `inert`，打开态焦点受控环绕，关闭后恢复到触发器；标签支持 roving tabindex、Home/End 和左右方向键。
+- [x] 阅读位置、全书进度和页码使用 polite 状态播报；主要控件均有可访问名称和可见焦点圈。
+- [x] 覆盖 100%、125%、150%、200% 等效缩放和 1366×768、1920×1080 常见桌面尺寸。
+- [x] 新增多章、长短章、对话、代码文本和中英混排真实视觉夹具。
+- [x] 新增 `reader-layout-audit` 与 `reader-realistic-visual-audit`；低高度分页自动降级为流式阅读，避免裁切且不覆盖保存的自动布局选择。
+- [x] 百万字符最终验收继续使用 1,000,311 字符/1,000 块完整夹具，并输出结果、预算和失败诊断。
+
+完成证据：2026-07-16：`npm run reader-shell-test`、`npm run reader-layout-audit`、`npm run reader-realistic-visual-audit` 与 `npm run reader-performance-acceptance` 通过；四个视觉场景正文对比度 11.81–13.90，无远程请求、横向溢出、抽屉越界或页面裁切。百万字符搜索 p95 6.52 ms、分页 p95 2.25 ms、观测堆增长 21.56 MiB；详见 `docs/F102E_READER_FINAL_ACCEPTANCE_2026-07-16.md`。交互浏览器确认真实长文可打开，抽屉标签状态和 End 键路径正确。未实现范围选择、Transfer Store、目标模块写入或增强格式解析。
+
+F-10.2 阶段退出：沉浸阅读的布局、恢复、排版、搜索、书签、输入、无障碍、缩放、真实长篇视觉和性能预算全部通过；下一步进入 F-10.3A。
+
+### F-10.3A Envelope、快照与 Transfer Store（已完成）
+
+- [x] 定义 `ReaderTransferEnvelopeV1`、受控 destination/scope、Locator、摘要和 active/consumed/archived 生命周期。
+- [x] Envelope、结构快照和规范化文本分文件保存；快照创建后不可覆盖，读取时重新校验文本、结构和整体摘要。
+- [x] Transfer 安全路径只从 `envelopeId` 推导；创建和列表响应不含正文、绝对路径或 API Key。
+- [x] 消费者身份和引用不可修改；consumed 需要已物化消费者，归档清理保护未物化且未释放的引用。
+- [x] 项目来源按冻结 source unit 检测 fresh/stale/missing；外部不可变 Revision 保持 fresh 并提示较新版本；粘贴快照自身权威。
+- [x] 原子提交、中断目录清理、重复 ID、摘要篡改、并发时间戳冲突和正式损坏保留报告均有自动化覆盖。
+
+完成证据：2026-07-16：新增 `src/core/document/reader-transfer-schema.js`、`desktop/storage/reader-transfer-store.js`、`desktop/services/reader-transfer-service.js` 及对应核心、Store、Service、协议测试。Reader Controller 提供轻量列表/创建、按 `envelopeId` 读取、新鲜度、消费者、生命周期和安全删除接口；未接写作、资料库或工作流正式业务。`npm run reader-core-test`、`npm run reader-storage-test`、`npm run reader-protocol-test` 通过。
+
+F-10.3A 阶段退出：快照重复读取摘要一致且不可原地覆盖，仍被消费者依赖的归档文本不会被清理；下一步进入 F-10.3B。
+
+### F-10.3B 范围选择与快照创建（已完成）
+
+- [x] 选区、场景、章节、多章和全文范围统一由 `reader-selection.js` 规范化；支持跨块、跨场景、跨章节、反向选择、emoji grapheme 边界和空范围拒绝。
+- [x] 连续、单页和双页 DOM 选区映射为同一 Reader locator；对应服务端快照正文和 `textDigest` 等价。
+- [x] 选区工具条与确认框显示来源、字符数、章节/场景数及风险；三个动作只创建 writer/compendium/workflow Envelope，不展示 Provider、Prompt 或写入设置。
+- [x] `/api/reader/transfer/range` 不信任客户端正文，按 document/revision/locator 重新读取权威来源；轻量响应不含正文或路径。
+- [x] 创建失败保留规范化选区、阅读页和确认框；超长全文可包含未挂载章节，但正文不进入当前 DOM、路由、history 或新版 localStorage。
+
+完成证据：2026-07-16：新增 `src/core/document/reader-selection.js`、`src/desktop/shell/reader-selection.js` 和 `tests/reader-selection.js`，扩展 Transfer Service、Reader Controller、Reader UI、协议和桌面回归。`npm run reader-core-test`、`npm run reader-storage-test`、`npm run reader-protocol-test`、`npm run desktop-mainline-test`、`node tests/reader-shell-structure.js`、`node tests/release-config.js` 与范围相关 ESLint 通过。
+
+F-10.3B 阶段退出：所有范围通过同一服务创建不可变快照，三布局结果等价且失败可安全重试；下一步进入 F-10.3C。
+
+### F-10.3C 新鲜度、来源条与安全跳转（已完成）
+
+- [x] 写作、资料库和工作流使用统一来源条，只按当前 `envelopeId` 读取快照，不枚举无关全文。
+- [x] fresh、stale、missing 与外部较新 Revision 均有明确提示；旧快照继续使用必须显式操作，返回 Reader 时尽可能恢复来源 locator。
+- [x] 目标指针仅保存 destination→`envelopeId`，刷新和应用重开后仍可解析；正文不进入 localStorage、路由或普通 history。
+- [x] `suggestedProjectId` 只显示为建议，不自动打开、切换或写入目标项目。
+- [x] 写作区创作要求、资料库未保存候选卡和工作流 Brief 成功物化后才登记消费者并 consumed；物化接口重试幂等，失败保持 active。
+
+完成证据：2026-07-16：新增 `src/desktop/shell/reader-transfer-consumer.js`、三个目标来源条及 `tests/reader-transfer-consumer.js`，扩展 Transfer Service/Controller 的幂等 materialize 接口和协议回归。`npm run reader-core-test`、`npm run reader-storage-test`、`npm run reader-protocol-test`、`npm run desktop-mainline-test`、`node tests/reader-transfer-consumer.js`、`node tests/release-config.js` 与定向 ESLint 通过。
+
+F-10.3 阶段退出：三个安全跳转、来源状态、应用重开和生命周期路径均通过；Reader 仍无正式写入权限。下一步进入 F-10.4A 写作接入。
+
+### F-10.4A 写作接入（已完成）
+
+- [x] 项目来源按 locator 返回精确、近似或丢失状态；跨项目只在用户显式选择后定位。
+- [x] 外部、粘贴和已删除来源从冻结快照进入写前预览，支持片段勾选、追加、覆盖、按章新建场景和新建项目。
+- [x] 预览展示章节/片段、目标章节/场景、现有字符冲突和覆盖风险；未确认不修改项目磁盘。
+- [x] 正式应用重新校验目标版本，先创建备份，再复用 Project Service 保存；并发变化拒绝写入。
+- [x] 场景持久化 `sourceReferences`，项目持久化 `readerApplications`；确定性 ID 和应用账本保证重复提交不重复追加或建场景。
+- [x] 创建失败不留部分项目；协议回归验证应用前备份可以恢复原场景集合。
+
+完成证据：2026-07-16：新增 `desktop/services/reader-writer-transfer-service.js`、`desktop/controllers/reader-writer-controller.js`、`src/desktop/shell/reader-writer-transfer.js`、独立样式和 `tests/reader-writer-transfer-service.js`，扩展协议及桌面三目标回归。`npm run reader-storage-test`、`npm run reader-protocol-test`、`npm run reader-shell-test`、`npm run storage-test`、`npm run desktop-mainline-test`、`node tests/release-config.js` 与定向 ESLint 通过。
+
+F-10.4A 阶段退出：定位与导入两条路径具备预览、确认、版本保护、备份、应用、幂等和恢复闭环；下一步进入 F-10.4B。
+
+### F-10.4B 资料库接入（已完成）
+
+- [x] Reader Envelope 通过资料库专用 Provider 按长文本分块抽取，支持空分块、单卡、多卡、跨块合并和别名去重。
+- [x] 候选与现有资料卡比较并分类为新建、更新或疑似重复；来源证据保留 Envelope、批次、Revision、Section 和摘录。
+- [x] 每张候选必须明确“通过、修改后通过或放弃”；整批确认、全选思路和批量保存均不能绕过未审核项。
+- [x] 模型无效 JSON、未知类型、越权字段、跨项目 ID 和超量结果在写入前被拒绝；API Key、绝对路径和无关正文不进入 Prompt。
+- [x] 整批先校验目标版本并创建备份，再一次写入所有通过项；失败不部分写入，重复批次不重复落卡。
+- [x] `sourceReferences` 向后兼容旧 `sceneId + excerpt`，新增 Reader 来源字段；项目备份可恢复应用前资料库。
+- [x] 在隔离项目使用 DeepSeek Flash 完成多卡提取、逐卡审核、保存、幂等和恢复，并记录调用范围、估算费用与无密钥证据。
+
+完成证据：2026-07-16：新增 `reader-compendium-extraction.js`、Reader 资料库 Extractor/Transfer Service、审核批次 Store、桌面审核队列和相应测试；`npm run reader-core-test`、`npm run reader-storage-test`、`npm run reader-shell-test`、`npm run reader-protocol-test`、`npm run storage-test`、`npm run desktop-mainline-test` 与 `node tests/release-config.js` 通过。真实 DeepSeek Flash 验收共执行 9 个分块请求；完整轮从 13,297 字符提取 8 张候选，7 通过、1 放弃、2 张命中既有卡，备份、幂等、Envelope consumed 与恢复通过；三轮总估算费用 `$0.012105`，验收文件中密钥和绝对路径命中为 0。详见 `docs/F104B_READER_COMPENDIUM_REAL_PROVIDER_ACCEPTANCE_2026-07-16.md`。下一步 F-10.4C。
+
+### F-10.4C 工作流接入（已完成）
+
+- [x] 来源条进入正式预览，明确选择目标项目、续写/重写模板和处理要求；建议项目不自动切换。
+- [x] 项目单场来源适配为 `writer-source@1`，保留 Envelope、Reader locators、source units 和冻结版本状态。
+- [x] 外部/粘贴来源适配为独立 `reader-source@1`，不伪造项目场景；外部来源和项目聚合来源不能进入单场重写模板。
+- [x] fresh/stale/missing/较新 Revision 进入预览、Artifact 元数据与运行事件，旧快照只能显式确认继续。
+- [x] 确定性 Run/Revision 身份保证重复 Envelope 消费不重复创建运行或输入 Revision；失败保持 active。
+- [x] 输入物化后可脱离 Reader Store 独立重开；Reader 删除不修改运行，普通项目保存不覆盖 v2 工作流文件。
+
+完成证据：2026-07-16：新增 `desktop/services/reader-workflow-transfer-service.js`、Reader 来源 Artifact 适配器、工作流正式预览/应用 API、桌面对话框和 `tests/reader-workflow-transfer-service.js`；协议回归使用真实 Store 完成外部 `continuation-guided` 与项目单场 `rewrite-guided` 输入闭环，桌面回归验证无确认不创建、外部重写禁用、失败可重试和正文不再进入 Brief。`npm run reader-storage-test`、`npm run reader-protocol-test`、`npm run reader-shell-test`、`npm run storage-test`、`npm run desktop-mainline-test`、`node tests/release-config.js` 与定向 ESLint 通过。下一步 F-10.4D。
+
+### F-10.4D 综合、压力、视觉和发布验收（已完成）
+
+- [x] 项目、TXT、Markdown、粘贴四来源 × 写作、资料库、工作流三目标共 12 条闭环通过。
+- [x] 百万字符预览、入库、快照、重读、搜索、重分页及 120 Envelope 压力通过预算。
+- [x] 迁移、路径安全、密钥/绝对路径隔离、备份恢复、失败不变和重复应用幂等审计通过。
+- [x] 多视口与真实长篇视觉、完整回归、NSIS/Portable 构建、unpacked 和实际安装版冒烟通过。
+- [x] 架构、用户说明、交接、功能进度及最终验收记录完成。
+
+完成证据：2026-07-16：`npm run reader-release-acceptance`、`npm run reader-performance-acceptance`、两项视觉审计、Reader 全套、`npm test`、备份和 Workflow 发布压力通过；`npm run dist` 生成 1.1.1 NSIS 与 Portable，`npm run packaged-smoke` 和 `npm run installed-smoke` 通过。百万字符快照写入/重读 p95 为 173.16/74.35 ms，堆增长 69.27 MiB；最终记录见 `docs/F10_FINAL_ACCEPTANCE_2026-07-16.md`。F-10 已关闭。
+
+## 规划阶段：证据化文风工程
+
+| 编号 | 功能 | 状态 | 依赖 | 完成标准 | 下一步 |
+| --- | --- | --- | --- | --- | --- |
+| F-11 | 证据化文风提取、校准与应用 | 未开始 | 统一提示词指令契约与编译器、项目/章节快照、Writer、Workflow v2、AI Task、避免写法与备份恢复 | 从章/项目建立有证据、可试听、可版本化的文风档案；续写和重写按任务编译并通过内容保真、复刻和幂等门禁；真实盲测优于朴素 style JSON | 推迟到下一个大版本；未来在独立实验分支先研究统一提示词工程，当前主线不实现 |
+
+### F-11 产品边界
+
+- 用户面对的是“文风档案”和试听校准，不需要维护 style JSON 或手写 Prompt。
+- 来源原则必须引用项目章节/场景证据；项目文风保留多个场景模式，不压成一个平均标签。
+- 文风描述、任务编译和结果审查分层；人物事实、剧情、因果、视角和时间线始终高于文风。
+- 首版只使用当前项目的一章、多章或整个项目；不做外部作者市场、网络抓取、模型微调或自动自我训练。
+- 正式设计：`docs/F11_EVIDENCE_BASED_STYLE_SYSTEM_DESIGN.md`。
+- 2026-07-17 决策：现有 Writer/Workflow 提示词控制较多，F-11 不能作为新模组直接叠加；必须以前置的统一指令编译与冲突解析重构为基础。当前版本继续使用已有全局/项目 Prompt、改写预设、手动要求和避免写法。
+
+### F-11 建议阶段
+
+- [ ] F-11.0：独立实验分支中的提示词来源盘点、统一指令契约/冲突解析，以及通用 Prompt / 朴素 style JSON / 证据档案三路基线。
+- [ ] F-11.1：来源快照、原子 Store、不可变 Revision、stale 与本地分析器。
+- [ ] F-11.2：分块证据分析、跨块合并、场景模式和可读档案。
+- [ ] F-11.3：试听校准、三档强度、任务级编译器和模型校准状态。
+- [ ] F-11.4：Writer 续写、三阶段重写、内容/文风/复刻审查和反馈账本。
+- [ ] F-11.5：Workflow 接入、真实 Provider A/B/C 盲测、压力与发布验收。
+
 ## 统一规则
 
 - AI 结果一律先进入预览态，不得直接覆盖正文或正式资料。
 - 所有写入动作必须由用户确认，并复用现有备份与恢复机制。
 - 正文重写和资料卡重写共用 AI 任务、模型配置、流式输出、历史和失败处理；各自只维护不同的输入与应用方式。
+- Provider 生成默认请求并消费流式响应；首包等待有上限，reasoning、正文、usage 或有效流数据都会重置空闲计时，活跃流默认不受总墙钟时长限制。
 - 新功能必须补充自动化测试，并在本表“完成标准”逐项记录验证结果。
 - 功能完成后在此表追加完成日期、测试命令和后续可选优化；若暂停，写明恢复条件。
 

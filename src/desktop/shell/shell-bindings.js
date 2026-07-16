@@ -2,6 +2,15 @@
         loadReaderState();
         renderReader();
         const elements = readerElements();
+        migrateLegacyReaderState();
+        if (typeof initializeReaderWorkspace === 'function') initializeReaderWorkspace();
+
+        if (elements.migrationConfirm) {
+            elements.migrationConfirm.addEventListener('click', () => migrateLegacyReaderState('confirm'));
+        }
+        if (elements.migrationAbandon) {
+            elements.migrationAbandon.addEventListener('click', () => migrateLegacyReaderState('abandon'));
+        }
 
         if (elements.file) {
             elements.file.addEventListener('change', async () => {
@@ -38,6 +47,7 @@
                 readerState.fontSize = Number(elements.fontSize.value) || 18;
                 applyReaderSettings();
                 saveReaderState();
+                if (typeof scheduleReaderPreferenceSave === 'function') scheduleReaderPreferenceSave();
             });
         }
 
@@ -46,6 +56,7 @@
                 readerState.textWidth = Number(elements.textWidth.value) || 760;
                 applyReaderSettings();
                 saveReaderState();
+                if (typeof scheduleReaderPreferenceSave === 'function') scheduleReaderPreferenceSave();
             });
         }
 
@@ -54,6 +65,7 @@
                 readerState.paragraphSpacing = Number(elements.paragraphSpacing.value) || 1.05;
                 applyReaderSettings();
                 saveReaderState();
+                if (typeof scheduleReaderPreferenceSave === 'function') scheduleReaderPreferenceSave();
             });
         }
 
@@ -62,6 +74,7 @@
                 readerState.fontFamily = elements.fontFamily.value || 'system';
                 applyReaderSettings();
                 saveReaderState();
+                if (typeof scheduleReaderPreferenceSave === 'function') scheduleReaderPreferenceSave();
             });
         }
 
@@ -70,6 +83,7 @@
                 readerState.indent = !!elements.indent.checked;
                 applyReaderSettings();
                 saveReaderState();
+                if (typeof scheduleReaderPreferenceSave === 'function') scheduleReaderPreferenceSave();
             });
         }
 
@@ -78,6 +92,7 @@
                 readerState.lineHeight = Number(elements.lineHeight.value) || 1.8;
                 applyReaderSettings();
                 saveReaderState();
+                if (typeof scheduleReaderPreferenceSave === 'function') scheduleReaderPreferenceSave();
             });
         }
 
@@ -86,11 +101,16 @@
                 readerState.theme = elements.theme.value || 'dark';
                 applyReaderSettings();
                 saveReaderState();
+                if (typeof scheduleReaderPreferenceSave === 'function') scheduleReaderPreferenceSave();
             });
         }
 
         if (elements.prev) {
             elements.prev.addEventListener('click', () => {
+                if (readerState.apiMode && typeof navigateReaderWorkspaceChapter === 'function') {
+                    navigateReaderWorkspaceChapter(-1);
+                    return;
+                }
                 rememberReaderScroll();
                 readerState.chapterIndex -= 1;
                 saveReaderState();
@@ -100,6 +120,10 @@
 
         if (elements.next) {
             elements.next.addEventListener('click', () => {
+                if (readerState.apiMode && typeof navigateReaderWorkspaceChapter === 'function') {
+                    navigateReaderWorkspaceChapter(1);
+                    return;
+                }
                 rememberReaderScroll();
                 readerState.chapterIndex += 1;
                 saveReaderState();
@@ -112,6 +136,35 @@
             if (!root || root.dataset.view !== 'reader') return;
             const target = event.target;
             if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+
+            if (event.key === 'Escape' && typeof handleReaderWorkspaceEscape === 'function') {
+                event.preventDefault();
+                handleReaderWorkspaceEscape();
+                return;
+            }
+            if (event.key === '[' && elements.prev && !elements.prev.disabled) {
+                event.preventDefault();
+                elements.prev.click();
+                return;
+            }
+            if (event.key === ']' && elements.next && !elements.next.disabled) {
+                event.preventDefault();
+                elements.next.click();
+                return;
+            }
+
+            if (readerState.apiMode && readerState.effectiveLayoutMode !== 'flow') {
+                if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+                    event.preventDefault();
+                    if (typeof queueReaderPageTurn === 'function') queueReaderPageTurn(-1);
+                    return;
+                }
+                if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') {
+                    event.preventDefault();
+                    if (typeof queueReaderPageTurn === 'function') queueReaderPageTurn(1);
+                    return;
+                }
+            }
 
             if (event.key === 'ArrowLeft' && elements.prev && !elements.prev.disabled) {
                 event.preventDefault();

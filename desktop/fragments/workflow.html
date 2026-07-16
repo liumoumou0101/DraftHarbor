@@ -1,16 +1,107 @@
             <section class="desktop-view desktop-workflow-view" data-view-panel="workflow">
+                <section class="desktop-reader-source-bar" data-reader-source-bar="workflow" hidden aria-live="polite">
+                    <div class="desktop-reader-source-copy">
+                        <span class="desktop-reader-source-mark" aria-hidden="true">阅</span>
+                        <div><strong data-reader-source-title>来自阅读器</strong><p data-reader-source-detail>正在读取来源快照…</p></div>
+                    </div>
+                    <div class="desktop-reader-source-actions">
+                        <button class="desktop-secondary-action" type="button" data-reader-source-return>返回阅读器</button>
+                        <button class="desktop-secondary-action" type="button" data-reader-source-dismiss>暂不处理</button>
+                        <button class="desktop-primary-action" type="button" data-reader-source-use>使用此快照</button>
+                    </div>
+                </section>
+                <dialog class="desktop-reader-workflow-dialog" data-reader-workflow-dialog aria-labelledby="reader-workflow-title">
+                    <header class="desktop-reader-workflow-header"><div><p class="desktop-section-kicker">Reader Workflow</p><h2 id="reader-workflow-title">将阅读快照创建为工作流输入</h2></div><button class="desktop-icon-button" type="button" data-reader-workflow-close aria-label="关闭">×</button></header>
+                    <div class="desktop-reader-workflow-body">
+                        <section class="desktop-reader-workflow-source"><strong data-reader-workflow-source>正在读取来源…</strong><p data-reader-workflow-freshness></p></section>
+                        <div class="desktop-reader-workflow-grid">
+                            <label><span>目标项目</span><select data-reader-workflow-project></select></label>
+                            <label><span>处理模板</span><select data-reader-workflow-template><option value="continuation-guided">续写作品 · 引导模式</option><option value="rewrite-guided">大段重写 · 引导模式</option></select></label>
+                            <label class="wide"><span>本次要求</span><textarea data-reader-workflow-brief rows="4" placeholder="说明要分析、续写或重写的目标；来源正文仍使用冻结快照。"></textarea></label>
+                        </div>
+                        <section class="desktop-reader-workflow-preview" data-reader-workflow-preview hidden><strong data-reader-workflow-artifact></strong><p data-reader-workflow-run></p><ul data-reader-workflow-conflicts></ul></section>
+                        <label class="desktop-reader-workflow-confirm"><input type="checkbox" data-reader-workflow-confirm> 我已核对目标项目、模板和旧快照提示，确认创建或重开此工作流。</label>
+                        <p class="desktop-reader-hint" data-reader-workflow-status aria-live="polite">尚未创建工作流运行或输入 Revision。</p>
+                    </div>
+                    <footer class="desktop-reader-workflow-actions"><button class="desktop-secondary-action" type="button" data-reader-workflow-refresh>重新预览</button><button class="desktop-primary-action" type="button" data-reader-workflow-apply disabled>确认并进入工作流</button></footer>
+                </dialog>
                 <aside class="desktop-workflow-sidebar">
                     <div>
                         <p class="desktop-section-kicker">Workflow</p>
                         <h2>创作流程</h2>
                         <p data-workflow-project-label>从书库打开项目后启动。</p>
-                        <p class="desktop-workflow-sidebar-note">按步骤引导的写作流程：设定项目 Brief 后逐步生成正文内容。</p>
+                        <p class="desktop-workflow-sidebar-note" data-workflow-mode-note>续写引导：冻结原文后，依次确认分析、方向、细纲、正文、审查和回流。</p>
                     </div>
                     <label>
-                        <span>项目设定 (Brief)</span>
-                        <textarea data-workflow-brief rows="8" placeholder="写下本次工作流要遵守的题材、主线、角色、限制和目标。"></textarea>
+                        <span>工作流类型</span>
+                        <select data-workflow-mode>
+                            <option value="continuation">续写现有作品</option>
+                            <option value="creation">从零构建新作</option>
+                            <option value="rewrite">大段重写现有正文</option>
+                        </select>
                     </label>
-                    <button class="desktop-primary-action" type="button" data-workflow-start>开始创作流程</button>
+                    <section class="desktop-workflow-launch-fields" data-workflow-continuation-fields>
+                        <label>
+                            <span>原文范围</span>
+                            <select data-workflow-source-scope>
+                                <option value="chapter">当前章节</option>
+                                <option value="scene">当前场景</option>
+                                <option value="project">整个项目</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>续写设定 (Brief)</span>
+                            <textarea data-workflow-brief rows="5" placeholder="写下本次续写要遵守的题材、主线、角色、限制和目标。"></textarea>
+                        </label>
+                    </section>
+                    <section class="desktop-workflow-launch-fields" data-workflow-rewrite-fields hidden>
+                        <label><span>重写范围</span><select data-workflow-rewrite-scope><option value="chapter">当前章节</option><option value="scene">当前场景</option><option value="project">整个项目</option></select></label>
+                        <label><span>重写目标</span><textarea data-workflow-rewrite-instruction rows="5" placeholder="例如：压缩冗余铺垫，强化冲突，但保留人物动机和关键线索。"></textarea></label>
+                        <div class="desktop-workflow-field-grid">
+                            <label><span>目标风格</span><input data-workflow-rewrite-style placeholder="克制、冷峻"></label>
+                            <label><span>目标基调</span><input data-workflow-rewrite-tone placeholder="紧张、压迫"></label>
+                            <label><span>目标视角</span><input data-workflow-rewrite-pov placeholder="第三人称限知"></label>
+                            <label><span>长度比例</span><input data-workflow-rewrite-ratio type="number" min="0.1" max="5" step="0.1" value="1"></label>
+                        </div>
+                    </section>
+                    <section class="desktop-workflow-launch-fields" data-workflow-creation-fields hidden>
+                        <label>
+                            <span>暂定书名</span>
+                            <input data-workflow-creation-title placeholder="例如：潮汐尽头的灯塔">
+                        </label>
+                        <label>
+                            <span>核心创意 / 故事前提</span>
+                            <textarea data-workflow-creation-premise rows="5" placeholder="主角是谁、遭遇什么变化、必须完成什么，以及失败的代价。"></textarea>
+                        </label>
+                        <div class="desktop-workflow-field-grid">
+                            <label><span>题材</span><input data-workflow-creation-genre placeholder="悬疑 / 奇幻"></label>
+                            <label><span>目标字数</span><input data-workflow-creation-target-length type="number" min="0" step="1000" placeholder="200000"></label>
+                            <label><span>基调</span><input data-workflow-creation-tone placeholder="冷峻、克制"></label>
+                            <label><span>视角</span><input data-workflow-creation-pov placeholder="第三人称限知"></label>
+                        </div>
+                        <label><span>主题（逗号分隔）</span><input data-workflow-creation-themes placeholder="记忆，身份，救赎"></label>
+                        <label><span>世界 / 时空设定</span><input data-workflow-creation-setting placeholder="近未来海港城"></label>
+                    </section>
+                    <label>
+                        <span>倾向锁（每行一个）</span>
+                        <textarea data-workflow-direction-locks rows="3" placeholder="例如：强化主角与导师之间的不信任"></textarea>
+                    </label>
+                    <label>
+                        <span>排除锁（每行一个）</span>
+                        <textarea data-workflow-exclusion-locks rows="3" placeholder="例如：不要揭晓幕后凶手"></textarea>
+                    </label>
+                    <label class="desktop-workflow-toggle">
+                        <input type="checkbox" data-workflow-fine-outline checked>
+                        <span>正文前生成可编辑细纲</span>
+                    </label>
+                    <label class="desktop-workflow-toggle" title="开启后 DeepSeek 会返回额外的思考流；结构化任务可能更慢，请按需启用。">
+                        <input type="checkbox" data-workflow-thinking>
+                        <span>深度思考（气泡实时显示）</span>
+                    </label>
+                    <button class="desktop-primary-action" type="button" data-workflow-start-guided>开始续写引导</button>
+                    <button class="desktop-primary-action" type="button" data-workflow-start-creation hidden>开始从零创作</button>
+                    <button class="desktop-primary-action" type="button" data-workflow-start-rewrite hidden>开始大段重写</button>
+                    <button class="desktop-mini-action" type="button" data-workflow-start>启动旧版兼容流程</button>
                     <div class="desktop-compendium-status" data-workflow-status>未打开项目</div>
                     <div class="desktop-workflow-run-list" data-workflow-run-list></div>
                 </aside>
@@ -20,9 +111,26 @@
                             <p class="desktop-section-kicker">流程看板</p>
                             <h2 data-workflow-title>选择或开始创作流程</h2>
                         </div>
+                        <div class="desktop-workflow-view-switch" role="group" aria-label="工作流视图">
+                            <button type="button" class="is-active" data-workflow-view-guided>步骤</button>
+                            <button type="button" data-workflow-view-graph>图视图</button>
+                        </div>
                     </header>
 
+                    <aside class="desktop-workflow-reasoning-bubble" data-workflow-reasoning-bubble data-phase="idle" hidden>
+                        <header>
+                            <div>
+                                <span class="desktop-workflow-reasoning-pulse" aria-hidden="true"></span>
+                                <strong data-workflow-reasoning-title>AI 思考过程</strong>
+                            </div>
+                            <button type="button" data-workflow-reasoning-close aria-label="关闭思考过程">×</button>
+                        </header>
+                        <p data-workflow-reasoning-status role="status" aria-live="polite">等待模型响应…</p>
+                        <pre data-workflow-reasoning-content aria-live="off">正在连接模型…</pre>
+                    </aside>
+
                     <div class="desktop-workflow-steps" data-workflow-steps></div>
+                    <section class="desktop-workflow-graph" data-workflow-graph aria-label="只读工作流图" hidden></section>
                     <div class="desktop-workflow-stage-actions" data-workflow-stage-actions hidden></div>
                     <div class="desktop-workflow-artifacts" data-workflow-artifacts></div>
                     <details class="desktop-workflow-events-details" data-workflow-events-details open>
@@ -34,4 +142,3 @@
                     </details>
                 </section>
             </section>
-

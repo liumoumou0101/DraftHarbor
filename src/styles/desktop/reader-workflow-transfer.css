@@ -1,0 +1,16 @@
+@layer components {
+    .desktop-reader-workflow-dialog { width: min(760px, calc(100vw - 32px)); max-height: min(820px, calc(100vh - 32px)); padding: 0; overflow: hidden; border: 1px solid var(--desktop-line-strong); border-radius: 14px; background: var(--desktop-panel); color: var(--desktop-text); box-shadow: 0 30px 90px rgba(0,0,0,.58); }
+    .desktop-reader-workflow-dialog::backdrop { background: rgba(3,5,8,.7); backdrop-filter: blur(3px); }
+    .desktop-reader-workflow-header,.desktop-reader-workflow-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:15px 18px; }
+    .desktop-reader-workflow-header { border-bottom:1px solid var(--desktop-line); } .desktop-reader-workflow-header h2 { margin:2px 0 0; font-size:20px; }
+    .desktop-reader-workflow-body { display:grid; gap:15px; max-height:min(620px,calc(100vh - 190px)); padding:18px; overflow:auto; }
+    .desktop-reader-workflow-source,.desktop-reader-workflow-preview { padding:13px 14px; border:1px solid rgba(var(--desktop-accent-rgb),.25); border-radius:10px; background:rgba(var(--desktop-accent-rgb),.07); }
+    .desktop-reader-workflow-source p,.desktop-reader-workflow-preview p { margin:5px 0 0; color:var(--desktop-muted); font-size:12px; line-height:1.5; }
+    .desktop-reader-workflow-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .desktop-reader-workflow-grid label { display:grid; gap:6px; color:var(--desktop-muted); font-size:12px; } .desktop-reader-workflow-grid .wide { grid-column:1/-1; }
+    .desktop-reader-workflow-grid select,.desktop-reader-workflow-grid textarea { width:100%; padding:8px 10px; border:1px solid var(--desktop-line-strong); border-radius:8px; background:rgba(255,255,255,.04); color:var(--desktop-text); }
+    .desktop-reader-workflow-preview ul { margin:9px 0 0; padding-left:20px; color:var(--desktop-muted); font-size:12px; }
+    .desktop-reader-workflow-confirm { display:flex; align-items:flex-start; gap:9px; color:var(--desktop-muted); line-height:1.45; }
+    .desktop-reader-workflow-actions { justify-content:flex-end; border-top:1px solid var(--desktop-line); }
+    @media(max-width:640px){.desktop-reader-workflow-grid{grid-template-columns:1fr}.desktop-reader-workflow-grid .wide{grid-column:auto}}
+}
