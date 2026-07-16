@@ -37,7 +37,7 @@
     function parseCardDrafts(raw) {
         const parsed = JSON.parse(stripJsonFence(raw));
         const drafts = Array.isArray(parsed) ? parsed : parsed && Array.isArray(parsed.cards) ? parsed.cards : null;
-        if (!drafts || !drafts.length) throw new Error('AI provider returned no card drafts.');
+        if (!drafts) throw new Error('AI provider returned an invalid card draft list.');
         return drafts;
     }
 

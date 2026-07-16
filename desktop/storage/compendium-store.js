@@ -61,6 +61,26 @@ async function saveEntry(dataRoot, projectId, entryInput = {}) {
   return saved.find((entry) => entry.id === incoming.id);
 }
 
+async function saveEntriesBatch(dataRoot, projectId, entryInputs = []) {
+  const projectPath = projectDir(dataRoot, projectId);
+  const entries = await readEntries(projectPath, projectId);
+  const now = new Date().toISOString();
+  const savedIds = [];
+  for (const entryInput of entryInputs) {
+    const incoming = CompendiumSchema.createCompendiumEntry({
+      ...entryInput, projectId, id: entryInput.id || undefined,
+      createdAt: entryInput.createdAt || now, updatedAt: now
+    });
+    if (entryInput.projectId && entryInput.projectId !== projectId) throw new Error('compendium entry projectId cannot cross projects');
+    const index = entries.findIndex((entry) => entry.id === incoming.id);
+    if (index >= 0) entries[index] = { ...entries[index], ...incoming, createdAt: entries[index].createdAt || incoming.createdAt, updatedAt: now };
+    else entries.push({ ...incoming, order: Number.isFinite(Number(entryInput.order)) ? Number(entryInput.order) : entries.length });
+    savedIds.push(incoming.id);
+  }
+  const written = await writeEntries(projectPath, entries, projectId);
+  return savedIds.map((id) => written.find((entry) => entry.id === id));
+}
+
 async function deleteEntry(dataRoot, projectId, entryId) {
   const projectPath = projectDir(dataRoot, projectId);
   const entries = await readEntries(projectPath, projectId);
@@ -75,5 +95,6 @@ module.exports = {
   writeEntries,
   listEntries,
   saveEntry,
+  saveEntriesBatch,
   deleteEntry
 };

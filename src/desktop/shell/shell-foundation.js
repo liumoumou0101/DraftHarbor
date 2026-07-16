@@ -33,7 +33,57 @@
         textWidth: 760,
         paragraphSpacing: 1.05,
         indent: true,
-        scrollPositions: {}
+        scrollPositions: {},
+        libraryDocuments: [],
+        libraryIndexVersion: 0,
+        activeDocumentId: '',
+        activeRevisionId: '',
+        activeChapterId: '',
+        documentMetadata: null,
+        contents: [],
+        currentChapter: null,
+        apiMode: false,
+        drawer: '',
+        leftTab: 'library',
+        controlsVisible: true,
+        drawerReturnFocus: null,
+        layoutMode: 'flow',
+        effectiveLayoutMode: 'flow',
+        pageIndex: 0,
+        pages: [],
+        prefetchedPages: [],
+        virtualWindow: { start: 0, end: 0 },
+        layoutCache: new Map(),
+        layoutRenderToken: 0,
+        pendingPageDelta: 0,
+        pageTurnFrame: null,
+        anchorLocator: null,
+        actualFontFamily: '',
+        fontFallback: false,
+        letterSpacing: 0,
+        pageMargin: 48,
+        textAlign: 'start',
+        pageTransition: 'fade',
+        reducedMotionOverride: undefined,
+        preferenceScope: 'global',
+        preferenceRecord: null,
+        globalPreferences: null,
+        preferenceOverrides: {},
+        searchQuery: '',
+        searchResults: [],
+        searchStatus: 'idle',
+        searchRequestId: 0,
+        searchAbortController: null,
+        bookmarkResolutions: new Map(),
+        revisionSnapshotPromise: null,
+        revisionSnapshotKey: '',
+        progressDragging: false,
+        progressNavigationToken: 0,
+        transferSelection: null,
+        transferScope: 'chapter',
+        transferChapterIds: [],
+        transferBusy: false,
+        transferLastEnvelopeId: ''
     };
     const nativeEditorState = {
         snapshot: null,
@@ -123,7 +173,33 @@
         selectedId: '',
         events: [],
         generating: false,
-        generatedText: ''
+        generatedText: '',
+        viewMode: 'guided',
+        graphEditing: false,
+        graphDraftRunId: '',
+        graphDraft: null,
+        graphSelectedNodeId: '',
+        graphTemplateId: '',
+        graphTemplateVersion: 0,
+        graphTemplates: [],
+        graphPendingConnection: null,
+        selectedArtifactId: '',
+        selectedDirectionIds: [],
+        selectedRewriteSceneIds: [],
+        variantComparison: null,
+        variantSelections: {},
+        pendingVariantId: '',
+        pendingVariantApproved: false,
+        reasoning: {
+            visible: false,
+            dismissed: false,
+            phase: 'idle',
+            title: 'AI 思考过程',
+            status: '',
+            text: '',
+            hasReasoning: false,
+            batchHasReasoning: false
+        }
     };
     const recoveryState = {
         backups: [],
@@ -223,6 +299,12 @@
 
         if (state) state.saveView(nextView);
         renderContextStrip();
+        if (nextView === 'reader' && readerState.apiMode && typeof scheduleReaderReflow === 'function') {
+            window.requestAnimationFrame(() => scheduleReaderReflow());
+        }
+        if (['writer', 'compendium', 'workflow'].includes(nextView) && typeof activateReaderTransferTarget === 'function') {
+            activateReaderTransferTarget(nextView);
+        }
     }
 
     function contextStripElements() {

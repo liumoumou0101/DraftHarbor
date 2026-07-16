@@ -5,7 +5,7 @@ const path = require('path');
 const { _electron: electron } = require('playwright');
 
 const root = path.resolve(__dirname, '..');
-const exePath = path.join(root, 'release', 'win-unpacked', 'DraftHarbor.exe');
+const exePath = process.env.DRAFTHARBOR_PACKAGED_EXE || path.join(root, 'release', 'win-unpacked', 'DraftHarbor.exe');
 
 (async () => {
   await fs.access(exePath);

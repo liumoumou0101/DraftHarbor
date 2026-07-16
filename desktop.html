@@ -5,14 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>稿湾 DraftHarbor</title>
     <link rel="stylesheet" href="src/styles/desktop/desktop-foundation.css">
+    <link rel="stylesheet" href="src/styles/desktop/workflow-graph.css">
     <link rel="stylesheet" href="src/styles/desktop/desktop-components.css">
     <link rel="stylesheet" href="src/styles/desktop/desktop-workspaces.css">
+    <link rel="stylesheet" href="src/styles/desktop/reader.css">
+    <link rel="stylesheet" href="src/styles/desktop/reader-writer-transfer.css">
+    <link rel="stylesheet" href="src/styles/desktop/reader-compendium-transfer.css"><link rel="stylesheet" href="src/styles/desktop/reader-workflow-transfer.css">
     <link rel="stylesheet" href="src/styles/desktop/desktop-polish.css">
     <link rel="stylesheet" href="src/styles/desktop/desktop-release.css">
     <link rel="stylesheet" href="src/styles/desktop/desktop-finishing.css">
     <script defer src="src/core/document/scene-ordering.js"></script>
     <script defer src="src/core/document/manuscript-builder.js"></script>
     <script defer src="src/core/document/reader-document.js"></script>
+    <script defer src="src/core/document/reader-document-schema.js"></script>
+      <script defer src="src/core/document/reader-locator.js"></script>
+      <script defer src="src/core/document/reader-layout.js"></script>
+      <script defer src="src/core/document/reader-navigation.js"></script>
+      <script defer src="src/core/document/reader-selection.js"></script>
+      <script defer src="src/core/document/reader-transfer-schema.js"></script>
     <script defer src="src/core/generation/prompt-builder.js"></script>
     <script defer src="src/core/generation/generation-result.js"></script>
     <script defer src="src/core/generation/generation-history.js"></script>
@@ -28,6 +38,10 @@
     <script defer src="src/core/workshop/workshop-schema.js"></script>
     <script defer src="src/core/workshop/workshop-prompt.js"></script>
     <script defer src="src/core/workflow/workflow-schema.js"></script>
+    <script defer src="src/core/workflow/workflow-artifact-schema.js"></script>
+    <script defer src="src/core/workflow/workflow-definition-schema.js"></script>
+    <script defer src="src/core/workflow/workflow-capability-registry.js"></script>
+    <script defer src="src/core/workflow/workflow-builtin-catalog.js"></script>
     <script defer src="src/core/workflow/workflow-engine.js"></script>
     <script defer src="src/core/settings/settings-schema.js"></script>
     <script defer src="src/core/settings/model-catalog.js"></script>
@@ -36,6 +50,12 @@
     <script defer src="src/desktop/shell/shell-foundation.js"></script>
     <script defer src="src/desktop/shell/project-library.js"></script>
     <script defer src="src/desktop/shell/reader.js"></script>
+      <script defer src="src/desktop/shell/reader-library.js"></script>
+      <script defer src="src/desktop/shell/reader-reading.js"></script>
+      <script defer src="src/desktop/shell/reader-settings.js"></script>
+      <script defer src="src/desktop/shell/reader-navigation.js"></script>
+      <script defer src="src/desktop/shell/reader-selection.js"></script>
+      <script defer src="src/desktop/shell/reader-workspace.js"></script>
     <script defer src="src/desktop/shell/recovery.js"></script>
     <script defer src="src/desktop/shell/shell-bindings.js"></script>
     <script defer src="src/desktop/shell/writer-core.js"></script>
@@ -48,10 +68,14 @@
     <script defer src="src/desktop/shell/compendium-draw.js"></script>
     <script defer src="src/desktop/shell/style-guard.js"></script>
     <script defer src="src/desktop/shell/workshop.js"></script>
+    <script defer src="src/desktop/shell/workflow-graph.js"></script>
     <script defer src="src/desktop/shell/workflow.js"></script>
     <script defer src="src/desktop/shell/writer-prompts.js"></script>
     <script defer src="src/desktop/shell/writer-generation.js"></script>
     <script defer src="src/desktop/shell/compendium-extraction.js"></script>
+    <script defer src="src/desktop/shell/reader-transfer-consumer.js"></script>
+    <script defer src="src/desktop/shell/reader-writer-transfer.js"></script>
+    <script defer src="src/desktop/shell/reader-compendium-transfer.js"></script><script defer src="src/desktop/shell/reader-workflow-transfer.js"></script>
     <script defer src="src/desktop/shell/writer-bindings.js"></script>
     <script defer src="src/desktop/shell/shell-bootstrap.js"></script>
 </head>

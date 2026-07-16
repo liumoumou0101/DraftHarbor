@@ -44,6 +44,22 @@ function legacySnapshot(id, name, text) {
           : scene
       ))
     });
+    const withWorkflowSource = await projectService.openProject(dataRoot, 'migration-source');
+    await projectService.saveProject(dataRoot, {
+      ...withWorkflowSource.project,
+      scenes: withWorkflowSource.project.scenes.map((scene) => (
+        scene.id === sceneId
+          ? { ...scene, sourceRunId: 'run-1', sourceArtifactId: 'artifact-1', sourceRevisionId: 'revision-1' }
+          : scene
+      ))
+    });
+    const sourceSnapshot = projectToLegacySnapshot((await projectService.openProject(dataRoot, 'migration-source')).project);
+    const sourceRoundTrip = require('../desktop/services/project-snapshot-adapter').legacySnapshotToProject(sourceSnapshot);
+    assert.deepStrictEqual(
+      sourceRoundTrip.scenes.find((scene) => scene.id === sceneId).sourceRevisionId,
+      'revision-1',
+      'project snapshot migration must preserve workflow source references'
+    );
 
     const markdown = await migrationService.exportProjectDocument(dataRoot, 'migration-source', 'markdown');
     assert.ok(markdown.filename.endsWith('.md'), 'markdown export should use .md filename');

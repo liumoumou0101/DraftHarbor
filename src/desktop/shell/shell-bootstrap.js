@@ -26,6 +26,10 @@
         bindStyleGuard();
         bindWorkshop();
         bindWorkflow();
+        if (typeof bindReaderTransferConsumers === 'function') bindReaderTransferConsumers();
+        if (typeof bindReaderWriterTransfer === 'function') bindReaderWriterTransfer();
+        if (typeof bindReaderCompendiumTransfer === 'function') bindReaderCompendiumTransfer();
+        if (typeof bindReaderWorkflowTransfer === 'function') bindReaderWorkflowTransfer();
         const state = getState();
         setView(state ? state.loadInitialView() : 'bookshelf');
         loadProjectLibrary();

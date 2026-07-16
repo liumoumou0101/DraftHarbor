@@ -1,96 +1,184 @@
             <section class="desktop-view desktop-view-reader" data-view-panel="reader">
-                <div class="desktop-reader-shell">
-                    <aside class="desktop-reader-sidebar">
-                        <div class="desktop-reader-sidebar-intro">
-                            <p class="desktop-section-kicker">Local Reader</p>
-                            <h2>本地阅读</h2>
-                            <p>导入 txt / md 后自动识别章节，并在本机保存阅读进度。</p>
-                        </div>
-
-                        <div class="desktop-reader-sidebar-group">
-                            <p class="desktop-reader-section-label">导入</p>
-                            <label class="desktop-reader-import">
-                                <span>选择小说文件</span>
-                                <input type="file" data-reader-file accept=".txt,.md,text/plain,text/markdown">
-                            </label>
-                            <p class="desktop-reader-hint">支持 .txt / .md 格式，文件不离开本机。</p>
-                        </div>
-
-                        <div class="desktop-reader-sidebar-group">
-                            <p class="desktop-reader-section-label">显示</p>
-                            <div class="desktop-reader-controls" aria-label="阅读设置">
-                                <label>
-                                    <span>字号</span>
-                                    <input type="range" data-reader-font-size min="15" max="26" step="1">
-                                </label>
-                                <label>
-                                    <span>行距</span>
-                                    <input type="range" data-reader-line-height min="1.45" max="2.2" step="0.05">
-                                </label>
-                                <label>
-                                    <span>版心宽度</span>
-                                    <input type="range" data-reader-width min="620" max="980" step="20">
-                                </label>
-                                <label>
-                                    <span>段落间距</span>
-                                    <input type="range" data-reader-paragraph-spacing min="0.4" max="1.6" step="0.1">
-                                </label>
-                                <label>
-                                    <span>字体</span>
-                                    <select data-reader-font-family>
-                                        <option value="system">系统默认</option>
-                                        <option value="serif">宋体/衬线</option>
-                                        <option value="yahei">微软雅黑</option>
-                                    </select>
-                                </label>
-                                <label>
-                                    <span>主题</span>
-                                    <select data-reader-theme>
-                                        <option value="dark">深色</option>
-                                        <option value="paper">纸张</option>
-                                        <option value="sepia">护眼</option>
-                                    </select>
-                                </label>
-                                <label class="desktop-reader-check">
-                                    <input type="checkbox" data-reader-indent>
-                                    <span>段首缩进</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="desktop-reader-sidebar-group">
-                            <p class="desktop-reader-section-label">进度</p>
-                            <div class="desktop-reader-progress">
-                                <div>
-                                    <strong data-reader-progress-label>未导入</strong>
-                                    <span data-reader-progress-percent>0%</span>
-                                </div>
-                                <progress data-reader-progress value="0" max="100"></progress>
-                            </div>
-                        </div>
-
-                        <div class="desktop-reader-chapters" data-reader-chapters aria-label="章节列表"></div>
-                    </aside>
-
+                <div class="desktop-reader-shell" data-reader-shell data-reader-controls-visible="true">
                     <article class="desktop-reader-stage" data-reader-theme-panel>
-                        <header class="desktop-reader-header">
-                            <div>
-                                <p class="desktop-section-kicker" data-reader-source>Reader</p>
-                                <h2 data-reader-title>还没有导入本地小说</h2>
+                        <header class="desktop-reader-topbar" data-reader-topbar>
+                            <div class="desktop-reader-toolbar-group">
+                                <button class="desktop-reader-tool" type="button" data-reader-exit>返回书库</button>
+                                <button class="desktop-reader-tool" type="button" data-reader-library-toggle aria-expanded="false" aria-controls="reader-left-drawer">书库与目录</button>
                             </div>
-                            <div class="desktop-reader-actions">
-                                <button class="desktop-secondary-action" type="button" data-reader-prev>上一章</button>
-                                <button class="desktop-primary-action" type="button" data-reader-next>下一章</button>
+                            <div class="desktop-reader-heading">
+                                <p data-reader-source>Reader</p>
+                                <h2 data-reader-title>选择一本书开始阅读</h2>
+                            </div>
+                            <div class="desktop-reader-toolbar-group desktop-reader-toolbar-group-end">
+                                <button class="desktop-reader-tool" type="button" data-reader-add-bookmark disabled>添加书签</button>
+                                <button class="desktop-reader-tool" type="button" data-reader-selection-toggle disabled>选择范围</button>
+                                <button class="desktop-reader-tool" type="button" data-reader-settings-toggle aria-expanded="false" aria-controls="reader-settings-drawer">阅读设置</button>
                             </div>
                         </header>
+
                         <div class="desktop-reader-reading-bar">
-                            <span data-reader-position-label>准备阅读</span>
-                            <span>←/→ 切换章节，Space / PageDown 向下阅读</span>
+                            <button class="desktop-reader-chapter-nav" type="button" data-reader-prev>上一章</button>
+                            <span data-reader-position-label aria-live="polite">准备阅读</span>
+                            <button class="desktop-reader-chapter-nav" type="button" data-reader-next>下一章</button>
                         </div>
-                        <div class="desktop-reader-content" data-reader-content>
-                            <p>选择左侧的 txt 或 md 文件后，这里会显示正文。阶段 1 先提供本地导入、章节识别、进度和排版控制。</p>
+
+                        <div class="desktop-reader-content" data-reader-content data-reader-layout="flow" tabindex="0" aria-label="阅读正文">
+                            <div class="desktop-reader-empty">
+                                <p class="desktop-section-kicker">DraftHarbor Reader</p>
+                                <h3>让正文成为唯一焦点</h3>
+                                <p>从书库选择已导入文档，或打开左侧面板导入 txt / md 文件。</p>
+                                <button class="desktop-primary-action" type="button" data-reader-empty-library>打开书库</button>
+                            </div>
                         </div>
+
+                        <footer class="desktop-reader-bottombar" data-reader-bottombar>
+                            <div class="desktop-reader-progress">
+                                <strong data-reader-progress-label>未导入</strong>
+                                <input type="range" data-reader-progress data-reader-progress-slider min="0" max="100" step="0.1" value="0" aria-label="阅读进度" disabled>
+                                <span data-reader-progress-percent aria-live="polite">0%</span>
+                            </div>
+                            <div class="desktop-reader-page-controls" data-reader-page-controls hidden>
+                                <button class="desktop-reader-chapter-nav" type="button" data-reader-page-prev>上一页</button>
+                                <span data-reader-page-label aria-live="polite">第 1 / 1 页</span>
+                                <button class="desktop-reader-chapter-nav" type="button" data-reader-page-next>下一页</button>
+                            </div>
+                            <span class="desktop-reader-shortcuts">方向键翻页 · 方括号切章 · Esc 隐藏控件</span>
+                        </footer>
                     </article>
+
+                    <div class="desktop-reader-selection-toolbar" data-reader-selection-toolbar hidden>
+                        <span data-reader-selection-toolbar-label>已选择文本</span>
+                        <button class="desktop-primary-action" type="button" data-reader-selection-confirm>使用此选区</button>
+                    </div>
+
+                    <aside class="desktop-reader-drawer desktop-reader-drawer-left" id="reader-left-drawer" data-reader-left-drawer aria-hidden="true" aria-labelledby="reader-navigation-title" inert>
+                        <header class="desktop-reader-drawer-header">
+                            <div>
+                                <p class="desktop-section-kicker">Reader</p>
+                                <h2 id="reader-navigation-title">书库与导航</h2>
+                            </div>
+                            <button class="desktop-reader-tool" type="button" data-reader-left-close>关闭</button>
+                        </header>
+                        <div class="desktop-reader-tabs" role="tablist" aria-label="阅读导航">
+                            <button type="button" role="tab" aria-selected="true" data-reader-tab="library">书库</button>
+                            <button type="button" role="tab" aria-selected="false" data-reader-tab="contents">目录</button>
+                            <button type="button" role="tab" aria-selected="false" data-reader-tab="search">搜索</button>
+                            <button type="button" role="tab" aria-selected="false" data-reader-tab="bookmarks">书签</button>
+                        </div>
+                        <div class="desktop-reader-drawer-body">
+                            <section data-reader-panel="library">
+                                <label class="desktop-reader-import">
+                                    <span>导入 txt / md</span>
+                                    <input type="file" data-reader-file accept=".txt,.md,text/plain,text/markdown">
+                                </label>
+                                <p class="desktop-reader-hint">文件仅在本机处理。旧导入入口暂时保留兼容。</p>
+                                <div class="desktop-reader-sidebar-group" data-reader-migration hidden>
+                                    <p class="desktop-reader-hint" data-reader-migration-message></p>
+                                    <div class="desktop-reader-actions" data-reader-migration-actions hidden>
+                                        <button class="desktop-primary-action" type="button" data-reader-migration-confirm>加入书库</button>
+                                        <button class="desktop-secondary-action" type="button" data-reader-migration-abandon>放弃旧正文</button>
+                                    </div>
+                                </div>
+                                <div class="desktop-reader-library" data-reader-library aria-live="polite"></div>
+                            </section>
+                            <section data-reader-panel="contents" hidden>
+                                <div class="desktop-reader-chapters" data-reader-chapters aria-label="章节列表"></div>
+                            </section>
+                            <section data-reader-panel="search" hidden>
+                                <form class="desktop-reader-search-form" data-reader-search-form>
+                                    <label><span>字面搜索</span><input type="search" data-reader-search-input placeholder="搜索当前书籍" autocomplete="off"></label>
+                                    <button class="desktop-secondary-action" type="submit" data-reader-search-submit>搜索</button>
+                                    <button class="desktop-reader-tool" type="button" data-reader-search-cancel disabled>取消</button>
+                                </form>
+                                <p class="desktop-reader-hint" data-reader-search-status aria-live="polite">输入关键词后按章搜索。</p>
+                                <div class="desktop-reader-search-results" data-reader-search-results></div>
+                            </section>
+                            <section data-reader-panel="bookmarks" hidden>
+                                <div class="desktop-reader-bookmark-toolbar">
+                                    <button class="desktop-primary-action" type="button" data-reader-bookmark-create disabled>添加当前位置</button>
+                                </div>
+                                <p class="desktop-reader-hint" data-reader-bookmark-status aria-live="polite">书签会保存稳定位置，并提示恢复精确度。</p>
+                                <div class="desktop-reader-bookmarks" data-reader-bookmarks></div>
+                            </section>
+                        </div>
+                    </aside>
+
+                    <aside class="desktop-reader-drawer desktop-reader-drawer-right" id="reader-settings-drawer" data-reader-settings-drawer aria-hidden="true" aria-labelledby="reader-settings-title" inert>
+                        <header class="desktop-reader-drawer-header">
+                            <div>
+                                <p class="desktop-section-kicker">Appearance</p>
+                                <h2 id="reader-settings-title">阅读设置</h2>
+                            </div>
+                            <button class="desktop-reader-tool" type="button" data-reader-settings-close>关闭</button>
+                        </header>
+                        <div class="desktop-reader-drawer-body desktop-reader-controls" aria-label="阅读设置">
+                            <section class="desktop-reader-settings-section" aria-labelledby="reader-preference-scope-title">
+                                <h3 id="reader-preference-scope-title">应用范围</h3>
+                                <label><span>偏好范围</span><select data-reader-preference-scope><option value="global">所有书籍</option><option value="document">仅当前书籍</option></select></label>
+                                <button class="desktop-secondary-action" type="button" data-reader-preference-reset>恢复全局设置</button>
+                                <p class="desktop-reader-hint" data-reader-preference-status aria-live="polite">正在读取阅读偏好…</p>
+                            </section>
+                            <section class="desktop-reader-settings-section" aria-labelledby="reader-typography-title">
+                            <h3 id="reader-typography-title">排版</h3>
+                            <label><span>字号</span><input type="range" data-reader-font-size min="15" max="26" step="1"></label>
+                            <label><span>行距</span><input type="range" data-reader-line-height min="1.45" max="2.2" step="0.05"></label>
+                            <label><span>字距</span><input type="range" data-reader-letter-spacing min="-0.02" max="0.12" step="0.01"></label>
+                            <label><span>版心宽度</span><input type="range" data-reader-width min="620" max="980" step="20"></label>
+                            <label><span>段落间距</span><input type="range" data-reader-paragraph-spacing min="0.4" max="1.6" step="0.05"></label>
+                            <label><span>页边距</span><input type="range" data-reader-page-margin min="20" max="96" step="4"></label>
+                            <label><span>字体</span><select data-reader-font-family><option value="system">系统默认</option><option value="serif">宋体 / 衬线</option><option value="sans-serif">黑体 / 无衬线</option><option value="kai">楷体</option></select></label>
+                            <p class="desktop-reader-hint" data-reader-font-status aria-live="polite">使用系统字体栈</p>
+                            <label><span>对齐</span><select data-reader-text-align><option value="start">自然对齐</option><option value="justify">两端对齐</option></select></label>
+                            <label class="desktop-reader-check"><input type="checkbox" data-reader-indent><span>段首缩进</span></label>
+                            </section>
+                            <section class="desktop-reader-settings-section" aria-labelledby="reader-appearance-title">
+                            <h3 id="reader-appearance-title">外观与翻页</h3>
+                            <label><span>主题</span><select data-reader-theme><option value="dark">深色</option><option value="paper">纸张</option><option value="sepia">护眼</option></select></label>
+                            <label><span>布局</span><select data-reader-layout-mode aria-describedby="reader-layout-hint"><option value="flow">连续阅读</option><option value="single-page">单页</option><option value="double-page">双页</option><option value="auto">自动</option></select></label>
+                            <p class="desktop-reader-hint" id="reader-layout-hint">自动布局会在空间不足时安全降为单页，阅读位置保持不变。</p>
+                            <label><span>翻页效果</span><select data-reader-page-transition><option value="fade">淡入</option><option value="slide">滑动</option><option value="none">无动画</option><option value="curl" disabled>仿真翻页（性能门禁未通过）</option></select></label>
+                            <label><span>减少动态效果</span><select data-reader-reduced-motion><option value="system">跟随系统</option><option value="reduce">始终减少</option><option value="allow">始终允许</option></select></label>
+                            </section>
+                        </div>
+                    </aside>
+
+                    <dialog class="desktop-reader-transfer-dialog" data-reader-transfer-dialog aria-labelledby="reader-transfer-title">
+                        <header class="desktop-reader-transfer-header">
+                            <div>
+                                <p class="desktop-section-kicker">Reader Transfer</p>
+                                <h2 id="reader-transfer-title">确认转交范围</h2>
+                            </div>
+                            <button class="desktop-reader-tool" type="button" data-reader-transfer-close>关闭</button>
+                        </header>
+                        <div class="desktop-reader-transfer-body">
+                            <label><span>范围</span><select data-reader-transfer-scope>
+                                <option value="selection">当前选区</option>
+                                <option value="scene">当前场景</option>
+                                <option value="chapter">当前章节</option>
+                                <option value="chapters">多个章节</option>
+                                <option value="document">全文</option>
+                            </select></label>
+                            <fieldset class="desktop-reader-transfer-chapters" data-reader-transfer-chapters hidden>
+                                <legend>选择章节</legend>
+                                <div data-reader-transfer-chapter-list></div>
+                            </fieldset>
+                            <div class="desktop-reader-transfer-summary">
+                                <strong data-reader-transfer-source>未选择来源</strong>
+                                <span data-reader-transfer-counts>0 字符</span>
+                                <p data-reader-transfer-risk>范围确认后将创建不可变本地快照。</p>
+                            </div>
+                            <p class="desktop-reader-hint" data-reader-transfer-status aria-live="polite">不会把正文放入路由、localStorage 或普通历史。</p>
+                        </div>
+                        <footer class="desktop-reader-transfer-actions" aria-label="转交目标">
+                            <button class="desktop-primary-action" type="button" data-reader-transfer-destination="writer">去写作</button>
+                            <button class="desktop-primary-action" type="button" data-reader-transfer-destination="compendium">生成资料卡</button>
+                            <button class="desktop-primary-action" type="button" data-reader-transfer-destination="workflow">去半自动工作流</button>
+                        </footer>
+                    </dialog>
+
+                    <button class="desktop-reader-scrim" type="button" data-reader-scrim aria-label="关闭阅读面板" tabindex="-1"></button>
+                    <button class="desktop-reader-touch-zone desktop-reader-touch-zone-prev" type="button" data-reader-touch-prev aria-label="触控上一页" hidden></button>
+                    <button class="desktop-reader-touch-zone desktop-reader-touch-zone-next" type="button" data-reader-touch-next aria-label="触控下一页" hidden></button>
                 </div>
             </section>
-

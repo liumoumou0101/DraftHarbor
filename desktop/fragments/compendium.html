@@ -1,4 +1,32 @@
             <section class="desktop-view desktop-compendium-view" data-view-panel="compendium">
+                <section class="desktop-reader-source-bar" data-reader-source-bar="compendium" hidden aria-live="polite">
+                    <div class="desktop-reader-source-copy">
+                        <span class="desktop-reader-source-mark" aria-hidden="true">阅</span>
+                        <div><strong data-reader-source-title>来自阅读器</strong><p data-reader-source-detail>正在读取来源快照…</p></div>
+                    </div>
+                    <div class="desktop-reader-source-actions">
+                        <button class="desktop-secondary-action" type="button" data-reader-source-return>返回阅读器</button>
+                        <button class="desktop-secondary-action" type="button" data-reader-source-dismiss>暂不处理</button>
+                        <button class="desktop-primary-action" type="button" data-reader-source-use>使用此快照</button>
+                    </div>
+                </section>
+                <dialog class="desktop-reader-compendium-dialog" data-reader-compendium-dialog aria-labelledby="reader-compendium-title">
+                    <header class="desktop-reader-compendium-header">
+                        <div><p class="desktop-section-kicker">Reader Extraction</p><h2 id="reader-compendium-title">从阅读快照提取资料卡</h2></div>
+                        <button class="desktop-icon-button" type="button" data-reader-compendium-close aria-label="关闭">×</button>
+                    </header>
+                    <div class="desktop-reader-compendium-body">
+                        <section class="desktop-reader-compendium-source"><strong data-reader-compendium-source>正在读取来源…</strong><p>长文本会分块提取并跨块合并；这里只显示候选，不会直接写入资料库。</p></section>
+                        <section class="desktop-reader-compendium-summary" data-reader-compendium-summary hidden></section>
+                        <div class="desktop-reader-compendium-cards" data-reader-compendium-cards></div>
+                        <label class="desktop-reader-compendium-confirm"><input type="checkbox" data-reader-compendium-confirm> 我已逐卡检查并确认保存所有“通过”或“修改后通过”的候选；放弃项不会写入。</label>
+                        <p class="desktop-reader-hint" data-reader-compendium-status aria-live="polite">尚未修改资料库磁盘。</p>
+                    </div>
+                    <footer class="desktop-reader-compendium-actions">
+                        <button class="desktop-secondary-action" type="button" data-reader-compendium-extract>开始提取</button>
+                        <button class="desktop-primary-action" type="button" data-reader-compendium-apply disabled>保存全部已审核卡片</button>
+                    </footer>
+                </dialog>
                 <aside class="desktop-compendium-sidebar">
                     <div>
                         <p class="desktop-section-kicker">Knowledge Base</p>

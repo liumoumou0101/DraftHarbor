@@ -19,7 +19,22 @@ const promptService = require('./services/prompt-service');
 const workshopService = require('./services/workshop-service');
 const projectMigrationService = require('./services/project-migration-service');
 const workflowService = require('./services/workflow-service');
+const workflowTransferService = require('./services/workflow-transfer-service');
+const workflowGuidedService = require('./services/workflow-guided-service');
+const workflowCreationGuidedService = require('./services/workflow-creation-guided-service');
+const workflowRewriteGuidedService = require('./services/workflow-rewrite-guided-service');
+const workflowVariantService = require('./services/workflow-variant-service');
+const workflowTemplateService = require('./services/workflow-template-service');
+const projectAssetQueryService = require('./services/project-asset-query-service');
+const readerLibraryService = require('./services/reader-library-service');
+const readerMigrationService = require('./services/reader-migration-service');
+const { createReaderTransferService } = require('./services/reader-transfer-service');
+const { createReaderWriterTransferService } = require('./services/reader-writer-transfer-service');
+const { createReaderCompendiumTransferService } = require('./services/reader-compendium-transfer-service'); const { createReaderCompendiumExtractorService } = require('./services/reader-compendium-extractor-service'); const { createReaderWorkflowTransferService } = require('./services/reader-workflow-transfer-service');
 const projectFileStore = require('./storage/project-file-store');
+const readerDocumentStore = require('./storage/reader-document-store');
+const readerStateStore = require('./storage/reader-state-store');
+const readerTransferStore = require('./storage/reader-transfer-store');
 const { projectDir, projectsRoot } = require('./storage/library-paths');
 const { legacySnapshotToProject, projectToLegacySnapshot, projectToLibrarySummary } = require('./services/project-snapshot-adapter');
 const { createImportExportController } = require('./controllers/import-export-controller');
@@ -34,8 +49,15 @@ const { createController: createProjectController } = require('./controllers/pro
 const { createController: createKnowledgeController } = require('./controllers/knowledge-controller');
 const { createController: createWorkshopController } = require('./controllers/workshop-controller');
 const { createController: createWorkflowController } = require('./controllers/workflow-controller');
+const { createController: createReaderController } = require('./controllers/reader-controller');
+const { createController: createReaderWriterController } = require('./controllers/reader-writer-controller');
 
 const HOST = '127.0.0.1';
+const readerTransferService = createReaderTransferService({
+  transferStore: readerTransferStore,
+  readerStore: readerDocumentStore,
+  projectStore: projectFileStore
+});
 function sanitizeFilename(value) {
   const safe = String(value || '')
     // Control characters are intentionally stripped from user-visible filenames.
@@ -711,12 +733,24 @@ const compendiumAgentRunnerService = compendiumAgentService && createCompendiumA
 const compendiumAgentQaService = compendiumAgentService && createCompendiumAgentQaService
   ? createCompendiumAgentQaService({ settingsService, compendiumAgentService })
   : null;
+const readerCompendiumTransferService = createReaderCompendiumTransferService({ readerTransferService, compendiumService, projectService, extractor: createReaderCompendiumExtractorService({ settingsService }), createBackup: createPreRestoreBackup });
 const handleKnowledgeApi = createKnowledgeController({
-  compendiumService, compendiumAgentService, compendiumAgentRunnerService, compendiumAgentQaService, promptService, readJsonPayload, jsonResponse,
+  compendiumService, compendiumAgentService, compendiumAgentRunnerService, compendiumAgentQaService, readerCompendiumTransferService, projectAssetQueryService, promptService, readJsonPayload, jsonResponse,
   readSettings, createPreRestoreBackup
 });
 const handleWorkshopApi = createWorkshopController({ workshopService, readJsonPayload, jsonResponse });
-const handleWorkflowApi = createWorkflowController({ workflowService, createPreRestoreBackup, readJsonPayload, jsonResponse });
+const readerWorkflowTransferService = createReaderWorkflowTransferService({ readerTransferService, projectService, workflowGuidedService, workflowRewriteGuidedService }); const handleWorkflowApi = createWorkflowController({ workflowService, workflowTransferService, workflowGuidedService, workflowCreationGuidedService, workflowRewriteGuidedService, workflowVariantService, workflowTemplateService, readerWorkflowTransferService, createPreRestoreBackup, readJsonPayload, jsonResponse });
+const handleReaderApi = createReaderController({
+  readerStore: readerDocumentStore,
+  readerStateStore,
+  readerLibraryService,
+  readerMigrationService,
+  readerTransferService,
+  readJsonPayload,
+  jsonResponse
+});
+const readerWriterTransferService = createReaderWriterTransferService({ readerTransferService, projectService, createBackup: createPreRestoreBackup });
+const handleReaderWriterApi = createReaderWriterController({ readerWriterTransferService, readJsonPayload, jsonResponse });
 
 async function handleAppApi(request, response, appRoot, dataRoot, parsedUrl, integrations = {}) {
   if (await handleBackupApi(request, response, dataRoot, parsedUrl)) return true;
@@ -728,6 +762,8 @@ async function handleAppApi(request, response, appRoot, dataRoot, parsedUrl, int
   if (await handleKnowledgeApi(request, response, appRoot, dataRoot, parsedUrl, integrations)) return true;
   if (await handleWorkshopApi(request, response, appRoot, dataRoot, parsedUrl, integrations)) return true;
   if (await handleWorkflowApi(request, response, appRoot, dataRoot, parsedUrl, integrations)) return true;
+  if (await handleReaderWriterApi(request, response, appRoot, dataRoot, parsedUrl, integrations)) return true;
+  if (await handleReaderApi(request, response, appRoot, dataRoot, parsedUrl, integrations)) return true;
 
   return false;
 }
