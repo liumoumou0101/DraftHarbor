@@ -8,6 +8,15 @@
 
 当前主要支持 Windows，提供 Electron 桌面应用、安装包和 Portable 版本。项目永久免费并以 GPL-3.0-or-later 开源。
 
+## 下载
+
+最新稳定版可从 [GitHub Releases](https://github.com/liumoumou0101/DraftHarbor/releases/latest) 下载：
+
+- `DraftHarbor-Setup-1.2.0.exe`：Windows 安装版。
+- `DraftHarbor-1.2.0.exe`：免安装便携版。
+
+`v1.2.0` 是稿湾第一阶段功能开发完成后的首个功能完整版本；后续主线以人工测试、缺陷修复和体验打磨为主。
+
 ## 项目起源
 
 稿湾最初源于对 [Writingway 2](https://github.com/aomukai/Writingway2) 的个人适配尝试。
@@ -44,6 +53,8 @@
 - Writingway 1 与旧 Writingway 2 JSON 数据导入
 - 本地备份、恢复副本、场景级恢复和替换前保护
 - 本地阅读器和语音朗读
+- 项目、TXT、Markdown 和粘贴文本的沉浸阅读、书签、搜索与稳定进度恢复
+- 将明确选择的阅读范围安全转交到写作、资料库或工作流；目标模块会先预览并要求确认
 
 旧格式兼容只保留数据解析能力，不包含旧网页应用运行时。
 
@@ -73,6 +84,7 @@ node tests/provider-stream.js
 npm run pack
 npm run packaged-smoke
 npm run dist
+npm run installed-smoke
 ```
 
 ## 数据与隐私

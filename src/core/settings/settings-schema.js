@@ -5,6 +5,14 @@
         root.DraftHarborSettingsSchema = factory();
     }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+    var CompendiumAgentPolicy = null;
+    try {
+        if (typeof require === 'function') {
+            CompendiumAgentPolicy = require('../knowledge/compendium-agent-policy');
+        }
+    } catch (e) {
+        CompendiumAgentPolicy = (typeof DraftHarborCompendiumAgentPolicy !== 'undefined') ? DraftHarborCompendiumAgentPolicy : null;
+    }
     const THEMES = Object.freeze(['morandi-ink', 'mist-library', 'ash-rose']);
     const DEFAULT_THEME = 'morandi-ink';
     const PROVIDER_MODES = Object.freeze(['local', 'api']);
@@ -172,6 +180,22 @@
         };
     }
 
+    function normalizeCompendiumAgentSettings(input = {}) {
+        if (!CompendiumAgentPolicy && typeof DraftHarborCompendiumAgentPolicy !== 'undefined') {
+            CompendiumAgentPolicy = DraftHarborCompendiumAgentPolicy;
+        }
+        if (CompendiumAgentPolicy && typeof CompendiumAgentPolicy.normalizeCompendiumAgentSettings === 'function') {
+            return CompendiumAgentPolicy.normalizeCompendiumAgentSettings(input);
+        }
+        return {
+            enabled: false,
+            providerProfileId: '',
+            model: '',
+            cardBodyAccess: 'read-only',
+            maxCardsPerRun: 30
+        };
+    }
+
     function normalizeGlobalPrompt(input = {}) {
         const source = input && typeof input === 'object' ? input : {};
         return {
@@ -193,6 +217,7 @@
             generationDefaults: normalizeGenerationDefaults(generationInput),
             localModelSettings: normalizeLocalModelSettings(localInput),
             appearance: normalizeAppearanceSettings(input.appearance || input.appearanceSettings || {}),
+            compendiumAgent: normalizeCompendiumAgentSettings(input.compendiumAgent),
             globalPrompt: normalizeGlobalPrompt(input.globalPrompt || input.globalPromptPrefix || {}),
             globalStyleGuardRules: Array.isArray(input.globalStyleGuardRules) ? input.globalStyleGuardRules : [],
             updatedAt: input.updatedAt || ''
@@ -304,10 +329,11 @@
         providerDefaultModel,
         normalizeProviderSettings,
         normalizeProviderProfile,
-        normalizeGlobalPrompt,
         normalizeGenerationDefaults,
         normalizeLocalModelSettings,
         normalizeAppearanceSettings,
+        normalizeCompendiumAgentSettings,
+        normalizeGlobalPrompt,
         normalizeDesktopSettings,
         providerRuntimeConfig,
         publicSettings,

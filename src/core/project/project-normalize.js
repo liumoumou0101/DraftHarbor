@@ -84,6 +84,17 @@
             tags: uniqueStrings(raw && raw.tags),
             povCharacter: cleanString(raw && (raw.povCharacter || raw.pov)),
             tense: cleanString(raw && raw.tense),
+            sourceRunId: cleanString(raw && raw.sourceRunId),
+            sourceArtifactId: cleanString(raw && raw.sourceArtifactId),
+            sourceRevisionId: cleanString(raw && raw.sourceRevisionId),
+            sourceReferences: cleanArray(raw && raw.sourceReferences).map((reference) => ({
+                kind: cleanString(reference && reference.kind),
+                envelopeId: cleanString(reference && reference.envelopeId),
+                applicationId: cleanString(reference && reference.applicationId),
+                mode: cleanString(reference && reference.mode),
+                locator: reference && reference.locator && typeof reference.locator === 'object' ? { ...reference.locator } : null,
+                appliedAt: normalizeTimestamp(reference && reference.appliedAt, timestamp)
+            })).filter((reference) => reference.kind && reference.envelopeId && reference.applicationId),
             createdAt: normalizeTimestamp(raw && (raw.createdAt || raw.created), timestamp),
             updatedAt: normalizeTimestamp(raw && (raw.updatedAt || raw.modified), timestamp)
         };
@@ -152,6 +163,14 @@
             promptHistory: cleanArray(raw.promptHistory),
             workshopSessions: cleanArray(raw.workshopSessions),
             workflowRuns: cleanArray(raw.workflowRuns)
+            ,readerApplications: cleanArray(raw.readerApplications).map((application) => ({
+                applicationId: cleanString(application && application.applicationId),
+                envelopeId: cleanString(application && application.envelopeId),
+                mode: cleanString(application && application.mode),
+                targetSceneIds: uniqueStrings(application && application.targetSceneIds),
+                backupId: cleanString(application && application.backupId),
+                appliedAt: normalizeTimestamp(application && application.appliedAt, timestamp)
+            })).filter((application) => application.applicationId && application.envelopeId)
             ,styleGuardRules: typeof window !== 'undefined' && window.DraftHarborAvoidanceRules
                 ? window.DraftHarborAvoidanceRules.normalizeRules(raw.styleGuardRules)
                 : cleanArray(raw.styleGuardRules)

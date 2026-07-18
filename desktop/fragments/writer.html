@@ -1,4 +1,15 @@
             <section class="desktop-view desktop-view-writer" data-view-panel="writer">
+                <section class="desktop-reader-source-bar" data-reader-source-bar="writer" hidden aria-live="polite">
+                    <div class="desktop-reader-source-copy">
+                        <span class="desktop-reader-source-mark" aria-hidden="true">阅</span>
+                        <div><strong data-reader-source-title>来自阅读器</strong><p data-reader-source-detail>正在读取来源快照…</p></div>
+                    </div>
+                    <div class="desktop-reader-source-actions">
+                        <button class="desktop-secondary-action" type="button" data-reader-source-return>返回阅读器</button>
+                        <button class="desktop-secondary-action" type="button" data-reader-source-dismiss>暂不处理</button>
+                        <button class="desktop-primary-action" type="button" data-reader-source-use>使用此快照</button>
+                    </div>
+                </section>
                 <div class="desktop-native-writer" data-native-writer>
                     <aside class="desktop-native-outline">
                         <div class="desktop-native-sidebar-resizer desktop-native-outline-resizer" data-native-resize-outline role="separator" aria-orientation="vertical" aria-label="调整结构栏宽度" tabindex="0"></div>
@@ -482,6 +493,36 @@
                             <div class="desktop-native-generation-history" data-native-generation-history></div>
                         </section>
                     </aside>
+                    <dialog class="desktop-reader-writer-dialog" data-reader-writer-dialog aria-labelledby="reader-writer-title">
+                        <header class="desktop-reader-writer-header">
+                            <div><p class="desktop-section-kicker">Reader Transfer</p><h2 id="reader-writer-title">将阅读快照接入写作</h2></div>
+                            <button class="desktop-icon-button" type="button" data-reader-writer-close aria-label="关闭">×</button>
+                        </header>
+                        <div class="desktop-reader-writer-body">
+                            <div class="desktop-reader-writer-source"><strong data-reader-writer-source>正在读取来源…</strong><p data-reader-writer-freshness></p></div>
+                            <div class="desktop-reader-writer-grid">
+                                <label><span>目标项目</span><select data-reader-writer-project></select></label>
+                                <label><span>处理方式</span><select data-reader-writer-intent>
+                                    <option value="locate">定位原场景</option>
+                                    <option value="append">追加到目标场景</option>
+                                    <option value="replace">覆盖目标场景</option>
+                                    <option value="new-scenes">按章节新建场景</option>
+                                    <option value="new-project">新建项目并导入</option>
+                                </select></label>
+                                <label data-reader-writer-chapter-field><span>目标章节</span><select data-reader-writer-chapter></select></label>
+                                <label data-reader-writer-scene-field><span>目标场景</span><select data-reader-writer-scene></select></label>
+                                <label data-reader-writer-title-field hidden><span>新项目名称</span><input data-reader-writer-project-title maxlength="120"></label>
+                            </div>
+                            <fieldset class="desktop-reader-writer-sections"><legend>导入章节/片段</legend><div data-reader-writer-sections></div></fieldset>
+                            <div class="desktop-reader-writer-preview"><strong>写前预览</strong><p data-reader-writer-location></p><ul data-reader-writer-conflicts></ul></div>
+                            <label class="desktop-reader-writer-confirm"><input type="checkbox" data-reader-writer-confirm> 我已核对目标、覆盖风险和来源范围，确认执行。</label>
+                            <p class="desktop-reader-hint" data-reader-writer-status aria-live="polite">尚未修改项目磁盘。</p>
+                        </div>
+                        <footer class="desktop-reader-writer-actions">
+                            <button class="desktop-secondary-action" type="button" data-reader-writer-refresh>重新预览</button>
+                            <button class="desktop-primary-action" type="button" data-reader-writer-apply disabled>确认并应用</button>
+                        </footer>
+                    </dialog>
                     <dialog class="desktop-native-prompt-dialog" data-native-prompt-dialog>
                         <pre data-native-prompt-preview></pre>
                         <button class="desktop-secondary-action" type="button" data-native-close-prompt>关闭</button>

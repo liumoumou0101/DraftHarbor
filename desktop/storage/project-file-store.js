@@ -20,19 +20,17 @@ async function readJson(filePath) {
 }
 
 function manifestFromProject(project) {
-  const {
-    chapters,
-    scenes,
-    compendium,
-    prompts,
-    workshopSessions,
-    workflowRuns,
-    ...manifest
-  } = project;
+  const manifest = { ...project };
+  delete manifest.chapters;
+  delete manifest.scenes;
+  delete manifest.compendium;
+  delete manifest.prompts;
+  delete manifest.workshopSessions;
+  delete manifest.workflowRuns;
   return {
     ...manifest,
-    chapterOrder: project.chapterOrder || (chapters || []).map((chapter) => chapter.id),
-    sceneOrder: project.sceneOrder || (scenes || []).map((scene) => scene.id)
+    chapterOrder: project.chapterOrder || (project.chapters || []).map((chapter) => chapter.id),
+    sceneOrder: project.sceneOrder || (project.scenes || []).map((scene) => scene.id)
   };
 }
 
@@ -44,6 +42,14 @@ async function ensureProjectDirs(projectPath) {
   await fs.mkdir(path.join(projectPath, 'workshop'), { recursive: true });
   await fs.mkdir(path.join(projectPath, 'workflows', 'runs'), { recursive: true });
   await fs.mkdir(path.join(projectPath, 'backups'), { recursive: true });
+}
+
+async function pruneOwnedProjectFiles(directory, allowedNames) {
+  let entries = [];
+  try { entries = await fs.readdir(directory, { withFileTypes: true }); } catch { return; }
+  for (const entry of entries) {
+    if (entry.isFile() && !allowedNames.has(entry.name)) await fs.rm(path.join(directory, entry.name), { force: true });
+  }
 }
 
 async function writeProject(projectPath, projectInput) {
@@ -61,10 +67,17 @@ async function writeProject(projectPath, projectInput) {
     await writeFileAtomic(paths.sceneMarkdownPath(projectPath, scene.id), content || '', 'utf8');
   }
 
+  await pruneOwnedProjectFiles(paths.chaptersDir(projectPath), new Set(project.chapters.map((chapter) => path.basename(paths.chapterPath(projectPath, chapter.id)))));
+  await pruneOwnedProjectFiles(paths.scenesDir(projectPath), new Set(project.scenes.flatMap((scene) => [
+    path.basename(paths.sceneMetaPath(projectPath, scene.id)),
+    path.basename(paths.sceneMarkdownPath(projectPath, scene.id))
+  ])));
+
   await writeJsonAtomic(path.join(projectPath, 'compendium', 'entries.json'), project.compendium || []);
   await writeJsonAtomic(path.join(projectPath, 'prompts', 'prompts.json'), project.prompts || []);
   await writeJsonAtomic(path.join(projectPath, 'workshop', 'sessions.json'), project.workshopSessions || []);
-  await writeJsonAtomic(path.join(projectPath, 'workflows', 'runs.json'), project.workflowRuns || []);
+  // Workflow files are owned by their dedicated Store. A project-wide save may
+  // carry an old in-memory workflowRuns snapshot, but must never overwrite it.
 
   return {
     project,

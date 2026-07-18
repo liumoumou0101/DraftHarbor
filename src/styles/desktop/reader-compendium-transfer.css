@@ -1,0 +1,24 @@
+@layer components {
+    .desktop-reader-compendium-dialog { width: min(980px, calc(100vw - 32px)); max-height: min(900px, calc(100vh - 32px)); padding: 0; overflow: hidden; border: 1px solid var(--desktop-line-strong); border-radius: 14px; background: var(--desktop-panel); color: var(--desktop-text); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.58); }
+    .desktop-reader-compendium-dialog::backdrop { background: rgba(3, 5, 8, 0.7); backdrop-filter: blur(3px); }
+    .desktop-reader-compendium-header, .desktop-reader-compendium-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 18px; }
+    .desktop-reader-compendium-header { border-bottom: 1px solid var(--desktop-line); }
+    .desktop-reader-compendium-header h2 { margin: 2px 0 0; font-size: 20px; }
+    .desktop-reader-compendium-body { display: grid; gap: 14px; max-height: min(700px, calc(100vh - 190px)); padding: 18px; overflow: auto; }
+    .desktop-reader-compendium-source, .desktop-reader-compendium-summary { padding: 13px 14px; border: 1px solid rgba(var(--desktop-accent-rgb), 0.25); border-radius: 10px; background: rgba(var(--desktop-accent-rgb), 0.07); }
+    .desktop-reader-compendium-source p { margin: 5px 0 0; color: var(--desktop-muted); font-size: 12px; }
+    .desktop-reader-compendium-cards { display: grid; gap: 12px; }
+    .desktop-reader-compendium-card { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--desktop-line); border-radius: 11px; background: rgba(255, 255, 255, 0.025); }
+    .desktop-reader-compendium-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .desktop-reader-compendium-card-heading h3 { margin: 0; font-size: 16px; }
+    .desktop-reader-compendium-card-heading p { margin: 4px 0 0; color: var(--desktop-muted); font-size: 12px; }
+    .desktop-reader-compendium-decision { min-width: 150px; min-height: 36px; border: 1px solid var(--desktop-line-strong); border-radius: 8px; background: var(--desktop-panel); color: var(--desktop-text); }
+    .desktop-reader-compendium-fields { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; }
+    .desktop-reader-compendium-fields label { display: grid; gap: 5px; color: var(--desktop-muted); font-size: 12px; }
+    .desktop-reader-compendium-fields .wide { grid-column: 1 / -1; }
+    .desktop-reader-compendium-fields input, .desktop-reader-compendium-fields select, .desktop-reader-compendium-fields textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--desktop-line-strong); border-radius: 8px; background: rgba(255, 255, 255, 0.04); color: var(--desktop-text); }
+    .desktop-reader-compendium-evidence { margin: 0; padding-left: 20px; color: var(--desktop-muted); font-size: 12px; }
+    .desktop-reader-compendium-confirm { display: flex; align-items: flex-start; gap: 9px; color: var(--desktop-muted); line-height: 1.45; }
+    .desktop-reader-compendium-actions { justify-content: flex-end; border-top: 1px solid var(--desktop-line); }
+    @media (max-width: 680px) { .desktop-reader-compendium-fields { grid-template-columns: 1fr; } .desktop-reader-compendium-fields .wide { grid-column: auto; } .desktop-reader-compendium-card-heading { display: grid; } }
+}

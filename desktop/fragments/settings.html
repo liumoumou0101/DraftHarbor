@@ -15,12 +15,16 @@
                             <span data-settings-cat-summary="provider">读取中</span>
                         </button>
                         <button type="button" class="desktop-settings-cat-item" data-settings-cat-target="profiles">
-                            <strong>模型档案</strong>
+                            <strong>模型配置</strong>
                             <span data-settings-cat-summary="profiles">读取中</span>
                         </button>
                         <button type="button" class="desktop-settings-cat-item" data-settings-cat-target="generation">
                             <strong>生成参数</strong>
                             <span data-settings-cat-summary="generation">读取中</span>
+                        </button>
+                        <button type="button" class="desktop-settings-cat-item" data-settings-cat-target="compendium-agent">
+                            <strong>资料库管家</strong>
+                            <span data-settings-cat-summary="compendium-agent">读取中</span>
                         </button>
                         <button type="button" class="desktop-settings-cat-item" data-settings-cat-target="appearance">
                             <strong>外观</strong>
@@ -86,11 +90,11 @@
                         <div class="desktop-settings-section-heading">
                             <div>
                                 <p class="desktop-section-kicker">Model Profiles</p>
-                                <h3>写作模型档案</h3>
+                                <h3>模型配置</h3>
                             </div>
-                            <span>可在写作页切换</span>
+                            <span>默认连接与可切换档案</span>
                         </div>
-                        <p class="desktop-settings-desc">为 DeepSeek、OpenAI 等云端模型保存独立档案。只有密钥和接口完整的档案才会出现在写作页。</p>
+                        <p class="desktop-settings-desc">默认写作连接与独立模型档案统一在此查看。资料库管家仍需使用自己的专用 API。</p>
                         <div class="desktop-settings-profiles-list" data-settings-profiles-list></div>
                         <div class="desktop-settings-profile-editor" data-settings-profile-editor hidden>
                             <div class="desktop-settings-profile-editor-heading">
@@ -164,6 +168,38 @@
                             <textarea data-settings-global-prompt rows="6" placeholder="会作为每次 AI 请求的第一条 system 指令，例如固定世界观、输出限制或其他跨模板规则。"></textarea>
                             <small>优先级高于正文、摘要、改写、讨论和工作流模板。关闭开关后不会发送。</small>
                         </label>
+                    </section>
+
+                    <section class="desktop-settings-section" data-settings-section="compendium-agent">
+                        <div class="desktop-settings-section-heading"><div><p class="desktop-section-kicker">Compendium Agent</p><h3>资料库管家模型</h3></div><span>只维护当前项目资料卡</span></div>
+                        <p class="desktop-settings-desc">直接在这里配置资料库管家的专用 API。它不会继承写作模型，且不能读取小说正文。</p>
+                        <label><span>已保存的专用配置</span><select data-settings-compendium-agent-profile></select></label>
+                        <div class="desktop-settings-profile-editor desktop-settings-agent-api-editor" data-settings-compendium-agent-api-editor>
+                            <div class="desktop-settings-profile-editor-heading">
+                                <strong>专用 API 配置</strong>
+                                <span>密钥只保存在本机；保存后自动启用并选中。</span>
+                            </div>
+                            <label>
+                                <span>Provider</span>
+                                <select data-settings-compendium-agent-api-provider>
+                                    <option value="deepseek">DeepSeek</option>
+                                    <option value="openai">OpenAI</option>
+                                    <option value="openrouter">OpenRouter</option>
+                                    <option value="nanogpt">NanoGPT</option>
+                                    <option value="openai-compatible">OpenAI-compatible</option>
+                                    <option value="custom">Custom</option>
+                                </select>
+                            </label>
+                            <label><span>Endpoint</span><input type="url" data-settings-compendium-agent-api-endpoint placeholder="https://.../chat/completions"></label>
+                            <label><span>模型</span><input type="text" data-settings-compendium-agent-api-model placeholder="例如 deepseek-v4-flash"></label>
+                            <label><span>API Key</span><input type="password" data-settings-compendium-agent-api-key placeholder="API Key"></label>
+                            <div class="desktop-settings-actions">
+                                <button class="desktop-primary-action" type="button" data-settings-compendium-agent-api-save>保存资料库管家配置</button>
+                                <button class="desktop-secondary-action" type="button" data-settings-compendium-agent-api-test>测试连接</button>
+                            </div>
+                            <p class="desktop-settings-desc" data-settings-compendium-agent-api-status aria-live="polite"></p>
+                        </div>
+                        <label><span>单次最多资料卡</span><input type="number" data-settings-compendium-agent-max-cards min="1" max="50" step="1"></label>
                     </section>
 
                     <section class="desktop-settings-section" data-settings-section="appearance">

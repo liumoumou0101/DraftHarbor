@@ -283,12 +283,46 @@ async function submitNativeName(page, value) {
         await page.fill('[data-settings-temperature]', '0.55');
         await page.fill('[data-settings-max-tokens]', '444');
         await page.check('[data-settings-global-prompt-enabled]');
-        await page.fill('[data-settings-global-prompt]', '全局前缀：始终遵守作品破限词设定。');
+        await page.fill('[data-settings-global-prompt]', '全局前缀：始终遵守作品设定。');
         await page.locator('[data-settings-form] button[type="submit"]').click();
         await page.waitForFunction(() => document.querySelector('[data-settings-status]').textContent.includes('设置已保存'));
         const globalPromptSettings = await fetch(`${servers.appUrl}/api/settings`).then((response) => response.json());
         assert.strictEqual(globalPromptSettings.settings.globalPrompt.enabled, true, 'global prompt should persist in desktop settings');
-        assert.strictEqual(globalPromptSettings.settings.globalPrompt.content, '全局前缀：始终遵守作品破限词设定。', 'global prompt content should persist in desktop settings');
+        assert.strictEqual(globalPromptSettings.settings.globalPrompt.content, '全局前缀：始终遵守作品设定。', 'global prompt content should persist in desktop settings');
+        await page.click('[data-settings-cat-target="profiles"]');
+        await page.waitForSelector('[data-settings-default-writing-profile]');
+        assert.ok((await page.locator('[data-settings-default-writing-profile]').textContent()).includes('默认写作连接'), 'model configuration should show the default writing connection');
+        await page.click('[data-settings-default-writing-profile] button');
+        await page.waitForFunction(() => document.querySelector('[data-settings-section="provider"]').hidden === false);
+        await page.click('[data-settings-cat-target="compendium-agent"]');
+        await page.selectOption('[data-settings-compendium-agent-api-provider]', 'deepseek');
+        await page.fill('[data-settings-compendium-agent-api-endpoint]', 'http://127.0.0.1:1/v1/chat/completions');
+        await page.fill('[data-settings-compendium-agent-api-model]', 'deepseek-v4-flash');
+        await page.fill('[data-settings-compendium-agent-api-key]', 'desktop-agent-key');
+        await page.click('[data-settings-compendium-agent-api-save]');
+        await page.waitForFunction(() => document.querySelector('[data-settings-status]').textContent.includes('专用 API 已保存并启用'));
+        const agentSettings = await fetch(`${servers.appUrl}/api/settings`).then((response) => response.json());
+        assert.strictEqual(agentSettings.settings.compendiumAgent.enabled, true, 'inline agent API setup should enable the agent');
+        assert.ok(agentSettings.settings.compendiumAgent.providerProfileId, 'inline agent API setup should select the saved profile');
+        const agentProfile = agentSettings.settings.providerProfiles.find((profile) => profile.id === agentSettings.settings.compendiumAgent.providerProfileId);
+        assert.ok(agentProfile && agentProfile.hasApiKey, 'inline agent API setup should save a usable local profile');
+        assert.strictEqual(agentProfile.model, 'deepseek-v4-flash', 'inline agent API setup should save its own model');
+        assert.strictEqual(await page.locator('.desktop-settings-global-actions').isHidden(), true, 'global settings actions should be hidden in the agent configuration section');
+        await page.click('[data-settings-compendium-agent-api-test]');
+        await page.waitForFunction(() => document.querySelector('[data-settings-compendium-agent-api-status]').textContent.includes('连接失败'));
+        await page.click('[data-view-target="compendium"]');
+        await page.waitForSelector('[data-compendium-agent-qa]:not([hidden])');
+        await page.click('[data-compendium-agent-qa]');
+        await page.waitForSelector('[data-compendium-agent-qa-modal][open]');
+        const qaModalWidth = await page.locator('[data-compendium-agent-qa-modal]').evaluate((element) => Math.round(element.getBoundingClientRect().width));
+        assert.ok(qaModalWidth <= 620, 'question dialog should use a focused reading width');
+        await page.click('[data-compendium-agent-qa-cancel]');
+        await page.waitForFunction(() => !document.querySelector('[data-compendium-agent-qa-modal]').open);
+        await page.click('[data-compendium-agent]');
+        await page.waitForSelector('[data-compendium-agent-modal][open]');
+        assert.strictEqual(await page.locator('[data-compendium-agent-result-actions]').isHidden(), true, 'selection actions should stay hidden before a result exists');
+        await page.click('[data-compendium-agent-cancel]');
+        await page.waitForFunction(() => !document.querySelector('[data-compendium-agent-modal]').open);
         await page.click('[data-view-target="writer"]');
         await page.click('[data-native-style-guard]');
         await page.waitForFunction(() => document.querySelector('[data-style-guard-modal]') && !document.querySelector('[data-style-guard-modal]').hidden);
@@ -300,12 +334,18 @@ async function submitNativeName(page, value) {
         assert.strictEqual(globalRulesSettings.settings.globalStyleGuardRules[0].text, '冷月像银盘', 'global avoidance rules should persist in desktop settings');
         await page.click('[data-view-target="compendium"]');
         await page.waitForSelector('[data-compendium-ai-rewrite]:not([disabled])');
+        const compendiumEditorScroll = await page.locator('.desktop-compendium-form-grid').evaluate((element) => ({
+            clientHeight: element.clientHeight,
+            scrollHeight: element.scrollHeight,
+            overflowY: getComputedStyle(element).overflowY
+        }));
+        assert.strictEqual(compendiumEditorScroll.overflowY, 'auto', 'compendium editor should keep an independent vertical scroll container');
+        assert.ok(compendiumEditorScroll.clientHeight > 0, 'compendium editor scroll container should have a constrained visible height');
         await page.click('[data-compendium-ai-rewrite]');
         await page.waitForFunction(() => document.querySelector('[data-compendium-rewrite-modal]') && !document.querySelector('[data-compendium-rewrite-modal]').hidden);
+        assert.deepStrictEqual(await page.locator('[data-compendium-rewrite-field]').evaluateAll((fields) => fields.map((field) => field.value).filter((value) => value.startsWith('characterProfile.'))), ['characterProfile.role', 'characterProfile.goal', 'characterProfile.motivation', 'characterProfile.conflict', 'characterProfile.voice', 'characterProfile.currentState', 'characterProfile.knowledge', 'characterProfile.relationshipNotes'], 'rewrite should expose the complete structured character profile');
         await page.evaluate(() => {
-            const fields = document.querySelector('[data-compendium-rewrite-fields]');
-            Array.from(fields.options).forEach((option) => { option.selected = option.value === 'summary'; });
-            fields.dispatchEvent(new Event('change', { bubbles: true }));
+            document.querySelectorAll('[data-compendium-rewrite-field]').forEach((field) => { field.checked = field.value === 'summary'; });
             window.__draftHarborGenerationStub = async (prompt, onToken) => onToken('{"summary":"AI refined navigator summary."}');
         });
         await page.click('[data-compendium-rewrite-generate]');
@@ -318,14 +358,19 @@ async function submitNativeName(page, value) {
         assert.strictEqual(rewrittenCompendiumBody.entries[0].body, 'Ada remembers every route through the storm belt.', 'AI rewrite should preserve unselected card fields');
         await page.click('[data-compendium-draw]');
         await page.waitForFunction(() => document.querySelector('[data-compendium-draw-modal]') && !document.querySelector('[data-compendium-draw-modal]').hidden);
+        assert.strictEqual(await page.locator('[data-compendium-draw-draft]').isHidden(), true, 'draw details should stay hidden until a draft is generated');
+        assert.strictEqual(await page.locator('[data-compendium-draw-save]').isDisabled(), true, 'draw save should stay disabled until a draft exists');
         await page.evaluate(() => {
-            window.__draftHarborGenerationStub = async (prompt, onToken) => onToken('{"cards":[{"type":"character","title":"Locked Harbor Guide","summary":"First draw.","tags":["draw"],"body":"A guide knows every tide route."}]}');
+            window.__draftHarborGenerationStub = async (prompt, onToken) => onToken('{"cards":[{"type":"character","title":"Locked Harbor Guide","summary":"First draw.","tags":["draw"],"body":"A guide knows every tide route.","characterProfile":{"role":"港口向导","goal":"守住潮汐航路","motivation":"偿还家族债务","conflict":"害怕暴风","voice":"克制简短","currentState":"躲避追捕","knowledge":"熟悉暗港","relationshipNotes":"信任船长"}}]}');
         });
         await page.click('[data-compendium-draw-generate]');
         await page.waitForFunction(() => document.querySelector('[data-compendium-draw-title]').value === 'Locked Harbor Guide');
+        assert.strictEqual(await page.locator('[data-compendium-draw-draft]').isVisible(), true, 'generated draft should reveal editable fields and reroll locks');
+        assert.strictEqual(await page.locator('[data-compendium-draw-character]').isVisible(), true, 'character draws should reveal structured character fields');
+        assert.strictEqual(await page.locator('[data-compendium-draw-character-goal]').inputValue(), '守住潮汐航路', 'character draw should fill the goal field');
         await page.check('[data-compendium-draw-lock="title"]');
         await page.evaluate(() => {
-            window.__draftHarborGenerationStub = async (prompt, onToken) => onToken('{"cards":[{"type":"character","title":"Different Title","summary":"Second draw.","tags":["rerolled"],"body":"A different body."}]}');
+            window.__draftHarborGenerationStub = async (prompt, onToken) => onToken('{"cards":[{"type":"character","title":"Different Title","summary":"Second draw.","tags":["rerolled"],"body":"A different body.","characterProfile":{"role":"密探","goal":"找回航图","motivation":"保护妹妹","conflict":"不信任同伴","voice":"冷静尖锐","currentState":"潜伏码头","knowledge":"掌握密道","relationshipNotes":"提防船长"}}]}');
         });
         await page.click('[data-compendium-draw-generate]');
         await page.waitForFunction(() => document.querySelector('[data-compendium-draw-summary]').value === 'Second draw.');
@@ -336,6 +381,7 @@ async function submitNativeName(page, value) {
         const drawnCompendiumBody = await drawnCompendiumResponse.json();
         assert.strictEqual(drawnCompendiumBody.entries[0].title, 'Locked Harbor Guide', 'confirmed draw should save the locked title');
         assert.strictEqual(drawnCompendiumBody.entries[0].summary, 'Second draw.', 'confirmed draw should save rerolled unlocked fields');
+        assert.strictEqual(drawnCompendiumBody.entries[0].characterProfile.goal, '找回航图', 'confirmed character draw should save structured character fields');
         await page.click('[data-view-target="writer"]');
         await page.evaluate(() => {
             const settings = document.querySelector('[data-native-model-settings]');

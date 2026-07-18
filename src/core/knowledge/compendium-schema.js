@@ -91,14 +91,22 @@
             .map((value) => {
                 const source = value && typeof value === 'object' ? value : {};
                 return {
+                    kind: cleanString(source.kind),
+                    envelopeId: cleanString(source.envelopeId),
+                    batchId: cleanString(source.batchId),
+                    candidateId: cleanString(source.candidateId),
+                    documentId: cleanString(source.documentId),
+                    revisionId: cleanString(source.revisionId),
+                    sectionId: cleanString(source.sectionId),
+                    chapterId: cleanString(source.chapterId),
                     sceneId: cleanString(source.sceneId),
                     excerpt: cleanString(source.excerpt),
                     createdAt: normalizeTimestamp(source.createdAt, nowIso())
                 };
             })
-            .filter((source) => source.sceneId || source.excerpt)
+            .filter((source) => source.sceneId || source.excerpt || source.envelopeId)
             .filter((source) => {
-                const key = `${source.sceneId}\n${source.excerpt}`;
+                const key = `${source.envelopeId}\n${source.batchId}\n${source.candidateId}\n${source.sceneId}\n${source.excerpt}`;
                 if (seen.has(key)) return false;
                 seen.add(key);
                 return true;

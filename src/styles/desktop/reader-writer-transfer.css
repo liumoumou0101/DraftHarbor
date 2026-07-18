@@ -1,0 +1,36 @@
+@layer components {
+    .desktop-reader-writer-dialog {
+        width: min(780px, calc(100vw - 32px));
+        max-height: min(820px, calc(100vh - 32px));
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid var(--desktop-line-strong);
+        border-radius: 14px;
+        background: var(--desktop-panel);
+        color: var(--desktop-text);
+        box-shadow: 0 30px 90px rgba(0, 0, 0, 0.58);
+    }
+    .desktop-reader-writer-dialog::backdrop { background: rgba(3, 5, 8, 0.7); backdrop-filter: blur(3px); }
+    .desktop-reader-writer-header,
+    .desktop-reader-writer-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 18px; }
+    .desktop-reader-writer-header { border-bottom: 1px solid var(--desktop-line); }
+    .desktop-reader-writer-header h2 { margin: 2px 0 0; font-size: 20px; }
+    .desktop-reader-writer-body { display: grid; gap: 16px; max-height: min(620px, calc(100vh - 190px)); padding: 18px; overflow: auto; }
+    .desktop-reader-writer-source,
+    .desktop-reader-writer-preview { padding: 13px 14px; border: 1px solid rgba(var(--desktop-accent-rgb), 0.25); border-radius: 10px; background: rgba(var(--desktop-accent-rgb), 0.07); }
+    .desktop-reader-writer-source p,
+    .desktop-reader-writer-preview p { margin: 5px 0 0; color: var(--desktop-muted); font-size: 12px; line-height: 1.5; }
+    .desktop-reader-writer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .desktop-reader-writer-grid label { display: grid; gap: 6px; color: var(--desktop-muted); font-size: 12px; }
+    .desktop-reader-writer-grid select,
+    .desktop-reader-writer-grid input { min-height: 38px; padding: 7px 10px; border: 1px solid var(--desktop-line-strong); border-radius: 8px; background: rgba(255, 255, 255, 0.045); color: var(--desktop-text); }
+    .desktop-reader-writer-sections { margin: 0; padding: 12px; border: 1px solid var(--desktop-line); border-radius: 10px; }
+    .desktop-reader-writer-sections > div { display: grid; gap: 8px; margin-top: 8px; }
+    .desktop-reader-writer-sections label,
+    .desktop-reader-writer-confirm { display: flex; align-items: flex-start; gap: 9px; color: var(--desktop-muted); line-height: 1.45; }
+    .desktop-reader-writer-preview ul { display: grid; gap: 5px; margin: 9px 0 0; padding-left: 20px; color: var(--desktop-muted); font-size: 12px; }
+    .desktop-reader-writer-actions { justify-content: flex-end; border-top: 1px solid var(--desktop-line); }
+    @media (max-width: 640px) {
+        .desktop-reader-writer-grid { grid-template-columns: minmax(0, 1fr); }
+    }
+}

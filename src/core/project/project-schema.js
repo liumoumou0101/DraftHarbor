@@ -50,6 +50,10 @@
             tags: Array.isArray(input.tags) ? [...input.tags] : [],
             povCharacter: String(input.povCharacter || input.pov || ''),
             tense: String(input.tense || ''),
+            sourceRunId: String(input.sourceRunId || ''),
+            sourceArtifactId: String(input.sourceArtifactId || ''),
+            sourceRevisionId: String(input.sourceRevisionId || ''),
+            sourceReferences: Array.isArray(input.sourceReferences) ? input.sourceReferences.map((item) => ({ ...item })) : [],
             createdAt: timestamp(input.createdAt || now),
             updatedAt: timestamp(input.updatedAt || input.modified || now)
         };
@@ -94,6 +98,7 @@
             promptHistory: [],
             workshopSessions: [],
             workflowRuns: []
+            ,readerApplications: []
             ,styleGuardRules: []
         };
     }

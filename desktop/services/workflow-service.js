@@ -1,17 +1,22 @@
 const { projectDir } = require('../storage/library-paths');
 const workflowStore = require('../storage/workflow-run-store');
+const workflowV2Store = require('../storage/workflow-run-store-v2');
 const projectStore = require('../storage/project-file-store');
+const workflowCompatibility = require('./workflow-compatibility-service');
 const WorkflowEngine = require('../../src/core/workflow/workflow-engine');
 const GenerationHistory = require('../../src/core/generation/generation-history');
 
 async function listRuns(dataRoot, projectId) {
   return {
     ok: true,
-    runs: await workflowStore.listWorkflowRuns(projectDir(dataRoot, projectId))
+    runs: await workflowCompatibility.listCompatibleRuns(projectDir(dataRoot, projectId))
   };
 }
 
 async function saveRun(dataRoot, projectId, run) {
+  if (await workflowV2Store.getWorkflowV2RunSummary(projectDir(dataRoot, projectId), run && run.id)) {
+    throw new Error('v2 workflow runs cannot be updated through the legacy workflow API');
+  }
   return {
     ok: true,
     run: await workflowStore.upsertWorkflowRun(projectDir(dataRoot, projectId), {
@@ -45,6 +50,9 @@ async function startNovelWorkflow(dataRoot, projectId, input = {}) {
 }
 
 async function getRunOrThrow(dataRoot, projectId, runId) {
+  if (await workflowV2Store.getWorkflowV2RunSummary(projectDir(dataRoot, projectId), runId)) {
+    throw new Error('v2 workflow runs are read-only until the v2 execution service is available');
+  }
   const runs = await workflowStore.listWorkflowRuns(projectDir(dataRoot, projectId));
   const run = runs.find((item) => item.id === runId);
   if (!run) throw new Error('Workflow run not found');
@@ -205,6 +213,9 @@ async function cancelRun(dataRoot, projectId, runId, reason = '') {
 }
 
 async function appendEvent(dataRoot, projectId, runId, event) {
+  if (await workflowV2Store.getWorkflowV2RunSummary(projectDir(dataRoot, projectId), runId)) {
+    throw new Error('v2 workflow runs cannot receive events through the legacy workflow API');
+  }
   return {
     ok: true,
     event: await workflowStore.appendWorkflowEvent(projectDir(dataRoot, projectId), runId, event)
@@ -214,7 +225,21 @@ async function appendEvent(dataRoot, projectId, runId, event) {
 async function listEvents(dataRoot, projectId, runId) {
   return {
     ok: true,
-    events: await workflowStore.listWorkflowEvents(projectDir(dataRoot, projectId), runId)
+    events: await workflowCompatibility.listCompatibleEvents(projectDir(dataRoot, projectId), runId)
+  };
+}
+
+async function copyLegacyRun(dataRoot, projectId, legacyRunId, input = {}) {
+  const copied = await workflowCompatibility.copyLegacyRunToV2(
+    projectDir(dataRoot, projectId),
+    projectId,
+    legacyRunId,
+    input
+  );
+  return {
+    ok: true,
+    run: workflowCompatibility.v2RunAdapter(copied.summary),
+    legacyRun: copied.legacyRun
   };
 }
 
@@ -229,5 +254,6 @@ module.exports = {
   applyArtifact,
   cancelRun,
   appendEvent,
-  listEvents
+  listEvents,
+  copyLegacyRun
 };

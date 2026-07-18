@@ -48,6 +48,13 @@ async function saveEntry(dataRoot, projectId, entryInput = {}) {
   };
 }
 
+async function saveEntriesBatch(dataRoot, projectId, entries = []) {
+  await ensureProject(dataRoot, projectId);
+  if (!Array.isArray(entries) || !entries.length) throw new Error('at least one compendium entry is required');
+  if (entries.length > 80) throw new Error('compendium batch exceeds the safety limit');
+  return { ok: true, entries: await compendiumStore.saveEntriesBatch(dataRoot, projectId, entries) };
+}
+
 async function deleteEntry(dataRoot, projectId, entryId) {
   await ensureProject(dataRoot, projectId);
   if (!entryId) throw new Error('entryId is required');
@@ -73,6 +80,7 @@ async function importEntries(dataRoot, projectId, entries = []) {
 module.exports = {
   listEntries,
   saveEntry,
+  saveEntriesBatch,
   deleteEntry,
   importEntries
 };

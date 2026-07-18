@@ -1,4 +1,32 @@
             <section class="desktop-view desktop-compendium-view" data-view-panel="compendium">
+                <section class="desktop-reader-source-bar" data-reader-source-bar="compendium" hidden aria-live="polite">
+                    <div class="desktop-reader-source-copy">
+                        <span class="desktop-reader-source-mark" aria-hidden="true">阅</span>
+                        <div><strong data-reader-source-title>来自阅读器</strong><p data-reader-source-detail>正在读取来源快照…</p></div>
+                    </div>
+                    <div class="desktop-reader-source-actions">
+                        <button class="desktop-secondary-action" type="button" data-reader-source-return>返回阅读器</button>
+                        <button class="desktop-secondary-action" type="button" data-reader-source-dismiss>暂不处理</button>
+                        <button class="desktop-primary-action" type="button" data-reader-source-use>使用此快照</button>
+                    </div>
+                </section>
+                <dialog class="desktop-reader-compendium-dialog" data-reader-compendium-dialog aria-labelledby="reader-compendium-title">
+                    <header class="desktop-reader-compendium-header">
+                        <div><p class="desktop-section-kicker">Reader Extraction</p><h2 id="reader-compendium-title">从阅读快照提取资料卡</h2></div>
+                        <button class="desktop-icon-button" type="button" data-reader-compendium-close aria-label="关闭">×</button>
+                    </header>
+                    <div class="desktop-reader-compendium-body">
+                        <section class="desktop-reader-compendium-source"><strong data-reader-compendium-source>正在读取来源…</strong><p>长文本会分块提取并跨块合并；这里只显示候选，不会直接写入资料库。</p></section>
+                        <section class="desktop-reader-compendium-summary" data-reader-compendium-summary hidden></section>
+                        <div class="desktop-reader-compendium-cards" data-reader-compendium-cards></div>
+                        <label class="desktop-reader-compendium-confirm"><input type="checkbox" data-reader-compendium-confirm> 我已逐卡检查并确认保存所有“通过”或“修改后通过”的候选；放弃项不会写入。</label>
+                        <p class="desktop-reader-hint" data-reader-compendium-status aria-live="polite">尚未修改资料库磁盘。</p>
+                    </div>
+                    <footer class="desktop-reader-compendium-actions">
+                        <button class="desktop-secondary-action" type="button" data-reader-compendium-extract>开始提取</button>
+                        <button class="desktop-primary-action" type="button" data-reader-compendium-apply disabled>保存全部已审核卡片</button>
+                    </footer>
+                </dialog>
                 <aside class="desktop-compendium-sidebar">
                     <div>
                         <p class="desktop-section-kicker">Knowledge Base</p>
@@ -18,6 +46,8 @@
                             <option value="note">笔记</option>
                         </select>
                         <button class="desktop-secondary-action" type="button" data-compendium-draw>抽卡</button>
+                        <button class="desktop-secondary-action" type="button" data-compendium-agent>资料体检</button>
+                        <button class="desktop-secondary-action" type="button" data-compendium-agent-qa>资料问答</button>
                         <button class="desktop-primary-action" type="button" data-compendium-new>新资料</button>
                     </div>
                     <div class="desktop-compendium-status" data-compendium-status>未打开项目</div>
@@ -156,3 +186,33 @@
                     </form>
                 </section>
             </section>
+
+            <dialog class="desktop-modal desktop-compendium-agent-modal" data-compendium-agent-modal>
+                <form method="dialog" class="desktop-modal-card desktop-compendium-agent-form" data-compendium-agent-form>
+                    <header class="desktop-modal-header">
+                        <div><p class="desktop-section-kicker">Compendium Agent</p><h2>资料库体检</h2></div>
+                        <button class="desktop-secondary-action" type="button" data-compendium-agent-cancel>关闭</button>
+                    </header>
+                    <p class="desktop-compendium-agent-intro">只分析当前项目资料卡，不读取小说正文。修改建议会先预览，确认后才写入并创建备份。</p>
+                    <label class="desktop-compendium-agent-scope"><span>检查范围</span><select data-compendium-agent-scope><option value="current">当前资料卡</option><option value="filtered">当前筛选结果</option><option value="all">全部资料（受单次上限限制）</option></select></label>
+                    <p class="desktop-compendium-status" data-compendium-agent-scope-note></p>
+                    <div class="desktop-compendium-agent-primary-actions"><button class="desktop-primary-action" type="button" data-compendium-agent-run>开始体检</button></div>
+                    <div class="desktop-compendium-agent-result-actions" data-compendium-agent-result-actions hidden><button class="desktop-secondary-action" type="button" data-compendium-agent-select-all>全选建议</button><button class="desktop-secondary-action" type="button" data-compendium-agent-select-none>全不选</button><button class="desktop-primary-action" type="button" data-compendium-agent-apply disabled>应用已勾选建议</button></div>
+                    <p class="desktop-compendium-status" data-compendium-agent-status aria-live="polite"></p>
+                    <div class="desktop-compendium-agent-results" data-compendium-agent-results></div>
+                </form>
+            </dialog>
+
+            <dialog class="desktop-modal desktop-compendium-agent-qa-modal" data-compendium-agent-qa-modal>
+                <form method="dialog" class="desktop-modal-card desktop-compendium-agent-form">
+                    <header class="desktop-modal-header">
+                        <div><p class="desktop-section-kicker">Compendium Agent</p><h2>资料库问答</h2></div>
+                        <button class="desktop-secondary-action" type="button" data-compendium-agent-qa-cancel>关闭</button>
+                    </header>
+                    <p class="desktop-compendium-agent-intro">先检索本地资料卡，再基于命中资料回答。不会读取小说正文，也不会改动资料。</p>
+                    <label class="desktop-compendium-agent-question"><span>你的问题</span><textarea data-compendium-agent-qa-question maxlength="1000" placeholder="例如：林岚与钟楼事件有什么关联？"></textarea></label>
+                    <div class="desktop-compendium-agent-primary-actions"><button class="desktop-primary-action" type="button" data-compendium-agent-qa-run>检索并回答</button><span>回答会标注引用的资料卡。</span></div>
+                    <p class="desktop-compendium-status" data-compendium-agent-qa-status aria-live="polite"></p>
+                    <article class="desktop-compendium-agent-results" data-compendium-agent-qa-result hidden></article>
+                </form>
+            </dialog>

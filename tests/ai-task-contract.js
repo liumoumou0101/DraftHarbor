@@ -2,7 +2,7 @@ const assert = require('assert');
 
 const AITaskContract = require('../src/core/generation/ai-task-contract');
 
-assert.deepStrictEqual(AITaskContract.DOMAINS, ['prose', 'compendium', 'summary', 'style-guard']);
+assert.deepStrictEqual(AITaskContract.DOMAINS, ['prose', 'compendium', 'summary', 'style-guard', 'workflow']);
 assert.ok(AITaskContract.ACTIONS.includes('rewrite'));
 assert.ok(AITaskContract.OUTPUT_CONTRACTS.includes('field-patch'));
 
@@ -60,6 +60,32 @@ const drawTask = AITaskContract.createAITask({
     outputContract: 'card-drafts'
 });
 assert.strictEqual(drawTask.action, 'draw');
+
+const workflowTask = AITaskContract.createAITask({
+    projectId: 'project-1',
+    domain: 'workflow',
+    action: 'generate',
+    target: { type: 'workflow-node', id: 'draft-node' },
+    scope: 'scene',
+    capabilityId: 'draft.batch',
+    capabilityVersion: 2,
+    outputArtifactType: 'draft-batch@3',
+    outputContract: 'text'
+});
+assert.strictEqual(workflowTask.capabilityId, 'draft.batch');
+assert.deepStrictEqual(workflowTask.outputArtifactType, { id: 'draft-batch', version: 3 });
+
+const invalidWorkflowTask = AITaskContract.validateAITask({
+    projectId: 'project-1',
+    domain: 'workflow',
+    action: 'generate',
+    target: { type: 'workflow-node', id: 'draft-node' },
+    scope: 'scene',
+    outputContract: 'text'
+});
+assert.strictEqual(invalidWorkflowTask.ok, false);
+assert.ok(invalidWorkflowTask.errors.includes('workflow capabilityId is required'));
+assert.ok(invalidWorkflowTask.errors.includes('workflow outputArtifactType is required'));
 
 const invalidDrawOutput = AITaskContract.validateAITask({
     projectId: 'project-1',
