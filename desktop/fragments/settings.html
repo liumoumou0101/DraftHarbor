@@ -159,6 +159,15 @@
                             <input type="checkbox" data-settings-provider-defaults>
                             <span>使用 provider 默认采样参数</span>
                         </label>
+                        <label class="desktop-settings-check">
+                            <input type="checkbox" data-settings-global-prompt-enabled>
+                            <span>启用全局写作前缀</span>
+                        </label>
+                        <label>
+                            <span>全局写作前缀</span>
+                            <textarea data-settings-global-prompt rows="6" placeholder="会作为每次 AI 请求的第一条 system 指令，例如固定世界观、输出限制或其他跨模板规则。"></textarea>
+                            <small>优先级高于正文、摘要、改写、讨论和工作流模板。关闭开关后不会发送。</small>
+                        </label>
                     </section>
 
                     <section class="desktop-settings-section" data-settings-section="compendium-agent">

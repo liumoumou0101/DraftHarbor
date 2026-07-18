@@ -158,6 +158,11 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
         globalThis.fetch = originalFetch;
     }
 
+    assert.deepStrictEqual(providerStream.prependGlobalPrompt([{ role: 'user', content: 'Draft.' }], 'Always use the project canon.'), [
+        { role: 'system', content: 'Always use the project canon.' },
+        { role: 'user', content: 'Draft.' }
+    ], 'global prompt should be inserted as the first system instruction');
+
     // Test 3: active reasoning/content chunks renew the idle timeout.
     globalThis.fetch = async (url, init) => {
         var encoder = new TextEncoder();

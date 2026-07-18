@@ -270,7 +270,7 @@
         project.scenes = Array.isArray(project.scenes) ? project.scenes : [];
         project.chapters = Array.isArray(project.chapters) ? project.chapters : [];
         if (project.chapters.length === 0) {
-            project.chapters.push({ id: 'chapter-1', title: 'Chapter 1', order: 0, createdAt: now, updatedAt: now });
+            project.chapters.push({ id: 'chapter-1', title: '第 1 章', order: 0, createdAt: now, updatedAt: now });
         }
         const chapterId = draft.chapterId || project.currentChapterId || (project.scenes[0] && project.scenes[0].chapterId) || project.chapters[0].id;
         let scene = project.scenes.find((item) => item.id === draft.sceneId);

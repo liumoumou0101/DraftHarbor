@@ -54,6 +54,14 @@ assert.deepStrictEqual(normalized.sceneOrder, ['s1', 's2', 's3']);
 assert.strictEqual(normalized.scenes[2].chapterId, 'c1');
 assert.strictEqual(normalized.scenes[1].content, '\u5979\u8d70\u8fdb\u96e8\u91cc\u3002\n\n\u8857\u706f\u4eae\u7740\u3002');
 
+const summaryMetadata = normalizeProject({
+    id: 'summary-metadata',
+    chapters: [{ id: 'chapter-summary', title: 'Chapter', summary: 'Old chapter summary', summaryUpdated: '2026-07-12T00:00:00.000Z', summarySource: 'ai', summaryStale: true }],
+    scenes: [{ id: 'scene-summary', chapterId: 'chapter-summary', title: 'Scene', summary: 'Old scene summary', summaryUpdated: '2026-07-12T00:00:00.000Z', summarySource: 'manual', summaryStale: true }]
+});
+assert.strictEqual(summaryMetadata.chapters[0].summaryStale, true, 'chapter summary stale status should survive normalization');
+assert.strictEqual(summaryMetadata.scenes[0].summarySource, 'manual', 'scene summary source should survive normalization');
+
 assert.strictEqual(countWords('Hello world'), 2);
 assert.strictEqual(countWords('\u5979\u8d70\u8fdb\u96e8\u91cc'), 5);
 assert.deepStrictEqual(projectStats(normalized), {

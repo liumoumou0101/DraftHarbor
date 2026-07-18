@@ -1,5 +1,7 @@
     function bindNativeEditor() {
         const elements = nativeEditorElements();
+        if (typeof bindNativeSidebarResize === 'function') bindNativeSidebarResize();
+        if (typeof bindNativeGlobalPrompt === 'function') bindNativeGlobalPrompt();
         if (elements.saveButton) {
             elements.saveButton.addEventListener('click', () => {
                 saveNativeScene();
@@ -53,7 +55,7 @@
         document.addEventListener('keydown', (event) => {
             if (event.key !== 'Escape') return;
             const elements = nativeEditorElements();
-            const hasOpenPopover = (elements.typography && !elements.typography.hidden) || (elements.specials && !elements.specials.hidden);
+            const hasOpenPopover = (elements.typography && !elements.typography.hidden) || (elements.specials && !elements.specials.hidden) || (elements.contextMenu && !elements.contextMenu.hidden);
             if (!hasOpenPopover) return;
             event.preventDefault();
             closeNativeWriterPopovers();
@@ -131,6 +133,9 @@
             tab.addEventListener('click', () => {
                 nativeEditorState.assistantPanel = tab.dataset.nativePanelTab || 'generate';
                 renderNativeEditor();
+                if (nativeEditorState.assistantPanel === 'metadata' && typeof loadSummaryPrompts === 'function') {
+                    loadSummaryPrompts();
+                }
             });
         });
         if (elements.search) {
@@ -153,7 +158,18 @@
             ['select', 'mouseup', 'keyup'].forEach((eventName) => {
                 elements.editor.addEventListener(eventName, renderNativeRewrite);
             });
+            elements.editor.addEventListener('contextmenu', (event) => {
+                if (!currentNativeScene()) return;
+                event.preventDefault();
+                openNativeEditorContextMenu(event.clientX, event.clientY);
+            });
         }
+        if (elements.summaryDialogClose) elements.summaryDialogClose.addEventListener('click', closeNativeSummaryDialog);
+        if (elements.summaryDialogCopy) elements.summaryDialogCopy.addEventListener('click', copyNativeSummaryDialog);
+        if (elements.summaryDialogEdit) elements.summaryDialogEdit.addEventListener('click', editNativeSummaryDialog);
+        if (elements.summaryDialog) elements.summaryDialog.addEventListener('click', (event) => {
+            if (event.target === elements.summaryDialog) closeNativeSummaryDialog();
+        });
         [elements.summary, elements.tags, elements.pov, elements.tense].forEach((field) => {
             if (!field) return;
             field.addEventListener('input', () => {
@@ -366,6 +382,12 @@
         }
         if (elements.generateSceneSummary) elements.generateSceneSummary.addEventListener('click', () => generateNativeSummary('scene'));
         if (elements.generateChapterSummary) elements.generateChapterSummary.addEventListener('click', () => generateNativeSummary('chapter'));
+        if (elements.summaryTemplate) {
+            elements.summaryTemplate.addEventListener('change', () => {
+                summaryPromptState.selectedId = elements.summaryTemplate.value || 'auto';
+                renderSummaryPromptTemplates();
+            });
+        }
         if (elements.newCharacter) {
             elements.newCharacter.addEventListener('click', async () => {
                 compendiumState.type = 'character';
@@ -412,6 +434,34 @@
                 }
             }
             if (target.dataset.nativeDiscardGeneration !== undefined) discardNativeGeneration();
+        });
+        document.addEventListener('click', (event) => {
+            const action = event.target && event.target.closest ? event.target.closest('[data-native-context-action]') : null;
+            if (action) {
+                const key = action.dataset.nativeContextAction;
+                closeNativeWriterPopovers();
+                if (key === 'rewrite-selection') {
+                    nativeEditorState.assistantPanel = 'rewrite';
+                    renderNativeEditor();
+                } else if (key === 'regenerate-selection') {
+                    startNativeRegenerateSelection();
+                } else if (key === 'send-to-workshop') {
+                    sendNativeSelectionToWorkshop();
+                } else if (key === 'extract-compendium') {
+                    openNativeCompendiumExtraction();
+                } else if (key === 'generate-summary') {
+                    generateNativeSummary('scene');
+                } else if (key === 'view-summary') {
+                    openNativeSummaryDialog('scene');
+                } else if (key === 'save') {
+                    saveNativeScene();
+                } else if (key === 'read-aloud') {
+                    readNativeSceneAloud();
+                }
+                return;
+            }
+            const menu = nativeEditorElements().contextMenu;
+            if (menu && !menu.hidden && !(event.target && event.target.closest && event.target.closest('[data-native-context-menu]'))) closeNativeWriterPopovers();
         });
         window.addEventListener('keydown', (event) => {
             if (!nativeEditorState.snapshot) return;

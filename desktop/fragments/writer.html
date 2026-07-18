@@ -12,6 +12,7 @@
                 </section>
                 <div class="desktop-native-writer" data-native-writer>
                     <aside class="desktop-native-outline">
+                        <div class="desktop-native-sidebar-resizer desktop-native-outline-resizer" data-native-resize-outline role="separator" aria-orientation="vertical" aria-label="调整结构栏宽度" tabindex="0"></div>
                         <div class="desktop-native-project">
                             <div class="desktop-native-project-heading">
                                 <div>
@@ -149,6 +150,20 @@
                                 <span class="desktop-native-paper-rule"></span>
                             </div>
                             <textarea data-native-scene-editor spellcheck="false" placeholder="从左侧选择场景，或从书架打开一个项目。"></textarea>
+                            <div class="desktop-native-context-menu" data-native-context-menu role="menu" aria-label="写作操作" hidden>
+                                <div data-native-context-selection-actions>
+                                    <button type="button" role="menuitem" data-native-context-action="rewrite-selection">润色选区</button>
+                                    <button type="button" role="menuitem" data-native-context-action="regenerate-selection">重生成选区</button>
+                                    <button type="button" role="menuitem" data-native-context-action="send-to-workshop">发送到讨论</button>
+                                    <button type="button" role="menuitem" data-native-context-action="extract-compendium">提取为资料</button>
+                                    <div class="desktop-native-context-menu-separator" role="separator"></div>
+                                </div>
+                                <button type="button" role="menuitem" data-native-context-action="generate-summary">生成场景摘要</button>
+                                <button type="button" role="menuitem" data-native-context-action="view-summary">查看场景摘要</button>
+                                <div class="desktop-native-context-menu-separator" role="separator"></div>
+                                <button type="button" role="menuitem" data-native-context-action="save">保存当前场景</button>
+                                <button type="button" role="menuitem" data-native-context-action="read-aloud">朗读当前场景</button>
+                            </div>
                             <div class="desktop-native-paper-footer" data-native-paper-footer aria-hidden="true">
                                 <span data-native-paper-stats>0 字</span>
                                 <span data-native-paper-position>未选择场景</span>
@@ -175,6 +190,7 @@
                         </div>
                     </main>
                     <aside class="desktop-native-assistant">
+                        <div class="desktop-native-sidebar-resizer desktop-native-assistant-resizer" data-native-resize-assistant role="separator" aria-orientation="vertical" aria-label="调整辅助栏宽度" tabindex="0"></div>
                         <div class="desktop-native-assistant-header">
                             <span class="desktop-native-assistant-header-label">Copilot</span>
                             <span class="desktop-native-assistant-header-desc">AI / 资料 / 元数据 / 历史</span>
@@ -241,6 +257,7 @@
                                 <div class="desktop-native-prompt-toolbar">
                                     <select data-native-prompt-template aria-label="正文提示词模板"></select>
                                     <button class="desktop-secondary-action" type="button" data-native-manage-prompts>管理</button>
+                                    <button class="desktop-secondary-action" type="button" data-native-manage-global-prompt>全局前缀</button>
                                 </div>
                                 <div class="desktop-native-generation-input">
                                     <textarea data-native-beat-input placeholder="输入这一段要发生什么，或写下续写方向"></textarea>
@@ -407,13 +424,18 @@
                         <section class="desktop-native-assistant-panel" data-native-panel="metadata">
                             <div class="desktop-native-metadata">
                                 <label>
-                                    <span>摘要</span>
+                                    <span data-native-summary-label>摘要</span>
+                                    <small data-native-summary-stale hidden>正文已变更，建议更新摘要</small>
                                     <textarea data-native-scene-summary placeholder="这一场发生了什么"></textarea>
                                 </label>
                                 <div class="desktop-native-generation-actions">
                                     <button class="desktop-secondary-action" type="button" data-native-generate-scene-summary>生成场景摘要</button>
                                     <button class="desktop-secondary-action" type="button" data-native-generate-chapter-summary>生成章节摘要</button>
                                 </div>
+                                <label>
+                                    <span>摘要模板</span>
+                                    <select data-native-summary-template aria-label="摘要模板"></select>
+                                </label>
                                 <label>
                                     <span>标签</span>
                                     <input type="text" data-native-scene-tags placeholder="逗号分隔">
@@ -504,6 +526,45 @@
                     <dialog class="desktop-native-prompt-dialog" data-native-prompt-dialog>
                         <pre data-native-prompt-preview></pre>
                         <button class="desktop-secondary-action" type="button" data-native-close-prompt>关闭</button>
+                    </dialog>
+                    <dialog class="desktop-native-prompt-dialog desktop-native-summary-dialog" data-native-summary-dialog>
+                        <header class="desktop-native-summary-dialog-header">
+                            <div>
+                                <p class="desktop-section-kicker">Scene Summary</p>
+                                <h2 data-native-summary-dialog-title>场景摘要</h2>
+                            </div>
+                            <span data-native-summary-dialog-meta>未保存</span>
+                        </header>
+                        <textarea data-native-summary-dialog-content readonly aria-label="摘要内容"></textarea>
+                        <div class="desktop-native-generation-actions">
+                            <button class="desktop-secondary-action" type="button" data-native-summary-dialog-copy>复制摘要</button>
+                            <button class="desktop-primary-action" type="button" data-native-summary-dialog-edit>前往编辑</button>
+                            <button class="desktop-secondary-action" type="button" data-native-summary-dialog-close>关闭</button>
+                        </div>
+                    </dialog>
+                    <dialog class="desktop-native-prompt-dialog desktop-native-global-prompt-dialog" data-native-global-prompt-dialog>
+                        <form data-native-global-prompt-form>
+                            <header class="desktop-native-summary-dialog-header">
+                                <div>
+                                    <p class="desktop-section-kicker">Global Prompt</p>
+                                    <h2>全局写作前缀</h2>
+                                </div>
+                                <span>所有 AI 写作请求</span>
+                            </header>
+                            <label class="desktop-native-writer-check">
+                                <input type="checkbox" data-native-global-prompt-enabled>
+                                <span>启用全局写作前缀</span>
+                            </label>
+                            <label class="desktop-native-global-prompt-field">
+                                <span>前缀内容</span>
+                                <textarea data-native-global-prompt-content rows="9" placeholder="作为所有 AI 请求的首条 system 指令，例如固定世界观、特殊词汇或跨模板规则。"></textarea>
+                            </label>
+                            <small data-native-global-prompt-status>关闭后不会发送；不会覆盖项目模板，而是优先于项目模板发送。</small>
+                            <div class="desktop-native-generation-actions">
+                                <button class="desktop-primary-action" type="submit">保存前缀</button>
+                                <button class="desktop-secondary-action" type="button" data-native-global-prompt-cancel>取消</button>
+                            </div>
+                        </form>
                     </dialog>
                     <dialog class="desktop-native-prompt-dialog" data-prompt-manager-dialog>
                         <form class="desktop-prompt-manager-shell" data-prompt-manager-form>

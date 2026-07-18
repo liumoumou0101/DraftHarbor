@@ -282,8 +282,13 @@ async function submitNativeName(page, value) {
         await page.click('[data-settings-cat-target="generation"]');
         await page.fill('[data-settings-temperature]', '0.55');
         await page.fill('[data-settings-max-tokens]', '444');
+        await page.check('[data-settings-global-prompt-enabled]');
+        await page.fill('[data-settings-global-prompt]', '全局前缀：始终遵守作品设定。');
         await page.locator('[data-settings-form] button[type="submit"]').click();
         await page.waitForFunction(() => document.querySelector('[data-settings-status]').textContent.includes('设置已保存'));
+        const globalPromptSettings = await fetch(`${servers.appUrl}/api/settings`).then((response) => response.json());
+        assert.strictEqual(globalPromptSettings.settings.globalPrompt.enabled, true, 'global prompt should persist in desktop settings');
+        assert.strictEqual(globalPromptSettings.settings.globalPrompt.content, '全局前缀：始终遵守作品设定。', 'global prompt content should persist in desktop settings');
         await page.click('[data-settings-cat-target="profiles"]');
         await page.waitForSelector('[data-settings-default-writing-profile]');
         assert.ok((await page.locator('[data-settings-default-writing-profile]').textContent()).includes('默认写作连接'), 'model configuration should show the default writing connection');

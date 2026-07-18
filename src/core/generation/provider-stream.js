@@ -36,6 +36,12 @@
             .join('\n');
     }
 
+    function prependGlobalPrompt(messages, value) {
+        const prefix = String(value || '').trim();
+        if (!prefix) return Array.isArray(messages) ? messages : [];
+        return [{ role: 'system', content: prefix }, ...(Array.isArray(messages) ? messages : [])];
+    }
+
     async function consumeEventStream(response, visit, onActivity) {
         if (!response.body || typeof response.body.getReader !== 'function') return false;
         const reader = response.body.getReader();
@@ -270,13 +276,16 @@
         const mode = activeSettings.mode || activeSettings.aiMode || 'local';
         try {
             if (mode === 'api') {
-                const chatMessages = messages || [{ role: 'user', content: String(prompt || '') }];
+                const chatMessages = prependGlobalPrompt(
+                    messages || [{ role: 'user', content: String(prompt || '') }],
+                    activeSettings.globalPrompt
+                );
                 const result = await requestChat(chatMessages, emit, activeSettings, watchdog.touch);
                 if (!contentCharacters) throw providerError('provider_empty_response', 'AI Provider 没有返回可用正文。');
                 return result;
             }
             const serialized = messages
-                ? messagesToChatML(messages)
+                ? messagesToChatML(prependGlobalPrompt(messages, activeSettings.globalPrompt))
                 : String(prompt && typeof prompt.asString === 'function' ? prompt.asString() : prompt || '');
             const result = await requestLocal(serialized, emit, activeSettings, watchdog.touch);
             if (!contentCharacters) throw providerError('provider_empty_response', '本地生成服务没有返回可用正文。');
@@ -288,5 +297,5 @@
         }
     }
 
-    return Object.freeze({ MODEL_CAPABILITIES, STREAM_TIMEOUT_DEFAULTS, getModelCapability, messagesToChatML, streamGeneration });
+    return Object.freeze({ MODEL_CAPABILITIES, STREAM_TIMEOUT_DEFAULTS, getModelCapability, messagesToChatML, prependGlobalPrompt, streamGeneration });
 });

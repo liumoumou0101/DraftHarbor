@@ -69,7 +69,7 @@
         return {
             id: scene.id,
             title: scene.title || '未命名场景',
-            summary: scene.summary || String(content || '').slice(0, 500)
+            summary: (!scene.summaryStale && scene.summary) || String(content || '').slice(0, 500)
         };
     }
 
@@ -83,6 +83,17 @@
             return re.test(source);
         }
         return source.toLowerCase().includes(raw.toLowerCase());
+    }
+
+    function sceneRelevanceScore(scene, index, currentIndex, currentChapterId, currentTags, currentPov, mentionText, mentionedSceneNames) {
+        let score = index / Math.max(1, currentIndex + 1);
+        if (currentChapterId && scene.chapterId === currentChapterId) score += 1;
+        const tags = Array.isArray(scene.tags) ? scene.tags.map((tag) => cleanString(tag).toLowerCase()).filter(Boolean) : [];
+        score += tags.filter((tag) => currentTags.includes(tag)).length * 3;
+        if (currentPov && cleanString(scene.povCharacter || scene.pov).toLowerCase() === currentPov) score += 2;
+        if (sceneMatchesMention(scene, mentionedSceneNames)) score += 8;
+        if (textMentionsTerm(mentionText, scene.title)) score += 4;
+        return score;
     }
 
     function getPolicy(entry) {
@@ -218,10 +229,22 @@
 
         const sceneMentionNames = mentionNames(beat, '#');
         const currentIndex = scenes.findIndex((scene) => scene.id === currentSceneId);
+        const currentTags = currentSceneObj && Array.isArray(currentSceneObj.tags)
+            ? currentSceneObj.tags.map((tag) => cleanString(tag).toLowerCase()).filter(Boolean)
+            : [];
+        const currentChapterId = cleanString(currentSceneObj && currentSceneObj.chapterId);
+        const currentPov = cleanString(currentSceneObj && (currentSceneObj.povCharacter || currentSceneObj.pov)).toLowerCase();
         const previousScenes = scenes
-            .filter((scene, index) => index < currentIndex && scene.summary)
-            .slice(-Number(selection.recentSceneLimit || 6));
-        for (const scene of previousScenes) {
+            .map((scene, index) => ({ scene, index }))
+            .filter(({ scene, index }) => index < currentIndex && scene.summary && !scene.summaryStale)
+            .sort((a, b) => {
+                const scoreDiff = sceneRelevanceScore(b.scene, b.index, currentIndex, currentChapterId, currentTags, currentPov, mentionText, sceneMentionNames)
+                    - sceneRelevanceScore(a.scene, a.index, currentIndex, currentChapterId, currentTags, currentPov, mentionText, sceneMentionNames);
+                return scoreDiff || b.index - a.index;
+            })
+            .slice(0, Number(selection.recentSceneLimit || 6))
+            .sort((a, b) => a.index - b.index);
+        for (const { scene } of previousScenes) {
             uniquePush(context.sceneSummaries, sceneSummary(scene, sceneContents[scene.id] || scene.content), (item) => item.id || item.title);
         }
         for (const scene of scenes) {

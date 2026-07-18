@@ -36,6 +36,30 @@ assert.ok(context.compendiumEntries.some((entry) => entry.id === 'city'), 'alway
 assert.ok(context.sceneSummaries.some((scene) => scene.id === 's1'), 'previous scene summary should be included');
 assert.ok(context.sceneSummaries.some((scene) => scene.id === 's3'), 'scene mention should include referenced scene');
 
+const staleSummaryContext = ContextResolver.resolveContext({
+  project: {
+    ...project,
+    scenes: project.scenes.map((scene) => scene.id === 's1' ? { ...scene, summaryStale: true } : scene),
+    sceneContents: { ...project.sceneContents, s1: 'Fresh replacement content.' }
+  },
+  selection: { currentSceneId: 's2', maxChars: 1000 }
+});
+assert.ok(!staleSummaryContext.sceneSummaries.some((scene) => scene.id === 's1'), 'stale previous summaries should not be injected automatically');
+
+const relevantSceneContext = ContextResolver.resolveContext({
+  project: {
+    id: 'relevance-project',
+    scenes: [
+      { id: 'old-relevant', chapterId: 'c1', title: 'Signal Room', summary: 'The signal machine fails.', tags: ['signal'], povCharacter: 'Mira' },
+      { id: 'recent-unrelated', chapterId: 'c1', title: 'Market', summary: 'A quiet market visit.', tags: ['market'], povCharacter: 'Ada' },
+      { id: 'current', chapterId: 'c1', title: 'Tower', summary: '', tags: ['signal'], povCharacter: 'Mira' }
+    ],
+    sceneContents: { current: 'Mira returns to the signal room.' }
+  },
+  selection: { currentSceneId: 'current', recentSceneLimit: 1, maxChars: 1000 }
+});
+assert.strictEqual(relevantSceneContext.sceneSummaries[0].id, 'old-relevant', 'shared tags and POV should outrank an unrelated recent summary');
+
 const template = PromptTemplateSchema.createPromptTemplate({
   category: 'prose',
   title: 'Atmospheric prose',

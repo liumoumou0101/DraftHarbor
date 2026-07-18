@@ -1644,6 +1644,94 @@
     color: var(--desktop-text);
 }
 
+.desktop-native-context-menu {
+    position: fixed;
+    z-index: 80;
+    display: grid;
+    min-width: 188px;
+    padding: 6px;
+    border: 1px solid var(--desktop-line-strong);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--desktop-panel) 98%, transparent);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+}
+
+.desktop-native-context-menu[hidden] {
+    display: none;
+}
+
+.desktop-native-context-menu > div:not([hidden]) {
+    display: grid;
+}
+
+.desktop-native-context-menu button {
+    min-height: 32px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--desktop-text);
+    text-align: left;
+    cursor: pointer;
+}
+
+.desktop-native-context-menu button:hover:not(:disabled),
+.desktop-native-context-menu button:focus-visible {
+    background: rgba(var(--desktop-accent-rgb), 0.16);
+    outline: none;
+}
+
+.desktop-native-context-menu button:disabled {
+    color: var(--desktop-muted);
+    cursor: not-allowed;
+}
+
+.desktop-native-context-menu-separator {
+    height: 1px;
+    margin: 5px 4px;
+    background: var(--desktop-line);
+}
+
+.desktop-native-summary-dialog {
+    width: min(700px, calc(100vw - 48px));
+}
+
+.desktop-native-summary-dialog-header {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+}
+
+.desktop-native-summary-dialog-header h2,
+.desktop-native-summary-dialog-header p {
+    margin: 0;
+}
+
+.desktop-native-summary-dialog-header h2 {
+    margin-top: 4px;
+    font-size: 19px;
+}
+
+.desktop-native-summary-dialog-header span {
+    color: var(--desktop-muted);
+    font-size: 12px;
+}
+
+.desktop-native-summary-dialog textarea {
+    width: 100%;
+    min-height: 240px;
+    resize: vertical;
+    padding: 14px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+    color: var(--desktop-text);
+    font: inherit;
+    line-height: 1.75;
+}
+
 .desktop-native-generation-history {
     min-height: 84px;
     max-height: 180px;

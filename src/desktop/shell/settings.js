@@ -10,6 +10,8 @@
             temperature: document.querySelector('[data-settings-temperature]'),
             maxTokens: document.querySelector('[data-settings-max-tokens]'),
             providerDefaults: document.querySelector('[data-settings-provider-defaults]'),
+            globalPromptEnabled: document.querySelector('[data-settings-global-prompt-enabled]'),
+            globalPrompt: document.querySelector('[data-settings-global-prompt]'),
             compendiumAgentEnabled: document.querySelector('[data-settings-compendium-agent-enabled]'),
             compendiumAgentProfile: document.querySelector('[data-settings-compendium-agent-profile]'),
             compendiumAgentMaxCards: document.querySelector('[data-settings-compendium-agent-max-cards]'),
@@ -118,6 +120,8 @@
         if (elements.temperature) elements.temperature.value = defaults.temperature === undefined ? 0.8 : defaults.temperature;
         if (elements.maxTokens) elements.maxTokens.value = defaults.maxTokens || 300;
         if (elements.providerDefaults) elements.providerDefaults.checked = !!defaults.useProviderDefaults;
+        if (elements.globalPromptEnabled) elements.globalPromptEnabled.checked = !!(settings.globalPrompt && settings.globalPrompt.enabled);
+        if (elements.globalPrompt) elements.globalPrompt.value = settings.globalPrompt && settings.globalPrompt.content || '';
         if (elements.compendiumAgentMaxCards) elements.compendiumAgentMaxCards.value = agent.maxCardsPerRun || 30;
         if (elements.compendiumAgentProfile) {
             elements.compendiumAgentProfile.replaceChildren();
@@ -132,7 +136,7 @@
         });
 
         const isBusy = settingsState.loading || settingsState.saving;
-        [elements.mode, elements.provider, elements.endpoint, elements.model, elements.apiKey, elements.temperature, elements.maxTokens, elements.providerDefaults, elements.compendiumAgentEnabled, elements.compendiumAgentProfile, elements.compendiumAgentMaxCards, elements.compendiumAgentApiProvider, elements.compendiumAgentApiEndpoint, elements.compendiumAgentApiModel, elements.compendiumAgentApiKey, elements.compendiumAgentApiSave, elements.compendiumAgentApiTest, elements.test, elements.refresh, elements.theme, elements.themeSave].forEach((field) => {
+        [elements.mode, elements.provider, elements.endpoint, elements.model, elements.apiKey, elements.temperature, elements.maxTokens, elements.providerDefaults, elements.globalPromptEnabled, elements.globalPrompt, elements.compendiumAgentEnabled, elements.compendiumAgentProfile, elements.compendiumAgentMaxCards, elements.compendiumAgentApiProvider, elements.compendiumAgentApiEndpoint, elements.compendiumAgentApiModel, elements.compendiumAgentApiKey, elements.compendiumAgentApiSave, elements.compendiumAgentApiTest, elements.test, elements.refresh, elements.theme, elements.themeSave].forEach((field) => {
             if (field) field.disabled = isBusy || (field === elements.apiKey && provider.mode === 'local');
         });
         renderCompendiumAgentApiEditor();
@@ -627,6 +631,10 @@
                 maxTokens: elements.maxTokens ? Number(elements.maxTokens.value) : 2000,
                 useProviderDefaults: !!(elements.providerDefaults && elements.providerDefaults.checked)
             },
+            globalPrompt: {
+                enabled: !!(elements.globalPromptEnabled && elements.globalPromptEnabled.checked),
+                content: elements.globalPrompt ? elements.globalPrompt.value.trim() : ''
+            },
             compendiumAgent: {
                 enabled: elements.compendiumAgentEnabled ? !!elements.compendiumAgentEnabled.checked : !!(current.compendiumAgent && current.compendiumAgent.enabled),
                 providerProfileId: elements.compendiumAgentProfile ? elements.compendiumAgentProfile.value : '',
@@ -768,7 +776,8 @@
             const response = await fetch('/api/settings/test-provider', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ settings: collectSettingsForm(), live: false })
+                // 密钥不会回显到页面；仅检查已保存配置，避免空输入覆盖有效密钥。
+                body: JSON.stringify({ live: false })
             });
             const result = await response.json().catch(() => ({}));
             if (!response.ok) {

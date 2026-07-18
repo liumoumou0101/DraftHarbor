@@ -63,7 +63,7 @@ function legacySnapshot(id, name, text) {
 
     const markdown = await migrationService.exportProjectDocument(dataRoot, 'migration-source', 'markdown');
     assert.ok(markdown.filename.endsWith('.md'), 'markdown export should use .md filename');
-    assert.ok(markdown.text.includes('# Migration Source') || markdown.text.includes('# Chapter 1'), 'markdown should include headings');
+    assert.ok(markdown.text.includes('# Migration Source') || markdown.text.includes('# 第 1 章'), 'markdown should include headings');
     assert.ok(markdown.text.includes('First line.'), 'markdown should include scene text');
 
     const text = await migrationService.exportProjectDocument(dataRoot, 'migration-source', 'text');
