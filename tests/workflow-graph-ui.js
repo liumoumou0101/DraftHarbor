@@ -125,7 +125,8 @@ async function assertGraph(page, expected) {
     assert.strictEqual(await page.locator('[data-workflow-graph-run-checkpoint]').isEnabled(), true);
     await page.click('[data-workflow-graph-restart-node]');
     await page.waitForFunction(() => document.querySelector('[data-workflow-status]')?.textContent.includes('下游已重置'));
-    assert.ok((await page.locator('[data-workflow-events]').innerText()).includes('guided_nodes_invalidated'));
+    await page.waitForFunction(() => document.querySelector('[data-workflow-events]')?.textContent.includes('guided_nodes_invalidated'));
+    assert.ok((await page.locator('[data-workflow-events]').textContent()).includes('guided_nodes_invalidated'));
 
     await page.click('[data-workflow-view-guided]');
     assert.strictEqual(await page.locator('[data-workflow-steps]').isVisible(), true);

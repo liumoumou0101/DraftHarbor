@@ -12,10 +12,10 @@
 
 最新稳定版可从 [GitHub Releases](https://github.com/liumoumou0101/DraftHarbor/releases/latest) 下载：
 
-- `DraftHarbor-Setup-1.2.0.exe`：Windows 安装版。
-- `DraftHarbor-1.2.0.exe`：免安装便携版。
+- `DraftHarbor Setup 1.2.1.exe`：Windows 安装版。
+- `DraftHarbor 1.2.1.exe`：免安装便携版。
 
-`v1.2.0` 是稿湾第一阶段功能开发完成后的首个功能完整版本；后续主线以人工测试、缺陷修复和体验打磨为主。
+`v1.2.1` 在功能完整的 v1.2.0 基础上合入写作摘要、全局写作前缀、侧栏交互和中文默认标题等增强；后续主线以人工测试、缺陷修复和体验打磨为主。
 
 ## 项目起源
 
