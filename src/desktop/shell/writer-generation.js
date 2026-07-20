@@ -96,7 +96,7 @@
         if (elements.reasoning) {
             var effectiveThinking = writerModelOverride.thinking;
             if (writerModelOverride.model === 'inherit') {
-                var globalConfig = runtimeProviderConfig();
+                const globalConfig = runtimeProviderConfig();
                 effectiveThinking = !!(globalConfig && globalConfig.enableThinking);
             }
             elements.reasoning.hidden = !(effectiveThinking && generation.inProgress) && !generation.reasoning;
@@ -107,7 +107,7 @@
             } else if (generation.inProgress && writerModelOverride.thinking) {
                 elements.reasoningText.textContent = '等待思考流...';
             } else if (generation.inProgress && writerModelOverride.model === 'inherit') {
-                var globalConfig = runtimeProviderConfig();
+                const globalConfig = runtimeProviderConfig();
                 if (globalConfig && globalConfig.enableThinking) {
                     elements.reasoningText.textContent = '等待思考流...';
                 } else {

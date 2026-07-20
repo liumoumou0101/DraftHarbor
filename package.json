@@ -37,12 +37,13 @@
     "reader-compendium-real-provider-acceptance": "node tests/reader-compendium-real-provider-acceptance.js",
         "reader-layout-audit": "node tests/reader-layout-audit.js",
         "reader-realistic-visual-audit": "node tests/reader-realistic-visual-audit.js",
+        "lint": "eslint . --max-warnings 0",
         "unit": "npm run core-test && node tests/context-prompt-core.js && node tests/avoidance-rules.js && node tests/protocol-handler.js && node tests/release-config.js",
     "backup-test": "node tests/backup-api.js",
     "workflow-release-acceptance": "node tests/workflow-release-acceptance.js",
     "workflow-provider-canary": "node tests/workflow-real-provider-canary.js",
         "ui": "npm run desktop-mainline-test",
-        "test": "npm run smoke && npm run unit && npm run desktop-mainline-test"
+        "test": "npm run lint && npm run smoke && npm run unit && npm run desktop-mainline-test"
     },
     "main": "desktop/main.js",
     "build": {

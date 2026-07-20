@@ -48,10 +48,10 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
         assert.ok(body.stream, 'request body should have stream: true');
         assert.strictEqual(body.model, 'deepseek-v4-pro', 'request body should use deepseek-v4-pro model');
         assert.strictEqual(body.thinking.type, 'enabled', 'request body should have thinking enabled');
-        assert.ok(!body.hasOwnProperty('temperature'), 'thinking mode should not send temperature');
-        assert.ok(!body.hasOwnProperty('top_p'), 'thinking mode should not send top_p');
-        assert.ok(!body.hasOwnProperty('presence_penalty'), 'thinking mode should not send presence_penalty');
-        assert.ok(!body.hasOwnProperty('frequency_penalty'), 'thinking mode should not send frequency_penalty');
+        assert.ok(!Object.prototype.hasOwnProperty.call(body, 'temperature'), 'thinking mode should not send temperature');
+        assert.ok(!Object.prototype.hasOwnProperty.call(body, 'top_p'), 'thinking mode should not send top_p');
+        assert.ok(!Object.prototype.hasOwnProperty.call(body, 'presence_penalty'), 'thinking mode should not send presence_penalty');
+        assert.ok(!Object.prototype.hasOwnProperty.call(body, 'frequency_penalty'), 'thinking mode should not send frequency_penalty');
 
         var encoder = new TextEncoder();
         var chunkIndex = 0;
@@ -121,8 +121,8 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
     globalThis.fetch = async (url, init) => {
         var body = JSON.parse(init.body);
         assert.strictEqual(body.model, 'gpt-4o-mini', 'non-deepseek should use the specified model');
-        assert.ok(!body.hasOwnProperty('thinking'), 'non-deepseek provider should NOT send thinking field');
-        assert.ok(!body.hasOwnProperty('reasoning'), 'non-deepseek provider should NOT send reasoning field');
+        assert.ok(!Object.prototype.hasOwnProperty.call(body, 'thinking'), 'non-deepseek provider should NOT send thinking field');
+        assert.ok(!Object.prototype.hasOwnProperty.call(body, 'reasoning'), 'non-deepseek provider should NOT send reasoning field');
         assert.strictEqual(body.temperature, 0.8, 'non-deepseek should send temperature');
 
         var encoder = new TextEncoder();
@@ -164,7 +164,7 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
     ], 'global prompt should be inserted as the first system instruction');
 
     // Test 3: active reasoning/content chunks renew the idle timeout.
-    globalThis.fetch = async (url, init) => {
+    globalThis.fetch = async (_url, _init) => {
         var encoder = new TextEncoder();
         var index = 0;
         var chunks = ['思考一', '思考二', '正文一', '正文二'];

@@ -1,5 +1,4 @@
 const crypto = require('crypto');
-const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const projectService = require('./services/project-service');
@@ -52,7 +51,6 @@ const { createController: createWorkflowController } = require('./controllers/wo
 const { createController: createReaderController } = require('./controllers/reader-controller');
 const { createController: createReaderWriterController } = require('./controllers/reader-writer-controller');
 
-const HOST = '127.0.0.1';
 const readerTransferService = createReaderTransferService({
   transferStore: readerTransferStore,
   readerStore: readerDocumentStore,
@@ -382,59 +380,6 @@ async function listDirectoryProjectSummaries(dataRoot) {
     }
   }
   return summaries;
-}
-
-function createProjectSnapshot(metadata) {
-  const now = new Date().toISOString();
-  const id = crypto.randomUUID();
-  const chapterId = `${id}-chapter-1`;
-  const sceneId = `${id}-scene-1`;
-  const project = {
-    id,
-    name: metadata.name,
-    description: metadata.description || '',
-    status: metadata.status || '',
-    tags: metadata.tags || [],
-    coverImage: metadata.coverImage || '',
-    created: now,
-    modified: now,
-    updatedAt: Date.now()
-  };
-
-  return {
-    version: '2.1-desktop',
-    exportedAt: now,
-    filesystemSavedAt: now,
-    filesystemSaveVersion: 1,
-    project,
-    chapters: [{
-      id: chapterId,
-      projectId: id,
-      title: '第一章',
-      order: 0,
-      created: now,
-      modified: now,
-      updatedAt: Date.now()
-    }],
-    scenes: [{
-      id: sceneId,
-      projectId: id,
-      chapterId,
-      title: '第一场',
-      order: 0,
-      created: now,
-      modified: now,
-      updatedAt: Date.now()
-    }],
-    sceneContents: {
-      [sceneId]: ''
-    },
-    compendium: [],
-    prompts: [],
-    codex: [],
-    promptHistory: [],
-    workshopSessions: []
-  };
 }
 
 async function uniqueFilePath(dir, filename) {

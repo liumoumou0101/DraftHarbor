@@ -1,4 +1,3 @@
-    /* global parseCommaList, currentProjectId, loadCompendium, renderCompendium, activateReaderTransferTarget */
     const readerCompendiumTransferState = { transfer: null, batch: null, busy: false };
 
     function readerCompendiumTransferElements() {

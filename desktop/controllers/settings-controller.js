@@ -1,9 +1,6 @@
-const fsp = require('fs/promises');
-const path = require('path');
-
 function createController(dependencies) {
-  const { settingsService, readSettings, writeSettings, projectSaveRoot, backupRoot, readJsonPayload, jsonResponse } = dependencies;
-  return async function handle(request, response, appRoot, dataRoot, parsedUrl, integrations = {}) {
+  const { settingsService, readSettings, projectSaveRoot, backupRoot, readJsonPayload, jsonResponse } = dependencies;
+  return async function handle(request, response, appRoot, dataRoot, parsedUrl, _integrations = {}) {
 
   if (request.method === 'GET' && parsedUrl.pathname === '/api/settings') {
     const settings = await readSettings(dataRoot);

@@ -1,6 +1,4 @@
 const fs = require('fs/promises');
-const path = require('path');
-
 const { createPlaceholderWorkflowRun, createWorkflowEvent } = require('../../src/core/workflow/workflow-schema');
 const { writeJsonAtomic } = require('./atomic-write');
 const paths = require('./library-paths');

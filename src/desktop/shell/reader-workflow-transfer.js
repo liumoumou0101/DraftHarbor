@@ -1,4 +1,3 @@
-    /* global currentProjectId, loadWorkflowRuns, renderWorkflow, workflowState, activateReaderTransferTarget */
     const readerWorkflowTransferState = { transfer: null, preview: null, busy: false };
 
     function readerWorkflowTransferElements() {

@@ -253,7 +253,6 @@
                 maxTokens: defaults.maxTokens,
                 useProviderDefaults: defaults.useProviderDefaults,
                 globalPrompt: settings.globalPrompt.enabled ? settings.globalPrompt.content : '',
-                profileId: selectedProfile.id,
                 ...extras,
                 profileId: selectedProfile.id
             };

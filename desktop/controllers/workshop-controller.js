@@ -1,9 +1,6 @@
-const fsp = require('fs/promises');
-const path = require('path');
-
 function createController(dependencies) {
   const { workshopService, readJsonPayload, jsonResponse } = dependencies;
-  return async function handle(request, response, appRoot, dataRoot, parsedUrl, integrations = {}) {
+  return async function handle(request, response, appRoot, dataRoot, parsedUrl, _integrations = {}) {
 
   if (request.method === 'GET' && parsedUrl.pathname === '/api/workshop-sessions') {
     try {

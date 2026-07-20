@@ -197,7 +197,7 @@ function createGuidedRuntime(spec = {}) {
 
   async function restartFromNode(options = {}) {
     const targetPath = projectPath(options.dataRoot, options.projectId);
-    const details = await getRun(options.dataRoot, options.projectId, options.runId);
+    await getRun(options.dataRoot, options.projectId, options.runId);
     const nodeId = clean(options.nodeId);
     const index = stages.findIndex((stage) => stage.id === nodeId);
     if (index < 0) throw new Error(`unknown guided node: ${nodeId}`);

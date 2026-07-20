@@ -1,6 +1,3 @@
-const fsp = require('fs/promises');
-const path = require('path');
-
 function createController(dependencies) {
   const { workflowService, workflowTransferService, workflowGuidedService, workflowCreationGuidedService, workflowRewriteGuidedService, workflowVariantService, workflowTemplateService, readerWorkflowTransferService, createPreRestoreBackup, readJsonPayload, jsonResponse } = dependencies;
   async function completeV2GuidedTransfer(payload, dataRoot) {
@@ -37,7 +34,7 @@ function createController(dependencies) {
     if (lastError) throw lastError;
     throw new Error('guided workflow restart service unavailable');
   }
-  return async function handle(request, response, appRoot, dataRoot, parsedUrl, integrations = {}) {
+  return async function handle(request, response, appRoot, dataRoot, parsedUrl, _integrations = {}) {
 
   if (readerWorkflowTransferService && request.method === 'POST' && parsedUrl.pathname.startsWith('/api/workflows/reader-transfer/')) {
     try {

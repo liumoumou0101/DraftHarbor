@@ -1,9 +1,6 @@
-const fsp = require('fs/promises');
-const path = require('path');
-
 function createController(dependencies) {
   const { runtimeInfo, installLlamaCpp, readJsonPayload, jsonResponse } = dependencies;
-  return async function handle(request, response, appRoot, dataRoot, parsedUrl, integrations = {}) {
+  return async function handle(request, response, appRoot, dataRoot, parsedUrl, _integrations = {}) {
 
   if (request.method === 'GET' && parsedUrl.pathname === '/api/health') {
     jsonResponse(response, 200, { ok: true, service: 'draftharbor-desktop-server', timestamp: new Date().toISOString() });

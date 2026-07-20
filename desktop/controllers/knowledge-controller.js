@@ -1,9 +1,6 @@
-const fsp = require('fs/promises');
-const path = require('path');
-
 function createController(dependencies) {
   const { compendiumService, compendiumAgentService, compendiumAgentRunnerService, compendiumAgentQaService, readerCompendiumTransferService, projectAssetQueryService, promptService, readJsonPayload, jsonResponse, readSettings, createPreRestoreBackup } = dependencies;
-  return async function handle(request, response, appRoot, dataRoot, parsedUrl, integrations = {}) {
+  return async function handle(request, response, appRoot, dataRoot, parsedUrl, _integrations = {}) {
 
   if (request.method === 'GET' && parsedUrl.pathname === '/api/compendium') {
     try {
