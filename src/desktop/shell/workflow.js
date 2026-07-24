@@ -3,6 +3,7 @@
             projectLabel: document.querySelector('[data-workflow-project-label]'),
             mode: document.querySelector('[data-workflow-mode]'),
             modeNote: document.querySelector('[data-workflow-mode-note]'),
+            aiConfig: document.querySelector('[data-workflow-ai-config]'),
             continuationFields: document.querySelector('[data-workflow-continuation-fields]'),
             creationFields: document.querySelector('[data-workflow-creation-fields]'),
             rewriteFields: document.querySelector('[data-workflow-rewrite-fields]'),
@@ -80,75 +81,6 @@
         status.dataset.tone = tone;
     }
 
-    function renderWorkflowReasoningBubble() {
-        const elements = workflowElements();
-        const state = workflowState.reasoning;
-        if (!elements.reasoningBubble || !state) return;
-        elements.reasoningBubble.hidden = !state.visible || state.dismissed;
-        elements.reasoningBubble.dataset.phase = state.phase || 'idle';
-        if (elements.reasoningTitle) elements.reasoningTitle.textContent = state.title || 'AI 思考过程';
-        if (elements.reasoningStatus) elements.reasoningStatus.textContent = state.status || '等待模型响应…';
-        if (elements.reasoningContent) {
-            const shouldFollow = elements.reasoningContent.scrollHeight - elements.reasoningContent.scrollTop - elements.reasoningContent.clientHeight < 48;
-            elements.reasoningContent.textContent = state.text || (state.phase === 'waiting' ? '正在连接模型…' : '当前模型未返回可展示的思考过程。');
-            if (shouldFollow) elements.reasoningContent.scrollTop = elements.reasoningContent.scrollHeight;
-        }
-    }
-
-    function beginWorkflowReasoning(config = {}, label = '当前任务') {
-        const deepSeek = String(config.provider || config.aiProvider || '').toLowerCase() === 'deepseek';
-        const model = String(config.model || config.aiModel || '').trim();
-        workflowState.reasoning = {
-            visible: true,
-            dismissed: false,
-            phase: 'waiting',
-            title: `${deepSeek ? 'DeepSeek' : 'AI'} 思考过程${model ? ` · ${model}` : ''}`,
-            status: `已发送：${label}，等待模型响应…`,
-            text: '',
-            hasReasoning: false,
-            batchHasReasoning: false
-        };
-        renderWorkflowReasoningBubble();
-    }
-
-    function beginWorkflowReasoningBatch(label, index, total) {
-        const state = workflowState.reasoning;
-        if (!state) return;
-        if (index > 0) state.text += `${state.text ? '\n\n' : ''}—— ${label} ——\n`;
-        state.phase = 'waiting';
-        state.batchHasReasoning = false;
-        state.status = `正在处理 ${index + 1}/${total}：${label}，等待思考流…`;
-        renderWorkflowReasoningBubble();
-    }
-
-    function appendWorkflowReasoning(token) {
-        if (!token || !workflowState.reasoning) return;
-        const state = workflowState.reasoning;
-        state.hasReasoning = true;
-        state.batchHasReasoning = true;
-        state.phase = 'thinking';
-        state.status = '模型正在思考，内容实时返回中…';
-        state.text += token;
-        if (state.text.length > 50000) state.text = `…较早的思考内容已省略…\n${state.text.slice(-48000)}`;
-        renderWorkflowReasoningBubble();
-    }
-
-    function markWorkflowAnswerStarted() {
-        const state = workflowState.reasoning;
-        if (!state || state.phase === 'answer') return;
-        state.phase = 'answer';
-        state.status = state.batchHasReasoning ? '思考完成，正在生成结果…' : '当前批次未返回可展示的思考过程，正在生成结果…';
-        renderWorkflowReasoningBubble();
-    }
-
-    function finishWorkflowReasoning(ok, message) {
-        const state = workflowState.reasoning;
-        if (!state) return;
-        state.phase = ok ? 'complete' : 'failed';
-        state.status = message || (ok ? '模型响应完成。' : '模型响应失败。');
-        renderWorkflowReasoningBubble();
-    }
-
     function isGuidedWorkflow(run = selectedWorkflowRun()) {
         return !!(run && run.storageVersion === 'v2' && run.supportsV2Execution);
     }
@@ -207,19 +139,6 @@
         ];
     }
 
-    function guidedStageProviderConfig(nodeId) {
-        const config = runtimeProviderConfig();
-        const thinking = !!workflowElements().thinking?.checked;
-        const minimums = { analysis: 4000, direction: 3000, blueprint: 5000, compendium: 5000, plan: 4000, draft: 6000, rewrite: 6000, repair: 6000, review: 3000 };
-        const minimum = minimums[nodeId] || 3000;
-        return {
-            ...config,
-            enableThinking: thinking,
-            useProviderDefaults: false,
-            maxTokens: Math.max(Number(config.maxTokens) || 0, minimum)
-        };
-    }
-
     async function loadGuidedWorkflowRun(runId = workflowState.selectedId) {
         const projectId = currentProjectId();
         const summary = workflowState.runs.find((run) => run.id === runId);
@@ -232,7 +151,13 @@
         const direction = artifacts.filter((artifact) => artifact.nodeId === 'direction').slice(-1)[0];
         const persistedDirectionIds = direction && direction.content && Array.isArray(direction.content.selectedDirectionIds)
             ? direction.content.selectedDirectionIds : [];
-        if (persistedDirectionIds.length) workflowState.selectedDirectionIds = persistedDirectionIds.slice();
+        const availableDirectionIds = direction && direction.content && Array.isArray(direction.content.directions)
+            ? direction.content.directions.map((item) => item.id).filter(Boolean) : [];
+        const selectedDirectionIds = (persistedDirectionIds.length ? persistedDirectionIds : workflowState.selectedDirectionIds)
+            .filter((id) => availableDirectionIds.includes(id));
+        workflowState.selectedDirectionIds = selectedDirectionIds.length
+            ? selectedDirectionIds
+            : availableDirectionIds.slice(0, 1);
         if (!artifacts.some((artifact) => artifact.id === workflowState.selectedArtifactId)) {
             const activeArtifact = artifacts.filter((artifact) => artifact.nodeId === result.run.activeNodeId).slice(-1)[0];
             workflowState.selectedArtifactId = activeArtifact ? activeArtifact.id : (artifacts[artifacts.length - 1] || {}).id || '';
@@ -262,8 +187,13 @@
             const project = nativeEditorState.snapshot && nativeEditorState.snapshot.project;
             elements.projectLabel.textContent = project ? `当前项目：${project.name || project.title || project.id}` : '请先在书库打开或新建一个项目。';
         }
+        if (elements.aiConfig) elements.aiConfig.textContent = `AI：${workflowConfigLabel(workflowGenerationPolicy(run))}`;
+        if (elements.modeNote && run && isGuidedWorkflow(run)) {
+            const label = isCreationWorkflow(run) ? '从零创作' : isRewriteWorkflow(run) ? '大段重写' : '续写引导';
+            elements.modeNote.textContent = `当前运行：${label}。下方表单仅用于新建另一条流程。`;
+        }
         if (elements.start) elements.start.disabled = !projectId || workflowState.generating;
-        if (elements.startCreation) elements.startCreation.disabled = !projectId || workflowState.generating;
+        if (elements.startCreation) elements.startCreation.disabled = workflowState.generating;
         if (elements.startRewrite) elements.startRewrite.disabled = !projectId || workflowState.generating;
         if (elements.legacyStart) elements.legacyStart.disabled = !projectId || workflowState.generating;
         if (elements.title) {
@@ -272,7 +202,10 @@
             } else if (!run) {
                 elements.title.textContent = '创建你的第一个创作流程';
             } else {
-                const stepTitle = step ? (step.id || step.title || '当前步骤') : '完成';
+                const terminalLabels = { completed: '完成', cancelled: '已取消', failed: '异常' };
+                const stepTitle = step
+                    ? (isGuidedWorkflow(run) ? (step.title || step.id) : (step.id || step.title)) || '当前步骤'
+                    : (terminalLabels[run.status] || '等待恢复');
                 elements.title.textContent = `${run.title || '创作流程'} · ${stepTitle}`;
             }
         }
@@ -409,7 +342,7 @@
                 const title = document.createElement('strong');
                 title.textContent = item.title || item.id;
                 const statusText = document.createElement('span');
-                const stepStatusLabels = { completed: '已完成', failed: '失败', in_progress: '生成中', waiting_user: '等待审批', ready: '准备执行', pending: '待处理' };
+                const stepStatusLabels = { completed: '已完成', cancelled: '已取消', failed: '失败', in_progress: '生成中', waiting_user: '等待审批', ready: '准备执行', pending: '待处理' };
                 statusText.textContent = `${stepStatusLabels[item.status] || item.status} · ${item.kind || ''}${item.staleArtifactCount ? ` · ${item.staleArtifactCount} 个过期产物` : ''}`;
                 meta.append(title, statusText);
                 header.append(mark, meta);
@@ -620,7 +553,7 @@
             if (!window.DraftHarborProviderStream || typeof window.DraftHarborProviderStream.streamGeneration !== 'function') {
                 throw new Error('Native generation provider stream is not loaded.');
             }
-            const providerConfig = { ...runtimeProviderConfig(), enableThinking: !!workflowElements().thinking?.checked };
+            const providerConfig = guidedStageProviderConfig(step.id, run);
             beginWorkflowReasoning(providerConfig, step.title || step.id);
             await window.DraftHarborProviderStream.streamGeneration(prepared.prompt, (token, meta) => {
                 if (meta && meta.type === 'reasoning') {
@@ -785,13 +718,40 @@
     function renderGuidedWorkflowActions(container, run, step, isTerminalRun) {
         const active = step && !isTerminalRun;
         const transferStep = (run.steps || []).find((item) => item.id === 'transfer');
-        const provider = guidedStageProviderConfig(step && step.id);
+        const provider = guidedStageProviderConfig(step && step.id, run);
         const contextCount = (run.artifacts || []).filter((artifact) => !step || artifact.nodeId !== step.id).length;
         const budget = provider.useProviderDefaults ? '使用模型默认输出预算' : `单批最多 ${provider.maxTokens || '未设置'} tokens`;
         const contextNote = document.createElement('p');
         contextNote.className = 'desktop-workflow-context-note';
         contextNote.textContent = `上下文来源 ${contextCount} 个产物 · ${provider.model || '当前模型'} · ${budget}${provider.enableThinking ? ' · 深度思考已开启' : ''}`;
         container.appendChild(contextNote);
+        renderGuidedWorkflowInlineResult(container, run, step);
+        if (run.status === 'cancelled') {
+            const resumeNote = document.createElement('p');
+            resumeNote.className = 'desktop-workflow-context-note';
+            resumeNote.textContent = '此流程保留了已生成的产物，可以从中断位置继续，不会重新消耗额度生成已有内容。';
+            const resume = document.createElement('button');
+            resume.type = 'button';
+            resume.className = 'desktop-primary-action';
+            resume.dataset.workflowGuidedResume = '';
+            resume.textContent = '恢复此流程';
+            resume.disabled = workflowState.generating;
+            resume.addEventListener('click', () => resumeGuidedWorkflowRun().catch((error) => setWorkflowStatus(`恢复失败：${error.message || error}`, 'error')));
+            container.append(resumeNote, resume);
+        }
+        if (workflowState.reasoning && workflowState.reasoning.hasReasoning) {
+            const showReasoning = document.createElement('button');
+            showReasoning.type = 'button';
+            showReasoning.className = 'desktop-mini-action';
+            showReasoning.dataset.workflowReasoningShow = '';
+            showReasoning.textContent = '查看本次思考';
+            showReasoning.addEventListener('click', () => {
+                workflowState.reasoning.visible = true;
+                workflowState.reasoning.dismissed = false;
+                renderWorkflowReasoningBubble();
+            });
+            container.appendChild(showReasoning);
+        }
         if (active && step.id !== 'transfer') {
             const generate = document.createElement('button');
             generate.type = 'button';
@@ -824,17 +784,24 @@
             compendium.type = 'button';
             compendium.className = 'desktop-secondary-action';
             compendium.dataset.workflowGuidedTransferCompendium = '';
-            compendium.textContent = '预览资料卡建议';
+            compendium.textContent = '确认并写入资料库';
             compendium.disabled = workflowState.generating;
             compendium.addEventListener('click', () => transferGuidedCompendiumSuggestions().catch((error) => setWorkflowStatus(`资料回流失败：${error.message || error}`, 'error')));
             container.appendChild(writer);
-            if (!isRewriteWorkflow(run)) container.appendChild(compendium);
+            if (!isRewriteWorkflow(run)) {
+                container.appendChild(compendium);
+                const transferNote = document.createElement('p');
+                transferNote.className = 'desktop-workflow-context-note';
+                transferNote.textContent = '正文与资料卡需要分别确认；流程完成后，尚未应用的另一项仍可继续回流。';
+                container.appendChild(transferNote);
+            }
             const variant = document.createElement('button');
             variant.type = 'button'; variant.className = 'desktop-secondary-action'; variant.dataset.workflowGenerateVariant = '';
             variant.textContent = '生成并比较替代版本'; variant.disabled = workflowState.generating;
             variant.addEventListener('click', () => generateAlternativeWorkflowVariant().catch((error) => setWorkflowStatus(`版本生成失败：${error.message || error}`, 'error')));
             container.appendChild(variant);
         }
+        renderGuidedWorkflowRecoveryActions(container, run, step);
         if (!isTerminalRun) {
             const cancel = document.createElement('button');
             cancel.type = 'button';
@@ -912,7 +879,6 @@
         if (selected.nodeId === 'direction' && selected.content && Array.isArray(selected.content.directions)) {
             const options = document.createElement('div');
             options.className = 'desktop-workflow-direction-options';
-            if (!workflowState.selectedDirectionIds.length && selected.content.directions[0]) workflowState.selectedDirectionIds = [selected.content.directions[0].id];
             selected.content.directions.forEach((direction) => {
                 const option = document.createElement('label');
                 const checkbox = document.createElement('input');
@@ -989,6 +955,15 @@
         const activeScene = (nativeEditorState.snapshot.scenes || []).find((scene) => scene.id === nativeEditorState.activeSceneId)
             || (nativeEditorState.snapshot.scenes || [])[0];
         if (scope !== 'project' && !activeScene) throw new Error('当前项目没有可用场景');
+        const sourceScenes = scope === 'project' ? (nativeEditorState.snapshot.scenes || [])
+            : scope === 'chapter' ? (nativeEditorState.snapshot.scenes || []).filter((scene) => scene.chapterId === activeScene.chapterId)
+                : [activeScene];
+        const sceneContents = nativeEditorState.snapshot.sceneContents || {};
+        if (!sourceScenes.some((scene) => String(
+            scene && sceneContents[scene.id] !== undefined ? sceneContents[scene.id] : scene && scene.content || ''
+        ).trim())) {
+            throw new Error('续写范围内没有正文，请先在写作页填写正文，或选择包含正文的场景/章节');
+        }
         workflowState.generating = true;
         setWorkflowStatus('正在冻结原文并创建引导运行...', 'info');
         renderWorkflow();
@@ -1003,7 +978,8 @@
                     chapterId: activeScene && activeScene.chapterId,
                     brief: elements.brief ? elements.brief.value : '',
                     fineOutlineEnabled: !elements.fineOutline || elements.fineOutline.checked,
-                    constraints: workflowLockConstraints(elements)
+                    constraints: workflowLockConstraints(elements),
+                    generationPolicy: workflowGenerationLaunchConfig()
                 })
             });
             const result = await response.json().catch(() => ({}));
@@ -1024,18 +1000,19 @@
     async function startCreationWorkflowRun() {
         const projectId = currentProjectId();
         const elements = workflowElements();
-        if (!projectId || !nativeEditorState.snapshot) return;
         const premise = elements.creationPremise ? elements.creationPremise.value.trim() : '';
         if (!premise) throw new Error('请先填写核心创意或故事前提');
         workflowState.generating = true;
         setWorkflowStatus('正在创建从零创作引导...', 'info');
         renderWorkflow();
         try {
-            const response = await fetch('/api/workflows/v2/start-creation', {
+            const launch = workflowGenerationLaunchConfig();
+            const endpoint = projectId ? '/api/workflows/v2/start-creation' : '/api/workflows/v2/create-project-and-start-creation';
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    projectId,
+                    ...(projectId ? { projectId } : { project: { title: elements.creationTitle ? elements.creationTitle.value : '', description: premise, status: '构思中' } }),
                     brief: {
                         workingTitle: elements.creationTitle ? elements.creationTitle.value : '',
                         premise,
@@ -1049,14 +1026,22 @@
                         avoid: workflowLockConstraints(elements).filter((item) => item.kind === 'exclusion').map((item) => item.text)
                     },
                     fineOutlineEnabled: !elements.fineOutline || elements.fineOutline.checked,
-                    constraints: workflowLockConstraints(elements)
+                    constraints: workflowLockConstraints(elements),
+                    generationPolicy: launch
                 })
             });
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
             workflowState.selectedId = result.runId;
             workflowState.selectedDirectionIds = [];
+            if (!projectId && result.projectId) {
+                await loadProjectLibrary();
+                const createdProject = (projectLibraryState.projects || []).find((item) => item.id === result.projectId);
+                if (!createdProject) throw new Error('新项目已创建，但未能在书库中找到它');
+                await openDesktopProject(createdProject);
+            }
             await loadWorkflowRuns();
+            setView('workflow');
             setWorkflowStatus('创作 Brief 已冻结，可以开始设计创意方向。', 'ok');
         } finally {
             workflowState.generating = false;
@@ -1078,7 +1063,8 @@
             const response = await fetch('/api/workflows/v2/start-rewrite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
                 projectId, scope, sceneId: activeScene && activeScene.id, chapterId: activeScene && activeScene.chapterId,
                 brief: { instruction, targetStyle: elements.rewriteStyle?.value || '', targetTone: elements.rewriteTone?.value || '', targetPov: elements.rewritePov?.value || '', targetLengthRatio: Number(elements.rewriteRatio?.value) || 1 },
-                constraints: workflowLockConstraints(elements)
+                constraints: workflowLockConstraints(elements),
+                generationPolicy: workflowGenerationLaunchConfig()
             }) });
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
@@ -1092,6 +1078,7 @@
         const run = selectedWorkflowRun();
         const step = activeWorkflowStep(run);
         if (!projectId || !run || !step || workflowState.generating) return;
+        workflowState.lastGenerationError = '';
         workflowState.generating = true;
         setWorkflowStatus(step.id === 'review' ? '正在执行自动审查...' : `正在生成：${step.title}`, 'info');
         renderWorkflow();
@@ -1105,7 +1092,7 @@
             if (!preparedResponse.ok || !prepared.ok) throw new Error(prepared.error || `HTTP ${preparedResponse.status}`);
             const outputs = [];
             const usage = [];
-            const stageConfig = guidedStageProviderConfig(step.id);
+            const stageConfig = guidedStageProviderConfig(step.id, run);
             beginWorkflowReasoning(stageConfig, step.title || step.id);
             if ((prepared.prompts || []).length && (!window.DraftHarborProviderStream || typeof window.DraftHarborProviderStream.streamGeneration !== 'function')) {
                 throw new Error('生成服务尚未加载');
@@ -1138,6 +1125,7 @@
             setWorkflowStatus(step.id === 'review' ? '自动审查完成。' : '生成完成，请检查并按需修改。', 'ok');
             finishWorkflowReasoning(true, '模型响应完成，结果已返回。');
         } catch (error) {
+            workflowState.lastGenerationError = error && error.message ? error.message : String(error);
             finishWorkflowReasoning(false, `响应失败：${error.message || error}`);
             throw error;
         } finally {
@@ -1214,7 +1202,7 @@
         await loadProjectLibrary();
         await loadWorkflowEvents();
         renderWorkflow();
-        setWorkflowStatus('正文已转入写作区，并保留工作流来源。', 'ok');
+        setWorkflowStatus('正文已转入写作区；资料卡需要点击“确认并写入资料库”另行确认。', 'ok');
     }
 
     async function transferGuidedCompendiumSuggestions() {
@@ -1292,7 +1280,7 @@
             const preparedResponse = await fetch('/api/workflows/v2/prepare-variant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, runId: run.id, instruction, label }) });
             const prepared = await preparedResponse.json().catch(() => ({}));
             if (!preparedResponse.ok || !prepared.ok) throw new Error(prepared.error || `HTTP ${preparedResponse.status}`);
-            const config = guidedStageProviderConfig(isRewriteWorkflow(run) ? 'repair' : 'draft');
+            const config = guidedStageProviderConfig(isRewriteWorkflow(run) ? 'repair' : 'draft', run);
             const outputs = []; beginWorkflowReasoning(config, `替代版本 · ${label}`);
             for (let index = 0; index < prepared.prompts.length; index += 1) {
                 let output = ''; const item = prepared.prompts[index]; beginWorkflowReasoningBatch(item.title, index, prepared.prompts.length);

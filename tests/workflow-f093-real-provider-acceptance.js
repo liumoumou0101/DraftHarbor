@@ -8,7 +8,7 @@ const Rewrite = require('../desktop/services/workflow-rewrite-guided-service');
 const Transfer = require('../desktop/services/workflow-transfer-service');
 
 const DATA_ROOT = path.resolve(__dirname, '..');
-const PROJECT_ID = 'f093-real-provider-acceptance-20260715';
+const PROJECT_ID = process.env.WORKFLOW_REAL_PROJECT_ID || 'f093-real-provider-acceptance-20260715';
 const CREATION_RUN = 'f093-real-creation';
 const REWRITE_RUN = 'f093-real-rewrite';
 const METRICS_PATH = path.join(DATA_ROOT, '.ai_state', 'f093-real-provider-acceptance-20260715.json');

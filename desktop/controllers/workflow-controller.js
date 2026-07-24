@@ -1,5 +1,7 @@
+const fsp = require('fs/promises');
+
 function createController(dependencies) {
-  const { workflowService, workflowTransferService, workflowGuidedService, workflowCreationGuidedService, workflowRewriteGuidedService, workflowVariantService, workflowTemplateService, readerWorkflowTransferService, createPreRestoreBackup, readJsonPayload, jsonResponse } = dependencies;
+  const { workflowService, workflowTransferService, workflowGuidedService, workflowCreationGuidedService, workflowRewriteGuidedService, workflowVariantService, workflowTemplateService, readerWorkflowTransferService, projectService, createPreRestoreBackup, readJsonPayload, jsonResponse } = dependencies;
   async function completeV2GuidedTransfer(payload, dataRoot) {
     const services = [workflowGuidedService, workflowCreationGuidedService, workflowRewriteGuidedService].filter(Boolean);
     let lastError = null;
@@ -33,6 +35,23 @@ function createController(dependencies) {
     }
     if (lastError) throw lastError;
     throw new Error('guided workflow restart service unavailable');
+  }
+  async function resumeV2GuidedRun(payload, dataRoot) {
+    const resumers = [
+      workflowGuidedService.resumeGuidedRun,
+      workflowCreationGuidedService && workflowCreationGuidedService.resumeCreationRun,
+      workflowRewriteGuidedService && workflowRewriteGuidedService.resumeRewriteRun
+    ].filter((item) => typeof item === 'function');
+    let lastError = null;
+    for (const resume of resumers) {
+      try { return await resume({ ...payload, dataRoot }); }
+      catch (error) {
+        lastError = error;
+        if (!/guided run not found/i.test(String(error && error.message))) throw error;
+      }
+    }
+    if (lastError) throw lastError;
+    throw new Error('guided workflow resume service unavailable');
   }
   return async function handle(request, response, appRoot, dataRoot, parsedUrl, _integrations = {}) {
 
@@ -209,6 +228,39 @@ function createController(dependencies) {
       jsonResponse(response, 200, { ...result, preRunSnapshot: preRun.backup });
     } catch (error) {
       jsonResponse(response, 500, { ok: false, error: error.message });
+    }
+    return true;
+  }
+
+  if (request.method === 'POST' && parsedUrl.pathname === '/api/workflows/v2/resume-run') {
+    try {
+      const payload = await readJsonPayload(request);
+      jsonResponse(response, 200, await resumeV2GuidedRun(payload, dataRoot));
+    } catch (error) { jsonResponse(response, 400, { ok: false, error: error.message }); }
+    return true;
+  }
+
+  if (workflowCreationGuidedService && request.method === 'POST' && parsedUrl.pathname === '/api/workflows/v2/create-project-and-start-creation') {
+    let created = null;
+    try {
+      const payload = await readJsonPayload(request);
+      const brief = payload.brief && typeof payload.brief === 'object' ? payload.brief : {};
+      const requested = payload.project && typeof payload.project === 'object' ? payload.project : {};
+      const title = String(requested.title || brief.workingTitle || brief.premise || '').trim().slice(0, 120);
+      if (!title) throw new Error('请填写暂定书名或核心创意，以便创建新项目');
+      if (!projectService || typeof projectService.createProject !== 'function') throw new Error('Project service is unavailable');
+      created = await projectService.createProject(dataRoot, {
+        title,
+        description: String(requested.description || brief.premise || '').trim(),
+        status: String(requested.status || '构思中').trim() || '构思中'
+      });
+      const result = await workflowCreationGuidedService.startGuidedCreation({ ...payload, dataRoot, projectId: created.project.id });
+      jsonResponse(response, 200, { ...result, projectId: created.project.id });
+    } catch (error) {
+      if (created && created.projectPath) {
+        await fsp.rm(created.projectPath, { recursive: true, force: true }).catch(() => {});
+      }
+      jsonResponse(response, 500, { ok: false, error: error.message || 'Could not create project and start creation workflow' });
     }
     return true;
   }

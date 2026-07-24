@@ -21,6 +21,10 @@ const compiled = Planning.compileConstraintPrompt([
 assert.strictEqual(compiled.snapshot.conflicts.length, 1);
 assert.ok(compiled.promptText.includes('权重5'));
 assert.deepStrictEqual(Planning.createScenePlan({ fineOutlineEnabled: false, scenes: [{ title: '抵达' }] }).scenes[0].fineOutline, []);
+assert.deepStrictEqual(
+  Planning.createScenePlan({ scenes: [{ title: '抵达', fineOutline: [{ action: '检查门锁', purpose: '确认是否有人进入' }] }] }).scenes[0].fineOutline,
+  ['检查门锁 — 确认是否有人进入']
+);
 
 (async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-workflow-planning-'));

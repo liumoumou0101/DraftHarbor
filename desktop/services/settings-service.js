@@ -45,6 +45,10 @@ async function updateSettings(dataRoot, patch = {}) {
     compendiumAgent: {
       ...current.compendiumAgent,
       ...(patch.compendiumAgent || {})
+    },
+    workflowGeneration: {
+      ...current.workflowGeneration,
+      ...(patch.workflowGeneration || {})
     }
   });
 }

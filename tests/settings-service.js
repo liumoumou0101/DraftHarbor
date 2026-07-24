@@ -29,6 +29,7 @@ const SettingsSchema = require('../src/core/settings/settings-schema');
     assert.strictEqual(normalized.generationDefaults.maxTokens, 1234);
     assert.ok(Array.isArray(normalized.providerProfiles), 'providerProfiles should be an array');
     assert.strictEqual(normalized.providerProfiles.length, 0, 'should default to empty profiles');
+    assert.strictEqual(normalized.workflowGeneration.providerProfileId, 'inherit', 'workflow should inherit the default writing connection by default');
     assert.strictEqual(normalized.appearance.theme, 'morandi-ink', 'default desktop theme should be Morandi Ink');
     assert.strictEqual(
       SettingsSchema.normalizeDesktopSettings({ appearance: { theme: 'loud-neon' } }).appearance.theme,
@@ -45,6 +46,8 @@ const SettingsSchema = require('../src/core/settings/settings-schema');
     });
     assert.strictEqual(updated.providerSettings.model, 'second-model');
     assert.strictEqual(updated.providerSettings.apiKey, 'secret', 'blank apiKey should preserve existing secret');
+    const workflowConfigured = await settingsService.updateSettings(dataRoot, { workflowGeneration: { providerProfileId: 'workflow-profile' } });
+    assert.strictEqual(workflowConfigured.workflowGeneration.providerProfileId, 'workflow-profile', 'workflow provider selection should persist separately from the default writing connection');
     assert.strictEqual(updated.generationDefaults.maxTokens, 777);
 
     const publicSettings = settingsService.publicSettings(updated);

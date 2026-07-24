@@ -195,6 +195,49 @@ function createGuidedRuntime(spec = {}) {
     return getRun(options.dataRoot, options.projectId, options.runId);
   }
 
+  async function resumeRun(options = {}) {
+    const targetPath = projectPath(options.dataRoot, options.projectId);
+    const details = await getRun(options.dataRoot, options.projectId, options.runId);
+    const current = await runStore.readWorkflowV2RunState(targetPath, options.runId);
+    if (!current) throw new Error(`${spec.templateId} guided run not found`);
+    if (current.status !== 'cancelled') throw new Error('only cancelled guided runs can be resumed');
+    const index = stages.findIndex((stage) => {
+      const state = (current.nodeStates || []).find((item) => item.nodeId === stage.id);
+      return state && state.executionState === 'cancelled';
+    });
+    if (index < 0) throw new Error('cancelled guided run has no resumable node');
+    const nodeId = stages[index].id;
+    const waitingArtifact = (details.run.artifacts || []).some((artifact) =>
+      artifact.nodeId === nodeId
+      && artifact.effectiveFreshness !== 'stale'
+      && artifact.revision
+      && artifact.revision.reviewState === 'waiting_review'
+    );
+    const resumedState = waitingArtifact ? 'waiting_user' : 'ready';
+    const nodeStates = (current.nodeStates || []).map((state) => {
+      const stateIndex = stages.findIndex((stage) => stage.id === state.nodeId);
+      if (stateIndex < 0 || stateIndex < index) return state;
+      return {
+        ...state,
+        executionState: stateIndex === index ? resumedState : 'pending',
+        error: null,
+        activeChunkId: '',
+        finishedAt: ''
+      };
+    });
+    await runStore.writeWorkflowV2RunState(targetPath, options.runId, {
+      status: 'in_progress',
+      activeNodeId: nodeId,
+      nodeStates,
+      finishedAt: ''
+    }, { expectedRevision: current.revision });
+    await appendEvent(targetPath, options.runId, 'guided_run_resumed', nodeId, {
+      resumedState,
+      preservedArtifactCount: (details.run.artifacts || []).filter((artifact) => artifact.nodeId === nodeId).length
+    });
+    return getRun(options.dataRoot, options.projectId, options.runId);
+  }
+
   async function restartFromNode(options = {}) {
     const targetPath = projectPath(options.dataRoot, options.projectId);
     await getRun(options.dataRoot, options.projectId, options.runId);
@@ -214,7 +257,7 @@ function createGuidedRuntime(spec = {}) {
     return getRun(options.dataRoot, options.projectId, options.runId);
   }
 
-  return { projectPath, appendEvent, artifactRecords, getRun, setNodeState, writeArtifact, completeOutputs, reviseArtifact, approveNode, completeTransfer, cancelRun, restartFromNode, parseJson };
+  return { projectPath, appendEvent, artifactRecords, getRun, setNodeState, writeArtifact, completeOutputs, reviseArtifact, approveNode, completeTransfer, cancelRun, resumeRun, restartFromNode, parseJson };
 }
 
 module.exports = { createGuidedRuntime, parseJson };

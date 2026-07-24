@@ -31,10 +31,16 @@
 
 .desktop-workflow-main {
     display: grid;
-    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    grid-template-rows: repeat(5, max-content);
+    align-content: start;
     gap: 14px;
     padding: 20px;
     min-height: 0;
+    overflow-y: auto;
+}
+
+.desktop-workflow-artifacts {
+    overflow: visible;
 }
 
 .desktop-workflow-stage-actions {
@@ -49,6 +55,62 @@
 
 .desktop-workflow-stage-actions[hidden] {
     display: none;
+}
+
+.desktop-workflow-current-result {
+    flex: 1 0 100%;
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid rgba(var(--desktop-accent-rgb), 0.55);
+    border-radius: 10px;
+    background: rgba(var(--desktop-accent-rgb), 0.09);
+}
+
+.desktop-workflow-current-result > div:first-child {
+    display: grid;
+    gap: 3px;
+}
+
+.desktop-workflow-current-result strong {
+    color: var(--desktop-text);
+}
+
+.desktop-workflow-current-result.is-error {
+    border-color: rgba(214, 96, 82, 0.7);
+    background: rgba(214, 96, 82, 0.1);
+}
+
+.desktop-workflow-current-result span,
+.desktop-workflow-current-result p,
+.desktop-workflow-current-result small {
+    color: var(--desktop-muted);
+}
+
+.desktop-workflow-current-result p {
+    margin: 0;
+    white-space: pre-wrap;
+}
+
+.desktop-workflow-current-direction-list {
+    display: grid;
+    gap: 8px;
+}
+
+.desktop-workflow-current-direction-list label {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 9px;
+    align-items: start;
+    padding: 10px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.desktop-workflow-current-direction-list label > span {
+    display: grid;
+    gap: 3px;
 }
 
 .desktop-workflow-context-note {

@@ -57,7 +57,12 @@ async function generateAndApprove(page, title) {
 
     await page.evaluate(() => {
       window.__workflowThinkingSeen = false;
+      window.__workflowFailNext = false;
       window.__draftHarborGenerationStub = async (prompt, onToken, settings) => {
+        if (window.__workflowFailNext) {
+          window.__workflowFailNext = false;
+          throw new Error('模拟 Provider 首响应超时');
+        }
         if (settings && settings.enableThinking) window.__workflowThinkingSeen = true;
         const system = prompt.messages[0].content;
         let output = '';
@@ -89,15 +94,41 @@ async function generateAndApprove(page, title) {
     await page.fill('[data-workflow-exclusion-locks]', '不要揭晓幕后凶手');
     await page.check('[data-workflow-thinking]');
     await page.click('[data-workflow-start-guided]');
+    await page.waitForSelector('[data-workflow-guided-generate]');
+    assert.ok(
+      !(await page.locator('[data-workflow-status]').innerText()).includes('续写范围内没有正文'),
+      'workflow launch validation must read prose from snapshot.sceneContents'
+    );
+    await page.uncheck('[data-workflow-thinking]');
+    assert.strictEqual(
+      await page.evaluate(() => window.guidedStageProviderConfig('analysis').enableThinking),
+      true,
+      'run must retain its frozen thinking setting after the launch form changes'
+    );
+
+    assert.strictEqual(await page.evaluate(() => window.guidedStageProviderConfig('analysis').firstResponseTimeoutMs), 90000);
+    await page.evaluate(() => { window.__workflowFailNext = true; });
+    await page.click('[data-workflow-guided-generate]');
+    await page.waitForSelector('[data-workflow-generation-error]');
+    assert.ok((await page.locator('[data-workflow-generation-error]').innerText()).includes('模拟 Provider 首响应超时'));
+    assert.strictEqual(await page.locator('[data-workflow-guided-generate]').isEnabled(), true, 'failed stage must remain retryable');
 
     await generateAndApprove(page, '原文分析');
     await activeStage(page, '续写方向');
     await page.click('[data-workflow-guided-generate]');
     await page.waitForSelector('.desktop-workflow-direction-options input');
     assert.ok(await page.locator('.desktop-workflow-direction-options input').first().isChecked());
+    await page.waitForSelector('[data-workflow-current-result]');
+    assert.ok((await page.locator('[data-workflow-current-result]').innerText()).includes('怀表倒计时'));
+    assert.strictEqual(await page.locator('[data-workflow-guided-regenerate]').isVisible(), true);
+    await page.click('[data-workflow-guided-regenerate]');
+    await page.waitForSelector('[data-workflow-guided-generate]:not([disabled])');
+    await page.click('[data-workflow-guided-generate]');
+    await page.waitForSelector('[data-workflow-current-result]');
     await page.click('[data-workflow-guided-approve]');
 
     await activeStage(page, '场景计划与细纲');
+    assert.strictEqual(await page.locator('[data-workflow-guided-return="direction"]').isVisible(), true);
     await page.click('[data-workflow-guided-generate]');
     await page.waitForSelector('[data-workflow-artifact-editor]:not([readonly])');
     const planEditor = page.locator('[data-workflow-artifact-editor]');

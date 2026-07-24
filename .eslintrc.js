@@ -9,6 +9,7 @@ const legacyShellGlobalNames = `
 acceptNativeGeneration
 acceptNativeRewrite
 activateReaderTransferTarget
+activeWorkflowStep
 addNativeChapter
 addNativeScene
 applyDesktopTheme
@@ -18,6 +19,8 @@ applyNativeEditorPrefs
 applyReaderPreferenceModel
 applyReaderSettings
 beginNativeSceneTitleEdit
+beginWorkflowReasoning
+beginWorkflowReasoningBatch
 bindCompendium
 bindCompendiumAgent
 bindCompendiumAgentQa
@@ -45,6 +48,7 @@ bindWorkflow
 bindWorkshop
 buildNativeRegenerateSelectionPrompt
 buildNativeRewritePrompt
+appendWorkflowReasoning
 cancelNativeGeneration
 captureReaderPositionLocator
 clampNumber
@@ -82,6 +86,7 @@ editNativeSummaryDialog
 EXPORT_OPTIONS_STORAGE_KEY
 fetchProjectSnapshot
 filteredCompendiumEntries
+finishWorkflowReasoning
 finishNativeSceneTitleEdit
 firstBookGlyph
 flushNativeEditorFields
@@ -123,6 +128,7 @@ loadWorkflowRuns
 loadWorkshopSessions
 loadWriterModelOverride
 markNativeDirty
+markWorkflowAnswerStarted
 maybeShiftReaderFlowWindow
 migrateLegacyReaderState
 modelCatalog
@@ -195,6 +201,10 @@ renderReader
 renderReaderLibrary
 renderReaderReading
 renderReaderWorkspace
+renderWorkflowReasoningBubble
+renderGuidedWorkflowInlineResult
+renderGuidedWorkflowRecoveryActions
+resumeGuidedWorkflowRun
 renderSummaryPromptTemplates
 renderWorkflow
 renderWorkflowGraph
@@ -216,6 +226,7 @@ scheduleReaderPreferenceSave
 scheduleReaderReflow
 selectedCompendiumEntry
 selectedCompendiumReferenceCards
+selectedWorkflowRun
 selectedPromptTemplate
 selectedSummaryPromptTemplate
 selectedWorkshopSession
@@ -253,6 +264,10 @@ updateReaderNavigationProgress
 updateReaderProgress
 updateReaderWorkspaceProgress
 workflowElements
+workflowGenerationLaunchConfig
+workflowGenerationPolicy
+workflowConfigLabel
+guidedStageProviderConfig
 workflowLockConstraints
 workflowState
 workshopState

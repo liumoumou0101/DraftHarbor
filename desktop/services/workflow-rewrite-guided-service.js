@@ -42,7 +42,7 @@ function definition(options = {}) {
     automationLevel: 'semi_automatic',
     nodes: STAGES.map((stage, index) => ({ ...stage, config: { requiresApproval: !['source', 'review'].includes(stage.id) }, position: { x: index * 240, y: 0 } })),
     edges: STAGES.slice(1).map((stage, index) => ({ id: `rewrite-edge-${index + 1}`, fromNodeId: STAGES[index].id, fromPortId: 'next', toNodeId: stage.id, toPortId: 'previous' })),
-    settings: { brief: options.brief || {}, constraints: normalizeConstraints(options) }
+    settings: { brief: options.brief || {}, constraints: normalizeConstraints(options), generationPolicy: options.generationPolicy || { providerProfileId: 'inherit' } }
   };
 }
 
@@ -144,5 +144,6 @@ module.exports = {
   getRewriteRun: runtime.getRun, prepareRewriteNode, completeRewriteNode,
   reviseRewriteArtifact: runtime.reviseArtifact, approveRewriteNode: runtime.approveNode,
   completeRewriteTransfer, cancelRewriteRun: runtime.cancelRun,
+  resumeRewriteRun: runtime.resumeRun,
   restartRewriteNode: runtime.restartFromNode
 };

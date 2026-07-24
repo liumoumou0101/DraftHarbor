@@ -6,6 +6,20 @@
     function list(value) { return Array.isArray(value) ? value : []; }
     function makeId(prefix, index) { return `${prefix}-${index + 1}`; }
     function uniqueStrings(value, limit = 30) { return [...new Set(list(value).map(clean).filter(Boolean))].slice(0, limit); }
+    function fineOutlineLine(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return clean(value);
+        const preferred = ['title', 'beat', 'action', 'event', 'description', 'detail', 'content', 'summary', 'purpose'];
+        const parts = preferred
+            .filter((key) => value[key] !== undefined)
+            .map((key) => clean(value[key]))
+            .filter(Boolean);
+        if (parts.length) return [...new Set(parts)].join(' — ');
+        return Object.values(value)
+            .filter((item) => ['string', 'number', 'boolean'].includes(typeof item))
+            .map(clean)
+            .filter(Boolean)
+            .join(' — ');
+    }
     function boundedNumber(value, fallback = 0, maximum = 100) {
         const number = Number(value);
         return Number.isFinite(number) ? Math.max(0, Math.min(maximum, number)) : fallback;
@@ -65,7 +79,7 @@
             mustInclude: uniqueStrings(item.mustInclude),
             avoid: uniqueStrings(item.avoid),
             continuity: clean(item.continuity),
-            fineOutline: fineOutlineEnabled ? list(item.fineOutline).map(clean).filter(Boolean) : []
+            fineOutline: fineOutlineEnabled ? list(item.fineOutline).map(fineOutlineLine).filter(Boolean) : []
         }));
         if (!scenes.length) throw new Error('scene plan requires at least one scene');
         return { schemaVersion: 1, kind: 'scene-plan', directionRevisionId: clean(input.directionRevisionId), fineOutlineEnabled, scenes };

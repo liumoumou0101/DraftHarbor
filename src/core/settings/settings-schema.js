@@ -204,6 +204,13 @@
         };
     }
 
+    function normalizeWorkflowGeneration(input = {}) {
+        const source = input && typeof input === 'object' ? input : {};
+        return {
+            providerProfileId: cleanString(source.providerProfileId || source.profileId, 'inherit') || 'inherit'
+        };
+    }
+
     function normalizeDesktopSettings(input = {}) {
         const providerInput = input.providerSettings || input.provider || input.ai || input;
         const generationInput = input.generationDefaults || input.generation || input;
@@ -218,6 +225,7 @@
             localModelSettings: normalizeLocalModelSettings(localInput),
             appearance: normalizeAppearanceSettings(input.appearance || input.appearanceSettings || {}),
             compendiumAgent: normalizeCompendiumAgentSettings(input.compendiumAgent),
+            workflowGeneration: normalizeWorkflowGeneration(input.workflowGeneration),
             globalPrompt: normalizeGlobalPrompt(input.globalPrompt || input.globalPromptPrefix || {}),
             globalStyleGuardRules: Array.isArray(input.globalStyleGuardRules) ? input.globalStyleGuardRules : [],
             updatedAt: input.updatedAt || ''
@@ -334,6 +342,7 @@
         normalizeCompendiumAgentSettings,
         normalizeGlobalPrompt,
         normalizeDesktopSettings,
+        normalizeWorkflowGeneration,
         providerRuntimeConfig,
         publicSettings,
         providerProfileRuntimeConfigs

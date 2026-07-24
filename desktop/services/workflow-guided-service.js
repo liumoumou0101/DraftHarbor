@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const runStore = require('../storage/workflow-run-store-v2');
 const artifactStore = require('../storage/workflow-artifact-store');
 const inputService = require('./workflow-input-service');
+const projectService = require('./project-service');
 const Review = require('./workflow-review-service');
 const PlanningSchema = require('../../src/core/workflow/workflow-planning-schema');
 const { createGuidedRuntime } = require('./workflow-guided-runtime-service');
@@ -60,9 +61,10 @@ function definition(options = {}) {
     nodes: STAGES.map((stage, index) => ({ ...stage, config: { requiresApproval: !['source', 'review'].includes(stage.id) }, position: { x: index * 240, y: 0 } })),
     edges: STAGES.slice(1).map((stage, index) => ({ id: `stage-edge-${index + 1}`, fromNodeId: STAGES[index].id, fromPortId: 'next', toNodeId: stage.id, toPortId: 'previous' })),
     settings: {
-      brief: clean(options.brief),
-      fineOutlineEnabled: options.fineOutlineEnabled !== false,
-      constraints: normalizeConstraints(options)
+        brief: clean(options.brief),
+        fineOutlineEnabled: options.fineOutlineEnabled !== false,
+        constraints: normalizeConstraints(options),
+        generationPolicy: options.generationPolicy || { providerProfileId: 'inherit' }
     }
   };
 }
@@ -84,6 +86,15 @@ async function startGuidedContinuation(options = {}) {
   if (!dataRoot || !projectId) throw new Error('guided workflow dataRoot and projectId are required');
   const targetPath = projectPath(dataRoot, projectId);
   const runId = clean(options.runId, id('continuation-run'));
+  if (options.readerTransfer) {
+    const transferredCharacters = Number(options.readerTransfer.snapshot && options.readerTransfer.snapshot.characterCount)
+      || String(options.readerTransfer.text || '').trim().length;
+    if (!transferredCharacters) throw new Error('续写来源没有正文内容，请先选择或填写非空正文');
+  } else {
+    const sourceProject = (await projectService.openProject(dataRoot, projectId)).project;
+    const sourcePreview = inputService.createSnapshot(sourceProject, options);
+    if (!sourcePreview.characterCount) throw new Error('续写来源没有正文内容，请先选择包含正文的场景、章节或项目');
+  }
   const created = await runStore.createWorkflowV2Run(targetPath, {
     id: runId,
     projectId,
@@ -141,16 +152,38 @@ async function prepareGuidedNode(options = {}) {
   const brief = run.settings && run.settings.brief || '';
   const constraints = run.settings && run.settings.constraints || [];
   if (nodeId === 'analysis') {
-    return { ok: true, nodeId, outputFormat: 'json', prompts: [{ id: 'analysis', prompt: jsonPrompt('分析小说原文，返回 hierarchicalSummary、outline、characterCandidates 三个字段。人物候选需包含 title、aliases、summary、characterProfile。', { brief, source: source.content }) }] };
+    return {
+      ok: true,
+      nodeId,
+      outputFormat: 'json',
+      prompts: [{
+        id: 'analysis',
+        prompt: jsonPrompt(
+          '只分析小说原文中已经出现的内容，不得续写、预测或引入新人物与新情节。返回 hierarchicalSummary、outline、characterCandidates 三个字段；outline 只能复述原文已有事件顺序，人物候选需包含 title、aliases、summary、characterProfile。',
+          { source: source.content }
+        )
+      }]
+    };
   }
   if (nodeId === 'direction') {
-    return { ok: true, nodeId, outputFormat: 'json', prompts: [{ id: 'direction', prompt: jsonPrompt('基于原文分析生成 2 到 4 个明显不同的续写方向。返回 {directions:[{id,title,premise,plotFocus,emotionalArc,risks:[]}] }。', { brief, analysis: analysis && analysis.content }) }] };
+    return {
+      ok: true,
+      nodeId,
+      outputFormat: 'json',
+      prompts: [{
+        id: 'direction',
+        prompt: jsonPrompt(
+          '基于原文分析生成 2 到 4 个明显不同的续写方向。所有方向都必须遵守 constraints；kind 为 exclusion 且 enforcement 为 hard 的内容不得作为候选、风险或变体出现。返回 {directions:[{id,title,premise,plotFocus,emotionalArc,risks:[]}] }。',
+          { brief, analysis: analysis && analysis.content, constraints }
+        )
+      }]
+    };
   }
   if (nodeId === 'plan') {
     const fineOutlineEnabled = run.settings.fineOutlineEnabled !== false;
     const persistedDirectionIds = direction && direction.content && Array.isArray(direction.content.selectedDirectionIds) ? direction.content.selectedDirectionIds : [];
     const selectedDirectionIds = Array.isArray(options.selectedDirectionIds) && options.selectedDirectionIds.length ? options.selectedDirectionIds : persistedDirectionIds;
-    return { ok: true, nodeId, outputFormat: 'json', prompts: [{ id: 'plan', prompt: jsonPrompt(`设计续写场景计划。返回 {fineOutlineEnabled:${fineOutlineEnabled},scenes:[{id,title,povCharacter,location,goal,conflict,outcome,emotionalBeat,fineOutline:[]}] }。`, { brief, source: source.content, directions: direction && direction.content, selectedDirectionIds, fineOutlineEnabled, constraints }) }] };
+    return { ok: true, nodeId, outputFormat: 'json', prompts: [{ id: 'plan', prompt: jsonPrompt(`设计续写场景计划。fineOutline 必须是字符串数组，每项是一条可直接执行的情节动作，不得返回对象。返回 {fineOutlineEnabled:${fineOutlineEnabled},scenes:[{id,title,povCharacter,location,goal,conflict,outcome,emotionalBeat,fineOutline:["情节动作"]}] }。`, { brief, source: source.content, directions: direction && direction.content, selectedDirectionIds, fineOutlineEnabled, constraints }) }] };
   }
   if (nodeId === 'draft') {
     const plan = PlanningSchema.createScenePlan(planArtifact && planArtifact.content || {});
@@ -263,6 +296,7 @@ module.exports = {
   approveGuidedNode,
   completeGuidedTransfer,
   cancelGuidedRun,
+  resumeGuidedRun: guidedRuntime.resumeRun,
   restartGuidedNode: guidedRuntime.restartFromNode,
   parseJsonOutput
 };

@@ -12,6 +12,7 @@
             providerDefaults: document.querySelector('[data-settings-provider-defaults]'),
             globalPromptEnabled: document.querySelector('[data-settings-global-prompt-enabled]'),
             globalPrompt: document.querySelector('[data-settings-global-prompt]'),
+            workflowProfile: document.querySelector('[data-settings-workflow-profile]'),
             compendiumAgentEnabled: document.querySelector('[data-settings-compendium-agent-enabled]'),
             compendiumAgentProfile: document.querySelector('[data-settings-compendium-agent-profile]'),
             compendiumAgentMaxCards: document.querySelector('[data-settings-compendium-agent-max-cards]'),
@@ -106,6 +107,7 @@
         const defaults = settings.generationDefaults || {};
         const local = settings.localModelSettings || {};
         const agent = settings.compendiumAgent || {};
+        const workflow = settings.workflowGeneration || {};
         const agentAvailable = compendiumAgentFeatureAvailable();
 
         if (elements.mode) elements.mode.value = provider.mode || 'local';
@@ -123,6 +125,14 @@
         if (elements.globalPromptEnabled) elements.globalPromptEnabled.checked = !!(settings.globalPrompt && settings.globalPrompt.enabled);
         if (elements.globalPrompt) elements.globalPrompt.value = settings.globalPrompt && settings.globalPrompt.content || '';
         if (elements.compendiumAgentMaxCards) elements.compendiumAgentMaxCards.value = agent.maxCardsPerRun || 30;
+        if (elements.workflowProfile) {
+            elements.workflowProfile.replaceChildren();
+            const inherit = document.createElement('option'); inherit.value = 'inherit'; inherit.textContent = '继承默认写作连接（全局）'; elements.workflowProfile.appendChild(inherit);
+            (settings.providerProfiles || []).filter((profile) => modelCatalog().isApiCompatibleProvider(profile.provider)).forEach((profile) => {
+                const option = document.createElement('option'); option.value = profile.id; option.textContent = `${profile.name || profile.provider} · ${profile.model || '默认模型'}${profile.hasApiKey ? '' : ' · 缺少密钥'}`; elements.workflowProfile.appendChild(option);
+            });
+            elements.workflowProfile.value = workflow.providerProfileId || 'inherit';
+        }
         if (elements.compendiumAgentProfile) {
             elements.compendiumAgentProfile.replaceChildren();
             const empty = document.createElement('option'); empty.value = ''; empty.textContent = '请选择专用 API 配置组'; elements.compendiumAgentProfile.appendChild(empty);
@@ -136,7 +146,7 @@
         });
 
         const isBusy = settingsState.loading || settingsState.saving;
-        [elements.mode, elements.provider, elements.endpoint, elements.model, elements.apiKey, elements.temperature, elements.maxTokens, elements.providerDefaults, elements.globalPromptEnabled, elements.globalPrompt, elements.compendiumAgentEnabled, elements.compendiumAgentProfile, elements.compendiumAgentMaxCards, elements.compendiumAgentApiProvider, elements.compendiumAgentApiEndpoint, elements.compendiumAgentApiModel, elements.compendiumAgentApiKey, elements.compendiumAgentApiSave, elements.compendiumAgentApiTest, elements.test, elements.refresh, elements.theme, elements.themeSave].forEach((field) => {
+        [elements.mode, elements.provider, elements.endpoint, elements.model, elements.apiKey, elements.temperature, elements.maxTokens, elements.providerDefaults, elements.globalPromptEnabled, elements.globalPrompt, elements.workflowProfile, elements.compendiumAgentEnabled, elements.compendiumAgentProfile, elements.compendiumAgentMaxCards, elements.compendiumAgentApiProvider, elements.compendiumAgentApiEndpoint, elements.compendiumAgentApiModel, elements.compendiumAgentApiKey, elements.compendiumAgentApiSave, elements.compendiumAgentApiTest, elements.test, elements.refresh, elements.theme, elements.themeSave].forEach((field) => {
             if (field) field.disabled = isBusy || (field === elements.apiKey && provider.mode === 'local');
         });
         renderCompendiumAgentApiEditor();
@@ -148,7 +158,7 @@
     }
 
     function setSettingsCategory(target) {
-        const allowed = new Set(['provider', 'profiles', 'generation', 'appearance', 'tts', 'storage']);
+        const allowed = new Set(['provider', 'profiles', 'generation', 'workflow', 'appearance', 'tts', 'storage']);
         if (compendiumAgentFeatureAvailable()) allowed.add('compendium-agent');
         const next = allowed.has(target) ? target : 'provider';
         settingsState.activeSection = next;
@@ -183,6 +193,8 @@
             provider: `${provider.mode === 'api' ? '云端' : '本地'} · ${settingsProviderLabel(provider.provider)}`,
             profiles: `${provider.mode === 'api' ? '默认连接' : '本地默认'}${profiles.length ? ` · ${profiles.length} 个独立档案` : ''}`,
             generation: defaults.useProviderDefaults ? '跟随模型默认值' : `${defaults.temperature ?? 0.8} · ${formatNumber(defaults.maxTokens || 2000)} tokens`,
+            workflow: (settings.workflowGeneration || {}).providerProfileId && (settings.workflowGeneration || {}).providerProfileId !== 'inherit'
+                ? '专用配置组已选择' : '继承默认写作连接',
             'compendium-agent': settings.compendiumAgent && settings.compendiumAgent.enabled ? (settings.compendiumAgent.providerProfileId ? '专用配置组已选择' : '请选择配置组') : '未启用',
             appearance: themeLabels[(settings.appearance || {}).theme] || '墨灰书房',
             tts: settingsElements().ttsVoice && settingsElements().ttsVoice.value ? '已选择本机声音' : '本机语音',
@@ -634,6 +646,9 @@
             globalPrompt: {
                 enabled: !!(elements.globalPromptEnabled && elements.globalPromptEnabled.checked),
                 content: elements.globalPrompt ? elements.globalPrompt.value.trim() : ''
+            },
+            workflowGeneration: {
+                providerProfileId: elements.workflowProfile ? elements.workflowProfile.value : ((current.workflowGeneration || {}).providerProfileId || 'inherit')
             },
             compendiumAgent: {
                 enabled: elements.compendiumAgentEnabled ? !!elements.compendiumAgentEnabled.checked : !!(current.compendiumAgent && current.compendiumAgent.enabled),
