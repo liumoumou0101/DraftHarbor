@@ -52,11 +52,18 @@ function prepareCreationStage(stage, context = {}) {
   if (stage === 'compendium') {
     return {
       outputFormat: 'json',
-      prompts: [{
-        id: 'creation-compendium',
-        title: '人物与世界观资料草稿',
-        prompt: jsonPrompt('基于故事蓝图生成人物与世界观资料草稿。必须复用资料库类型 character、location、organization、item、lore、timeline、note。返回 {cards:[{id,type,title,summary,body,tags,aliases,characterProfile:{role,goal,motivation,conflict,voice,currentState,knowledge,relationshipNotes}}]}；非人物卡省略 characterProfile。', { brief, selectedDirection, blueprint, constraints })
-      }]
+      prompts: [
+        {
+          id: 'creation-compendium-characters',
+          title: '人物资料草稿',
+          prompt: jsonPrompt('基于故事蓝图只生成角色资料。返回 {cards:[{id,type:"character",title,summary,body,tags,aliases,characterProfile:{role,goal,motivation,conflict,voice,currentState,knowledge,relationshipNotes}}]}。覆盖主角、主要对手和推动故事所需的关键配角，不要生成地点或世界设定。', { brief, selectedDirection, blueprint, constraints })
+        },
+        {
+          id: 'creation-compendium-world',
+          title: '世界观资料草稿',
+          prompt: jsonPrompt('基于故事蓝图只生成世界观资料。必须复用资料库类型 location、organization、item、lore、timeline、note。返回 {cards:[{id,type,title,summary,body,tags,aliases}]}。覆盖故事成立所需的关键地点、组织、物件、规则或历史，不要重复生成人物。', { brief, selectedDirection, blueprint, constraints })
+        }
+      ]
     };
   }
   const compendium = CreationSchema.createCompendiumDraftBundle(context.compendium || {}, { projectId: context.projectId });

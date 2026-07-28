@@ -100,6 +100,7 @@ async function prepareRewriteNode(options = {}) {
 }
 
 async function completeRewriteNode(options = {}) {
+  if (options.generationFailure) return runtime.recordGenerationFailure(options);
   const details = await runtime.getRun(options.dataRoot, options.projectId, options.runId);
   const nodeId = clean(options.nodeId, details.run.activeNodeId);
   const source = latest(details.run.artifacts, 'source');

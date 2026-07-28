@@ -37,8 +37,11 @@ async function generateAndApprove(page, title) {
 
     await page.evaluate(() => {
       window.__creationThinkingSeen = false;
+      window.__blueprintRepairSeen = false;
+      window.__structuredMaxTokensSeen = 0;
       window.__draftHarborGenerationStub = async (prompt, onToken, settings) => {
         if (settings && settings.enableThinking) window.__creationThinkingSeen = true;
+        window.__structuredMaxTokensSeen = Math.max(window.__structuredMaxTokensSeen, Number(settings && settings.maxTokens) || 0);
         const system = prompt.messages[0].content;
         let output = '';
         onToken('正在推演新作结构与人物关系…', { type: 'reasoning' });
@@ -54,11 +57,21 @@ async function generateAndApprove(page, title) {
             { id: 'identity', title: '身份谜案', premise: '潜水员追查多个自己的来源。', plotFocus: '记忆与复制', emotionalArc: '迷惘到决断', risks: [] },
             { id: 'city', title: '城市阴谋', premise: '管理 AI 正在改写整座城市的记忆。', plotFocus: '集体真相', emotionalArc: '信任到背叛', risks: [] }
           ] });
-        } else if (system.includes('设计可编辑的长篇故事蓝图')) {
+        } else if (system.includes('严格的 JSON 修复器')) {
+          const repair = JSON.parse(prompt.messages[1].content);
+          window.__blueprintRepairSeen = repair.task.includes('故事蓝图');
           output = JSON.stringify({ title: '潮汐回声', logline: '失忆潜水员必须证明自己不是复制品。', themes: ['身份'], centralConflict: { protagonistGoal: '找回死亡记录', opposingForce: '管理 AI', stakes: '幸存者身份', dilemma: '真相会摧毁共同记忆' }, acts: [{ id: 'dive', title: '下潜', purpose: '进入沉城', turningPoint: '发现自己的墓碑', emotionalDirection: '疑惑转恐惧' }], characterArcs: [{ character: '苏晚', start: '逃避', change: '直面真相', end: '主动选择身份' }], worldRules: ['城市随潮汐沉没'], endingDirection: '开放式胜利' });
-        } else if (system.includes('人物与世界观资料草稿')) {
+        } else if (system.includes('设计可编辑的长篇故事蓝图')) {
+          output = '{"title":"潮汐回声","logline":"被截断的蓝图';
+          onToken(output, { type: 'content' });
+          onToken('', { type: 'finish', finishReason: 'length' });
+          return;
+        } else if (system.includes('只生成角色资料')) {
           output = JSON.stringify({ cards: [
-            { id: 'su-wan', type: 'character', title: '苏晚', summary: '失忆潜水员', aliases: [], characterProfile: { role: '主角', goal: '找回记录', motivation: '证明存在', conflict: '害怕自己是复制品' } },
+            { id: 'su-wan', type: 'character', title: '苏晚', summary: '失忆潜水员', aliases: [], characterProfile: { role: '主角', goal: '找回记录', motivation: '证明存在', conflict: '害怕自己是复制品' } }
+          ] });
+        } else if (system.includes('只生成世界观资料')) {
+          output = JSON.stringify({ cards: [
             { id: 'tide-city', type: 'location', title: '潮汐城', summary: '周期性被海水淹没的城市' }
           ] });
         } else if (system.includes('场景计划')) {
@@ -152,6 +165,7 @@ async function generateAndApprove(page, title) {
     await page.click('[data-workflow-guided-generate]');
     await page.waitForSelector('[data-workflow-artifact-editor]:not([readonly])');
     assert.ok((await page.locator('[data-workflow-status]').innerText()).includes('已从本地运行恢复'), 'a completed node must recover when the browser loses the completion response');
+    assert.strictEqual(await page.evaluate(() => window.__blueprintRepairSeen), true, 'truncated JSON should be repaired automatically before completion');
     assert.strictEqual(await page.locator('[data-workflow-reasoning-bubble]').isHidden(), true, 'completed reasoning must stay out of the artifact editor');
     assert.strictEqual(await page.locator('[data-workflow-reasoning-show]').count(), 1, 'the run must retain its launch-time thinking setting after the form changes');
     await page.click('[data-workflow-guided-cancel]');
@@ -199,6 +213,7 @@ async function generateAndApprove(page, title) {
     const compendium = await compendiumResponse.json();
     assert.ok(compendium.entries.some((entry) => entry.title === '苏晚' && entry.aliases.includes('小晚')));
     assert.ok(compendium.entries.some((entry) => entry.title === '潮汐城'));
+    assert.ok(await page.evaluate(() => window.__structuredMaxTokensSeen >= 16000), 'long structured workflow stages should receive an expanded output budget');
     assert.deepStrictEqual(browserErrors, []);
     console.log('Workflow creation guided UI test passed.');
   } finally {

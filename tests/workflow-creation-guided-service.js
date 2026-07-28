@@ -4,6 +4,7 @@ const os = require('os');
 const path = require('path');
 const projectService = require('../desktop/services/project-service');
 const Creation = require('../desktop/services/workflow-creation-guided-service');
+const eventStore = require('../desktop/storage/workflow-event-store-v2');
 const { startDesktopServers } = require('../desktop/local-server');
 
 (async () => {
@@ -21,6 +22,20 @@ const { startDesktopServers } = require('../desktop/local-server');
     let details = await Creation.getCreationRun(dataRoot, created.project.id, base.runId);
     assert.strictEqual(details.run.activeNodeId, 'direction');
     assert.strictEqual(details.run.artifacts.find((artifact) => artifact.nodeId === 'brief').revision.reviewState, 'approved');
+    await Creation.completeCreationNode({
+      ...base,
+      generationFailure: {
+        code: 'json_repair_output_limit',
+        message: 'JSON truncated',
+        repairAttempted: true,
+        outputs: [{ promptId: 'creation-directions', characters: 2306, tail: '"unfinished', finishReason: 'length' }]
+      }
+    });
+    const diagnosticEvents = await eventStore.listWorkflowV2Events(created.projectPath, base.runId);
+    const failureEvent = diagnosticEvents.find((event) => event.type === 'guided_node_generation_failed');
+    assert.ok(failureEvent, 'generation failures should be persisted as workflow diagnostics');
+    assert.strictEqual(failureEvent.payload.outputs[0].finishReason, 'length');
+    assert.strictEqual(failureEvent.payload.outputs[0].characters, 2306);
 
     const directions = { directions: [
       { id: 'identity', title: '身份谜案', premise: '追查多个自己的来源。' },
@@ -58,6 +73,9 @@ const { startDesktopServers } = require('../desktop/local-server');
     );
     await Creation.approveCreationNode(base);
 
+    prepared = await Creation.prepareCreationNode(base);
+    assert.strictEqual(prepared.nodeId, 'compendium');
+    assert.strictEqual(prepared.prompts.length, 2, 'compendium generation should be split into character and world batches');
     const cards = { cards: [
       { type: 'character', title: '苏晚', summary: '失忆潜水员', characterProfile: { role: '主角', goal: '找回记录', motivation: '证明存在' } },
       { type: 'location', title: '潮汐城', summary: '周期性被海水淹没的城市' }

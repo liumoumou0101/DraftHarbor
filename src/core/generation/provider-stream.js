@@ -243,9 +243,12 @@
         if (!response.body || typeof response.body.getReader !== 'function') {
             const payload = await response.json();
             if (typeof onActivity === 'function') onActivity();
-            const message = payload && payload.choices && payload.choices[0] ? payload.choices[0].message || {} : {};
+            const choice = payload && payload.choices && payload.choices[0] ? payload.choices[0] : {};
+            const message = choice.message || {};
             if (message.reasoning_content) emit(message.reasoning_content, { type: 'reasoning' });
             if (message.content) emit(message.content, { type: 'content' });
+            if (choice.finish_reason) emit('', { type: 'finish', finishReason: choice.finish_reason });
+            if (payload && payload.usage) emit('', { type: 'usage', usage: payload.usage });
             return;
         }
 
@@ -256,6 +259,7 @@
             const delta = choice && choice.delta ? choice.delta : {};
             if (request.thinking && delta.reasoning_content) emit(delta.reasoning_content, { type: 'reasoning' });
             if (delta.content) emit(delta.content, request.thinking ? { type: 'content' } : undefined);
+            if (choice && choice.finish_reason) emit('', { type: 'finish', finishReason: choice.finish_reason });
         }, onActivity);
     }
 
