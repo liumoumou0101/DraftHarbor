@@ -42,7 +42,14 @@ async function generateAndApprove(page, title) {
         const system = prompt.messages[0].content;
         let output = '';
         onToken('正在推演新作结构与人物关系…', { type: 'reasoning' });
-        if (system.includes('创意方向')) {
+        if (system.includes('长篇小说策划编辑')) {
+          await new Promise((resolve) => setTimeout(resolve, 60));
+          output = JSON.stringify({
+            workingTitle: '潮汐回声', premise: '失忆潜水员在沉没城市寻找自己的死亡记录。', genre: '科幻悬疑', targetLength: 180000,
+            themes: ['身份', '记忆'], tone: '潮湿、冷峻', pov: '第三人称限知', setting: '周期性沉没的近未来海港城',
+            endingPreference: '真相揭开但保留代价', mustInclude: ['死亡记录'], avoid: ['梦境解释一切'], notes: '主角必须主动做出选择。'
+          });
+        } else if (system.includes('创意方向')) {
           output = JSON.stringify({ directions: [
             { id: 'identity', title: '身份谜案', premise: '潜水员追查多个自己的来源。', plotFocus: '记忆与复制', emotionalArc: '迷惘到决断', risks: [] },
             { id: 'city', title: '城市阴谋', premise: '管理 AI 正在改写整座城市的记忆。', plotFocus: '集体真相', emotionalArc: '信任到背叛', risks: [] }
@@ -70,14 +77,36 @@ async function generateAndApprove(page, title) {
     });
 
     await page.selectOption('[data-workflow-mode]', 'creation');
+    assert.strictEqual(await page.locator('[data-workflow-thinking]').isChecked(), true, 'workflow thinking must be enabled by default for supported models');
+    assert.ok(await page.locator('[data-workflow-model] option').count() >= 1, 'workflow launch must expose its effective model');
+    await page.click('[data-workflow-creation-fields] > details > summary');
     await page.fill('[data-workflow-creation-title]', '潮汐档案');
-    await page.fill('[data-workflow-creation-premise]', '失忆潜水员寻找自己的死亡记录。');
+    await page.fill('[data-workflow-creation-inspiration]', '失忆潜水员寻找自己的死亡记录。');
     await page.fill('[data-workflow-creation-genre]', '科幻悬疑');
     await page.fill('[data-workflow-creation-target-length]', '180000');
     await page.fill('[data-workflow-creation-themes]', '身份，记忆');
     await page.fill('[data-workflow-creation-setting]', '周期性沉没的近未来海港城');
-    await page.check('[data-workflow-thinking]');
-    assert.strictEqual(await page.locator('[data-workflow-start-creation]').isDisabled(), false, 'from-zero creation must be available without an existing project');
+    assert.strictEqual(await page.locator('[data-workflow-start-creation]').isDisabled(), true, 'creation must wait for an approved Brief');
+    await page.click('[data-workflow-creation-complete]');
+    await page.waitForFunction(() => document.querySelector('[data-workflow-reasoning-content]')?.textContent.includes('正在推演新作结构'));
+    await page.waitForSelector('[data-workflow-creation-brief]:not([hidden])');
+    assert.strictEqual(await page.locator('[data-workflow-brief-thinking]').isChecked(), true, 'Brief rewrite must share the workflow thinking setting');
+    assert.strictEqual(await page.locator('[data-workflow-brief-model]').inputValue(), await page.locator('[data-workflow-model]').inputValue(), 'Brief rewrite must share the workflow model');
+    assert.strictEqual(await page.locator('[data-workflow-creation-brief-editor="workingTitle"]').inputValue(), '潮汐档案', 'user-provided title must remain locked during completion');
+    await page.click('[data-workflow-creation-brief-close]');
+    assert.strictEqual(await page.locator('[data-workflow-creation-brief]').isHidden(), true, 'Brief close button must hide the editor');
+    await page.click('[data-workflow-creation-edit]');
+    assert.strictEqual(await page.locator('[data-workflow-creation-brief]').isVisible(), true, 'Brief editor must reopen from the launcher');
+    await page.keyboard.press('Escape');
+    assert.strictEqual(await page.locator('[data-workflow-creation-brief]').isHidden(), true, 'Escape must close the Brief editor');
+    await page.click('[data-workflow-creation-edit]');
+    await page.check('[data-workflow-creation-brief-field="tone"]');
+    await page.fill('[data-workflow-creation-rewrite-instruction]', '更冷峻一些。');
+    await page.click('[data-workflow-creation-rewrite]');
+    await page.waitForFunction(() => document.querySelector('[data-workflow-creation-brief-editor="tone"]')?.value === '潮湿、冷峻');
+    await page.click('[data-workflow-creation-apply]');
+    assert.strictEqual(await page.locator('[data-workflow-creation-brief]').isHidden(), true, 'saving the Brief must return to the launcher');
+    assert.strictEqual(await page.locator('[data-workflow-start-creation]').isDisabled(), false, 'from-zero creation must be available after confirming the Brief');
     await page.click('[data-workflow-start-creation]');
 
     await page.waitForFunction(() => document.querySelector('[data-native-project-title]')?.textContent.includes('潮汐档案'));
@@ -106,8 +135,23 @@ async function generateAndApprove(page, title) {
     assert.strictEqual(await page.locator('[data-workflow-guided-return="direction"]').isVisible(), true);
     await page.click('[data-workflow-launcher] > summary');
     await page.uncheck('[data-workflow-thinking]');
+    await page.evaluate(() => {
+      const originalFetch = window.fetch.bind(window);
+      let dropCompletedBlueprintResponse = true;
+      window.fetch = async (...args) => {
+        const response = await originalFetch(...args);
+        const url = String(args[0] || '');
+        if (dropCompletedBlueprintResponse && url.includes('/api/workflows/v2/complete-creation-node')) {
+          dropCompletedBlueprintResponse = false;
+          window.fetch = originalFetch;
+          throw new TypeError('simulated lost response after server completion');
+        }
+        return response;
+      };
+    });
     await page.click('[data-workflow-guided-generate]');
     await page.waitForSelector('[data-workflow-artifact-editor]:not([readonly])');
+    assert.ok((await page.locator('[data-workflow-status]').innerText()).includes('已从本地运行恢复'), 'a completed node must recover when the browser loses the completion response');
     assert.strictEqual(await page.locator('[data-workflow-reasoning-bubble]').isHidden(), true, 'completed reasoning must stay out of the artifact editor');
     assert.strictEqual(await page.locator('[data-workflow-reasoning-show]').count(), 1, 'the run must retain its launch-time thinking setting after the form changes');
     await page.click('[data-workflow-guided-cancel]');

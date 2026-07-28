@@ -2,7 +2,8 @@
         const settings = normalizeDesktopSettings(settingsState.settings || {});
         const configured = (settings.workflowGeneration || {}).providerProfileId || 'inherit';
         const profileId = configured === 'inherit' ? '' : configured;
-        const config = runtimeProviderConfig(profileId ? { profileId } : {});
+        const selectedModel = workflowState.workflowModel || 'inherit';
+        const config = runtimeProviderConfig({ ...(profileId ? { profileId } : {}), ...(selectedModel !== 'inherit' ? { model: selectedModel } : {}) });
         const profile = profileId ? (settings.providerProfiles || []).find((item) => item.id === profileId) : null;
         return {
             providerProfileId: configured,
@@ -18,11 +19,40 @@
                 model: config.model || '',
                 temperature: config.temperature,
                 maxTokens: config.maxTokens,
-                enableThinking: !!workflowElements().thinking?.checked,
+                enableThinking: workflowState.workflowThinking !== false,
                 useProviderDefaults: !!config.useProviderDefaults
             }
         };
     }
+
+    window.renderWorkflowModelControl = function renderWorkflowModelControl() {
+        const elements = workflowElements();
+        const selects = [elements.workflowModel, elements.briefWorkflowModel].filter(Boolean);
+        if (!selects.length) return;
+        const settings = normalizeDesktopSettings(settingsState.settings || {});
+        const configured = (settings.workflowGeneration || {}).providerProfileId || 'inherit';
+        const profileId = configured === 'inherit' ? '' : configured;
+        const config = runtimeProviderConfig(profileId ? { profileId } : {});
+        const catalog = modelCatalog();
+        const selected = workflowState.workflowModel || 'inherit';
+        selects.forEach((select) => {
+            select.replaceChildren();
+            const inherited = document.createElement('option');
+            inherited.value = 'inherit'; inherited.textContent = `使用配置默认模型（${config.model || '未设置'}）`;
+            select.appendChild(inherited);
+            if (config.mode === 'api' && catalog.isApiCompatibleProvider(config.provider)) {
+                catalog.getProviderModels(config.provider).filter((item) => item.id !== '__custom__').forEach((item) => {
+                    const option = document.createElement('option'); option.value = item.id; option.textContent = item.label || item.id; select.appendChild(option);
+                });
+            }
+            select.disabled = select.options.length < 2;
+            select.value = Array.from(select.options).some((option) => option.value === selected) ? selected : 'inherit';
+        });
+        if (!selects.some((select) => select.value === selected)) workflowState.workflowModel = 'inherit';
+        [elements.thinking, elements.briefThinking].filter(Boolean).forEach((toggle) => {
+            toggle.checked = workflowState.workflowThinking !== false;
+        });
+    };
 
     function workflowGenerationPolicy(run = selectedWorkflowRun()) {
         return (run && run.settings && run.settings.generationPolicy) || workflowGenerationLaunchConfig();
@@ -40,7 +70,7 @@
         const profileId = policy.providerProfileId && policy.providerProfileId !== 'inherit' ? policy.providerProfileId : '';
         const config = runtimeProviderConfig(profileId ? { profileId } : {});
         const thinking = snapshot.enableThinking === undefined
-            ? !!workflowElements().thinking?.checked
+            ? workflowState.workflowThinking !== false
             : !!snapshot.enableThinking;
         const minimums = { analysis: 4000, direction: 3000, blueprint: 5000, compendium: 5000, plan: 4000, draft: 6000, rewrite: 6000, repair: 6000, review: 3000 };
         const minimum = minimums[nodeId] || 3000;

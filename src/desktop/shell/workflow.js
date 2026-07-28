@@ -15,6 +15,9 @@
             exclusionLocks: document.querySelector('[data-workflow-exclusion-locks]'),
             fineOutline: document.querySelector('[data-workflow-fine-outline]'),
             thinking: document.querySelector('[data-workflow-thinking]'),
+            workflowModel: document.querySelector('[data-workflow-model]'),
+            briefThinking: document.querySelector('[data-workflow-brief-thinking]'),
+            briefWorkflowModel: document.querySelector('[data-workflow-brief-model]'),
             start: document.querySelector('[data-workflow-start-guided]'),
             startCreation: document.querySelector('[data-workflow-start-creation]'),
             startRewrite: document.querySelector('[data-workflow-start-rewrite]'),
@@ -25,6 +28,7 @@
             rewritePov: document.querySelector('[data-workflow-rewrite-pov]'),
             rewriteRatio: document.querySelector('[data-workflow-rewrite-ratio]'),
             creationTitle: document.querySelector('[data-workflow-creation-title]'),
+            creationInspiration: document.querySelector('[data-workflow-creation-inspiration]'),
             creationPremise: document.querySelector('[data-workflow-creation-premise]'),
             creationGenre: document.querySelector('[data-workflow-creation-genre]'),
             creationTargetLength: document.querySelector('[data-workflow-creation-target-length]'),
@@ -32,6 +36,16 @@
             creationTone: document.querySelector('[data-workflow-creation-tone]'),
             creationPov: document.querySelector('[data-workflow-creation-pov]'),
             creationSetting: document.querySelector('[data-workflow-creation-setting]'),
+            creationComplete: document.querySelector('[data-workflow-creation-complete]'),
+            creationBrief: document.querySelector('[data-workflow-creation-brief]'),
+            creationBriefFields: document.querySelector('[data-workflow-creation-brief-fields]'),
+            creationBriefStatus: document.querySelector('[data-workflow-creation-brief-status]'),
+            creationEditorStatus: document.querySelector('[data-workflow-creation-editor-status]'),
+            creationRewriteInstruction: document.querySelector('[data-workflow-creation-rewrite-instruction]'),
+            creationRewrite: document.querySelector('[data-workflow-creation-rewrite]'),
+            creationApply: document.querySelector('[data-workflow-creation-apply]'),
+            creationEdit: document.querySelector('[data-workflow-creation-edit]'),
+            creationBriefClose: document.querySelector('[data-workflow-creation-brief-close]'),
             legacyStart: document.querySelector('[data-workflow-start]'),
             status: document.querySelector('[data-workflow-status]'),
             runList: document.querySelector('[data-workflow-run-list]'),
@@ -129,6 +143,7 @@
         if (elements.legacyStart) elements.legacyStart.hidden = creation || rewrite;
         if (elements.modeNote) elements.modeNote.textContent = rewrite ? '大段重写：冻结原文后，确认重写计划，分场景重写、修复衔接、预览差异并选择回流。' : creation
             ? '从零创作：确认 Brief 后，依次设计方向、故事蓝图、人物与世界观、节奏细纲、正文和回流。' : '续写引导：冻结原文后，依次确认分析、方向、细纲、正文、审查和回流。';
+        if (typeof window.renderWorkflowModelControl === 'function') window.renderWorkflowModelControl();
     }
 
     function workflowLockConstraints(elements) {
@@ -147,6 +162,7 @@
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
         workflowState.runs = workflowState.runs.map((run) => run.id === runId ? result.run : run);
+        if (nativeEditorState.snapshot) nativeEditorState.snapshot.workflowRuns = workflowState.runs;
         const artifacts = result.run.artifacts || [];
         const direction = artifacts.filter((artifact) => artifact.nodeId === 'direction').slice(-1)[0];
         const persistedDirectionIds = direction && direction.content && Array.isArray(direction.content.selectedDirectionIds)
@@ -203,7 +219,7 @@
             elements.modeNote.textContent = `正在查看：${label}。新建流程设置已单独收起，不会改变当前运行。`;
         }
         if (elements.start) elements.start.disabled = !projectId || workflowState.generating;
-        if (elements.startCreation) elements.startCreation.disabled = workflowState.generating;
+        if (elements.startCreation) elements.startCreation.disabled = workflowState.generating || !workflowState.creationBrief;
         if (elements.startRewrite) elements.startRewrite.disabled = !projectId || workflowState.generating;
         if (elements.legacyStart) elements.legacyStart.disabled = !projectId || workflowState.generating;
         if (elements.title) {
@@ -1018,10 +1034,157 @@
         return String(value || '').split(/[,，]/).map((item) => item.trim()).filter(Boolean);
     }
 
+    const creationBriefFields = Object.freeze([
+        ['workingTitle', '暂定书名', 'input'], ['premise', '核心前提', 'textarea'], ['genre', '题材', 'input'],
+        ['targetLength', '目标字数', 'number'], ['themes', '主题', 'textarea'], ['tone', '基调', 'input'],
+        ['pov', '视角', 'input'], ['setting', '世界 / 时空设定', 'textarea'], ['endingPreference', '结局倾向', 'input'],
+        ['mustInclude', '必须包含', 'textarea'], ['avoid', '避免项', 'textarea'], ['notes', '补充备注', 'textarea']
+    ]);
+
+    function creationBriefFromInputs(elements = workflowElements()) {
+        return {
+            workingTitle: elements.creationTitle?.value.trim() || '',
+            premise: elements.creationInspiration?.value.trim() || elements.creationPremise?.value.trim() || '',
+            genre: elements.creationGenre?.value.trim() || '',
+            targetLength: Number(elements.creationTargetLength?.value) || 0,
+            themes: commaSeparatedValues(elements.creationThemes?.value),
+            tone: elements.creationTone?.value.trim() || '',
+            pov: elements.creationPov?.value.trim() || '',
+            setting: elements.creationSetting?.value.trim() || '',
+            endingPreference: '', mustInclude: [], avoid: [], notes: ''
+        };
+    }
+
+    function normalizeCreationBriefDraft(input = {}) {
+        const clean = (value) => String(value === undefined || value === null ? '' : value).trim();
+        const lines = (value) => Array.isArray(value) ? value.map(clean).filter(Boolean) : String(value || '').split(/[\n，,]/).map(clean).filter(Boolean);
+        return {
+            workingTitle: clean(input.workingTitle || input.title), premise: clean(input.premise || input.coreIdea || input.inspiration),
+            genre: clean(input.genre), targetLength: Math.max(0, Number(input.targetLength || input.targetWords) || 0),
+            themes: lines(input.themes), tone: clean(input.tone), pov: clean(input.pov || input.pointOfView), setting: clean(input.setting),
+            endingPreference: clean(input.endingPreference), mustInclude: lines(input.mustInclude), avoid: lines(input.avoid), notes: clean(input.notes)
+        };
+    }
+
+    function creationBriefValueForEditor(brief, key) {
+        const value = brief[key];
+        return Array.isArray(value) ? value.join('，') : String(value === undefined || value === null ? '' : value);
+    }
+
+    function setCreationBriefStatus(message, tone = 'info') {
+        const elements = workflowElements();
+        [elements.creationBriefStatus, elements.creationEditorStatus].filter(Boolean).forEach((status) => {
+            status.textContent = message || '';
+            status.dataset.tone = tone;
+        });
+    }
+
+    function renderCreationBrief() {
+        const elements = workflowElements();
+        const brief = workflowState.creationBrief;
+        if (elements.creationBrief) elements.creationBrief.hidden = !brief || !workflowState.creationBriefOpen;
+        if (elements.creationComplete) elements.creationComplete.disabled = workflowState.creationBriefGenerating;
+        if (elements.creationEdit) elements.creationEdit.hidden = !brief;
+        if (elements.creationRewrite) elements.creationRewrite.disabled = !brief || workflowState.creationBriefGenerating;
+        if (elements.creationApply) elements.creationApply.disabled = !brief || workflowState.creationBriefGenerating;
+        if (!brief || !elements.creationBriefFields) return;
+        elements.creationBriefFields.replaceChildren();
+        creationBriefFields.forEach(([key, label, kind]) => {
+            const row = document.createElement('label');
+            row.className = 'desktop-workflow-creation-brief-field';
+            const select = document.createElement('input'); select.type = 'checkbox'; select.dataset.workflowCreationBriefField = key; select.setAttribute('aria-label', `选择重写${label}`);
+            const title = document.createElement('span'); title.textContent = label;
+            const editor = document.createElement(kind === 'textarea' ? 'textarea' : 'input');
+            if (kind === 'number') { editor.type = 'number'; editor.min = '0'; editor.step = '1000'; }
+            if (kind === 'textarea') editor.rows = key === 'premise' ? 4 : 2;
+            editor.value = creationBriefValueForEditor(brief, key);
+            editor.dataset.workflowCreationBriefEditor = key;
+            editor.addEventListener('input', () => {
+                const next = { ...workflowState.creationBrief };
+                next[key] = ['themes', 'mustInclude', 'avoid'].includes(key) ? commaSeparatedValues(editor.value) : (key === 'targetLength' ? Number(editor.value) || 0 : editor.value.trim());
+                workflowState.creationBrief = normalizeCreationBriefDraft(next);
+            });
+            row.append(select, title, editor);
+            elements.creationBriefFields.appendChild(row);
+        });
+    }
+
+    function creationBriefPrompt(brief, fields, instruction) {
+        return {
+            messages: [
+                { role: 'system', content: '你是长篇小说策划编辑。只输出合法 JSON 对象，不要 Markdown。允许字段：workingTitle,premise,genre,targetLength,themes,tone,pov,setting,endingPreference,mustInclude,avoid,notes。targetLength 是正整数；themes、mustInclude、avoid 是字符串数组。' },
+                { role: 'user', content: `创作灵感与当前 Brief：\n${JSON.stringify(brief, null, 2)}\n\n只生成或重写这些字段：${fields.join(', ')}。用户已有的其他字段必须保持不变。${instruction ? `\n额外要求：${instruction}` : ''}` }
+            ],
+            asString() { return this.messages.map((message) => `<|im_start|>${message.role}\n${message.content}<|im_end|>`).join('\n'); }
+        };
+    }
+
+    function parseCreationBriefOutput(text) {
+        const cleaned = String(text || '').trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+        const output = JSON.parse(cleaned);
+        if (!output || typeof output !== 'object' || Array.isArray(output)) throw new Error('AI 没有返回有效的 Brief 对象');
+        return output;
+    }
+
+    async function generateCreationBrief(fields, instruction = '') {
+        const elements = workflowElements();
+        const source = workflowState.creationBrief || creationBriefFromInputs(elements);
+        if (!source.premise) throw new Error('请先写下一点灵感、关键词或故事片段');
+        if (!window.DraftHarborProviderStream || typeof window.DraftHarborProviderStream.streamGeneration !== 'function') throw new Error('生成服务尚未加载');
+        workflowState.creationBriefGenerating = true;
+        renderCreationBrief();
+        setCreationBriefStatus('AI 正在补全创作设定…');
+        const stageConfig = guidedStageProviderConfig('brief');
+        const taskLabel = workflowState.creationBrief ? '重写创作 Brief 字段' : '补全创作 Brief';
+        beginWorkflowReasoning(stageConfig, taskLabel);
+        beginWorkflowReasoningBatch(taskLabel, 0, 1);
+        try {
+            let text = '';
+            await window.DraftHarborProviderStream.streamGeneration(creationBriefPrompt(source, fields, instruction), (token, meta) => {
+                if (meta && meta.type === 'reasoning') appendWorkflowReasoning(token);
+                else if (!meta || meta.type === 'content') {
+                    markWorkflowAnswerStarted();
+                    text += token;
+                }
+            }, { ...stageConfig, includeUsage: true });
+            const rawPatch = parseCreationBriefOutput(text);
+            const patch = normalizeCreationBriefDraft(rawPatch);
+            const next = { ...source };
+            fields.forEach((key) => { if (Object.prototype.hasOwnProperty.call(rawPatch, key)) next[key] = patch[key]; });
+            workflowState.creationBrief = normalizeCreationBriefDraft(next);
+            workflowState.creationBriefOpen = true;
+            renderCreationBrief();
+            setCreationBriefStatus(fields.length === creationBriefFields.length ? '设定已补全。可直接修改，或勾选字段后让 AI 重写。' : '所选字段已重写。可继续修改后开始创作。', 'ok');
+            finishWorkflowReasoning(true, '创作 Brief 已生成。');
+        } catch (error) {
+            finishWorkflowReasoning(false, `Brief 生成失败：${error.message || error}`);
+            throw error;
+        } finally {
+            workflowState.creationBriefGenerating = false;
+            renderCreationBrief();
+        }
+    }
+
+    function syncCreationBriefToInputs() {
+        const elements = workflowElements();
+        const brief = workflowState.creationBrief;
+        if (!brief) return;
+        if (elements.creationTitle) elements.creationTitle.value = brief.workingTitle;
+        if (elements.creationInspiration) elements.creationInspiration.value = brief.premise;
+        if (elements.creationPremise) elements.creationPremise.value = brief.premise;
+        if (elements.creationGenre) elements.creationGenre.value = brief.genre;
+        if (elements.creationTargetLength) elements.creationTargetLength.value = brief.targetLength || '';
+        if (elements.creationThemes) elements.creationThemes.value = brief.themes.join('，');
+        if (elements.creationTone) elements.creationTone.value = brief.tone;
+        if (elements.creationPov) elements.creationPov.value = brief.pov;
+        if (elements.creationSetting) elements.creationSetting.value = brief.setting;
+    }
+
     async function startCreationWorkflowRun() {
         const projectId = currentProjectId();
         const elements = workflowElements();
-        const premise = elements.creationPremise ? elements.creationPremise.value.trim() : '';
+        const confirmedBrief = workflowState.creationBrief ? normalizeCreationBriefDraft(workflowState.creationBrief) : null;
+        const premise = confirmedBrief ? confirmedBrief.premise : '';
         if (!premise) throw new Error('请先填写核心创意或故事前提');
         workflowState.generating = true;
         setWorkflowStatus('正在创建从零创作引导...', 'info');
@@ -1033,18 +1196,11 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    ...(projectId ? { projectId } : { project: { title: elements.creationTitle ? elements.creationTitle.value : '', description: premise, status: '构思中' } }),
+                    ...(projectId ? { projectId } : { project: { title: confirmedBrief.workingTitle, description: premise, status: '构思中' } }),
                     brief: {
-                        workingTitle: elements.creationTitle ? elements.creationTitle.value : '',
-                        premise,
-                        genre: elements.creationGenre ? elements.creationGenre.value : '',
-                        targetLength: Number(elements.creationTargetLength && elements.creationTargetLength.value) || 0,
-                        themes: commaSeparatedValues(elements.creationThemes && elements.creationThemes.value),
-                        tone: elements.creationTone ? elements.creationTone.value : '',
-                        pov: elements.creationPov ? elements.creationPov.value : '',
-                        setting: elements.creationSetting ? elements.creationSetting.value : '',
-                        mustInclude: workflowLockConstraints(elements).filter((item) => item.kind === 'direction').map((item) => item.text),
-                        avoid: workflowLockConstraints(elements).filter((item) => item.kind === 'exclusion').map((item) => item.text)
+                        ...confirmedBrief,
+                        mustInclude: [...confirmedBrief.mustInclude, ...workflowLockConstraints(elements).filter((item) => item.kind === 'direction').map((item) => item.text)],
+                        avoid: [...confirmedBrief.avoid, ...workflowLockConstraints(elements).filter((item) => item.kind === 'exclusion').map((item) => item.text)]
                     },
                     fineOutlineEnabled: !elements.fineOutline || elements.fineOutline.checked,
                     constraints: workflowLockConstraints(elements),
@@ -1099,6 +1255,7 @@
         const run = selectedWorkflowRun();
         const step = activeWorkflowStep(run);
         if (!projectId || !run || !step || workflowState.generating) return;
+        let completionStatus = '';
         workflowState.lastGenerationError = '';
         workflowState.generating = true;
         setWorkflowStatus(step.id === 'review' ? '正在执行自动审查...' : `正在生成：${step.title}`, 'info');
@@ -1139,19 +1296,36 @@
             });
             const completed = await completeResponse.json().catch(() => ({}));
             if (!completeResponse.ok || !completed.ok) throw new Error(completed.error || `HTTP ${completeResponse.status}`);
-            workflowState.runs = workflowState.runs.map((item) => item.id === run.id ? completed.run : item);
-            const artifact = (completed.run.artifacts || []).filter((item) => item.nodeId === step.id).slice(-1)[0];
+            const refreshedRun = await loadGuidedWorkflowRun(run.id);
+            const artifact = (refreshedRun.artifacts || []).filter((item) => item.nodeId === step.id).slice(-1)[0];
             workflowState.selectedArtifactId = artifact ? artifact.id : workflowState.selectedArtifactId;
             await loadWorkflowEvents();
-            setWorkflowStatus(step.id === 'review' ? '自动审查完成。' : '生成完成，请检查并按需修改。', 'ok');
+            completionStatus = step.id === 'review' ? '自动审查完成。' : '生成完成，请检查并按需修改。';
             finishWorkflowReasoning(true, '模型响应完成，结果已返回。');
         } catch (error) {
+            let recoveredRun = null;
+            try {
+                recoveredRun = await loadGuidedWorkflowRun(run.id);
+            } catch {
+                recoveredRun = null;
+            }
+            const recoveredStep = recoveredRun && (recoveredRun.steps || []).find((item) => item.id === step.id);
+            const recoveredArtifact = recoveredRun && (recoveredRun.artifacts || []).filter((item) => item.nodeId === step.id).slice(-1)[0];
+            if (recoveredStep && ['waiting_user', 'completed'].includes(recoveredStep.status) && recoveredArtifact) {
+                workflowState.selectedArtifactId = recoveredArtifact.id;
+                workflowState.lastGenerationError = '';
+                await loadWorkflowEvents().catch(() => {});
+                completionStatus = step.id === 'review' ? '自动审查已完成，已从本地运行恢复。' : '生成已经完成，结果已从本地运行恢复，请检查并确认。';
+                finishWorkflowReasoning(true, '模型结果已保存，并已从本地运行恢复。');
+                return;
+            }
             workflowState.lastGenerationError = error && error.message ? error.message : String(error);
             finishWorkflowReasoning(false, `响应失败：${error.message || error}`);
             throw error;
         } finally {
             workflowState.generating = false;
             renderWorkflow();
+            if (completionStatus) setWorkflowStatus(completionStatus, 'ok');
         }
     }
 
@@ -1385,6 +1559,60 @@
         if (elements.mode) elements.mode.addEventListener('change', () => {
             renderWorkflowLaunchMode();
             renderWorkflow();
+        });
+        [elements.workflowModel, elements.briefWorkflowModel].filter(Boolean).forEach((select) => select.addEventListener('change', () => {
+            workflowState.workflowModel = select.value || 'inherit';
+            window.renderWorkflowModelControl?.();
+            renderWorkflow();
+        }));
+        [elements.thinking, elements.briefThinking].filter(Boolean).forEach((toggle) => toggle.addEventListener('change', () => {
+            workflowState.workflowThinking = !!toggle.checked;
+            window.renderWorkflowModelControl?.();
+            renderWorkflow();
+        }));
+        if (elements.creationComplete) elements.creationComplete.addEventListener('click', () => {
+            const draft = creationBriefFromInputs(elements);
+            const fields = creationBriefFields.map(([key]) => key).filter((key) => {
+                const value = draft[key];
+                return key !== 'premise' && (!value || (Array.isArray(value) && !value.length));
+            });
+            if (!fields.length) {
+                setCreationBriefStatus('所有字段都已有内容；请勾选要重写的字段。', 'info');
+                workflowState.creationBrief = draft;
+                workflowState.creationBriefOpen = true;
+                renderCreationBrief();
+                return;
+            }
+            generateCreationBrief(fields).catch((error) => setCreationBriefStatus(`补全失败：${error.message || error}`, 'error'));
+        });
+        if (elements.creationRewrite) elements.creationRewrite.addEventListener('click', () => {
+            const fields = Array.from(document.querySelectorAll('[data-workflow-creation-brief-field]:checked')).map((item) => item.dataset.workflowCreationBriefField).filter(Boolean);
+            if (!fields.length) { setCreationBriefStatus('请先勾选一个或多个要重写的字段。', 'error'); return; }
+            const instruction = [
+                '保持未选择字段不变；让所选字段与整体故事设定一致、具体且可执行。',
+                elements.creationRewriteInstruction?.value.trim() || ''
+            ].filter(Boolean).join(' ');
+            generateCreationBrief(fields, instruction).catch((error) => setCreationBriefStatus(`重写失败：${error.message || error}`, 'error'));
+        });
+        if (elements.creationApply) elements.creationApply.addEventListener('click', () => {
+            syncCreationBriefToInputs();
+            workflowState.creationBriefOpen = false;
+            renderCreationBrief();
+            renderWorkflow();
+            setCreationBriefStatus('Brief 已确认，可开始从零创作。', 'ok');
+        });
+        if (elements.creationEdit) elements.creationEdit.addEventListener('click', () => {
+            workflowState.creationBriefOpen = true;
+            renderCreationBrief();
+        });
+        if (elements.creationBriefClose) elements.creationBriefClose.addEventListener('click', () => {
+            workflowState.creationBriefOpen = false;
+            renderCreationBrief();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape' || !workflowState.creationBriefOpen) return;
+            workflowState.creationBriefOpen = false;
+            renderCreationBrief();
         });
         if (elements.start) elements.start.addEventListener('click', () => startGuidedWorkflowRun().catch((error) => setWorkflowStatus(`启动失败：${error.message || error}`, 'error')));
         if (elements.startCreation) elements.startCreation.addEventListener('click', () => startCreationWorkflowRun().catch((error) => setWorkflowStatus(`启动失败：${error.message || error}`, 'error')));
