@@ -167,13 +167,17 @@ async function openProject(dataRoot, projectId) {
   return readProject(paths.projectDir(dataRoot, projectId));
 }
 
+function isReservedProjectDirectory(name) {
+  return name === 'backups' || name === '.removed-projects' || name.startsWith('.');
+}
+
 async function listProjects(dataRoot) {
   const root = paths.projectsRoot(dataRoot);
   try {
     const entries = await fs.readdir(root, { withFileTypes: true });
     const summaries = [];
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+      if (!entry.isDirectory() || isReservedProjectDirectory(entry.name)) continue;
       const projectPath = path.join(root, entry.name);
       const manifestFile = paths.manifestPath(projectPath);
       const stats = await fs.stat(projectPath);

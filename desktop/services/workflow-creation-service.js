@@ -67,7 +67,7 @@ function prepareCreationStage(stage, context = {}) {
       prompts: [{
         id: 'creation-scene-plan',
         title: '节奏与场景计划',
-        prompt: jsonPrompt(`设计首批可生成的场景计划。返回 {fineOutlineEnabled:${fineOutlineEnabled},scenes:[{id,title,povCharacter,location,goal,conflict,outcome,participants,turningPoint,reveal,hook,emotionalStart,emotionalEnd,emotionalBeat,pace:"slow|medium|fast",conflictIntensity:0,informationDensity:0,targetWords:0,mustInclude:[],avoid:[],continuity,fineOutline:[]}]}。`, { brief, selectedDirection, blueprint, compendium, constraints })
+        prompt: jsonPrompt(`设计首批可生成的场景计划。fineOutline 必须是字符串数组，每项是一条可直接执行的情节动作，不得返回对象。返回 {fineOutlineEnabled:${fineOutlineEnabled},scenes:[{id,title,povCharacter,location,goal,conflict,outcome,participants,turningPoint,reveal,hook,emotionalStart,emotionalEnd,emotionalBeat,pace:"slow|medium|fast",conflictIntensity:0,informationDensity:0,targetWords:0,mustInclude:[],avoid:[],continuity,fineOutline:["情节动作"]}]}。`, { brief, selectedDirection, blueprint, compendium, constraints })
       }]
     };
   }

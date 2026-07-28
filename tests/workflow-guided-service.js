@@ -19,13 +19,23 @@ const Guided = require('../desktop/services/workflow-guided-service');
         : scene)
     });
 
+    const empty = await projectService.createProject(dataRoot, { id: 'empty-guided-project', title: '空正文' });
+    await assert.rejects(
+      () => Guided.startGuidedContinuation({ dataRoot, projectId: empty.project.id, runId: 'empty-run', scope: 'project' }),
+      /续写来源没有正文内容/
+    );
+    const emptyRunsPath = path.join(empty.projectPath, 'workflows', 'v2', 'runs');
+    const emptyRuns = await fs.readdir(emptyRunsPath).catch(() => []);
+    assert.strictEqual(emptyRuns.length, 0, 'empty continuation must not leave an orphan run');
+
     const started = await Guided.startGuidedContinuation({
       dataRoot,
       projectId: created.project.id,
       runId: 'guided-run',
       scope: 'chapter',
       chapterId,
-      brief: '续写钟楼谜案，保持悬疑感。'
+      brief: '续写钟楼谜案，保持悬疑感。',
+      constraints: [{ id: 'no-supernatural', kind: 'exclusion', text: '不要引入超自然设定', enforcement: 'hard' }]
     });
     assert.ok(started.ok);
     let details = await Guided.getGuidedRun(dataRoot, created.project.id, 'guided-run');
@@ -57,6 +67,9 @@ const Guided = require('../desktop/services/workflow-guided-service');
     details = await Guided.getGuidedRun(dataRoot, created.project.id, 'guided-run');
     assert.strictEqual(details.run.artifacts.find((artifact) => artifact.nodeId === 'analysis').revision.parentRevisionId, approvedAnalysisRevisionId);
     await Guided.approveGuidedNode({ dataRoot, projectId: created.project.id, runId: 'guided-run' });
+    const directionPrepared = await Guided.prepareGuidedNode({ dataRoot, projectId: created.project.id, runId: 'guided-run' });
+    assert.ok(JSON.stringify(directionPrepared.prompts[0].prompt).includes('不要引入超自然设定'));
+    assert.ok(JSON.stringify(directionPrepared.prompts[0].prompt).includes('不得作为候选'));
 
     await Guided.completeGuidedNode({
       dataRoot, projectId: created.project.id, runId: 'guided-run',

@@ -684,7 +684,7 @@ const handleKnowledgeApi = createKnowledgeController({
   readSettings, createPreRestoreBackup
 });
 const handleWorkshopApi = createWorkshopController({ workshopService, readJsonPayload, jsonResponse });
-const readerWorkflowTransferService = createReaderWorkflowTransferService({ readerTransferService, projectService, workflowGuidedService, workflowRewriteGuidedService }); const handleWorkflowApi = createWorkflowController({ workflowService, workflowTransferService, workflowGuidedService, workflowCreationGuidedService, workflowRewriteGuidedService, workflowVariantService, workflowTemplateService, readerWorkflowTransferService, createPreRestoreBackup, readJsonPayload, jsonResponse });
+const readerWorkflowTransferService = createReaderWorkflowTransferService({ readerTransferService, projectService, workflowGuidedService, workflowRewriteGuidedService }); const handleWorkflowApi = createWorkflowController({ workflowService, workflowTransferService, workflowGuidedService, workflowCreationGuidedService, workflowRewriteGuidedService, workflowVariantService, workflowTemplateService, readerWorkflowTransferService, projectService, createPreRestoreBackup, readJsonPayload, jsonResponse });
 const handleReaderApi = createReaderController({
   readerStore: readerDocumentStore,
   readerStateStore,

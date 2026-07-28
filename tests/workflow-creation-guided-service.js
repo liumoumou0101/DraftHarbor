@@ -42,6 +42,20 @@ const { startDesktopServers } = require('../desktop/local-server');
       acts: [{ title: '下潜', purpose: '进入沉城', turningPoint: '发现自己的墓碑' }]
     };
     await Creation.completeCreationNode({ ...base, outputs: [JSON.stringify(blueprint)] });
+    const blueprintBeforeCancel = (await Creation.getCreationRun(dataRoot, created.project.id, base.runId))
+      .run.artifacts.find((artifact) => artifact.nodeId === 'blueprint');
+    details = await Creation.cancelCreationRun(base);
+    assert.strictEqual(details.run.status, 'cancelled');
+    assert.strictEqual(details.run.activeNodeId, '');
+    details = await Creation.resumeCreationRun(base);
+    assert.strictEqual(details.run.status, 'in_progress');
+    assert.strictEqual(details.run.activeNodeId, 'blueprint');
+    assert.strictEqual(details.run.steps.find((step) => step.id === 'blueprint').status, 'waiting_user');
+    assert.strictEqual(
+      details.run.artifacts.find((artifact) => artifact.nodeId === 'blueprint').revision.id,
+      blueprintBeforeCancel.revision.id,
+      'resuming must preserve the generated artifact revision'
+    );
     await Creation.approveCreationNode(base);
 
     const cards = { cards: [

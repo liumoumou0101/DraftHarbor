@@ -31,16 +31,22 @@
                         <h2>创作流程</h2>
                         <p data-workflow-project-label>从书库打开项目后启动。</p>
                         <p class="desktop-workflow-sidebar-note" data-workflow-mode-note>续写引导：冻结原文后，依次确认分析、方向、细纲、正文、审查和回流。</p>
+                        <p class="desktop-workflow-sidebar-note" data-workflow-ai-config>AI 配置读取中…</p>
                     </div>
-                    <label>
-                        <span>工作流类型</span>
-                        <select data-workflow-mode>
-                            <option value="continuation">续写现有作品</option>
-                            <option value="creation">从零构建新作</option>
-                            <option value="rewrite">大段重写现有正文</option>
-                        </select>
-                    </label>
-                    <section class="desktop-workflow-launch-fields" data-workflow-continuation-fields>
+                    <details class="desktop-workflow-launcher" data-workflow-launcher open>
+                        <summary>
+                            <span><strong data-workflow-launcher-title>新建创作流程</strong><small>展开设置，不会改变当前运行</small></span>
+                        </summary>
+                        <div class="desktop-workflow-launcher-body">
+                            <label>
+                                <span>工作流类型</span>
+                                <select data-workflow-mode>
+                                    <option value="continuation">续写现有作品</option>
+                                    <option value="creation">从零构建新作</option>
+                                    <option value="rewrite">大段重写现有正文</option>
+                                </select>
+                            </label>
+                            <section class="desktop-workflow-launch-fields" data-workflow-continuation-fields>
                         <label>
                             <span>原文范围</span>
                             <select data-workflow-source-scope>
@@ -53,8 +59,8 @@
                             <span>续写设定 (Brief)</span>
                             <textarea data-workflow-brief rows="5" placeholder="写下本次续写要遵守的题材、主线、角色、限制和目标。"></textarea>
                         </label>
-                    </section>
-                    <section class="desktop-workflow-launch-fields" data-workflow-rewrite-fields hidden>
+                            </section>
+                            <section class="desktop-workflow-launch-fields" data-workflow-rewrite-fields hidden>
                         <label><span>重写范围</span><select data-workflow-rewrite-scope><option value="chapter">当前章节</option><option value="scene">当前场景</option><option value="project">整个项目</option></select></label>
                         <label><span>重写目标</span><textarea data-workflow-rewrite-instruction rows="5" placeholder="例如：压缩冗余铺垫，强化冲突，但保留人物动机和关键线索。"></textarea></label>
                         <div class="desktop-workflow-field-grid">
@@ -63,8 +69,8 @@
                             <label><span>目标视角</span><input data-workflow-rewrite-pov placeholder="第三人称限知"></label>
                             <label><span>长度比例</span><input data-workflow-rewrite-ratio type="number" min="0.1" max="5" step="0.1" value="1"></label>
                         </div>
-                    </section>
-                    <section class="desktop-workflow-launch-fields" data-workflow-creation-fields hidden>
+                            </section>
+                            <section class="desktop-workflow-launch-fields" data-workflow-creation-fields hidden>
                         <label>
                             <span>暂定书名</span>
                             <input data-workflow-creation-title placeholder="例如：潮汐尽头的灯塔">
@@ -81,28 +87,31 @@
                         </div>
                         <label><span>主题（逗号分隔）</span><input data-workflow-creation-themes placeholder="记忆，身份，救赎"></label>
                         <label><span>世界 / 时空设定</span><input data-workflow-creation-setting placeholder="近未来海港城"></label>
-                    </section>
-                    <label>
+                            </section>
+                            <label>
                         <span>倾向锁（每行一个）</span>
                         <textarea data-workflow-direction-locks rows="3" placeholder="例如：强化主角与导师之间的不信任"></textarea>
-                    </label>
-                    <label>
+                            </label>
+                            <label>
                         <span>排除锁（每行一个）</span>
                         <textarea data-workflow-exclusion-locks rows="3" placeholder="例如：不要揭晓幕后凶手"></textarea>
-                    </label>
-                    <label class="desktop-workflow-toggle">
+                            </label>
+                            <label class="desktop-workflow-toggle">
                         <input type="checkbox" data-workflow-fine-outline checked>
                         <span>正文前生成可编辑细纲</span>
-                    </label>
-                    <label class="desktop-workflow-toggle" title="开启后 DeepSeek 会返回额外的思考流；结构化任务可能更慢，请按需启用。">
+                            </label>
+                            <label class="desktop-workflow-toggle" title="开启后 DeepSeek 会返回额外的思考流；结构化任务可能更慢，请按需启用。">
                         <input type="checkbox" data-workflow-thinking>
                         <span>深度思考（气泡实时显示）</span>
-                    </label>
-                    <button class="desktop-primary-action" type="button" data-workflow-start-guided>开始续写引导</button>
-                    <button class="desktop-primary-action" type="button" data-workflow-start-creation hidden>开始从零创作</button>
-                    <button class="desktop-primary-action" type="button" data-workflow-start-rewrite hidden>开始大段重写</button>
-                    <button class="desktop-mini-action" type="button" data-workflow-start>启动旧版兼容流程</button>
-                    <div class="desktop-compendium-status" data-workflow-status>未打开项目</div>
+                            </label>
+                            <button class="desktop-primary-action" type="button" data-workflow-start-guided>开始续写引导</button>
+                            <button class="desktop-primary-action" type="button" data-workflow-start-creation hidden>开始从零创作</button>
+                            <button class="desktop-primary-action" type="button" data-workflow-start-rewrite hidden>开始大段重写</button>
+                            <button class="desktop-mini-action" type="button" data-workflow-start>启动旧版兼容流程</button>
+                        </div>
+                    </details>
+                    <div class="desktop-compendium-status" data-workflow-status role="status" aria-live="polite">未打开项目</div>
+                    <p class="desktop-workflow-list-heading">运行记录</p>
                     <div class="desktop-workflow-run-list" data-workflow-run-list></div>
                 </aside>
                 <section class="desktop-workflow-main">
@@ -129,13 +138,13 @@
                         <pre data-workflow-reasoning-content aria-live="off">正在连接模型…</pre>
                     </aside>
 
+                    <div class="desktop-workflow-stage-actions" data-workflow-stage-actions hidden></div>
                     <div class="desktop-workflow-steps" data-workflow-steps></div>
                     <section class="desktop-workflow-graph" data-workflow-graph aria-label="只读工作流图" hidden></section>
-                    <div class="desktop-workflow-stage-actions" data-workflow-stage-actions hidden></div>
                     <div class="desktop-workflow-artifacts" data-workflow-artifacts></div>
-                    <details class="desktop-workflow-events-details" data-workflow-events-details open>
+                    <details class="desktop-workflow-events-details" data-workflow-events-details>
                         <summary data-workflow-events-summary>
-                            <span class="desktop-workflow-events-title">事件日志</span>
+                            <span class="desktop-workflow-events-title">诊断记录</span>
                             <span class="desktop-workflow-events-count" data-workflow-events-count></span>
                         </summary>
                         <div class="desktop-workflow-events" data-workflow-events></div>

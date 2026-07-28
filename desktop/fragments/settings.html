@@ -22,6 +22,10 @@
                             <strong>生成参数</strong>
                             <span data-settings-cat-summary="generation">读取中</span>
                         </button>
+                        <button type="button" class="desktop-settings-cat-item" data-settings-cat-target="workflow">
+                            <strong>工作流 AI</strong>
+                            <span data-settings-cat-summary="workflow">读取中</span>
+                        </button>
                         <button type="button" class="desktop-settings-cat-item" data-settings-cat-target="compendium-agent">
                             <strong>资料库管家</strong>
                             <span data-settings-cat-summary="compendium-agent">读取中</span>
@@ -168,6 +172,15 @@
                             <textarea data-settings-global-prompt rows="6" placeholder="会作为每次 AI 请求的第一条 system 指令，例如固定世界观、输出限制或其他跨模板规则。"></textarea>
                             <small>优先级高于正文、摘要、改写、讨论和工作流模板。关闭开关后不会发送。</small>
                         </label>
+                    </section>
+
+                    <section class="desktop-settings-section" data-settings-section="workflow">
+                        <div class="desktop-settings-section-heading">
+                            <div><p class="desktop-section-kicker">Workflow AI</p><h3>工作流专用模型</h3></div>
+                            <span>续写、从零创作与重写</span>
+                        </div>
+                        <p class="desktop-settings-desc">此选择只供工作流使用，不影响写作区或资料库管家。选择“继承默认写作连接”时使用全局写作配置；选择配置组后，工作流使用该配置组。每次启动工作流都会冻结非敏感配置快照，历史运行不会因之后切换模型而悄悄改变。</p>
+                        <label><span>工作流使用的 AI 配置</span><select data-settings-workflow-profile></select></label>
                     </section>
 
                     <section class="desktop-settings-section" data-settings-section="compendium-agent">

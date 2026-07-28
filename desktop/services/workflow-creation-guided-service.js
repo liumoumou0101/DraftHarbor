@@ -40,7 +40,7 @@ function definition(options = {}) {
     automationLevel: 'semi_automatic',
     nodes: STAGES.map((stage, index) => ({ ...stage, config: { requiresApproval: !['brief', 'review'].includes(stage.id) }, position: { x: index * 240, y: 0 } })),
     edges: STAGES.slice(1).map((stage, index) => ({ id: `creation-edge-${index + 1}`, fromNodeId: STAGES[index].id, fromPortId: 'next', toNodeId: stage.id, toPortId: 'previous' })),
-    settings: { fineOutlineEnabled: options.fineOutlineEnabled !== false, constraints: normalizeConstraints(options) }
+    settings: { fineOutlineEnabled: options.fineOutlineEnabled !== false, constraints: normalizeConstraints(options), generationPolicy: options.generationPolicy || { providerProfileId: 'inherit' } }
   };
 }
 
@@ -142,5 +142,6 @@ module.exports = {
   getCreationRun: runtime.getRun, prepareCreationNode, completeCreationNode,
   reviseCreationArtifact: runtime.reviseArtifact, approveCreationNode: runtime.approveNode,
   completeCreationTransfer: runtime.completeTransfer, cancelCreationRun: runtime.cancelRun,
+  resumeCreationRun: runtime.resumeRun,
   restartCreationNode: runtime.restartFromNode
 };

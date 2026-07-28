@@ -8,7 +8,7 @@ const Guided = require('../desktop/services/workflow-guided-service');
 const Transfer = require('../desktop/services/workflow-transfer-service');
 
 const DATA_ROOT = path.resolve(__dirname, '..');
-const PROJECT_ID = 'f09-real-provider-acceptance-20260715';
+const PROJECT_ID = process.env.WORKFLOW_REAL_PROJECT_ID || 'f09-real-provider-acceptance-20260715';
 const PRICE_USD_PER_MILLION = {
   'deepseek-v4-flash': { hit: 0.0028, miss: 0.14, output: 0.28 },
   'deepseek-v4-pro': { hit: 0.003625, miss: 0.435, output: 0.87 }

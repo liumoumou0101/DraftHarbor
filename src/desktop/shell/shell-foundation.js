@@ -194,6 +194,7 @@
         variantSelections: {},
         pendingVariantId: '',
         pendingVariantApproved: false,
+        lastGenerationError: '',
         reasoning: {
             visible: false,
             dismissed: false,
