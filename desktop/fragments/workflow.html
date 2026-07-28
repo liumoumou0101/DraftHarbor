@@ -46,6 +46,16 @@
                                     <option value="rewrite">大段重写现有正文</option>
                                 </select>
                             </label>
+                            <div class="desktop-workflow-ai-controls" aria-label="本次工作流 AI 设置">
+                                <label>
+                                    <span>本次模型</span>
+                                    <select data-workflow-model aria-label="本次工作流模型"></select>
+                                </label>
+                                <label class="desktop-workflow-toggle" title="开启后会实时显示模型返回的思考流。">
+                                    <input type="checkbox" data-workflow-thinking checked>
+                                    <span>深度思考</span>
+                                </label>
+                            </div>
                             <section class="desktop-workflow-launch-fields" data-workflow-continuation-fields>
                         <label>
                             <span>原文范围</span>
@@ -72,21 +82,40 @@
                             </section>
                             <section class="desktop-workflow-launch-fields" data-workflow-creation-fields hidden>
                         <label>
-                            <span>暂定书名</span>
-                            <input data-workflow-creation-title placeholder="例如：潮汐尽头的灯塔">
+                            <span>灵感、关键词或故事片段</span>
+                            <textarea data-workflow-creation-inspiration rows="5" placeholder="想到什么写什么：人物、画面、冲突、题材、关键词都可以。AI 会据此补全创作设定。"></textarea>
                         </label>
-                        <label>
-                            <span>核心创意 / 故事前提</span>
-                            <textarea data-workflow-creation-premise rows="5" placeholder="主角是谁、遭遇什么变化、必须完成什么，以及失败的代价。"></textarea>
-                        </label>
-                        <div class="desktop-workflow-field-grid">
-                            <label><span>题材</span><input data-workflow-creation-genre placeholder="悬疑 / 奇幻"></label>
-                            <label><span>目标字数</span><input data-workflow-creation-target-length type="number" min="0" step="1000" placeholder="200000"></label>
-                            <label><span>基调</span><input data-workflow-creation-tone placeholder="冷峻、克制"></label>
-                            <label><span>视角</span><input data-workflow-creation-pov placeholder="第三人称限知"></label>
+                        <details>
+                            <summary>我想先指定一些方向（可选）</summary>
+                            <div class="desktop-workflow-field-grid">
+                                <label><span>暂定书名</span><input data-workflow-creation-title placeholder="例如：潮汐尽头的灯塔"></label>
+                                <label><span>题材</span><input data-workflow-creation-genre placeholder="悬疑 / 奇幻"></label>
+                                <label><span>目标字数</span><input data-workflow-creation-target-length type="number" min="0" step="1000" placeholder="200000"></label>
+                                <label><span>基调</span><input data-workflow-creation-tone placeholder="冷峻、克制"></label>
+                                <label><span>视角</span><input data-workflow-creation-pov placeholder="第三人称限知"></label>
+                            </div>
+                            <label><span>主题（逗号分隔）</span><input data-workflow-creation-themes placeholder="记忆，身份，救赎"></label>
+                            <label><span>世界 / 时空设定</span><input data-workflow-creation-setting placeholder="近未来海港城"></label>
+                        </details>
+                        <div class="desktop-workflow-launch-actions">
+                            <button class="desktop-secondary-action" type="button" data-workflow-creation-complete>AI 补全创作设定</button>
+                            <button class="desktop-secondary-action" type="button" data-workflow-creation-edit hidden>编辑当前 Brief</button>
+                            <span data-workflow-creation-brief-status aria-live="polite">先写下一点灵感，再让 AI 补全其余设定。</span>
                         </div>
-                        <label><span>主题（逗号分隔）</span><input data-workflow-creation-themes placeholder="记忆，身份，救赎"></label>
-                        <label><span>世界 / 时空设定</span><input data-workflow-creation-setting placeholder="近未来海港城"></label>
+                        <section class="desktop-workflow-creation-brief" data-workflow-creation-brief hidden aria-live="polite">
+                            <header><div><p class="desktop-section-kicker">Creation Brief</p><strong>创作 Brief 草稿</strong><p>可直接修改任意项；勾选多个字段后可让 AI 只重写这些项。</p></div><button class="desktop-icon-button" type="button" data-workflow-creation-brief-close aria-label="收起 Brief 编辑，当前修改会保留" title="收起，当前修改会保留">×</button></header>
+                            <div class="desktop-workflow-creation-brief-fields" data-workflow-creation-brief-fields></div>
+                            <label><span>重写要求（可选）</span><textarea data-workflow-creation-rewrite-instruction rows="2" placeholder="例如：更冷峻，强化悬疑感，不要改变既定世界设定。"></textarea></label>
+                            <div class="desktop-workflow-ai-controls desktop-workflow-ai-controls-brief" aria-label="Brief AI 重写设置">
+                                <label><span>重写模型</span><select data-workflow-brief-model aria-label="Brief 重写模型"></select></label>
+                                <label class="desktop-workflow-toggle"><input type="checkbox" data-workflow-brief-thinking checked><span>深度思考</span></label>
+                            </div>
+                            <p class="desktop-modal-status" data-workflow-creation-editor-status aria-live="polite">修改会保留在当前草稿中，保存后即可启动工作流。</p>
+                            <div class="desktop-workflow-launch-actions">
+                                <button class="desktop-mini-action" type="button" data-workflow-creation-rewrite>AI 重写所选项</button>
+                                <button class="desktop-primary-action" type="button" data-workflow-creation-apply>保存并返回启动页</button>
+                            </div>
+                        </section>
                             </section>
                             <label>
                         <span>倾向锁（每行一个）</span>
@@ -100,12 +129,8 @@
                         <input type="checkbox" data-workflow-fine-outline checked>
                         <span>正文前生成可编辑细纲</span>
                             </label>
-                            <label class="desktop-workflow-toggle" title="开启后 DeepSeek 会返回额外的思考流；结构化任务可能更慢，请按需启用。">
-                        <input type="checkbox" data-workflow-thinking>
-                        <span>深度思考（气泡实时显示）</span>
-                            </label>
                             <button class="desktop-primary-action" type="button" data-workflow-start-guided>开始续写引导</button>
-                            <button class="desktop-primary-action" type="button" data-workflow-start-creation hidden>开始从零创作</button>
+                            <button class="desktop-primary-action" type="button" data-workflow-start-creation hidden disabled>确认 Brief 并开始创作</button>
                             <button class="desktop-primary-action" type="button" data-workflow-start-rewrite hidden>开始大段重写</button>
                             <button class="desktop-mini-action" type="button" data-workflow-start>启动旧版兼容流程</button>
                         </div>
