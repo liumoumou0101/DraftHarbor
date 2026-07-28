@@ -236,6 +236,7 @@ async function setNodeState(targetPath, runId, nodeId, executionState, advance =
 }
 
 async function completeGuidedNode(options = {}) {
+  if (options.generationFailure) return guidedRuntime.recordGenerationFailure(options);
   const targetPath = projectPath(options.dataRoot, options.projectId);
   const details = await getGuidedRun(options.dataRoot, options.projectId, options.runId);
   const nodeId = clean(options.nodeId, details.run.activeNodeId);

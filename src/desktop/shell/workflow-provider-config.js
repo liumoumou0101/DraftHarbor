@@ -72,7 +72,17 @@
         const thinking = snapshot.enableThinking === undefined
             ? workflowState.workflowThinking !== false
             : !!snapshot.enableThinking;
-        const minimums = { analysis: 4000, direction: 3000, blueprint: 5000, compendium: 5000, plan: 4000, draft: 6000, rewrite: 6000, repair: 6000, review: 3000 };
+        const minimums = {
+            analysis: 12000,
+            direction: 8000,
+            blueprint: 16000,
+            compendium: 16000,
+            plan: 16000,
+            draft: 12000,
+            rewrite: 12000,
+            repair: 16000,
+            review: 8000
+        };
         const minimum = minimums[nodeId] || 3000;
         return {
             ...config,

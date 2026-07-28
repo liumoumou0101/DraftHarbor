@@ -59,7 +59,8 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
             { choices: [{ delta: { reasoning_content: 'Let me think about this...' } }] },
             { choices: [{ delta: { reasoning_content: ' more reasoning.' } }] },
             { choices: [{ delta: { content: 'Here is the answer.' } }] },
-            { choices: [{ delta: { content: ' And more text.' } }] }
+            { choices: [{ delta: { content: ' And more text.' } }] },
+            { choices: [{ delta: {}, finish_reason: 'length' }] }
         ];
 
         var stream = new ReadableStream({
@@ -111,6 +112,7 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
         assert.ok(reasoningTokens.includes('think about'), 'reasoning content should not be mixed into body');
         assert.ok(contentTokens.includes('answer'), 'content should contain answer');
         assert.ok(!contentTokens.includes('reasoning'), 'content should not contain reasoning');
+        assert.ok(lastMeta.some((meta) => meta && meta.type === 'finish' && meta.finishReason === 'length'), 'stream should expose provider finish reasons');
 
         console.log('Provider stream DeepSeek thinking test passed.');
     } finally {

@@ -268,6 +268,16 @@ workflowGenerationLaunchConfig
 workflowGenerationPolicy
 workflowConfigLabel
 guidedStageProviderConfig
+creationBriefFields
+creationBriefFromInputs
+generateCreationBrief
+guidedWorkflowEndpoints
+loadGuidedWorkflowRun
+renderCreationBrief
+setCreationBriefStatus
+startCreationWorkflowRun
+startRewriteWorkflowRun
+syncCreationBriefToInputs
 workflowLockConstraints
 workflowState
 workshopState

@@ -20,6 +20,7 @@
         guided_run_resumed: '流程已恢复',
         guided_run_cancelled: '流程已取消',
         guided_node_generated: '步骤结果已生成',
+        guided_node_generation_failed: '步骤生成失败诊断',
         guided_node_approved: '步骤已确认',
         guided_node_rejected: '步骤已退回',
         guided_node_restarted: '步骤已重新开始',

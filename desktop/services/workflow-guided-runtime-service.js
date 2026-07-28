@@ -131,6 +131,28 @@ function createGuidedRuntime(spec = {}) {
     return getRun(options.dataRoot, options.projectId, options.runId);
   }
 
+  async function recordGenerationFailure(options = {}) {
+    const targetPath = projectPath(options.dataRoot, options.projectId);
+    const details = await getRun(options.dataRoot, options.projectId, options.runId);
+    const nodeId = clean(options.nodeId, details.run.activeNodeId);
+    const failure = options.generationFailure && typeof options.generationFailure === 'object'
+      ? options.generationFailure : {};
+    const outputDiagnostics = (Array.isArray(failure.outputs) ? failure.outputs : []).slice(0, 20).map((item) => ({
+      promptId: clean(item && item.promptId),
+      characters: Math.max(0, Number(item && item.characters) || 0),
+      tail: clean(item && item.tail).slice(-500),
+      finishReason: clean(item && item.finishReason)
+    }));
+    await appendEvent(targetPath, options.runId, 'guided_node_generation_failed', nodeId, {
+      code: clean(failure.code, 'generation_failed'),
+      message: clean(failure.message, '生成失败').slice(0, 1000),
+      repairAttempted: !!failure.repairAttempted,
+      outputs: outputDiagnostics,
+      usage: Array.isArray(failure.usage) ? failure.usage.slice(0, 40) : []
+    });
+    return { ok: true, recorded: true };
+  }
+
   async function reviseArtifact(options = {}) {
     const targetPath = projectPath(options.dataRoot, options.projectId);
     const family = await artifactStore.readArtifactFamily(targetPath, options.runId, options.artifactId);
@@ -257,7 +279,7 @@ function createGuidedRuntime(spec = {}) {
     return getRun(options.dataRoot, options.projectId, options.runId);
   }
 
-  return { projectPath, appendEvent, artifactRecords, getRun, setNodeState, writeArtifact, completeOutputs, reviseArtifact, approveNode, completeTransfer, cancelRun, resumeRun, restartFromNode, parseJson };
+  return { projectPath, appendEvent, artifactRecords, getRun, setNodeState, writeArtifact, completeOutputs, recordGenerationFailure, reviseArtifact, approveNode, completeTransfer, cancelRun, resumeRun, restartFromNode, parseJson };
 }
 
 module.exports = { createGuidedRuntime, parseJson };

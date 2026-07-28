@@ -51,8 +51,30 @@ async function assertGraph(page, expected) {
 
     await page.click('[data-workflow-launcher] > summary');
     await page.selectOption('[data-workflow-mode]', 'creation');
+    await page.evaluate(() => {
+      window.__draftHarborGenerationStub = async (_prompt, onToken) => {
+        onToken(JSON.stringify({
+          workingTitle: '玻璃海岸',
+          premise: '守灯人发现海面每天倒映不同的城市。',
+          genre: '奇幻悬疑',
+          targetLength: 120000,
+          themes: ['记忆', '城市'],
+          tone: '冷峻',
+          pov: '第三人称限知',
+          setting: '不断变化倒影的玻璃海岸',
+          endingPreference: '开放式',
+          mustInclude: [],
+          avoid: [],
+          notes: ''
+        }), { type: 'content' });
+      };
+    });
+    await page.click('[data-workflow-creation-fields] > details > summary');
     await page.fill('[data-workflow-creation-title]', '玻璃海岸');
-    await page.fill('[data-workflow-creation-premise]', '守灯人发现海面每天倒映不同的城市。');
+    await page.fill('[data-workflow-creation-inspiration]', '守灯人发现海面每天倒映不同的城市。');
+    await page.click('[data-workflow-creation-complete]');
+    await page.waitForSelector('[data-workflow-creation-brief]:not([hidden])');
+    await page.click('[data-workflow-creation-apply]');
     await page.click('[data-workflow-start-creation]');
     await assertGraph(page, { nodeCount: 8, edgeCount: 7, activeNodeId: 'direction' });
 
