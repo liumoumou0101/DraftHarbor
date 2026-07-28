@@ -3,6 +3,31 @@
         return (run.artifacts || []).filter((artifact) => artifact.nodeId === step.id).slice(-1)[0] || null;
     }
 
+    window.workflowStepTitle = (run, stepId) => {
+        const step = run && (run.steps || []).find((item) => item.id === stepId);
+        return step ? (step.title || step.id) : '';
+    };
+
+    window.workflowReviewStateLabel = (state) => ({
+        draft: '草稿',
+        waiting_review: '待审批',
+        approved: '已确认',
+        rejected: '已退回'
+    })[state] || state || '未标记';
+
+    window.workflowEventLabel = (type) => ({
+        guided_run_created: '流程已创建',
+        guided_run_resumed: '流程已恢复',
+        guided_run_cancelled: '流程已取消',
+        guided_node_generated: '步骤结果已生成',
+        guided_node_approved: '步骤已确认',
+        guided_node_rejected: '步骤已退回',
+        guided_node_restarted: '步骤已重新开始',
+        guided_nodes_invalidated: '后续结果已标记为过期',
+        guided_artifact_revised: '产物已保存为新版本',
+        guided_artifact_transferred: '产物已回流到项目'
+    })[type] || '流程记录';
+
     function guidedResultSummary(content) {
         if (typeof content === 'string') return content.slice(0, 420);
         if (!content || typeof content !== 'object') return '本步骤已经生成结果，可打开完整产物查看。';
@@ -13,6 +38,57 @@
         if (Array.isArray(content.findings)) return `审查完成，发现 ${content.findings.length} 项结果。`;
         return '本步骤已经生成结果，可打开完整产物查看。';
     }
+
+    function appendGuidedPreviewItem(container, label, value) {
+        if (value === undefined || value === null || value === '') return;
+        const item = document.createElement('div');
+        const term = document.createElement('strong');
+        const detail = document.createElement('span');
+        term.textContent = label;
+        detail.textContent = String(value);
+        item.append(term, detail);
+        container.appendChild(item);
+    }
+
+    function renderGuidedArtifactPreview(container, content) {
+        if (!content || typeof content !== 'object') return false;
+        const preview = document.createElement('section');
+        preview.className = 'desktop-workflow-structured-preview';
+        if (content.logline) appendGuidedPreviewItem(preview, '一句话故事', content.logline);
+        if (content.centralConflict && typeof content.centralConflict === 'object') {
+            appendGuidedPreviewItem(preview, '主角目标', content.centralConflict.protagonistGoal);
+            appendGuidedPreviewItem(preview, '主要阻力', content.centralConflict.opposition);
+            appendGuidedPreviewItem(preview, '失败代价', content.centralConflict.stakes);
+            appendGuidedPreviewItem(preview, '核心困境', content.centralConflict.dilemma);
+        }
+        const entries = Array.isArray(content.entries) ? content.entries : (Array.isArray(content.cards) ? content.cards : []);
+        if (entries.length) {
+            entries.slice(0, 8).forEach((entry, index) => {
+                appendGuidedPreviewItem(preview, entry.title || `资料 ${index + 1}`, entry.summary || entry.type || '资料草稿');
+            });
+        }
+        if (Array.isArray(content.scenes) && content.scenes.length) {
+            content.scenes.slice(0, 8).forEach((scene, index) => {
+                const details = [scene.goal && `目标：${scene.goal}`, scene.conflict && `冲突：${scene.conflict}`, scene.targetWords && `约 ${scene.targetWords} 字`].filter(Boolean).join(' · ');
+                appendGuidedPreviewItem(preview, `${index + 1}. ${scene.title || '未命名场景'}`, details || scene.outcome || '场景计划');
+            });
+        }
+        if (Array.isArray(content.findings)) {
+            appendGuidedPreviewItem(preview, '审查结论', content.findings.length ? `发现 ${content.findings.length} 项需要处理的问题` : '未发现需要处理的问题');
+            content.findings.slice(0, 6).forEach((finding, index) => {
+                appendGuidedPreviewItem(preview, `问题 ${index + 1}`, finding.message || finding.summary || finding.description || JSON.stringify(finding));
+            });
+        }
+        if (!preview.childElementCount && content.summary) appendGuidedPreviewItem(preview, '摘要', content.summary);
+        if (!preview.childElementCount && Array.isArray(content.outline)) {
+            appendGuidedPreviewItem(preview, '内容提要', content.outline.slice(0, 8).join('；'));
+        }
+        if (!preview.childElementCount) return false;
+        container.appendChild(preview);
+        return true;
+    }
+
+    window.renderGuidedArtifactPreview = renderGuidedArtifactPreview;
 
     function renderGuidedWorkflowInlineResult(container, run, step) {
         if (workflowState.lastGenerationError) {
@@ -69,15 +145,17 @@
             });
             panel.appendChild(choices);
         } else {
-            const summary = document.createElement('p');
-            summary.textContent = guidedResultSummary(content);
-            panel.appendChild(summary);
+            if (!renderGuidedArtifactPreview(panel, content)) {
+                const summary = document.createElement('p');
+                summary.textContent = guidedResultSummary(content);
+                panel.appendChild(summary);
+            }
         }
         const open = document.createElement('button');
         open.type = 'button';
         open.className = 'desktop-mini-action';
         open.dataset.workflowOpenCurrentArtifact = '';
-        open.textContent = '查看完整产物与版本';
+        open.textContent = '查看完整内容与高级编辑';
         open.addEventListener('click', () => {
             workflowState.selectedArtifactId = artifact.id;
             renderWorkflow();

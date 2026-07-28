@@ -96,7 +96,7 @@ async function generateAndApprove(page, title) {
     await page.waitForSelector('[data-workflow-artifact-editor]:not([readonly])');
     await page.waitForSelector('[data-workflow-current-result]');
     assert.strictEqual(await page.locator('[data-workflow-current-result]').isVisible(), true);
-    assert.ok((await page.locator('[data-workflow-mode-note]').innerText()).includes('当前运行：大段重写'));
+    assert.ok((await page.locator('[data-workflow-mode-note]').innerText()).includes('正在查看：大段重写'));
     const editor = page.locator('[data-workflow-artifact-editor]');
     const plan = JSON.parse(await editor.inputValue());
     plan.units[0].objective = '用户确认：直接进入足迹悬念';

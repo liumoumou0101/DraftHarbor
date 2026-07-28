@@ -104,6 +104,7 @@ async function generateAndApprove(page, title) {
 
     await activeStage(page, '故事蓝图与冲突结构');
     assert.strictEqual(await page.locator('[data-workflow-guided-return="direction"]').isVisible(), true);
+    await page.click('[data-workflow-launcher] > summary');
     await page.uncheck('[data-workflow-thinking]');
     await page.click('[data-workflow-guided-generate]');
     await page.waitForSelector('[data-workflow-artifact-editor]:not([readonly])');
@@ -132,7 +133,7 @@ async function generateAndApprove(page, title) {
     cards.entries.find((entry) => entry.title === '苏晚').aliases = ['小晚'];
     await cardEditor.fill(JSON.stringify(cards, null, 2));
     await page.click('[data-workflow-artifact-save]');
-    await page.waitForFunction(() => document.querySelector('.desktop-workflow-artifact-editor > div span')?.textContent.includes('Revision'));
+    await page.waitForFunction(() => document.querySelector('[data-workflow-status]')?.textContent.includes('修改已保存'));
     await page.click('[data-workflow-guided-approve]');
 
     await generateAndApprove(page, '节奏与场景计划');

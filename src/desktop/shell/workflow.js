@@ -1,6 +1,8 @@
     function workflowElements() {
         return {
             projectLabel: document.querySelector('[data-workflow-project-label]'),
+            launcher: document.querySelector('[data-workflow-launcher]'),
+            launcherTitle: document.querySelector('[data-workflow-launcher-title]'),
             mode: document.querySelector('[data-workflow-mode]'),
             modeNote: document.querySelector('[data-workflow-mode-note]'),
             aiConfig: document.querySelector('[data-workflow-ai-config]'),
@@ -56,7 +58,6 @@
             reasoningClose: document.querySelector('[data-workflow-reasoning-close]')
         };
     }
-
     function selectedWorkflowRun() {
         return workflowState.runs.find((run) => run.id === workflowState.selectedId) || null;
     }
@@ -114,7 +115,6 @@
             cancel: '/api/workflows/v2/cancel-guided'
         };
     }
-
     function renderWorkflowLaunchMode() {
         const elements = workflowElements();
         const mode = elements.mode ? elements.mode.value : 'continuation';
@@ -173,6 +173,16 @@
         const isTerminalRun = run && ['completed', 'cancelled', 'failed'].includes(run.status);
         const draftArtifact = latestWorkflowArtifact(run, 'draft_text');
         const graphMode = workflowState.viewMode === 'graph';
+        if (elements.launcher) {
+            const launcherProjectId = elements.launcher.dataset.projectId || '';
+            const launcherRunId = elements.launcher.dataset.runId || '';
+            if (launcherProjectId !== (projectId || '') || launcherRunId !== (run && run.id || '')) {
+                elements.launcher.dataset.projectId = projectId || '';
+                elements.launcher.dataset.runId = run && run.id || '';
+                elements.launcher.open = !run;
+            }
+        }
+        if (elements.launcherTitle) elements.launcherTitle.textContent = run ? '新建另一条流程' : '新建创作流程';
         if (elements.viewGuided) elements.viewGuided.classList.toggle('is-active', !graphMode);
         if (elements.viewGraph) {
             elements.viewGraph.classList.toggle('is-active', graphMode);
@@ -190,7 +200,7 @@
         if (elements.aiConfig) elements.aiConfig.textContent = `AI：${workflowConfigLabel(workflowGenerationPolicy(run))}`;
         if (elements.modeNote && run && isGuidedWorkflow(run)) {
             const label = isCreationWorkflow(run) ? '从零创作' : isRewriteWorkflow(run) ? '大段重写' : '续写引导';
-            elements.modeNote.textContent = `当前运行：${label}。下方表单仅用于新建另一条流程。`;
+            elements.modeNote.textContent = `正在查看：${label}。新建流程设置已单独收起，不会改变当前运行。`;
         }
         if (elements.start) elements.start.disabled = !projectId || workflowState.generating;
         if (elements.startCreation) elements.startCreation.disabled = workflowState.generating;
@@ -231,7 +241,8 @@
                     const statusText = statusLabels[item.status] || item.status;
                     const guidedLabel = item.templateId === 'creation-guided' ? ' · 从零创作' : item.templateId === 'rewrite-guided' ? ' · 大段重写' : ' · 续写引导';
                     const storageLabel = item.storageVersion === 'v2' ? (item.supportsV2Execution ? guidedLabel : ' · v2（只读）') : '';
-                    button.innerHTML = `<strong>${item.title || '创作流程'}</strong><span>${statusText}${item.activeStepId ? ` · ${item.activeStepId}` : ''}${storageLabel}</span>`;
+                    const activeTitle = window.workflowStepTitle(item, item.activeStepId || item.activeNodeId);
+                    button.innerHTML = `<strong>${item.title || '创作流程'}</strong><span>${statusText}${activeTitle ? ` · ${activeTitle}` : ''}${storageLabel}</span>`;
                     button.addEventListener('click', async () => {
                         workflowState.selectedId = item.id;
                         workflowState.selectedArtifactId = '';
@@ -453,7 +464,8 @@
             workflowState.events.slice().reverse().forEach((event) => {
                 const card = document.createElement('div');
                 card.className = 'desktop-workflow-event';
-                card.textContent = `${formatDate(event.createdAt)} / ${event.type}${event.stepId ? ` / ${event.stepId}` : ''}`;
+                const stepTitle = window.workflowStepTitle(run, event.stepId || event.nodeId);
+                card.textContent = `${formatDate(event.createdAt)} · ${window.workflowEventLabel(event.type)}${stepTitle ? ` · ${stepTitle}` : ''}`;
                 elements.events.appendChild(card);
             });
             if (elements.eventsDetails && !run) {
@@ -752,20 +764,20 @@
             });
             container.appendChild(showReasoning);
         }
-        if (active && step.id !== 'transfer') {
+        if (active && step.id !== 'transfer' && ['ready', 'failed'].includes(step.status)) {
             const generate = document.createElement('button');
             generate.type = 'button';
             generate.className = 'desktop-primary-action';
             generate.dataset.workflowGuidedGenerate = '';
             generate.textContent = step.id === 'review' ? '执行自动审查' : `生成：${step.title}`;
-            generate.disabled = workflowState.generating || !['ready', 'failed'].includes(step.status);
+            generate.disabled = workflowState.generating;
             generate.addEventListener('click', () => generateGuidedWorkflowNode().catch((error) => setWorkflowStatus(`生成失败：${error.message || error}`, 'error')));
             container.appendChild(generate);
         }
         if (active && step.status === 'waiting_user') {
             const approve = document.createElement('button');
             approve.type = 'button';
-            approve.className = 'desktop-secondary-action';
+            approve.className = 'desktop-primary-action';
             approve.dataset.workflowGuidedApprove = '';
             approve.textContent = `确认并进入下一步`;
             approve.disabled = workflowState.generating;
@@ -817,15 +829,17 @@
     function renderGuidedWorkflowArtifacts(container, run) {
         const label = document.createElement('p');
         label.className = 'desktop-workflow-artifacts-label';
-        label.textContent = '产物与版本';
+        label.textContent = '完整内容与版本';
         const list = document.createElement('div');
         list.className = 'desktop-workflow-artifact-list';
         (run.artifacts || []).forEach((artifact) => {
+            const artifactVersions = (run.artifacts || []).filter((candidate) => candidate.nodeId === artifact.nodeId);
+            const versionNumber = artifactVersions.findIndex((candidate) => candidate.id === artifact.id) + 1;
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'desktop-workflow-artifact-tab';
             button.classList.toggle('is-active', artifact.id === workflowState.selectedArtifactId);
-            button.textContent = `${artifact.title} · ${artifact.revision.reviewState}${artifact.effectiveFreshness === 'stale' ? ' · 已过期' : ''}`;
+            button.textContent = `${artifact.title} · 第 ${versionNumber} 版 · ${window.workflowReviewStateLabel(artifact.revision.reviewState)}${artifact.effectiveFreshness === 'stale' ? ' · 已过期' : ''}`;
             button.addEventListener('click', () => {
                 workflowState.selectedArtifactId = artifact.id;
                 renderWorkflow();
@@ -840,14 +854,21 @@
         editor.className = 'desktop-workflow-artifact-editor';
         const meta = document.createElement('div');
         const provider = selected.revision.providerSnapshot || {};
-        meta.innerHTML = `<strong>${selected.title}</strong><span>${selected.artifactType} · Revision ${selected.revision.id} · ${selected.revision.reviewState}${selected.effectiveFreshness === 'stale' ? ' · 已过期，需重新生成' : ''}${provider.model ? ` · ${provider.model}` : ''}</span>`;
+        const selectedVersions = (run.artifacts || []).filter((artifact) => artifact.nodeId === selected.nodeId);
+        const selectedVersionNumber = selectedVersions.findIndex((artifact) => artifact.id === selected.id) + 1;
+        meta.innerHTML = `<strong>${selected.title}</strong><span>第 ${selectedVersionNumber} 版 · ${window.workflowReviewStateLabel(selected.revision.reviewState)}${selected.effectiveFreshness === 'stale' ? ' · 已过期，需重新生成' : ''}${provider.model ? ` · ${provider.model}` : ''}</span>`;
         const textarea = document.createElement('textarea');
         textarea.dataset.workflowArtifactEditor = '';
         textarea.value = typeof selected.content === 'string' ? selected.content : JSON.stringify(selected.content, null, 2);
         const activeStep = activeWorkflowStep(run);
         const editable = !!(activeStep && activeStep.id === selected.nodeId && activeStep.status === 'waiting_user');
         textarea.readOnly = !editable;
-        editor.append(meta, textarea);
+        editor.appendChild(meta);
+        window.renderGuidedArtifactPreview(editor, selected.content);
+        const advancedLabel = document.createElement('p');
+        advancedLabel.className = 'desktop-workflow-advanced-label';
+        advancedLabel.textContent = editable ? '高级编辑（JSON）— 修改后保存为新版本' : '高级内容（只读）';
+        editor.append(advancedLabel, textarea);
         if (selected.artifactType === 'rewrite-comparison@1' && selected.content && Array.isArray(selected.content.comparisons)) {
             textarea.hidden = true;
             const comparisons = document.createElement('div');

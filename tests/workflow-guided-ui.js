@@ -99,6 +99,9 @@ async function generateAndApprove(page, title) {
       !(await page.locator('[data-workflow-status]').innerText()).includes('续写范围内没有正文'),
       'workflow launch validation must read prose from snapshot.sceneContents'
     );
+    assert.strictEqual(await page.locator('[data-workflow-launcher]').evaluate((node) => node.open), false, 'new-run settings should collapse after launch');
+    assert.strictEqual(await page.locator('[data-workflow-events-details]').evaluate((node) => node.open), false, 'diagnostic events should stay collapsed by default');
+    await page.click('[data-workflow-launcher] > summary');
     await page.uncheck('[data-workflow-thinking]');
     assert.strictEqual(
       await page.evaluate(() => window.guidedStageProviderConfig('analysis').enableThinking),
@@ -120,6 +123,8 @@ async function generateAndApprove(page, title) {
     assert.ok(await page.locator('.desktop-workflow-direction-options input').first().isChecked());
     await page.waitForSelector('[data-workflow-current-result]');
     assert.ok((await page.locator('[data-workflow-current-result]').innerText()).includes('怀表倒计时'));
+    assert.strictEqual(await page.locator('[data-workflow-guided-generate]').count(), 0, 'waiting review must not show a disabled generate action');
+    assert.ok((await page.locator('[data-workflow-guided-approve]').getAttribute('class')).includes('desktop-primary-action'));
     assert.strictEqual(await page.locator('[data-workflow-guided-regenerate]').isVisible(), true);
     await page.click('[data-workflow-guided-regenerate]');
     await page.waitForSelector('[data-workflow-guided-generate]:not([disabled])');
@@ -135,12 +140,8 @@ async function generateAndApprove(page, title) {
     const plan = JSON.parse(await planEditor.inputValue());
     plan.scenes[0].title = '用户修改后的午夜回响';
     await planEditor.fill(JSON.stringify(plan, null, 2));
-    const revisionBefore = await page.locator('.desktop-workflow-artifact-editor > div span').innerText();
     await page.click('[data-workflow-artifact-save]');
-    await page.waitForFunction((previous) => {
-      const node = document.querySelector('.desktop-workflow-artifact-editor > div span');
-      return node && node.textContent !== previous;
-    }, revisionBefore);
+    await page.waitForFunction(() => document.querySelector('[data-workflow-status]')?.textContent.includes('修改已保存'));
     await page.click('[data-workflow-guided-approve]');
 
     await generateAndApprove(page, '分场正文');

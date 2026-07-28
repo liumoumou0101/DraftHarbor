@@ -54,6 +54,10 @@ const projectService = require('../desktop/services/project-service');
     assert.ok(reopened.scenes[0].content.includes('Hello world'));
     assert.ok(reopened.scenes[0].content.includes('\u5979\u8d70\u8fdb\u96e8\u91cc'));
 
+    await fs.mkdir(path.join(paths.projectsRoot(dataRoot), 'backups'), { recursive: true });
+    await fs.mkdir(path.join(paths.projectsRoot(dataRoot), '.removed-projects'), { recursive: true });
+    await fs.mkdir(path.join(paths.projectsRoot(dataRoot), '.internal-cache'), { recursive: true });
+
     const listed = await projectService.listProjects(dataRoot);
     assert.strictEqual(listed.ok, true);
     assert.strictEqual(listed.projects.length, 1);

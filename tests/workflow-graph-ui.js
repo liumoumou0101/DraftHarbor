@@ -49,12 +49,14 @@ async function assertGraph(page, expected) {
     await assertGraph(page, { nodeCount: 7, edgeCount: 6, activeNodeId: 'analysis' });
     assert.ok((await page.locator('[data-workflow-graph-node="source"]').innerText()).includes('1 个产物'));
 
+    await page.click('[data-workflow-launcher] > summary');
     await page.selectOption('[data-workflow-mode]', 'creation');
     await page.fill('[data-workflow-creation-title]', '玻璃海岸');
     await page.fill('[data-workflow-creation-premise]', '守灯人发现海面每天倒映不同的城市。');
     await page.click('[data-workflow-start-creation]');
     await assertGraph(page, { nodeCount: 8, edgeCount: 7, activeNodeId: 'direction' });
 
+    await page.click('[data-workflow-launcher] > summary');
     await page.selectOption('[data-workflow-mode]', 'rewrite');
     await page.fill('[data-workflow-rewrite-instruction]', '强化脚步逼近时的压迫感，保留关键事实。');
     await page.click('[data-workflow-start-rewrite]');
@@ -125,8 +127,8 @@ async function assertGraph(page, expected) {
     assert.strictEqual(await page.locator('[data-workflow-graph-run-checkpoint]').isEnabled(), true);
     await page.click('[data-workflow-graph-restart-node]');
     await page.waitForFunction(() => document.querySelector('[data-workflow-status]')?.textContent.includes('下游已重置'));
-    await page.waitForFunction(() => document.querySelector('[data-workflow-events]')?.textContent.includes('guided_nodes_invalidated'));
-    assert.ok((await page.locator('[data-workflow-events]').textContent()).includes('guided_nodes_invalidated'));
+    await page.waitForFunction(() => document.querySelector('[data-workflow-events]')?.textContent.includes('后续结果已标记为过期'));
+    assert.ok((await page.locator('[data-workflow-events]').textContent()).includes('后续结果已标记为过期'));
 
     await page.click('[data-workflow-view-guided]');
     assert.strictEqual(await page.locator('[data-workflow-steps]').isVisible(), true);
