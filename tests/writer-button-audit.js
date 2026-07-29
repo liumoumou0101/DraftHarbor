@@ -813,7 +813,7 @@ async function openNativeModelSettings(page) {
     await page.waitForFunction(() => document.querySelector('[data-native-context-compendium]').textContent.includes('新人物'));
     await page.locator('[data-native-context-compendium] input[type="checkbox"]').first().check();
     await page.waitForSelector('[data-native-context-compendium-tags]');
-    await page.locator('[data-native-context-chapters] select').first().selectOption('summary');
+    await page.locator('[data-native-context-chapters] select').first().selectOption('full');
     await page.locator('[data-native-context-scenes] select').first().selectOption('summary');
 
     await page.waitForSelector('[data-native-context-summary]');
@@ -827,8 +827,16 @@ async function openNativeModelSettings(page) {
     assert.ok(summaryText.includes('场景引用'), 'context summary should show scene section');
     assert.ok(summaryText.includes('直接引用'), 'context summary should show direct selection count');
     assert.ok(summaryText.includes('摘要'), 'context summary should show mode labels');
+    assert.ok(summaryText.includes('全文'), 'context summary should show full-text chapter mode');
 
     await page.click('[data-native-panel-tab="generate"]');
+    await page.click('[data-native-gen-task="continue"]');
+    await page.click('[data-native-preview-prompt]');
+    await page.waitForFunction(() => document.querySelector('[data-native-prompt-dialog]').open);
+    const fullContextPrompt = await page.locator('[data-native-prompt-preview]').textContent();
+    assert.ok(fullContextPrompt.includes('Second scene body.'), 'full chapter context must include complete referenced scene text in the final model prompt');
+    await page.click('[data-native-close-prompt]');
+    await page.waitForFunction(() => !document.querySelector('[data-native-prompt-dialog]').open);
     await page.click('[data-native-manage-prompts]');
     await page.waitForFunction(() => document.querySelector('[data-prompt-manager-dialog]').open);
     await page.fill('[data-prompt-manager-title]', 'Audit Prompt');

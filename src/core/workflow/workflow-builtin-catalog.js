@@ -8,9 +8,11 @@
     const ARTIFACT_TYPES = Object.freeze([
         ['workflow-stage', '流程控制', 'json'], ['source-snapshot', '原文快照', 'json'],
         ['workflow-analysis', '原文分析', 'json'], ['creation-brief', '创作 Brief', 'json'],
+        ['workflow-writing-instructions', '全局写作指令', 'json'],
         ['direction-set', '方向集合', 'json'], ['story-blueprint', '故事蓝图', 'json'],
         ['compendium-draft-bundle', '资料卡草稿包', 'json'], ['scene-plan', '场景计划', 'json'],
-        ['draft-batch', '正文批次', 'text'], ['draft-review', '正文审查', 'json'],
+        ['generation-batch', '生成批次清单', 'json'], ['draft-batch', '正文批次', 'text'],
+        ['draft-review', '正文审查', 'json'],
         ['rewrite-plan', '重写计划', 'json'], ['rewrite-text', '重写正文', 'text'],
         ['rewrite-review', '重写审查', 'json'], ['transfer-result', '转交结果', 'json']
     ]);

@@ -1,3 +1,4 @@
+/* global settingsState, workflowGenerationLaunchConfig, workflowState */
 const assert = require('assert');
 const fs = require('fs/promises');
 const os = require('os');
@@ -5,6 +6,7 @@ const path = require('path');
 const { chromium } = require('playwright');
 const { startDesktopServers } = require('../desktop/local-server');
 const projectService = require('../desktop/services/project-service');
+const settingsService = require('../desktop/services/settings-service');
 
 async function activeStage(page, title) {
   await page.waitForFunction((expected) => {
@@ -25,6 +27,9 @@ async function generateAndApprove(page, title) {
   let servers = null;
   let browser = null;
   try {
+    await settingsService.updateSettings(dataRoot, {
+      globalPrompt: { enabled: true, content: 'UI-WORKFLOW-GLOBAL-PROMPT-SENTINEL' }
+    });
     servers = await startDesktopServers({ appRoot: path.resolve(__dirname, '..'), dataRoot, revealPath: async () => '' });
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage({ viewport: { width: 1440, height: 980 } });
@@ -33,14 +38,23 @@ async function generateAndApprove(page, title) {
     page.on('pageerror', (error) => browserErrors.push(error.message));
     page.on('dialog', (dialog) => dialog.accept());
     await page.goto(`${servers.appUrl}/desktop.html`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => settingsState.settings?.globalPrompt?.content === 'UI-WORKFLOW-GLOBAL-PROMPT-SENTINEL');
+    assert.strictEqual(
+      await page.evaluate(() => workflowGenerationLaunchConfig().snapshot.globalPrompt),
+      'UI-WORKFLOW-GLOBAL-PROMPT-SENTINEL',
+      'workflow launch config should include the active global prompt'
+    );
     await page.click('[data-view-target="workflow"]');
 
     await page.evaluate(() => {
       window.__creationThinkingSeen = false;
+      window.__creationGlobalPromptSeen = false;
+      window.__creationReviewCount = 0;
       window.__blueprintRepairSeen = false;
       window.__structuredMaxTokensSeen = 0;
       window.__draftHarborGenerationStub = async (prompt, onToken, settings) => {
         if (settings && settings.enableThinking) window.__creationThinkingSeen = true;
+        if (settings && settings.globalPrompt === 'UI-WORKFLOW-GLOBAL-PROMPT-SENTINEL') window.__creationGlobalPromptSeen = true;
         window.__structuredMaxTokensSeen = Math.max(window.__structuredMaxTokensSeen, Number(settings && settings.maxTokens) || 0);
         const system = prompt.messages[0].content;
         let output = '';
@@ -74,13 +88,26 @@ async function generateAndApprove(page, title) {
           output = JSON.stringify({ cards: [
             { id: 'tide-city', type: 'location', title: '潮汐城', summary: '周期性被海水淹没的城市' }
           ] });
-        } else if (system.includes('场景计划')) {
+        } else if (system.includes('fineOutline 必须是字符串数组')) {
           output = JSON.stringify({ fineOutlineEnabled: true, scenes: [
             { id: 'dive', title: '第一次下潜', povCharacter: '苏晚', location: '潮汐城', goal: '进入城市', conflict: '氧气泄漏', outcome: '发现墓碑', participants: ['苏晚'], turningPoint: '墓碑上是自己的名字', hook: '墓碑日期来自明天', emotionalStart: '戒备', emotionalEnd: '恐惧', emotionalBeat: '身份动摇', pace: 'fast', conflictIntensity: 82, informationDensity: 55, targetWords: 3000, fineOutline: ['穿过闸门', '发现墓碑'] },
             { id: 'archive', title: '死亡档案', povCharacter: '苏晚', location: '档案馆', goal: '读取记录', conflict: 'AI 封锁', outcome: '取得副本', participants: ['苏晚'], turningPoint: '记录显示她已死', hook: '监控中出现另一个她', emotionalStart: '恐惧', emotionalEnd: '决绝', emotionalBeat: '接受真相', pace: 'medium', conflictIntensity: 68, informationDensity: 75, targetWords: 2800, fineOutline: ['潜入档案馆', '读取记录'] }
           ] });
         } else if (system.includes('连续性编辑')) {
-          output = JSON.stringify({ summary: '审查通过', findings: [] });
+          window.__creationReviewCount += 1;
+          output = window.__creationReviewCount === 2
+            ? JSON.stringify({
+              summary: '发现过程标签',
+              findings: [{
+                type: 'process_label_leak',
+                severity: 'error',
+                sceneId: 'dive',
+                sceneTitle: '第一次下潜',
+                evidence: '场景 6-1',
+                suggestion: '删除过程标签并保留故事事实。'
+              }]
+            })
+            : JSON.stringify({ summary: '审查通过', findings: [] });
         } else {
           const payload = JSON.parse(prompt.messages[1].content);
           output = `${payload.currentScene.title}的验收正文。苏晚在潮水与警报声中继续寻找自己的记录。`;
@@ -120,6 +147,21 @@ async function generateAndApprove(page, title) {
     await page.click('[data-workflow-creation-apply]');
     assert.strictEqual(await page.locator('[data-workflow-creation-brief]').isHidden(), true, 'saving the Brief must return to the launcher');
     assert.strictEqual(await page.locator('[data-workflow-start-creation]').isDisabled(), false, 'from-zero creation must be available after confirming the Brief');
+    assert.strictEqual(
+      await page.evaluate(() => workflowGenerationLaunchConfig().snapshot.globalPrompt),
+      'UI-WORKFLOW-GLOBAL-PROMPT-SENTINEL',
+      'global prompt must still be present when the creation run starts'
+    );
+    await page.evaluate(() => {
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (...args) => {
+        const url = String(args[0] || '');
+        if (url.includes('/api/workflows/v2/create-project-and-start-creation')) {
+          window.__creationStartPayload = JSON.parse(args[1]?.body || '{}');
+        }
+        return originalFetch(...args);
+      };
+    });
     await page.click('[data-workflow-start-creation]');
 
     await page.waitForFunction(() => document.querySelector('[data-native-project-title]')?.textContent.includes('潮汐档案'));
@@ -129,6 +171,20 @@ async function generateAndApprove(page, title) {
       return (result.projects || []).find((project) => project.name === '潮汐档案')?.id || '';
     });
     assert.ok(creationProjectId, 'from-zero creation should create and open a project');
+    assert.strictEqual(
+      await page.evaluate(() => window.__creationStartPayload?.generationPolicy?.snapshot?.globalPrompt),
+      'UI-WORKFLOW-GLOBAL-PROMPT-SENTINEL',
+      'creation start request must include the frozen global prompt'
+    );
+    await page.waitForFunction(() =>
+      workflowState.runs.find((item) => item.id === workflowState.selectedId)?.settings?.generationPolicy?.snapshot);
+    const storedLaunchSnapshot = await page.evaluate(() =>
+      workflowState.runs.find((item) => item.id === workflowState.selectedId)?.settings?.generationPolicy?.snapshot);
+    assert.strictEqual(
+      storedLaunchSnapshot?.globalPrompt,
+      'UI-WORKFLOW-GLOBAL-PROMPT-SENTINEL',
+      `workflow launch must freeze the active global prompt into the run snapshot: ${JSON.stringify(storedLaunchSnapshot)}`
+    );
 
     await activeStage(page, '创意方向');
     await page.click('[data-workflow-guided-generate]');
@@ -163,7 +219,13 @@ async function generateAndApprove(page, title) {
       };
     });
     await page.click('[data-workflow-guided-generate]');
+    await page.waitForSelector('[data-artifact-view="json"]');
+    await page.click('[data-artifact-view="json"]');
     await page.waitForSelector('[data-workflow-artifact-editor]:not([readonly])');
+    assert.strictEqual(await page.locator('[data-artifact-view]').count(), 3, 'artifact result should support readable, form and raw JSON views');
+    assert.strictEqual(await page.locator('[data-workflow-artifact-rewrite-thinking]').isChecked(), true, 'artifact AI rewrite thinking should default to enabled');
+    assert.strictEqual(await page.locator('[data-workflow-artifact-rewrite-model]').count(), 1, 'artifact AI rewrite should expose model selection');
+    assert.ok((await page.locator('[data-workflow-step-progress]').innerText()).includes('等待确认'));
     assert.ok((await page.locator('[data-workflow-status]').innerText()).includes('已从本地运行恢复'), 'a completed node must recover when the browser loses the completion response');
     assert.strictEqual(await page.evaluate(() => window.__blueprintRepairSeen), true, 'truncated JSON should be repaired automatically before completion');
     assert.strictEqual(await page.locator('[data-workflow-reasoning-bubble]').isHidden(), true, 'completed reasoning must stay out of the artifact editor');
@@ -177,6 +239,8 @@ async function generateAndApprove(page, title) {
     await activeStage(page, '人物与世界观资料草稿');
     await page.click('[data-workflow-guided-generate]');
     try {
+      await page.waitForSelector('[data-artifact-view="json"]');
+      await page.click('[data-artifact-view="json"]');
       await page.waitForSelector('[data-workflow-artifact-editor]:not([readonly])');
     } catch (error) {
       const diagnostics = await page.evaluate(() => ({
@@ -192,6 +256,8 @@ async function generateAndApprove(page, title) {
     await cardEditor.fill(JSON.stringify(cards, null, 2));
     await page.click('[data-workflow-artifact-save]');
     await page.waitForFunction(() => document.querySelector('[data-workflow-status]')?.textContent.includes('修改已保存'));
+    await page.click('[data-workflow-artifact-history]');
+    await page.waitForFunction(() => document.querySelectorAll('.desktop-workflow-artifact-history-item').length >= 2);
     await page.click('[data-workflow-guided-approve]');
 
     await generateAndApprove(page, '节奏与场景计划');
@@ -199,16 +265,48 @@ async function generateAndApprove(page, title) {
     await activeStage(page, '自动审查');
     await page.click('[data-workflow-guided-generate]');
     await activeStage(page, '转到写作与资料库');
+    assert.strictEqual(await page.locator('[data-workflow-creation-batch-progress]').isVisible(), true);
+    assert.strictEqual(await page.locator('[data-workflow-creation-repair-batch]').isVisible(), true);
+    assert.strictEqual(await page.locator('[data-workflow-creation-adjust-continue]').isVisible(), true);
+    assert.strictEqual(await page.locator('[data-workflow-creation-continue]').isVisible(), true);
+    assert.strictEqual(
+      await page.locator('[data-workflow-creation-continue]').isDisabled(),
+      false,
+      `a clean review should allow continuation: ${await page.locator('[data-workflow-creation-batch-progress]').innerText()}`
+    );
+    await page.click('[data-workflow-creation-continue]');
+    await activeStage(page, '节奏与场景计划');
+    await generateAndApprove(page, '节奏与场景计划');
+    await generateAndApprove(page, '分场正文');
+    await activeStage(page, '自动审查');
+    await page.click('[data-workflow-guided-generate]');
+    await activeStage(page, '转到写作与资料库');
+    assert.ok((await page.locator('[data-workflow-creation-batch-progress]').innerText()).includes('第 2 批'));
+    assert.ok((await page.locator('[data-workflow-creation-batch-progress]').innerText()).includes('质量门禁未通过'));
+    assert.strictEqual(await page.locator('[data-workflow-guided-transfer-writer]').isDisabled(), true);
+    await page.locator('.desktop-workflow-artifact-tab').filter({ hasText: '自动审查报告' }).last().click();
+    await page.click('[data-artifact-view="readable"]');
+    await page.click('[data-workflow-repair-finding="dive"]');
+    await activeStage(page, '分场正文');
+    await generateAndApprove(page, '分场正文');
+    await activeStage(page, '自动审查');
+    await page.click('[data-workflow-guided-generate]');
+    await activeStage(page, '转到写作与资料库');
+    assert.strictEqual(await page.locator('[data-workflow-guided-transfer-writer]').isDisabled(), false);
+    assert.strictEqual(await page.locator('[data-workflow-guided-transfer-writer]').innerText(), '结束并回流正文');
     await page.click('[data-workflow-guided-transfer-compendium]');
     await page.waitForFunction(() => document.querySelector('[data-workflow-status]').textContent.includes('资料建议已写入资料库'));
+    await page.click('[data-workflow-guided-transfer-writer]');
+    await page.waitForFunction(() => document.querySelector('[data-workflow-status]').textContent.includes('正文已转入写作区'));
     await page.click('[data-workflow-guided-transfer-writer]');
     await page.waitForFunction(() => document.querySelector('[data-workflow-status]').textContent.includes('正文已转入写作区'));
 
     const opened = await projectService.openProject(dataRoot, creationProjectId);
     const generated = opened.project.scenes.filter((scene) => scene.sourceRunId);
-    assert.strictEqual(generated.length, 2);
+    assert.strictEqual(generated.length, 4);
     assert.ok(generated.every((scene) => scene.sourceArtifactId && scene.sourceRevisionId));
     assert.strictEqual(await page.evaluate(() => window.__creationThinkingSeen), true);
+    assert.strictEqual(await page.evaluate(() => window.__creationGlobalPromptSeen), true, 'workflow provider calls must receive the frozen global prompt');
     const compendiumResponse = await fetch(`${servers.appUrl}/api/compendium?projectId=${encodeURIComponent(creationProjectId)}`);
     const compendium = await compendiumResponse.json();
     assert.ok(compendium.entries.some((entry) => entry.title === '苏晚' && entry.aliases.includes('小晚')));

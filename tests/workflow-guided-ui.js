@@ -58,6 +58,8 @@ async function generateAndApprove(page, title) {
     await page.evaluate(() => {
       window.__workflowThinkingSeen = false;
       window.__workflowFailNext = false;
+      window.__workflowSlowProse = false;
+      window.__releaseWorkflowProse = null;
       window.__draftHarborGenerationStub = async (prompt, onToken, settings) => {
         if (window.__workflowFailNext) {
           window.__workflowFailNext = false;
@@ -84,6 +86,14 @@ async function generateAndApprove(page, title) {
         } else {
           const payload = JSON.parse(prompt.messages[1].content);
           output = `${payload.currentScene.title}的验收正文。林岚遵守约束继续调查。`;
+        }
+        if (window.__workflowSlowProse && !output.startsWith('{')) {
+          window.__workflowSlowProse = false;
+          const splitAt = Math.max(1, Math.floor(output.length / 2));
+          onToken(output.slice(0, splitAt), { type: 'content' });
+          await new Promise((resolve) => { window.__releaseWorkflowProse = resolve; });
+          onToken(output.slice(splitAt), { type: 'content' });
+          return;
         }
         onToken(output, { type: 'content' });
       };
@@ -135,6 +145,8 @@ async function generateAndApprove(page, title) {
     await activeStage(page, '场景计划与细纲');
     assert.strictEqual(await page.locator('[data-workflow-guided-return="direction"]').isVisible(), true);
     await page.click('[data-workflow-guided-generate]');
+    await page.waitForSelector('[data-artifact-view="json"]');
+    await page.click('[data-artifact-view="json"]');
     await page.waitForSelector('[data-workflow-artifact-editor]:not([readonly])');
     const planEditor = page.locator('[data-workflow-artifact-editor]');
     const plan = JSON.parse(await planEditor.inputValue());
@@ -144,7 +156,35 @@ async function generateAndApprove(page, title) {
     await page.waitForFunction(() => document.querySelector('[data-workflow-status]')?.textContent.includes('修改已保存'));
     await page.click('[data-workflow-guided-approve]');
 
-    await generateAndApprove(page, '分场正文');
+    await activeStage(page, '分场正文');
+    await page.evaluate(() => { window.__workflowSlowProse = true; });
+    await page.click('[data-workflow-guided-generate]');
+    await page.waitForSelector('[data-workflow-stream-stage][data-phase="streaming"]');
+    const liveText = await page.locator('[data-workflow-stream-text]').innerText();
+    assert.ok(liveText.length > 0, 'partial prose must become visible before the provider response finishes');
+    assert.ok(!liveText.includes('继续调查'), 'live stage must expose an intermediate response instead of waiting for completion');
+    assert.ok(
+      (await page.locator('[data-workflow-step-progress]').innerText()).includes(`${liveText.length} 字符`),
+      'compact progress and live manuscript must report the same received length'
+    );
+    if (process.env.WORKFLOW_STREAM_SCREENSHOT) {
+      await page.screenshot({ path: process.env.WORKFLOW_STREAM_SCREENSHOT, fullPage: true });
+    }
+    assert.strictEqual(await page.locator('[data-workflow-stream-follow]').getAttribute('aria-pressed'), 'true');
+    await page.locator('[data-workflow-stream-viewport]').evaluate((node) => {
+      node.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true }));
+    });
+    assert.strictEqual(await page.locator('[data-workflow-stream-follow]').getAttribute('aria-pressed'), 'false', 'scrolling upward must pause auto-follow');
+    await page.click('[data-workflow-stream-follow]');
+    assert.strictEqual(await page.locator('[data-workflow-stream-follow]').getAttribute('aria-pressed'), 'true');
+    await page.evaluate(() => window.__releaseWorkflowProse());
+    await page.waitForSelector('[data-workflow-guided-approve]:not([disabled])');
+    assert.strictEqual(await page.locator('[data-workflow-stream-stage]').getAttribute('data-phase'), 'complete');
+    const completedLiveText = await page.locator('[data-workflow-stream-text]').innerText();
+    assert.ok(completedLiveText.includes('继续调查'));
+    assert.ok(completedLiveText.includes('暗门之后'), 'each scene must start with a clean live preview');
+    assert.ok(!completedLiveText.includes('用户修改后的午夜回响'), 'the previous scene must not leak into the next live preview');
+    await page.click('[data-workflow-guided-approve]');
     await activeStage(page, '自动审查');
     await page.click('[data-workflow-guided-generate]');
     await activeStage(page, '转到写作与资料库');

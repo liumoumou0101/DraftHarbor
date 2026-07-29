@@ -5,6 +5,7 @@ const projectService = require('./project-service');
 const compendiumService = require('./compendium-service');
 const projectAssetQueryService = require('./project-asset-query-service');
 const applicationService = require('./workflow-application-service');
+const reviewService = require('./workflow-review-service');
 
 const ALLOWED_UPDATE_FIELDS = applicationService.ALLOWED_CARD_FIELDS;
 
@@ -51,6 +52,30 @@ async function readTransferSource(projectPath, runId, sourceInput) {
   return { source, family, revision, content: String(content || '') };
 }
 
+async function assertNoBlockingReviewFindings(projectPath, runId) {
+  const families = (await artifactStore.listArtifactFamilies(projectPath, runId))
+    .filter((family) => family.nodeId === 'review'
+      && family.artifactType && family.artifactType.id === 'draft-review');
+  const blocking = [];
+  for (const family of families) {
+    const revisionId = family.revisionIds[family.revisionIds.length - 1];
+    if (!revisionId) continue;
+    const report = await artifactStore.readArtifactContent(projectPath, runId, family.id, revisionId);
+    reviewService.blockingFindings(report).forEach((finding) => blocking.push({
+      ...finding,
+      artifactId: family.id,
+      reviewRevisionId: revisionId
+    }));
+  }
+  if (blocking.length) {
+    const error = new Error(`质量门禁未通过：仍有 ${blocking.length} 项阻断问题，不能转入写作区`);
+    error.code = 'WORKFLOW_QUALITY_GATE_BLOCKED';
+    error.findings = blocking;
+    throw error;
+  }
+  return { ok: true, blockingFindingCount: 0 };
+}
+
 async function previewWriterTransfer(options = {}) {
   const dataRoot = options.dataRoot;
   const projectId = clean(options.projectId);
@@ -59,6 +84,7 @@ async function previewWriterTransfer(options = {}) {
   const opened = await projectService.openProject(dataRoot, projectId);
   const project = opened.project;
   const projectPath = projectDir(dataRoot, projectId);
+  await assertNoBlockingReviewFindings(projectPath, runId);
   const inputs = Array.isArray(options.scenes) ? options.scenes : [];
   if (!inputs.length) throw new Error('writer transfer requires at least one scene');
   const scenes = [];
@@ -238,6 +264,7 @@ async function locateWorkflowAssets(dataRoot, projectId, options = {}) {
 module.exports = {
   sourceReference,
   readTransferSource,
+  assertNoBlockingReviewFindings,
   normalizeSelection,
   materializeTransferSource,
   previewWriterTransfer,

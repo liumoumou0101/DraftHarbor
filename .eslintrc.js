@@ -21,6 +21,7 @@ applyReaderSettings
 beginNativeSceneTitleEdit
 beginWorkflowReasoning
 beginWorkflowReasoningBatch
+beginWorkflowStreamStage
 bindCompendium
 bindCompendiumAgent
 bindCompendiumAgentQa
@@ -49,6 +50,7 @@ bindWorkshop
 buildNativeRegenerateSelectionPrompt
 buildNativeRewritePrompt
 appendWorkflowReasoning
+appendWorkflowStreamText
 cancelNativeGeneration
 captureReaderPositionLocator
 clampNumber
@@ -60,6 +62,7 @@ closeProjectCreator
 closeProjectEditor
 compendiumReferencesPromptBlock
 compendiumState
+compareWorkflowVariants
 contextPolicyLabel
 contextPolicyMode
 contextStripElements
@@ -87,12 +90,14 @@ EXPORT_OPTIONS_STORAGE_KEY
 fetchProjectSnapshot
 filteredCompendiumEntries
 finishWorkflowReasoning
+finishWorkflowStreamStage
 finishNativeSceneTitleEdit
 firstBookGlyph
 flushNativeEditorFields
 formatDate
 formatNumber
 generateGuidedWorkflowNode
+generateAlternativeWorkflowVariant
 generateNativeSummary
 getNativeAITaskRunner
 getState
@@ -101,6 +106,7 @@ importProjectPackageFile
 importProjectSnapshotFile
 importReaderFile
 importWritingway1Files
+isRewriteWorkflow
 initializeReaderNavigation
 initializeReaderNavigationDocument
 initializeReaderSelection
@@ -129,6 +135,7 @@ loadWorkshopSessions
 loadWriterModelOverride
 markNativeDirty
 markWorkflowAnswerStarted
+markWorkflowStreamSaving
 maybeShiftReaderFlowWindow
 migrateLegacyReaderState
 modelCatalog
@@ -202,9 +209,12 @@ renderReaderLibrary
 renderReaderReading
 renderReaderWorkspace
 renderWorkflowReasoningBubble
+renderWorkflowStreamStage
 renderGuidedWorkflowInlineResult
 renderGuidedWorkflowRecoveryActions
+renderCreationBatchDecisionActions
 resumeGuidedWorkflowRun
+workflowStableApplicationId
 renderSummaryPromptTemplates
 renderWorkflow
 renderWorkflowGraph
@@ -280,6 +290,7 @@ startRewriteWorkflowRun
 syncCreationBriefToInputs
 workflowLockConstraints
 workflowState
+hideWorkflowStreamStage
 workshopState
 WRITER_MODEL_KEY
 writerEffectiveProfile

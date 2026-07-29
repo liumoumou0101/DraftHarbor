@@ -29,6 +29,7 @@
             rewriteRatio: document.querySelector('[data-workflow-rewrite-ratio]'),
             creationTitle: document.querySelector('[data-workflow-creation-title]'),
             creationInspiration: document.querySelector('[data-workflow-creation-inspiration]'),
+            creationWritingInstructions: document.querySelector('[data-workflow-creation-writing-instructions]'),
             creationPremise: document.querySelector('[data-workflow-creation-premise]'),
             creationGenre: document.querySelector('[data-workflow-creation-genre]'),
             creationTargetLength: document.querySelector('[data-workflow-creation-target-length]'),
@@ -185,6 +186,7 @@
         const elements = workflowElements();
         const projectId = currentProjectId();
         const run = selectedWorkflowRun();
+        if (typeof window.renderWorkflowStreamStage === 'function') window.renderWorkflowStreamStage();
         const step = activeWorkflowStep(run);
         const isTerminalRun = run && ['completed', 'cancelled', 'failed'].includes(run.status);
         const draftArtifact = latestWorkflowArtifact(run, 'draft_text');
@@ -594,14 +596,22 @@
             }
             const providerConfig = guidedStageProviderConfig(step.id, run);
             beginWorkflowReasoning(providerConfig, step.title || step.id);
+            beginWorkflowStreamStage({
+                runId: run.id,
+                title: step.title || step.id || '正在生成正文',
+                current: 1,
+                total: 1,
+                model: providerConfig.model
+            });
             await window.DraftHarborProviderStream.streamGeneration(prepared.prompt, (token, meta) => {
                 if (meta && meta.type === 'reasoning') {
                     appendWorkflowReasoning(token);
                     return;
                 }
-                if (meta && meta.type === 'usage') return;
+                if (meta && ['usage', 'finish'].includes(meta.type)) return;
                 markWorkflowAnswerStarted();
                 workflowState.generatedText += token;
+                appendWorkflowStreamText(token);
                 const currentRun = selectedWorkflowRun();
                 const existing = latestWorkflowArtifact(currentRun, 'generation_result');
                 if (!existing && currentRun) {
@@ -620,6 +630,7 @@
                 }
                 renderWorkflow();
             }, providerConfig);
+            markWorkflowStreamSaving('正文已经抵达，正在写入工作流产物');
             const completeResponse = await fetch('/api/workflows/complete-generation', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -638,10 +649,12 @@
             workflowState.runs = workflowState.runs.map((item) => item.id === completed.run.id ? completed.run : item);
             await loadWorkflowEvents();
             setWorkflowStatus('步骤已生成，等待人工确认。', 'ok');
+            finishWorkflowStreamStage(true, '正文已生成并安全保存，可以开始审阅');
             finishWorkflowReasoning(true, '模型响应完成，结果已返回。');
         } catch (error) {
             console.warn('Workflow generation failed:', error);
             setWorkflowStatus(`工作流生成失败：${error.message || error}`, 'error');
+            finishWorkflowStreamStage(false, `生成中断：${error.message || error}。当前已接收文字仍保留在预览中`);
             finishWorkflowReasoning(false, `响应失败：${error.message || error}`);
         } finally {
             workflowState.generating = false;
@@ -764,6 +777,11 @@
         contextNote.className = 'desktop-workflow-context-note';
         contextNote.textContent = `上下文来源 ${contextCount} 个产物 · ${provider.model || '当前模型'} · ${budget}${provider.enableThinking ? ' · 深度思考已开启' : ''}`;
         container.appendChild(contextNote);
+        const progressPanel = document.createElement('p');
+        progressPanel.className = 'desktop-workflow-step-progress';
+        progressPanel.dataset.workflowStepProgress = '';
+        container.appendChild(progressPanel);
+        window.setWorkflowGenerationProgress();
         renderGuidedWorkflowInlineResult(container, run, step);
         if (run.status === 'cancelled') {
             const resumeNote = document.createElement('p');
@@ -796,7 +814,7 @@
             generate.type = 'button';
             generate.className = 'desktop-primary-action';
             generate.dataset.workflowGuidedGenerate = '';
-            generate.textContent = step.id === 'review' ? '执行自动审查' : `生成：${step.title}`;
+            generate.textContent = step.id === 'review' ? '开始自动审查' : `开始生成：${step.title}`;
             generate.disabled = workflowState.generating;
             generate.addEventListener('click', () => generateGuidedWorkflowNode().catch((error) => setWorkflowStatus(`生成失败：${error.message || error}`, 'error')));
             container.appendChild(generate);
@@ -806,18 +824,20 @@
             approve.type = 'button';
             approve.className = 'desktop-primary-action';
             approve.dataset.workflowGuidedApprove = '';
-            approve.textContent = `确认并进入下一步`;
+            approve.textContent = '确认结果并继续';
             approve.disabled = workflowState.generating;
             approve.addEventListener('click', () => approveGuidedWorkflowNode().catch((error) => setWorkflowStatus(`确认失败：${error.message || error}`, 'error')));
             container.appendChild(approve);
         }
+        renderCreationBatchDecisionActions(container, run, step);
         if ((step && step.id === 'transfer') || (transferStep && transferStep.status === 'completed')) {
+            const creationReviewBlocked = window.creationQualityGateBlocked(run);
             const writer = document.createElement('button');
             writer.type = 'button';
             writer.className = 'desktop-primary-action';
             writer.dataset.workflowGuidedTransferWriter = '';
-            writer.textContent = isRewriteWorkflow(run) ? '更新勾选的原场景' : '预览并转到写作区';
-            writer.disabled = workflowState.generating;
+            writer.textContent = isRewriteWorkflow(run) ? '更新勾选的原场景' : isCreationWorkflow(run) && step && step.id === 'transfer' ? '结束并回流正文' : '预览并转到写作区';
+            writer.disabled = workflowState.generating || creationReviewBlocked; if (creationReviewBlocked) writer.title = '存在未修复的阻断问题，重新审查通过后才能回流正文';
             writer.addEventListener('click', () => (isRewriteWorkflow(run) ? transferGuidedRewrite() : transferGuidedDrafts()).catch((error) => setWorkflowStatus(`转写失败：${error.message || error}`, 'error')));
             const compendium = document.createElement('button');
             compendium.type = 'button';
@@ -888,14 +908,54 @@
         textarea.dataset.workflowArtifactEditor = '';
         textarea.value = typeof selected.content === 'string' ? selected.content : JSON.stringify(selected.content, null, 2);
         const activeStep = activeWorkflowStep(run);
-        const editable = !!(activeStep && activeStep.id === selected.nodeId && activeStep.status === 'waiting_user');
+        const isGlobalInstructions = selected.artifactType === 'workflow-writing-instructions@1';
+        const editable = !!(
+            (activeStep && activeStep.id === selected.nodeId && activeStep.status === 'waiting_user')
+            || (isGlobalInstructions && run.status === 'in_progress')
+        );
         textarea.readOnly = !editable;
         editor.appendChild(meta);
-        window.renderGuidedArtifactPreview(editor, selected.content);
+        const viewSwitch = document.createElement('div');
+        viewSwitch.className = 'desktop-workflow-view-switch';
+        viewSwitch.setAttribute('role', 'group');
+        viewSwitch.setAttribute('aria-label', '产物查看方式');
+        const readable = document.createElement('div');
+        readable.dataset.workflowArtifactReadable = '';
+        const renderedPreview = window.renderGuidedArtifactPreview(readable, selected.content);
+        if (!renderedPreview) {
+            const text = document.createElement('div');
+            text.className = 'desktop-workflow-readable-text';
+            text.textContent = typeof selected.content === 'string' ? selected.content : JSON.stringify(selected.content, null, 2);
+            readable.appendChild(text);
+        }
+        const form = document.createElement('div');
+        form.dataset.workflowArtifactForm = '';
+        form.className = 'desktop-workflow-artifact-form';
+        window.renderWorkflowArtifactForm(form, selected.content);
         const advancedLabel = document.createElement('p');
         advancedLabel.className = 'desktop-workflow-advanced-label';
         advancedLabel.textContent = editable ? '高级编辑（JSON）— 修改后保存为新版本' : '高级内容（只读）';
-        editor.append(advancedLabel, textarea);
+        const views = [
+            ['readable', '可读视图', readable],
+            ['form', '表单视图', form],
+            ['json', typeof selected.content === 'string' ? '原始文本' : '原始 JSON', textarea]
+        ];
+        const setArtifactView = (mode) => {
+            workflowState.artifactViewMode = mode;
+            views.forEach(([id, , panel]) => { panel.hidden = id !== mode; });
+            advancedLabel.hidden = mode !== 'json';
+            Array.from(viewSwitch.children).forEach((button) => button.classList.toggle('is-active', button.dataset.artifactView === mode));
+        };
+        views.forEach(([id, title]) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.dataset.artifactView = id;
+            button.textContent = title;
+            button.addEventListener('click', () => setArtifactView(id));
+            viewSwitch.appendChild(button);
+        });
+        editor.append(viewSwitch, readable, form, advancedLabel, textarea);
+        setArtifactView(workflowState.artifactViewMode || 'readable');
         if (selected.artifactType === 'rewrite-comparison@1' && selected.content && Array.isArray(selected.content.comparisons)) {
             textarea.hidden = true;
             const comparisons = document.createElement('div');
@@ -945,14 +1005,20 @@
             editor.appendChild(options);
         }
         if (editable) {
+            window.appendWorkflowArtifactRewriteControls(editor, {
+                artifact: selected,
+                currentContent: () => textarea.value,
+                isGlobalInstructions
+            });
             const save = document.createElement('button');
             save.type = 'button';
             save.className = 'desktop-secondary-action';
             save.dataset.workflowArtifactSave = '';
-            save.textContent = '保存为新版本';
+            save.textContent = '保存修改为新版本';
             save.addEventListener('click', () => saveGuidedArtifact(selected, textarea.value).catch((error) => setWorkflowStatus(`保存失败：${error.message || error}`, 'error')));
             editor.appendChild(save);
         }
+        window.appendWorkflowArtifactHistoryControl(editor, selected);
         container.appendChild(editor);
         renderWorkflowVariantComparison(container, run);
     }
@@ -1099,7 +1165,12 @@
         if (!window.confirm(`将 ${preview.counts.scenes} 个场景转入写作区（${targetHint}），是否继续？`)) return;
         const response = await fetch('/api/workflows/v2/apply-writer-transfer', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectId, runId: run.id, applicationId: `guided-writer-${Date.now()}`, scenes })
+            body: JSON.stringify({
+                projectId,
+                runId: run.id,
+                applicationId: workflowStableApplicationId(`guided-writer-${run.id}`, drafts.map((artifact) => artifact.revision.id)),
+                scenes
+            })
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
@@ -1175,36 +1246,6 @@
         if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
         workflowState.variantComparison = { ...result.comparison, runId: run.id };
         return result.comparison;
-    }
-
-    async function generateAlternativeWorkflowVariant() {
-        const projectId = currentProjectId(); const run = selectedWorkflowRun();
-        if (!projectId || !run || workflowState.generating) return;
-        const instruction = window.prompt('新版本要求', '生成一个情节更紧凑、冲突更强的替代版本。');
-        if (!instruction || !instruction.trim()) return;
-        const label = window.prompt('版本名称', instruction.trim().slice(0, 24)) || instruction.trim().slice(0, 24);
-        workflowState.generating = true; setWorkflowStatus('正在准备替代版本...', 'info'); renderWorkflow();
-        try {
-            const preparedResponse = await fetch('/api/workflows/v2/prepare-variant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, runId: run.id, instruction, label }) });
-            const prepared = await preparedResponse.json().catch(() => ({}));
-            if (!preparedResponse.ok || !prepared.ok) throw new Error(prepared.error || `HTTP ${preparedResponse.status}`);
-            const config = guidedStageProviderConfig(isRewriteWorkflow(run) ? 'repair' : 'draft', run);
-            const outputs = []; beginWorkflowReasoning(config, `替代版本 · ${label}`);
-            for (let index = 0; index < prepared.prompts.length; index += 1) {
-                let output = ''; const item = prepared.prompts[index]; beginWorkflowReasoningBatch(item.title, index, prepared.prompts.length);
-                await window.DraftHarborProviderStream.streamGeneration(item.prompt, (token, meta) => {
-                    if (meta?.type === 'reasoning') appendWorkflowReasoning(token); else if (meta?.type !== 'usage') { markWorkflowAnswerStarted(); output += token; }
-                }, { ...config, includeUsage: true });
-                outputs.push(output);
-            }
-            const completeResponse = await fetch('/api/workflows/v2/complete-variant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, runId: run.id, variantId: prepared.variantId, instruction, label, outputs, providerSnapshot: { provider: config.provider, model: config.model } }) });
-            const completed = await completeResponse.json().catch(() => ({}));
-            if (!completeResponse.ok || !completed.ok) throw new Error(completed.error || `HTTP ${completeResponse.status}`);
-            workflowState.pendingVariantId = completed.variant.variantId; workflowState.pendingVariantApproved = false; workflowState.variantSelections = {};
-            await compareWorkflowVariants(run, completed.variant.variantId); finishWorkflowReasoning(true, '替代版本生成完成，请逐场景比较并批准。');
-            setWorkflowStatus('替代版本已生成，尚未批准或写回。', 'ok');
-        } catch (error) { finishWorkflowReasoning(false, `版本生成失败：${error.message || error}`); throw error; }
-        finally { workflowState.generating = false; renderWorkflow(); }
     }
 
     async function approveAlternativeWorkflowVariant() {
@@ -1335,6 +1376,7 @@
             workflowState.reasoning.dismissed = true;
             renderWorkflowReasoningBubble();
         });
+        if (typeof window.bindWorkflowStreamStage === 'function') window.bindWorkflowStreamStage();
         renderWorkflowLaunchMode();
         renderWorkflow();
     }

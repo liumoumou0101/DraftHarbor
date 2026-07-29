@@ -264,6 +264,10 @@
                 : null,
             startedAt: cleanString(input.startedAt),
             finishedAt: cleanString(input.finishedAt),
+            invalidatedAt: cleanString(input.invalidatedAt),
+            invalidatedRevisionIds: Array.isArray(input.invalidatedRevisionIds)
+                ? [...new Set(input.invalidatedRevisionIds.map(cleanString).filter(Boolean))]
+                : [],
             updatedAt: nowIso(input.updatedAt)
         };
     }

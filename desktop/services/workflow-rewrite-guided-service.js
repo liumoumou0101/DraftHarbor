@@ -143,7 +143,7 @@ async function completeRewriteTransfer(options = {}) {
 module.exports = {
   STAGES, OUTPUT_TYPES, definition, normalizeConstraints, startGuidedRewrite,
   getRewriteRun: runtime.getRun, prepareRewriteNode, completeRewriteNode,
-  reviseRewriteArtifact: runtime.reviseArtifact, approveRewriteNode: runtime.approveNode,
+  reviseRewriteArtifact: runtime.reviseArtifact, getRewriteArtifactHistory: runtime.getArtifactHistory, approveRewriteNode: runtime.approveNode,
   completeRewriteTransfer, cancelRewriteRun: runtime.cancelRun,
   resumeRewriteRun: runtime.resumeRun,
   restartRewriteNode: runtime.restartFromNode

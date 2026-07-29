@@ -53,6 +53,23 @@ function createController(dependencies) {
     if (lastError) throw lastError;
     throw new Error('guided workflow resume service unavailable');
   }
+  async function getV2ArtifactHistory(payload, dataRoot) {
+    const readers = [
+      workflowGuidedService.getGuidedArtifactHistory,
+      workflowCreationGuidedService && workflowCreationGuidedService.getCreationArtifactHistory,
+      workflowRewriteGuidedService && workflowRewriteGuidedService.getRewriteArtifactHistory
+    ].filter((item) => typeof item === 'function');
+    let lastError = null;
+    for (const read of readers) {
+      try { return await read({ ...payload, dataRoot }); }
+      catch (error) {
+        lastError = error;
+        if (!/guided run not found/i.test(String(error && error.message))) throw error;
+      }
+    }
+    if (lastError) throw lastError;
+    throw new Error('guided artifact history service unavailable');
+  }
   return async function handle(request, response, appRoot, dataRoot, parsedUrl, _integrations = {}) {
 
   if (readerWorkflowTransferService && request.method === 'POST' && parsedUrl.pathname.startsWith('/api/workflows/reader-transfer/')) {
@@ -301,6 +318,49 @@ function createController(dependencies) {
       jsonResponse(response, 200, await workflowCreationGuidedService.approveCreationNode({ ...payload, dataRoot }));
     } catch (error) {
       jsonResponse(response, 500, { ok: false, error: error.message });
+    }
+    return true;
+  }
+
+  if (request.method === 'GET' && parsedUrl.pathname === '/api/workflows/v2/artifact-history') {
+    try {
+      jsonResponse(response, 200, await getV2ArtifactHistory({
+        projectId: String(parsedUrl.searchParams.get('projectId') || '').trim(),
+        runId: String(parsedUrl.searchParams.get('runId') || '').trim(),
+        artifactId: String(parsedUrl.searchParams.get('artifactId') || '').trim()
+      }, dataRoot));
+    } catch (error) {
+      jsonResponse(response, /not found/i.test(error.message) ? 404 : 500, { ok: false, error: error.message });
+    }
+    return true;
+  }
+
+  if (workflowCreationGuidedService && request.method === 'POST' && parsedUrl.pathname === '/api/workflows/v2/preview-next-creation-batch') {
+    try {
+      const payload = await readJsonPayload(request);
+      jsonResponse(response, 200, await workflowCreationGuidedService.previewNextCreationBatch({ ...payload, dataRoot }));
+    } catch (error) {
+      jsonResponse(response, 400, { ok: false, error: error.message });
+    }
+    return true;
+  }
+
+  if (workflowCreationGuidedService && request.method === 'POST' && parsedUrl.pathname === '/api/workflows/v2/continue-creation-batch') {
+    try {
+      const payload = await readJsonPayload(request);
+      jsonResponse(response, 200, await workflowCreationGuidedService.continueCreationBatch({ ...payload, dataRoot }));
+    } catch (error) {
+      jsonResponse(response, 400, { ok: false, error: error.message });
+    }
+    return true;
+  }
+
+  if (workflowCreationGuidedService && request.method === 'POST' && parsedUrl.pathname === '/api/workflows/v2/apply-creation-writing-instructions') {
+    try {
+      const payload = await readJsonPayload(request);
+      jsonResponse(response, 200, await workflowCreationGuidedService.applyWritingInstructionsToCurrentBatch({ ...payload, dataRoot }));
+    } catch (error) {
+      jsonResponse(response, 400, { ok: false, error: error.message });
     }
     return true;
   }
