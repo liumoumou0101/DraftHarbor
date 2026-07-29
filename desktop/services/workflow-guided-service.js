@@ -270,6 +270,10 @@ async function reviseArtifact(options = {}) {
   return guidedRuntime.reviseArtifact(options);
 }
 
+async function getGuidedArtifactHistory(options = {}) {
+  return guidedRuntime.getArtifactHistory(options);
+}
+
 async function approveGuidedNode(options = {}) {
   return guidedRuntime.approveNode(options);
 }
@@ -294,6 +298,7 @@ module.exports = {
   prepareGuidedNode,
   completeGuidedNode,
   reviseArtifact,
+  getGuidedArtifactHistory,
   approveGuidedNode,
   completeGuidedTransfer,
   cancelGuidedRun,

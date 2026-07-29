@@ -64,6 +64,7 @@ async function writeText(projectPath, projectId, runId, artifactId, revisionId, 
     let scene = opened.project.scenes.find((item) => item.id === 'workflow-scene-1');
     assert.strictEqual(scene.content, '第一场工作流正文。');
     assert.strictEqual(scene.sourceRevisionId, 'draft-r1');
+    assert.strictEqual(opened.project.currentSceneId, 'workflow-scene-1', 'first transfer into an empty project should open the generated scene');
 
     const updatePreview = await Transfer.previewWriterTransfer({
       dataRoot, projectId: project.id, runId, scenes: [{
@@ -159,6 +160,30 @@ async function writeText(projectPath, projectId, runId, artifactId, revisionId, 
     assert.ok(apiResponse.ok && apiPreview.ok);
     assert.strictEqual(apiPreview.scenes[0].scene.content, '第一场工作流正文。');
     assert.strictEqual((await projectService.openProject(dataRoot, project.id)).project.scenes.some((item) => item.id === 'api-preview-scene'), false);
+
+    await artifactStore.writeArtifactRevision(projectPath, runId, {
+      id: 'blocking-review',
+      projectId: project.id,
+      runId,
+      nodeId: 'review',
+      artifactType: 'draft-review@1',
+      title: '阻断审查'
+    }, {
+      id: 'blocking-review-r1',
+      reviewState: 'approved',
+      approvedAt: '2026-07-29T00:00:00.000Z',
+      payload: { format: 'json' }
+    }, {
+      kind: 'draft-review',
+      qualityGate: 'blocked',
+      findings: [{ type: 'process_label_leak', severity: 'major', evidence: '场景 6-1' }]
+    });
+    await assert.rejects(() => Transfer.previewWriterTransfer({
+      dataRoot,
+      projectId: project.id,
+      runId,
+      scenes: [sceneInput]
+    }), (error) => error.code === 'WORKFLOW_QUALITY_GATE_BLOCKED' && /不能转入写作区/.test(error.message));
 
     console.log('Workflow transfer service test passed.');
   } finally {

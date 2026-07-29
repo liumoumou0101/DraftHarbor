@@ -31,6 +31,7 @@ function createGuidedRuntime(spec = {}) {
       if (!revision) continue;
       records.push({
         id: family.id, title: family.title, nodeId: family.nodeId,
+        targetRef: family.targetRef || {},
         artifactType: `${family.artifactType.id}@${family.artifactType.version}`,
         revision,
         content: await artifactStore.readArtifactContent(targetPath, runId, family.id, revision.id)
@@ -47,22 +48,37 @@ function createGuidedRuntime(spec = {}) {
     const states = new Map((stored.state.nodeStates || []).map((state) => [state.nodeId, state]));
     const definition = stored.definitionSnapshot && stored.definitionSnapshot.definition;
     const definitionNodes = new Map(((definition && definition.nodes) || []).map((node) => [node.id, node]));
-    const artifacts = storedArtifacts.map((artifact) => {
+    const internalArtifacts = storedArtifacts.filter((artifact) => artifact.targetRef && artifact.targetRef.internal === true);
+    const artifacts = storedArtifacts.filter((artifact) => !internalArtifacts.includes(artifact)).map((artifact) => {
       const state = states.get(artifact.nodeId) || {};
-      const effectiveFreshness = ['ready', 'pending', 'interrupted', 'failed'].includes(state.executionState) ? 'stale' : (artifact.revision.freshness || 'fresh');
+      const explicitlyInvalidated = (state.invalidatedRevisionIds || []).includes(artifact.revision.id);
+      const effectiveFreshness = explicitlyInvalidated ? 'stale' : (artifact.revision.freshness || 'fresh');
       return { ...artifact, effectiveFreshness };
     });
+    const run = {
+      ...stored.summary,
+      activeStepId: stored.summary.activeNodeId,
+      storageVersion: 'v2', compatibilityMode: 'v2_guided', readOnly: false, supportsV2Execution: true,
+      definition: definition || null,
+      settings: definition ? definition.settings : {},
+      batches: [],
+      activeBatchId: '',
+      batchWarnings: [],
+      generationProgress: {
+        completedCharacters: 0,
+        targetCharacters: 0,
+        remainingCharacters: 0,
+        completionRatio: 0
+      },
+      steps: stages.map((stage) => ({ ...stage, ...(definitionNodes.get(stage.id) || {}), status: (states.get(stage.id) || {}).executionState || 'pending', artifactCount: artifacts.filter((artifact) => artifact.nodeId === stage.id).length, staleArtifactCount: artifacts.filter((artifact) => artifact.nodeId === stage.id && artifact.effectiveFreshness === 'stale').length })),
+      artifacts
+    };
+    const decorated = typeof spec.decorateRun === 'function'
+      ? spec.decorateRun(run, internalArtifacts) || {}
+      : {};
     return {
       ok: true,
-      run: {
-        ...stored.summary,
-        activeStepId: stored.summary.activeNodeId,
-        storageVersion: 'v2', compatibilityMode: 'v2_guided', readOnly: false, supportsV2Execution: true,
-        definition: definition || null,
-        settings: definition ? definition.settings : {},
-        steps: stages.map((stage) => ({ ...stage, ...(definitionNodes.get(stage.id) || {}), status: (states.get(stage.id) || {}).executionState || 'pending', artifactCount: artifacts.filter((artifact) => artifact.nodeId === stage.id).length, staleArtifactCount: artifacts.filter((artifact) => artifact.nodeId === stage.id && artifact.effectiveFreshness === 'stale').length })),
-        artifacts
-      }
+      run: { ...run, ...decorated }
     };
   }
 
@@ -91,7 +107,8 @@ function createGuidedRuntime(spec = {}) {
       runId: options.runId,
       nodeId: options.nodeId,
       artifactType: options.artifactType,
-      title: options.title || stage.title
+      title: options.title || stage.title,
+      targetRef: options.targetRef || {}
     }, {
       id: options.revisionId || id(`${options.nodeId}-r`),
       parentRevisionId: options.parentRevisionId,
@@ -111,23 +128,40 @@ function createGuidedRuntime(spec = {}) {
     const outputs = Array.isArray(options.outputs) ? options.outputs : [options.output];
     if (!outputs.length || outputs.some((output) => !clean(output))) throw new Error('guided node outputs are required');
     const stageIndex = stages.findIndex((stage) => stage.id === nodeId);
-    const refs = details.run.artifacts.filter((artifact) => stages.findIndex((stage) => stage.id === artifact.nodeId) < stageIndex).map((artifact) => artifact.revision.id);
+    const inputArtifacts = details.run.artifacts.filter((artifact) => stages.findIndex((stage) => stage.id === artifact.nodeId) < stageIndex);
+    const scopedInputs = typeof spec.inputArtifacts === 'function'
+      ? spec.inputArtifacts(inputArtifacts, details.run, nodeId)
+      : inputArtifacts;
+    const refs = scopedInputs.map((artifact) => artifact.revision.id);
     for (let index = 0; index < outputs.length; index += 1) {
       const normalized = spec.normalizeOutput(nodeId, outputs[index], { ...options, index });
       const format = typeof normalized === 'string' ? 'text' : 'json';
-      const artifactId = `${nodeId}-result${outputs.length > 1 ? `-${index + 1}` : ''}`;
+      const outputIndex = Array.isArray(options.outputIndexes) && Number.isInteger(Number(options.outputIndexes[index]))
+        ? Number(options.outputIndexes[index]) : index;
+      const identity = typeof spec.outputIdentity === 'function'
+        ? spec.outputIdentity({ nodeId, index: outputIndex, outputCount: outputs.length, options, details })
+        : {};
+      const artifactId = clean(identity && identity.artifactId, `${nodeId}-result${outputs.length > 1 ? `-${index + 1}` : ''}`);
       const previous = details.run.artifacts.find((artifact) => artifact.id === artifactId);
+      const requestedTitle = clean(Array.isArray(options.outputTitles) && options.outputTitles[index]);
+      const outputTitle = requestedTitle
+        || (outputs.length > 1 ? `${stageMap.get(nodeId).title} ${index + 1}` : stageMap.get(nodeId).title);
       await writeArtifact(targetPath, {
         ...options, nodeId, inputRevisionIds: refs, content: normalized, format,
         artifactId,
+        targetRef: identity && identity.targetRef,
         parentRevisionId: previous && previous.revision.id,
         artifactType: spec.outputTypes[nodeId],
-        title: outputs.length > 1 ? clean(options.outputTitles && options.outputTitles[index], `${stageMap.get(nodeId).title} ${index + 1}`) : stageMap.get(nodeId).title,
-        summary: outputs.length > 1 ? `${stageMap.get(nodeId).title} ${index + 1}` : `${stageMap.get(nodeId).title}生成结果`
+        title: outputTitle,
+        summary: `${outputTitle}生成结果`
       });
     }
-    await setNodeState(targetPath, options.runId, nodeId, 'waiting_user');
-    await appendEvent(targetPath, options.runId, 'guided_node_generated', nodeId, { outputCount: outputs.length, usage: options.usage || [] });
+    await setNodeState(targetPath, options.runId, nodeId, options.partial === true ? 'ready' : 'waiting_user');
+    await appendEvent(targetPath, options.runId, 'guided_node_generated', nodeId, {
+      outputCount: outputs.length,
+      partial: options.partial === true,
+      usage: options.usage || []
+    });
     return getRun(options.dataRoot, options.projectId, options.runId);
   }
 
@@ -159,7 +193,10 @@ function createGuidedRuntime(spec = {}) {
     const parent = await artifactStore.readArtifactRevision(targetPath, options.runId, options.artifactId, options.parentRevisionId);
     if (!family || !parent) throw new Error('guided artifact revision not found');
     const contentInput = parent.payload.format === 'json' && typeof options.content === 'string' ? parseJson(options.content) : options.content;
-    const content = spec.normalizeOutput(family.nodeId, contentInput, options);
+    const content = spec.normalizeOutput(family.nodeId, contentInput, {
+      ...options,
+      artifactType: `${family.artifactType.id}@${family.artifactType.version}`
+    });
     const result = await writeArtifact(targetPath, {
       ...options, nodeId: family.nodeId, artifactId: family.id, artifactType: `${family.artifactType.id}@${family.artifactType.version}`,
       title: family.title, parentRevisionId: parent.id, inputRevisionIds: parent.inputRevisionIds,
@@ -169,11 +206,38 @@ function createGuidedRuntime(spec = {}) {
     return { ok: true, artifact: result };
   }
 
+  async function getArtifactHistory(options = {}) {
+    await getRun(options.dataRoot, options.projectId, options.runId);
+    const targetPath = projectPath(options.dataRoot, options.projectId);
+    const family = await artifactStore.readArtifactFamily(targetPath, options.runId, options.artifactId);
+    if (!family) throw new Error('guided artifact family not found');
+    const revisions = [];
+    for (const revisionId of family.revisionIds || []) {
+      const revision = await artifactStore.readArtifactRevision(targetPath, options.runId, family.id, revisionId);
+      if (!revision) continue;
+      revisions.push({
+        revision,
+        content: await artifactStore.readArtifactContent(targetPath, options.runId, family.id, revisionId)
+      });
+    }
+    return {
+      ok: true,
+      artifact: {
+        id: family.id,
+        title: family.title,
+        nodeId: family.nodeId,
+        artifactType: `${family.artifactType.id}@${family.artifactType.version}`
+      },
+      revisions
+    };
+  }
+
   async function approveNode(options = {}) {
     const targetPath = projectPath(options.dataRoot, options.projectId);
     const details = await getRun(options.dataRoot, options.projectId, options.runId);
     const nodeId = clean(options.nodeId, details.run.activeNodeId);
-    const artifacts = details.run.artifacts.filter((artifact) => artifact.nodeId === nodeId);
+    const artifacts = details.run.artifacts.filter((artifact) => artifact.nodeId === nodeId
+      && (typeof spec.artifactInActiveScope !== 'function' || spec.artifactInActiveScope(artifact, details.run, nodeId)));
     if (!artifacts.length) throw new Error(`guided node has no artifact to approve: ${nodeId}`);
     const requestedDirectionIds = Array.isArray(options.selectedDirectionIds)
       ? [...new Set(options.selectedDirectionIds.map(clean).filter(Boolean))] : [];
@@ -262,24 +326,36 @@ function createGuidedRuntime(spec = {}) {
 
   async function restartFromNode(options = {}) {
     const targetPath = projectPath(options.dataRoot, options.projectId);
-    await getRun(options.dataRoot, options.projectId, options.runId);
+    const details = await getRun(options.dataRoot, options.projectId, options.runId);
     const nodeId = clean(options.nodeId);
     const index = stages.findIndex((stage) => stage.id === nodeId);
     if (index < 0) throw new Error(`unknown guided node: ${nodeId}`);
     const stage = stages[index];
     if (index === 0 || nodeId === spec.transferNodeId || ['writer.snapshot', 'creation.brief'].includes(stage.capabilityId)) throw new Error(`guided node cannot be restarted: ${nodeId}`);
     const current = await runStore.readWorkflowV2RunState(targetPath, options.runId);
+    const invalidatedAt = new Date().toISOString();
     const nodeStates = (current.nodeStates || []).map((state) => {
       const stateIndex = stages.findIndex((item) => item.id === state.nodeId);
       if (stateIndex < index) return state;
-      return { ...state, executionState: stateIndex === index ? 'ready' : 'pending', error: null, activeChunkId: '', finishedAt: '' };
+      const invalidatedRevisionIds = (details.run.artifacts || [])
+        .filter((artifact) => artifact.nodeId === state.nodeId)
+        .map((artifact) => artifact.revision.id);
+      return {
+        ...state,
+        executionState: stateIndex === index ? 'ready' : 'pending',
+        error: null,
+        activeChunkId: '',
+        finishedAt: '',
+        invalidatedAt,
+        invalidatedRevisionIds: [...new Set([...(state.invalidatedRevisionIds || []), ...invalidatedRevisionIds])]
+      };
     });
     await runStore.writeWorkflowV2RunState(targetPath, options.runId, { status: 'in_progress', activeNodeId: nodeId, nodeStates, finishedAt: '' }, { expectedRevision: current.revision });
     await appendEvent(targetPath, options.runId, 'guided_nodes_invalidated', nodeId, { reason: clean(options.reason, '用户请求重新运行'), invalidatedNodeIds: stages.slice(index).map((item) => item.id) });
     return getRun(options.dataRoot, options.projectId, options.runId);
   }
 
-  return { projectPath, appendEvent, artifactRecords, getRun, setNodeState, writeArtifact, completeOutputs, recordGenerationFailure, reviseArtifact, approveNode, completeTransfer, cancelRun, resumeRun, restartFromNode, parseJson };
+  return { projectPath, appendEvent, artifactRecords, getRun, setNodeState, writeArtifact, completeOutputs, recordGenerationFailure, reviseArtifact, getArtifactHistory, approveNode, completeTransfer, cancelRun, resumeRun, restartFromNode, parseJson };
 }
 
 module.exports = { createGuidedRuntime, parseJson };

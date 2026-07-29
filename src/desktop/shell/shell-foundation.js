@@ -188,6 +188,11 @@
         graphTemplates: [],
         graphPendingConnection: null,
         selectedArtifactId: '',
+        artifactViewMode: 'readable',
+        artifactRewriteModel: 'inherit',
+        artifactRewriteThinking: true,
+        artifactRewriteBusy: false,
+        artifactHistory: null,
         selectedDirectionIds: [],
         selectedRewriteSceneIds: [],
         creationBrief: null,
@@ -200,6 +205,15 @@
         pendingVariantId: '',
         pendingVariantApproved: false,
         lastGenerationError: '',
+        generationProgressDetail: {
+            phase: 'idle',
+            detail: '',
+            current: 0,
+            total: 0,
+            characters: 0,
+            cumulativeCharacters: 0,
+            startedAt: 0
+        },
         reasoning: {
             visible: false,
             dismissed: false,
@@ -209,6 +223,23 @@
             text: '',
             hasReasoning: false,
             batchHasReasoning: false
+        },
+        streamPreview: {
+            visible: false,
+            phase: 'idle',
+            runId: '',
+            title: '',
+            status: '',
+            text: '',
+            current: 0,
+            total: 0,
+            cumulativeCharacters: 0,
+            startedAt: 0,
+            firstTokenAt: 0,
+            lastTokenAt: 0,
+            follow: true,
+            collapsed: false,
+            model: ''
         }
     };
     const recoveryState = {

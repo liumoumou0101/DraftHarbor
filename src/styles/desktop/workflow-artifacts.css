@@ -1,0 +1,104 @@
+.desktop-workflow-readable-text {
+    max-height: 70vh;
+    overflow: auto;
+    padding: 12px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 6px;
+    white-space: pre-wrap;
+    line-height: 1.8;
+}
+
+.desktop-workflow-artifact-form {
+    display: grid;
+    gap: 8px;
+    max-height: 70vh;
+    overflow: auto;
+}
+
+.desktop-workflow-artifact-form-row {
+    display: grid;
+    gap: 5px;
+    padding: 9px 10px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.desktop-workflow-artifact-form-row p {
+    margin: 0;
+    color: var(--desktop-muted);
+    white-space: pre-wrap;
+}
+
+.desktop-workflow-artifact-rewrite {
+    display: grid;
+    gap: 9px;
+    padding: 12px;
+    border: 1px solid rgba(var(--desktop-accent-rgb), 0.32);
+    border-radius: 8px;
+    background: rgba(var(--desktop-accent-rgb), 0.06);
+}
+
+.desktop-workflow-artifact-rewrite textarea {
+    min-height: 80px;
+    font-family: inherit;
+}
+
+.desktop-workflow-artifact-history,
+.desktop-workflow-artifact-history > div,
+.desktop-workflow-artifact-history-item {
+    display: grid;
+    gap: 8px;
+}
+
+.desktop-workflow-artifact-history-item {
+    padding: 8px 10px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 6px;
+}
+
+.desktop-workflow-artifact-history-item pre {
+    max-height: 320px;
+    overflow: auto;
+    white-space: pre-wrap;
+    color: var(--desktop-muted);
+}
+
+.desktop-workflow-history-compare {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 8px;
+}
+
+.desktop-workflow-history-comparison {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.desktop-workflow-history-comparison[hidden] {
+    display: none;
+}
+
+.desktop-workflow-history-comparison pre {
+    max-height: 360px;
+    overflow: auto;
+    padding: 8px;
+    border: 1px solid var(--desktop-line);
+    white-space: pre-wrap;
+}
+
+.desktop-workflow-step-progress {
+    margin: 4px 0;
+    padding: 9px 11px;
+    border-left: 3px solid rgba(var(--desktop-accent-rgb), 0.6);
+    border-radius: 4px;
+    background: rgba(var(--desktop-accent-rgb), 0.07);
+    color: var(--desktop-muted);
+    font-size: 12px;
+}
+
+.desktop-workflow-step-progress[data-phase="等待确认"] {
+    color: var(--desktop-text);
+}

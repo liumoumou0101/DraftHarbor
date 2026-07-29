@@ -19,6 +19,7 @@
                 model: config.model || '',
                 temperature: config.temperature,
                 maxTokens: config.maxTokens,
+                globalPrompt: config.globalPrompt || '',
                 enableThinking: workflowState.workflowThinking !== false,
                 useProviderDefaults: !!config.useProviderDefaults
             }
@@ -93,6 +94,7 @@
             organization: snapshot.organization || config.organization,
             model: snapshot.model || config.model,
             temperature: snapshot.temperature === undefined ? config.temperature : snapshot.temperature,
+            globalPrompt: snapshot.globalPrompt === undefined ? config.globalPrompt : snapshot.globalPrompt,
             enableThinking: thinking,
             firstResponseTimeoutMs: 90000,
             idleTimeoutMs: 120000,

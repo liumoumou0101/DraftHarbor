@@ -1,0 +1,510 @@
+.desktop-workflow-stream-stage {
+    --stream-glow: rgba(var(--desktop-accent-rgb), 0.22);
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    gap: 0;
+    min-height: 430px;
+    overflow: hidden;
+    border: 1px solid rgba(var(--desktop-accent-rgb), 0.42);
+    border-radius: 18px;
+    background:
+        linear-gradient(145deg, rgba(var(--desktop-accent-rgb), 0.08), transparent 34%),
+        color-mix(in srgb, var(--desktop-panel) 94%, #071411 6%);
+    box-shadow:
+        0 24px 70px rgba(0, 0, 0, 0.24),
+        0 0 0 1px rgba(255, 255, 255, 0.025) inset,
+        0 0 42px var(--stream-glow);
+}
+
+.desktop-workflow-stream-stage[hidden] {
+    display: none;
+}
+
+.desktop-workflow-stream-stage::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    opacity: 0.26;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: linear-gradient(to bottom, black, transparent 76%);
+}
+
+.desktop-workflow-stream-aurora {
+    position: absolute;
+    z-index: -1;
+    top: -180px;
+    left: 8%;
+    width: 84%;
+    height: 280px;
+    border-radius: 50%;
+    opacity: 0.38;
+    background: radial-gradient(ellipse, rgba(var(--desktop-accent-rgb), 0.58), transparent 68%);
+    filter: blur(42px);
+    transform: translate3d(-12%, 0, 0);
+    animation: workflow-stream-aurora 8s ease-in-out infinite alternate;
+}
+
+.desktop-workflow-stream-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 17px 20px 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+    background: rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(16px);
+}
+
+.desktop-workflow-stream-heading,
+.desktop-workflow-stream-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.desktop-workflow-stream-heading .desktop-section-kicker {
+    margin: 0 0 3px;
+    color: rgba(var(--desktop-accent-rgb), 0.88);
+    letter-spacing: 0.13em;
+}
+
+.desktop-workflow-stream-heading h3 {
+    margin: 0;
+    color: var(--desktop-text);
+    font-size: 16px;
+    font-weight: 650;
+}
+
+.desktop-workflow-stream-signal {
+    display: flex;
+    align-items: end;
+    gap: 3px;
+    width: 30px;
+    height: 28px;
+    padding: 6px;
+    border: 1px solid rgba(var(--desktop-accent-rgb), 0.32);
+    border-radius: 9px;
+    background: rgba(var(--desktop-accent-rgb), 0.09);
+    box-shadow: 0 0 20px rgba(var(--desktop-accent-rgb), 0.12);
+}
+
+.desktop-workflow-stream-signal i {
+    width: 3px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--desktop-accent);
+    opacity: 0.52;
+    transform-origin: bottom;
+}
+
+.desktop-workflow-stream-stage[data-phase="waiting"] .desktop-workflow-stream-signal i,
+.desktop-workflow-stream-stage[data-phase="streaming"] .desktop-workflow-stream-signal i {
+    animation: workflow-stream-signal 1.1s ease-in-out infinite;
+}
+
+.desktop-workflow-stream-signal i:nth-child(2) { height: 9px; animation-delay: -0.28s !important; }
+.desktop-workflow-stream-signal i:nth-child(3) { height: 13px; animation-delay: -0.54s !important; }
+.desktop-workflow-stream-signal i:nth-child(4) { height: 17px; animation-delay: -0.76s !important; }
+
+.desktop-workflow-stream-actions button {
+    min-height: 32px;
+    padding: 6px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 9px;
+    background: rgba(0, 0, 0, 0.12);
+    color: var(--desktop-muted);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: 160ms ease;
+}
+
+.desktop-workflow-stream-actions button:hover,
+.desktop-workflow-stream-follow.is-active {
+    border-color: rgba(var(--desktop-accent-rgb), 0.42);
+    background: rgba(var(--desktop-accent-rgb), 0.12);
+    color: var(--desktop-text);
+}
+
+.desktop-workflow-stream-follow span:first-child {
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    margin-right: 4px;
+    border-radius: 50%;
+    background: rgba(var(--desktop-accent-rgb), 0.14);
+}
+
+.desktop-workflow-stream-follow.is-active span:first-child {
+    animation: workflow-stream-follow 1.7s ease-in-out infinite;
+}
+
+.desktop-workflow-stream-progress {
+    position: relative;
+    height: 2px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.045);
+}
+
+.desktop-workflow-stream-progress span {
+    position: absolute;
+    inset: 0 auto 0 -36%;
+    width: 36%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, transparent, rgba(var(--desktop-accent-rgb), 0.95), rgba(255, 255, 255, 0.78), transparent);
+    box-shadow: 0 0 15px rgba(var(--desktop-accent-rgb), 0.72);
+}
+
+.desktop-workflow-stream-stage[data-phase="waiting"] .desktop-workflow-stream-progress span,
+.desktop-workflow-stream-stage[data-phase="streaming"] .desktop-workflow-stream-progress span,
+.desktop-workflow-stream-stage[data-phase="saving"] .desktop-workflow-stream-progress span {
+    animation: workflow-stream-progress 2.4s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+.desktop-workflow-stream-stage[data-phase="complete"] .desktop-workflow-stream-progress span {
+    left: 0;
+    width: 100%;
+    background: rgba(102, 213, 165, 0.8);
+}
+
+.desktop-workflow-stream-stage[data-phase="failed"] {
+    --stream-glow: rgba(239, 107, 115, 0.12);
+    border-color: rgba(239, 107, 115, 0.46);
+}
+
+.desktop-workflow-stream-stage[data-phase="failed"] .desktop-workflow-stream-progress span {
+    left: 0;
+    width: 100%;
+    background: rgba(239, 107, 115, 0.72);
+}
+
+.desktop-workflow-stream-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 156px;
+    min-height: 340px;
+}
+
+.desktop-workflow-stream-viewport {
+    min-width: 0;
+    max-height: 58vh;
+    overflow: auto;
+    scrollbar-color: rgba(var(--desktop-accent-rgb), 0.36) transparent;
+    outline: none;
+}
+
+.desktop-workflow-stream-viewport:focus-visible {
+    box-shadow: 0 0 0 2px rgba(var(--desktop-accent-rgb), 0.5) inset;
+}
+
+.desktop-workflow-stream-paper {
+    position: relative;
+    min-height: 100%;
+    padding: clamp(28px, 4vw, 58px) clamp(30px, 7vw, 92px);
+    background:
+        linear-gradient(90deg, transparent 0, transparent 34px, rgba(var(--desktop-accent-rgb), 0.07) 35px, transparent 36px),
+        linear-gradient(rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0));
+}
+
+.desktop-workflow-stream-paper::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    inset: 0;
+    opacity: 0.2;
+    background: linear-gradient(105deg, transparent 38%, rgba(var(--desktop-accent-rgb), 0.1) 48%, transparent 58%);
+    transform: translateX(-100%);
+}
+
+.desktop-workflow-stream-stage[data-phase="streaming"] .desktop-workflow-stream-paper::after {
+    animation: workflow-stream-paper-scan 7s ease-in-out infinite;
+}
+
+.desktop-workflow-stream-manuscript {
+    position: relative;
+    z-index: 1;
+    color: color-mix(in srgb, var(--desktop-text) 92%, var(--desktop-accent) 8%);
+    font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
+    font-size: clamp(16px, 1.25vw, 19px);
+    line-height: 2;
+    letter-spacing: 0.035em;
+    text-align: start;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    text-shadow: 0 0 18px rgba(var(--desktop-accent-rgb), 0.035);
+}
+
+.desktop-workflow-stream-ink {
+    animation: workflow-stream-ink 520ms cubic-bezier(0.16, 0.78, 0.2, 1) both;
+}
+
+.desktop-workflow-stream-manuscript[hidden],
+.desktop-workflow-stream-empty[hidden] {
+    display: none;
+}
+
+.desktop-workflow-stream-caret {
+    display: inline-block;
+    width: 0.62em;
+    height: 1.2em;
+    margin-left: 0.12em;
+    vertical-align: -0.22em;
+    border-radius: 2px 7px 7px 2px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), var(--desktop-accent));
+    box-shadow:
+        0 0 8px rgba(var(--desktop-accent-rgb), 0.9),
+        0 0 22px rgba(var(--desktop-accent-rgb), 0.58),
+        9px 0 22px rgba(var(--desktop-accent-rgb), 0.2);
+}
+
+.desktop-workflow-stream-stage[data-phase="streaming"] .desktop-workflow-stream-caret {
+    animation: workflow-stream-caret 0.86s steps(1, end) infinite;
+}
+
+.desktop-workflow-stream-stage[data-phase="complete"] .desktop-workflow-stream-caret,
+.desktop-workflow-stream-stage[data-phase="failed"] .desktop-workflow-stream-caret {
+    display: none;
+}
+
+.desktop-workflow-stream-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 8px;
+    color: var(--desktop-muted);
+    text-align: center;
+}
+
+.desktop-workflow-stream-empty strong {
+    color: var(--desktop-text);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.desktop-workflow-stream-empty small {
+    color: var(--desktop-faint);
+}
+
+.desktop-workflow-stream-orbit {
+    position: relative;
+    width: 62px;
+    height: 62px;
+    margin-bottom: 8px;
+    border: 1px solid rgba(var(--desktop-accent-rgb), 0.22);
+    border-radius: 50%;
+    box-shadow: 0 0 36px rgba(var(--desktop-accent-rgb), 0.12);
+}
+
+.desktop-workflow-stream-orbit::before,
+.desktop-workflow-stream-orbit::after {
+    content: "";
+    position: absolute;
+    border: 1px solid rgba(var(--desktop-accent-rgb), 0.32);
+    border-radius: 50%;
+}
+
+.desktop-workflow-stream-orbit::before { inset: 9px; }
+.desktop-workflow-stream-orbit::after {
+    inset: 22px;
+    border: 0;
+    background: var(--desktop-accent);
+    box-shadow: 0 0 22px rgba(var(--desktop-accent-rgb), 0.78);
+    animation: workflow-stream-core 1.8s ease-in-out infinite;
+}
+
+.desktop-workflow-stream-orbit i {
+    position: absolute;
+    top: 28px;
+    left: 28px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--desktop-accent);
+    box-shadow: 0 0 10px rgba(var(--desktop-accent-rgb), 0.8);
+    transform: rotate(calc(var(--orbit-index, 0) * 120deg)) translateX(28px);
+    transform-origin: 2px 2px;
+}
+
+.desktop-workflow-stream-orbit i:nth-child(1) { --orbit-index: 0; }
+.desktop-workflow-stream-orbit i:nth-child(2) { --orbit-index: 1; }
+.desktop-workflow-stream-orbit i:nth-child(3) { --orbit-index: 2; }
+
+.desktop-workflow-stream-stage[data-phase="waiting"] .desktop-workflow-stream-orbit {
+    animation: workflow-stream-orbit 4s linear infinite;
+}
+
+.desktop-workflow-stream-telemetry {
+    display: grid;
+    grid-auto-rows: minmax(68px, auto);
+    align-content: center;
+    gap: 1px;
+    padding: 16px;
+    border-left: 1px solid rgba(255, 255, 255, 0.055);
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.desktop-workflow-stream-telemetry > div {
+    display: grid;
+    align-content: center;
+    gap: 5px;
+    padding: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+.desktop-workflow-stream-telemetry > div:last-child {
+    border-bottom: 0;
+}
+
+.desktop-workflow-stream-telemetry span {
+    color: var(--desktop-faint);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+}
+
+.desktop-workflow-stream-telemetry strong {
+    color: var(--desktop-text);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.45;
+}
+
+.desktop-workflow-stream-stage[data-phase="streaming"] [data-workflow-stream-status] {
+    color: var(--desktop-accent);
+}
+
+.desktop-workflow-stream-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 10px 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.055);
+    background: rgba(0, 0, 0, 0.09);
+    color: var(--desktop-faint);
+    font-size: 11px;
+}
+
+.desktop-workflow-stream-stage.is-collapsed {
+    min-height: 0;
+}
+
+.desktop-workflow-stream-stage.is-collapsed .desktop-workflow-stream-body {
+    display: none;
+}
+
+@keyframes workflow-stream-aurora {
+    to { transform: translate3d(18%, 7%, 0) scale(1.12); opacity: 0.52; }
+}
+
+@keyframes workflow-stream-signal {
+    0%, 100% { opacity: 0.35; transform: scaleY(0.58); }
+    50% { opacity: 1; transform: scaleY(1.08); }
+}
+
+@keyframes workflow-stream-progress {
+    0% { left: -36%; }
+    60%, 100% { left: 100%; }
+}
+
+@keyframes workflow-stream-follow {
+    0%, 100% { transform: translateY(-1px); box-shadow: 0 0 0 rgba(var(--desktop-accent-rgb), 0); }
+    50% { transform: translateY(2px); box-shadow: 0 0 12px rgba(var(--desktop-accent-rgb), 0.28); }
+}
+
+@keyframes workflow-stream-paper-scan {
+    0%, 22% { transform: translateX(-100%); }
+    68%, 100% { transform: translateX(100%); }
+}
+
+@keyframes workflow-stream-caret {
+    0%, 52% { opacity: 1; transform: scaleY(1); }
+    53%, 100% { opacity: 0.24; transform: scaleY(0.88); }
+}
+
+@keyframes workflow-stream-ink {
+    0% {
+        opacity: 0;
+        color: color-mix(in srgb, var(--desktop-accent) 78%, white 22%);
+        filter: blur(3px);
+        text-shadow: 0 0 16px rgba(var(--desktop-accent-rgb), 0.8);
+    }
+    48% {
+        opacity: 1;
+        filter: blur(0);
+        text-shadow: 0 0 9px rgba(var(--desktop-accent-rgb), 0.34);
+    }
+    100% {
+        color: inherit;
+        text-shadow: inherit;
+    }
+}
+
+@keyframes workflow-stream-core {
+    0%, 100% { transform: scale(0.75); opacity: 0.7; }
+    50% { transform: scale(1.15); opacity: 1; }
+}
+
+@keyframes workflow-stream-orbit {
+    to { transform: rotate(360deg); }
+}
+
+@media (max-width: 900px) {
+    .desktop-workflow-stream-body {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .desktop-workflow-stream-telemetry {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-auto-rows: auto;
+        padding: 8px 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.055);
+        border-left: 0;
+    }
+
+    .desktop-workflow-stream-telemetry > div {
+        min-width: 0;
+        border-right: 1px solid rgba(255, 255, 255, 0.045);
+        border-bottom: 0;
+    }
+}
+
+@media (max-width: 640px) {
+    .desktop-workflow-stream-header,
+    .desktop-workflow-stream-footer {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .desktop-workflow-stream-actions {
+        width: 100%;
+    }
+
+    .desktop-workflow-stream-actions button {
+        flex: 1;
+    }
+
+    .desktop-workflow-stream-paper {
+        padding: 28px 24px;
+        background: linear-gradient(rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0));
+    }
+
+    .desktop-workflow-stream-telemetry {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .desktop-workflow-stream-stage *,
+    .desktop-workflow-stream-stage *::before,
+    .desktop-workflow-stream-stage *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}

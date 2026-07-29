@@ -93,6 +93,8 @@ async function generateAndApprove(page, title) {
     await activeStage(page, '可编辑重写计划');
     await page.click('[data-workflow-guided-generate]');
     await page.waitForFunction(() => document.querySelector('[data-workflow-reasoning-content]')?.textContent.includes('正在比较原文'));
+    await page.waitForSelector('[data-artifact-view="json"]');
+    await page.click('[data-artifact-view="json"]');
     await page.waitForSelector('[data-workflow-artifact-editor]:not([readonly])');
     await page.waitForSelector('[data-workflow-current-result]');
     assert.strictEqual(await page.locator('[data-workflow-current-result]').isVisible(), true);

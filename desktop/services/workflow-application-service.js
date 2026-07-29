@@ -130,6 +130,9 @@ async function applyOperation(dataRoot, projectPath, runId, operation) {
     const project = opened.project;
     const now = new Date().toISOString();
     if (operation.kind === 'writer.create-scene') {
+      const currentScene = project.scenes.find((item) => item.id === project.currentSceneId);
+      const shouldActivateCreatedScene = !currentScene
+        || (project.scenes.length === 1 && !String(currentScene.content || '').trim());
       const chapterData = operation.data.chapter || {};
       let chapter = project.chapters.find((item) => item.id === operation.target.chapterId);
       if (!chapter) {
@@ -153,6 +156,7 @@ async function applyOperation(dataRoot, projectPath, runId, operation) {
       });
       chapter.sceneIds = [...(chapter.sceneIds || []), operation.target.sceneId];
       chapter.updatedAt = now;
+      if (shouldActivateCreatedScene) project.currentSceneId = operation.target.sceneId;
     } else {
       const scene = project.scenes.find((item) => item.id === operation.target.sceneId);
       if (!scene) throw new Error(`writer target scene not found: ${operation.target.sceneId}`);

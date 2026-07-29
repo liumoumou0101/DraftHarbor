@@ -170,6 +170,10 @@
                         mustInclude: [...confirmedBrief.mustInclude, ...workflowLockConstraints(elements).filter((item) => item.kind === 'direction').map((item) => item.text)],
                         avoid: [...confirmedBrief.avoid, ...workflowLockConstraints(elements).filter((item) => item.kind === 'exclusion').map((item) => item.text)]
                     },
+                    writingInstructions: {
+                        text: elements.creationWritingInstructions?.value.trim() || '',
+                        applicableStages: ['direction', 'blueprint', 'compendium', 'plan', 'draft', 'review']
+                    },
                     fineOutlineEnabled: !elements.fineOutline || elements.fineOutline.checked,
                     constraints: workflowLockConstraints(elements),
                     generationPolicy: launch
@@ -224,6 +228,7 @@
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('AI 没有返回 JSON 对象');
         return parsed;
     }
+    window.parseGuidedJsonOutput = parseGuidedJsonOutput;
 
     function guidedJsonRepairPrompt(step, prompt, output, finishReason) {
         return {
@@ -301,6 +306,15 @@
         let completionStatus = '';
         workflowState.lastGenerationError = '';
         workflowState.generating = true;
+        window.setWorkflowGenerationProgress({
+            phase: '准备上下文',
+            detail: step.title,
+            current: 0,
+            total: 0,
+            characters: 0,
+            cumulativeCharacters: run.generationProgress && run.generationProgress.completedCharacters || 0,
+            startedAt: Date.now()
+        });
         setWorkflowStatus(step.id === 'review' ? '正在执行自动审查...' : `正在生成：${step.title}`, 'info');
         renderWorkflow();
         try {
@@ -308,13 +322,23 @@
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ projectId, runId: run.id, nodeId: step.id, selectedDirectionIds: workflowState.selectedDirectionIds })
             });
-            const prepared = await preparedResponse.json().catch(() => ({}));
+            let prepared = await preparedResponse.json().catch(() => ({}));
             if (!preparedResponse.ok || !prepared.ok) throw new Error(prepared.error || `HTTP ${preparedResponse.status}`);
+            window.setWorkflowGenerationProgress({
+                phase: '请求模型',
+                detail: step.id === 'draft' && prepared.sequentialDraft
+                    ? `第 ${prepared.batchSequence || 1} 批 · 第 ${(prepared.completedCount || 0) + 1}/${prepared.totalCount || 1} 场`
+                    : step.title,
+                total: (prepared.prompts || []).length,
+                cumulativeCharacters: prepared.cumulativeCharacters || 0
+            });
             const stageConfig = guidedStageProviderConfig(step.id, run);
             beginWorkflowReasoning(stageConfig, step.title || step.id);
+            if (prepared.outputFormat !== 'text') hideWorkflowStreamStage();
             if ((prepared.prompts || []).length && (!window.DraftHarborProviderStream || typeof window.DraftHarborProviderStream.streamGeneration !== 'function')) {
                 throw new Error('生成服务尚未加载');
             }
+            let completedIncrementally = false;
             for (let index = 0; index < (prepared.prompts || []).length; index += 1) {
                 const prompt = prepared.prompts[index];
                 let text = '';
@@ -322,7 +346,25 @@
                 const outputRecord = { promptId: prompt.id, text: '', finishReason: '' };
                 outputRecords.push(outputRecord);
                 setWorkflowStatus(`正在生成 ${index + 1}/${prepared.prompts.length}：${prompt.title || step.title}`, 'info');
+                window.setWorkflowGenerationProgress({
+                    phase: '请求模型',
+                    detail: prompt.title || step.title,
+                    current: index + 1,
+                    total: prepared.prompts.length,
+                    characters: 0
+                });
                 beginWorkflowReasoningBatch(prompt.title || step.title, index, prepared.prompts.length);
+                if (prepared.outputFormat === 'text') {
+                    beginWorkflowStreamStage({
+                        runId: run.id,
+                        title: prompt.title || step.title || '正在生成正文',
+                        current: prepared.sequentialDraft ? (prepared.completedCount || 0) + 1 : index + 1,
+                        total: prepared.sequentialDraft ? prepared.totalCount || 1 : prepared.prompts.length,
+                        cumulativeCharacters: prepared.cumulativeCharacters || 0,
+                        model: stageConfig.model
+                    });
+                }
+                let progressContentStarted = false;
                 await window.DraftHarborProviderStream.streamGeneration(prompt.prompt, (token, meta) => {
                     if (meta && meta.type === 'usage') usage.push({ promptId: prompt.id, model: stageConfig.model, ...meta.usage });
                     else if (meta && meta.type === 'finish') {
@@ -334,9 +376,27 @@
                         markWorkflowAnswerStarted();
                         text += token;
                         outputRecord.text = text;
+                        if (prepared.outputFormat === 'text') appendWorkflowStreamText(token);
+                        if (!progressContentStarted || text.length % 500 < String(token || '').length) {
+                            progressContentStarted = true;
+                            window.setWorkflowGenerationProgress({
+                                phase: '接收内容',
+                                detail: prompt.title || step.title,
+                                current: index + 1,
+                                total: prepared.prompts.length,
+                                characters: text.length,
+                                cumulativeCharacters: (prepared.cumulativeCharacters || 0) + text.length
+                            });
+                        }
                     }
                 }, { ...stageConfig, includeUsage: true });
+                if (prepared.outputFormat === 'text') markWorkflowStreamSaving('正文已经抵达，正在校验并保存 Revision');
                 if (prepared.outputFormat === 'json') {
+                    window.setWorkflowGenerationProgress({
+                        phase: '校验结果',
+                        detail: prompt.title || step.title,
+                        characters: text.length
+                    });
                     let invalidJson = false;
                     try {
                         parseGuidedJsonOutput(text);
@@ -345,6 +405,7 @@
                     }
                     if (finishReason === 'length' || invalidJson) {
                         repairAttempted = true;
+                        window.setWorkflowGenerationProgress({ phase: '自动修复', detail: prompt.title || step.title });
                         let repaired;
                         try {
                             repaired = await repairGuidedJsonOutput(step, prompt, text, finishReason, stageConfig, usage);
@@ -361,22 +422,70 @@
                         outputRecord.finishReason = repaired.finishReason || finishReason;
                     }
                 }
+                if (prepared.sequentialDraft) {
+                    const partial = prepared.remainingCount > 1;
+                    window.setWorkflowGenerationProgress({
+                        phase: '保存 Revision',
+                        detail: prompt.title || step.title,
+                        characters: text.length
+                    });
+                    const partialResponse = await fetch(endpoints.complete, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            projectId,
+                            runId: run.id,
+                            nodeId: step.id,
+                            outputs: [text],
+                            outputIndexes: [prompt.outputIndex],
+                            usage,
+                            outputTitles: [prompt.title || step.title],
+                            partial
+                        })
+                    });
+                    const partialResult = await partialResponse.json().catch(() => ({}));
+                    if (!partialResponse.ok || !partialResult.ok) throw new Error(partialResult.error || `HTTP ${partialResponse.status}`);
+                    if (partial) {
+                        finishWorkflowStreamStage(true, `${prompt.title || step.title} 已保存，正在准备下一场`);
+                        window.setWorkflowGenerationProgress({
+                            phase: '更新滚动上下文',
+                            detail: `${prompt.title || step.title} 已保存，准备下一场`,
+                            cumulativeCharacters: (prepared.cumulativeCharacters || 0) + text.length
+                        });
+                        const nextPreparedResponse = await fetch(endpoints.prepare, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ projectId, runId: run.id, nodeId: step.id, selectedDirectionIds: workflowState.selectedDirectionIds })
+                        });
+                        prepared = await nextPreparedResponse.json().catch(() => ({}));
+                        if (!nextPreparedResponse.ok || !prepared.ok) throw new Error(prepared.error || `HTTP ${nextPreparedResponse.status}`);
+                        index = -1;
+                        continue;
+                    }
+                    completedIncrementally = true;
+                    break;
+                }
                 outputs.push(text);
             }
-            const completedOutputs = combineGuidedOutputs(step, prepared, outputs);
-            const completeResponse = await fetch(endpoints.complete, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    projectId,
-                    runId: run.id,
-                    nodeId: step.id,
-                    outputs: completedOutputs.outputs,
-                    usage,
-                    outputTitles: completedOutputs.outputTitles
-                })
-            });
-            const completed = await completeResponse.json().catch(() => ({}));
-            if (!completeResponse.ok || !completed.ok) throw new Error(completed.error || `HTTP ${completeResponse.status}`);
+            if (!completedIncrementally) {
+                const completedOutputs = combineGuidedOutputs(step, prepared, outputs);
+                window.setWorkflowGenerationProgress({
+                    phase: step.id === 'review' ? '更新滚动状态' : '保存 Revision',
+                    detail: step.title,
+                    characters: outputs.reduce((sum, output) => sum + output.length, 0)
+                });
+                const completeResponse = await fetch(endpoints.complete, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        projectId,
+                        runId: run.id,
+                        nodeId: step.id,
+                        outputs: completedOutputs.outputs,
+                        usage,
+                        outputTitles: completedOutputs.outputTitles
+                    })
+                });
+                const completed = await completeResponse.json().catch(() => ({}));
+                if (!completeResponse.ok || !completed.ok) throw new Error(completed.error || `HTTP ${completeResponse.status}`);
+            }
             const refreshedRun = await loadGuidedWorkflowRun(run.id);
             const artifact = (refreshedRun.artifacts || []).filter((item) => item.nodeId === step.id).slice(-1)[0];
             workflowState.selectedArtifactId = artifact ? artifact.id : workflowState.selectedArtifactId;
@@ -386,6 +495,13 @@
                 : repairAttempted
                     ? '生成完成；检测到不完整 JSON，并已自动修复。请检查结果。'
                     : '生成完成，请检查并按需修改。';
+            window.setWorkflowGenerationProgress({
+                phase: '等待确认',
+                detail: completionStatus,
+                current: 0,
+                total: 0
+            });
+            if (prepared.outputFormat === 'text') finishWorkflowStreamStage(true, '正文已生成并安全保存，可以开始审阅');
             finishWorkflowReasoning(true, '模型响应完成，结果已返回。');
         } catch (error) {
             let recoveredRun = null;
@@ -401,6 +517,13 @@
                 workflowState.lastGenerationError = '';
                 await loadWorkflowEvents().catch(() => {});
                 completionStatus = step.id === 'review' ? '自动审查已完成，已从本地运行恢复。' : '生成已经完成，结果已从本地运行恢复，请检查并确认。';
+                window.setWorkflowGenerationProgress({
+                    phase: '等待确认',
+                    detail: completionStatus,
+                    current: 0,
+                    total: 0
+                });
+                finishWorkflowStreamStage(true, '正文已经保存，并已从本地运行恢复');
                 finishWorkflowReasoning(true, '模型结果已保存，并已从本地运行恢复。');
                 return;
             }
@@ -427,6 +550,7 @@
                 })
             }).catch(() => {});
             await loadWorkflowEvents().catch(() => {});
+            finishWorkflowStreamStage(false, `生成中断：${error.message || error}。当前已接收文字仍保留在预览中`);
             finishWorkflowReasoning(false, `响应失败：${error.message || error}`);
             throw error;
         } finally {

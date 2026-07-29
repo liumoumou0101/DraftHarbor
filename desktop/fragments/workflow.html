@@ -85,6 +85,10 @@
                             <span>灵感、关键词或故事片段</span>
                             <textarea data-workflow-creation-inspiration rows="5" placeholder="想到什么写什么：人物、画面、冲突、题材、关键词都可以。AI 会据此补全创作设定。"></textarea>
                         </label>
+                        <label>
+                            <span>全局写作指令（可选）</span>
+                            <textarea data-workflow-creation-writing-instructions rows="4" placeholder="例如：克制的第三人称限知；减少解释性旁白；对话约占三成；避免堆砌比喻。该指令会作为可修改版本保存，并默认从下一批生效。"></textarea>
+                        </label>
                         <details>
                             <summary>我想先指定一些方向（可选）</summary>
                             <div class="desktop-workflow-field-grid">
@@ -162,6 +166,49 @@
                         <p data-workflow-reasoning-status role="status" aria-live="polite">等待模型响应…</p>
                         <pre data-workflow-reasoning-content aria-live="off">正在连接模型…</pre>
                     </aside>
+
+                    <section class="desktop-workflow-stream-stage" data-workflow-stream-stage data-phase="idle" hidden aria-label="正文实时生成">
+                        <div class="desktop-workflow-stream-aurora" aria-hidden="true"></div>
+                        <header class="desktop-workflow-stream-header">
+                            <div class="desktop-workflow-stream-heading">
+                                <span class="desktop-workflow-stream-signal" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                                <div>
+                                    <p class="desktop-section-kicker">Live Manuscript · 实时创作</p>
+                                    <h3 data-workflow-stream-title>正在准备稿纸</h3>
+                                </div>
+                            </div>
+                            <div class="desktop-workflow-stream-actions">
+                                <button type="button" class="desktop-workflow-stream-follow is-active" data-workflow-stream-follow aria-pressed="true">
+                                    <span aria-hidden="true">↧</span>
+                                    <span data-workflow-stream-follow-label>自动跟随</span>
+                                </button>
+                                <button type="button" class="desktop-workflow-stream-minimize" data-workflow-stream-minimize aria-expanded="true">收起预览</button>
+                            </div>
+                        </header>
+                        <div class="desktop-workflow-stream-progress" aria-hidden="true"><span></span></div>
+                        <div class="desktop-workflow-stream-body" data-workflow-stream-body>
+                            <div class="desktop-workflow-stream-viewport" data-workflow-stream-viewport tabindex="0" aria-label="正在生成的正文，使用滚轮可暂停自动跟随">
+                                <article class="desktop-workflow-stream-paper">
+                                    <div class="desktop-workflow-stream-empty" data-workflow-stream-empty>
+                                        <span class="desktop-workflow-stream-orbit" aria-hidden="true"><i></i><i></i><i></i></span>
+                                        <strong>灵感正在汇聚</strong>
+                                        <small>模型开始书写后，正文会在这里实时出现</small>
+                                    </div>
+                                    <div class="desktop-workflow-stream-manuscript" data-workflow-stream-manuscript hidden aria-live="off"><span data-workflow-stream-text></span><span class="desktop-workflow-stream-caret" aria-hidden="true"></span></div>
+                                </article>
+                            </div>
+                            <aside class="desktop-workflow-stream-telemetry" aria-label="生成状态">
+                                <div><span>状态</span><strong data-workflow-stream-status role="status" aria-live="polite">准备上下文</strong></div>
+                                <div><span>本段字数</span><strong data-workflow-stream-characters>0</strong></div>
+                                <div><span>生成速度</span><strong data-workflow-stream-rate>等待首字</strong></div>
+                                <div><span>已用时间</span><strong data-workflow-stream-elapsed>0:00</strong></div>
+                            </aside>
+                        </div>
+                        <footer class="desktop-workflow-stream-footer">
+                            <span data-workflow-stream-position>等待模型开始书写</span>
+                            <span data-workflow-stream-model></span>
+                        </footer>
+                    </section>
 
                     <div class="desktop-workflow-stage-actions" data-workflow-stage-actions hidden></div>
                     <div class="desktop-workflow-steps" data-workflow-steps></div>

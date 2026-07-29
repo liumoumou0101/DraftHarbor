@@ -15,6 +15,16 @@
         rejected: '已退回'
     })[state] || state || '未标记';
 
+    function workflowStableApplicationId(prefix, values) {
+        const text = (Array.isArray(values) ? values : [values]).map((value) => String(value || '')).join('|');
+        let hash = 2166136261;
+        for (let index = 0; index < text.length; index += 1) {
+            hash ^= text.charCodeAt(index);
+            hash = Math.imul(hash, 16777619);
+        }
+        return `${prefix}-${(hash >>> 0).toString(16).padStart(8, '0')}`;
+    }
+
     window.workflowEventLabel = (type) => ({
         guided_run_created: '流程已创建',
         guided_run_resumed: '流程已恢复',
@@ -26,7 +36,8 @@
         guided_node_restarted: '步骤已重新开始',
         guided_nodes_invalidated: '后续结果已标记为过期',
         guided_artifact_revised: '产物已保存为新版本',
-        guided_artifact_transferred: '产物已回流到项目'
+        guided_artifact_transferred: '产物已回流到项目',
+        creation_batch_continued: '已开始下一批创作'
     })[type] || '流程记录';
 
     function guidedResultSummary(content) {
@@ -75,9 +86,50 @@
             });
         }
         if (Array.isArray(content.findings)) {
-            appendGuidedPreviewItem(preview, '审查结论', content.findings.length ? `发现 ${content.findings.length} 项需要处理的问题` : '未发现需要处理的问题');
+            appendGuidedPreviewItem(preview, '审查结论', content.qualityGate === 'blocked'
+                ? `质量门禁未通过：${content.blockingFindingCount || 1} 项阻断问题`
+                : content.findings.length ? `发现 ${content.findings.length} 项需要处理的问题` : '未发现需要处理的问题');
             content.findings.slice(0, 6).forEach((finding, index) => {
-                appendGuidedPreviewItem(preview, `问题 ${index + 1}`, finding.message || finding.summary || finding.description || JSON.stringify(finding));
+                const label = [
+                    String(finding.severity || 'warning').toUpperCase(),
+                    finding.sceneTitle || finding.sceneId || '',
+                    finding.type || ''
+                ].filter(Boolean).join(' · ');
+                const detail = [
+                    finding.evidence && `证据：${finding.evidence}`,
+                    finding.suggestion && `建议：${finding.suggestion}`,
+                    finding.message || finding.summary || finding.description || ''
+                ].filter(Boolean).join('；');
+                appendGuidedPreviewItem(preview, `问题 ${index + 1}｜${label}`, detail || JSON.stringify(finding));
+                const normalizedSeverity = String(finding.severity || '').trim().toLowerCase();
+                if (['error', 'critical', 'major', 'high', '严重', '致命'].includes(normalizedSeverity)) {
+                    const run = selectedWorkflowRun();
+                    const matchingDraft = (run?.artifacts || []).find((artifact) => artifact.nodeId === 'draft'
+                        && (!run.activeBatchId || artifact.targetRef?.batchId === run.activeBatchId)
+                        && (artifact.targetRef?.sceneId === finding.sceneId
+                            || (!finding.sceneId && artifact.title === finding.sceneTitle)));
+                    if (run?.templateId === 'creation-guided' && matchingDraft?.targetRef?.sceneId) {
+                        const repair = document.createElement('button');
+                        repair.type = 'button';
+                        repair.className = 'desktop-mini-action';
+                        repair.dataset.workflowRepairFinding = matchingDraft.targetRef.sceneId;
+                        repair.textContent = `只修复“${matchingDraft.title || finding.sceneTitle || '此场景'}”`;
+                        repair.addEventListener('click', () => {
+                            const instruction = window.prompt(
+                                '补充修复意见（可直接确认默认建议）',
+                                finding.suggestion || '修复审查指出的问题，保留其他内容和事实。'
+                            );
+                            if (instruction === null) return;
+                            restartGuidedWorkflowFromStep(run, 'draft', matchingDraft.title || '分场正文', {
+                                skipConfirm: true,
+                                sceneIds: [matchingDraft.targetRef.sceneId],
+                                userInstruction: instruction.trim(),
+                                reason: `修复审查问题：${finding.type || 'quality-gate'}`
+                            }).catch((error) => setWorkflowStatus(`场景修复失败：${error.message || error}`, 'error'));
+                        });
+                        preview.lastElementChild?.appendChild(repair);
+                    }
+                }
             });
         }
         if (!preview.childElementCount && content.summary) appendGuidedPreviewItem(preview, '摘要', content.summary);
@@ -90,6 +142,16 @@
     }
 
     window.renderGuidedArtifactPreview = renderGuidedArtifactPreview;
+
+    window.creationQualityGateBlocked = function creationQualityGateBlocked(run) {
+        if (!run || run.templateId !== 'creation-guided') return false;
+        const blocking = new Set(['error', 'critical', 'major', 'high', '严重', '致命']);
+        return (run.artifacts || []).some((artifact) => artifact.nodeId === 'review'
+            && artifact.content
+            && (artifact.content.qualityGate === 'blocked'
+                || (artifact.content.findings || []).some((finding) =>
+                    blocking.has(String(finding?.severity || '').trim().toLowerCase()))));
+    };
 
     function renderGuidedWorkflowInlineResult(container, run, step) {
         if (workflowState.lastGenerationError) {
@@ -171,13 +233,20 @@
         return !!(step && !['source', 'brief', 'transfer'].includes(step.id));
     }
 
-    async function restartGuidedWorkflowFromStep(run, nodeId, label) {
+    async function restartGuidedWorkflowFromStep(run, nodeId, label, options = {}) {
         const projectId = currentProjectId();
         if (!projectId || !run || !guidedRestartableStep(run, nodeId)) return;
-        if (!window.confirm(`将返回“${label}”。该步骤及其后续结果会标为过期，但历史版本会保留。是否继续？`)) return;
+        if (!options.skipConfirm && !window.confirm(`将返回“${label}”。该步骤及其后续结果会标为过期，但历史版本会保留。是否继续？`)) return;
         const response = await fetch('/api/workflows/v2/restart-node', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectId, runId: run.id, nodeId, reason: '用户从步骤视图请求重新运行' })
+            body: JSON.stringify({
+                projectId,
+                runId: run.id,
+                nodeId,
+                reason: options.reason || '用户从步骤视图请求重新运行',
+                sceneIds: options.sceneIds || [],
+                userInstruction: options.userInstruction || ''
+            })
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
@@ -185,7 +254,9 @@
         workflowState.selectedArtifactId = '';
         await loadWorkflowEvents();
         renderWorkflow();
-        setWorkflowStatus(`已返回“${label}”；该步骤及下游需要重新生成。`, 'ok');
+        setWorkflowStatus(options.sceneIds?.length
+            ? '已进入场景修复；无问题的前序场景保持原 Revision，依赖该场景的后续内容会重新生成。'
+            : `已返回“${label}”；该步骤及下游需要重新生成。`, 'ok');
     }
 
     function renderGuidedWorkflowRecoveryActions(container, run, step) {
@@ -195,7 +266,7 @@
             regenerate.type = 'button';
             regenerate.className = 'desktop-mini-action';
             regenerate.dataset.workflowGuidedRegenerate = '';
-            regenerate.textContent = '重新生成本步';
+            regenerate.textContent = '重新生成当前步骤';
             regenerate.addEventListener('click', () => restartGuidedWorkflowFromStep(run, step.id, step.title || step.id).catch((error) => setWorkflowStatus(`重跑失败：${error.message || error}`, 'error')));
             container.appendChild(regenerate);
         }
@@ -206,10 +277,93 @@
             back.type = 'button';
             back.className = 'desktop-mini-action';
             back.dataset.workflowGuidedReturn = previous.id;
-            back.textContent = `返回到：${previous.title || previous.id}`;
+            back.textContent = `返回上一步：${previous.title || previous.id}`;
             back.addEventListener('click', () => restartGuidedWorkflowFromStep(run, previous.id, previous.title || previous.id).catch((error) => setWorkflowStatus(`回退失败：${error.message || error}`, 'error')));
             container.appendChild(back);
         }
+    }
+
+    async function continueCreationFromDecision(run, requestAdjustment) {
+        const projectId = currentProjectId();
+        if (!projectId || !run || run.templateId !== 'creation-guided') return;
+        const previewResponse = await fetch('/api/workflows/v2/preview-next-creation-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId, runId: run.id })
+        });
+        const preview = await previewResponse.json().catch(() => ({}));
+        if (!previewResponse.ok || !preview.ok) throw new Error(preview.error || `HTTP ${previewResponse.status}`);
+        let userInstruction = '';
+        if (requestAdjustment) {
+            const entered = window.prompt('下一批调整要求', '承接上一批，调整节奏、人物选择或必须落实的情节。');
+            if (entered === null) return;
+            userInstruction = entered.trim();
+        }
+        if (preview.qualityGateBlocked) {
+            throw new Error(`质量门禁未通过：当前批次仍有 ${preview.blockingFindingCount || 1} 项阻断问题，请先点击“修复当前批次”并重新审查`);
+        }
+        if (!window.confirm(`将开始第 ${preview.nextBatch.sequence} 批。当前已完成 ${preview.progress.completedCharacters}/${preview.progress.targetCharacters || '未设目标'} 字符，是否继续？`)) {
+            return;
+        }
+        workflowState.generating = true;
+        renderWorkflow();
+        setWorkflowStatus('正在建立下一批并准备连续性上下文…', 'info');
+        try {
+            const response = await fetch('/api/workflows/v2/continue-creation-batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectId, runId: run.id, userInstruction })
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+            workflowState.runs = workflowState.runs.map((item) => item.id === run.id ? result.run : item);
+            workflowState.selectedArtifactId = '';
+            await loadWorkflowEvents();
+            setWorkflowStatus(`第 ${result.run.batches.length} 批已建立，可以生成下一批场景计划。`, 'ok');
+        } finally {
+            workflowState.generating = false;
+            renderWorkflow();
+        }
+    }
+
+    function renderCreationBatchDecisionActions(container, run, step) {
+        if (!run || run.templateId !== 'creation-guided' || !step || step.id !== 'transfer' || run.status !== 'in_progress') return;
+        const active = (run.batches || []).find((batch) => batch.batchId === run.activeBatchId);
+        if (!active || active.status !== 'waiting_decision') return;
+        const progress = run.generationProgress || {};
+        const currentReview = (run.artifacts || []).filter((artifact) => artifact.nodeId === 'review'
+            && (!run.activeBatchId || artifact.targetRef?.batchId === run.activeBatchId)).slice(-1)[0];
+        const blockingFindingCount = currentReview?.content?.blockingFindingCount
+            || (currentReview?.content?.findings || []).filter((finding) =>
+                ['error', 'critical', 'major', 'high', '严重', '致命'].includes(String(finding?.severity || '').trim().toLowerCase())).length;
+        const qualityGateBlocked = currentReview?.content?.qualityGate === 'blocked' || blockingFindingCount > 0;
+        const note = document.createElement('p');
+        note.className = 'desktop-workflow-context-note';
+        note.dataset.workflowCreationBatchProgress = '';
+        note.textContent = qualityGateBlocked
+            ? `第 ${active.sequence} 批质量门禁未通过：${blockingFindingCount} 项阻断问题。请先修复当前批次并重新审查；继续生成和转入写作区已暂停。`
+            : `第 ${active.sequence} 批已审查 · 本批 ${active.batchCharacters} 字符 · 累计 ${progress.completedCharacters || 0}/${progress.targetCharacters || '未设目标'} 字符`;
+        const repair = document.createElement('button');
+        repair.type = 'button';
+        repair.className = 'desktop-secondary-action';
+        repair.dataset.workflowCreationRepairBatch = '';
+        repair.textContent = '修复当前批次';
+        repair.addEventListener('click', () => restartGuidedWorkflowFromStep(run, 'draft', '分场正文').catch((error) => setWorkflowStatus(`返回失败：${error.message || error}`, 'error')));
+        const adjust = document.createElement('button');
+        adjust.type = 'button';
+        adjust.className = 'desktop-secondary-action';
+        adjust.dataset.workflowCreationAdjustContinue = '';
+        adjust.textContent = '调整要求后继续';
+        adjust.disabled = qualityGateBlocked;
+        adjust.addEventListener('click', () => continueCreationFromDecision(run, true).catch((error) => setWorkflowStatus(`继续失败：${error.message || error}`, 'error')));
+        const next = document.createElement('button');
+        next.type = 'button';
+        next.className = 'desktop-primary-action';
+        next.dataset.workflowCreationContinue = '';
+        next.textContent = progress.targetCharacters && progress.completedCharacters >= progress.targetCharacters ? '仍要继续下一批' : '继续下一批';
+        next.disabled = qualityGateBlocked;
+        next.addEventListener('click', () => continueCreationFromDecision(run, false).catch((error) => setWorkflowStatus(`继续失败：${error.message || error}`, 'error')));
+        container.append(note, repair, adjust, next);
     }
 
     async function resumeGuidedWorkflowRun() {
