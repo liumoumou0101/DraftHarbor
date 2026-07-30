@@ -88,7 +88,7 @@ function prepareCreationStage(stage, context = {}) {
       prompts: [{
         id: 'creation-scene-plan',
         title: '节奏与场景计划',
-        prompt: jsonPrompt(`${planningInstruction} ${instructionPriority} fineOutline 必须是字符串数组，每项是一条可直接执行的情节动作，不得返回对象。返回 {fineOutlineEnabled:${fineOutlineEnabled},scenes:[{id,title,povCharacter,location,goal,conflict,outcome,participants,turningPoint,reveal,hook,emotionalStart,emotionalEnd,emotionalBeat,pace:"slow|medium|fast",conflictIntensity:0,informationDensity:0,targetWords:0,mustInclude:[],avoid:[],continuity,fineOutline:["情节动作"]}]}。`, { brief, selectedDirection, blueprint, compendium, constraints, writingInstructions, globalContext, batchContext })
+        prompt: jsonPrompt(`${planningInstruction} ${instructionPriority} 若 batchContext.dueThreads 或 mustCloseThreads 非空，本批计划必须推进或明确回收这些未解线索，并在相关场景的 mustInclude/outcome/hook 中体现。fineOutline 必须是字符串数组，每项是一条可直接执行的情节动作，不得返回对象。返回 {fineOutlineEnabled:${fineOutlineEnabled},scenes:[{id,title,povCharacter,location,goal,conflict,outcome,participants,turningPoint,reveal,hook,emotionalStart,emotionalEnd,emotionalBeat,pace:"slow|medium|fast",conflictIntensity:0,informationDensity:0,targetWords:0,mustInclude:[],avoid:[],continuity,fineOutline:["情节动作"]}]}。`, { brief, selectedDirection, blueprint, compendium, constraints, writingInstructions, globalContext, batchContext })
       }]
     };
   }

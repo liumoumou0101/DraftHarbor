@@ -11,8 +11,8 @@
             rewriteFields: document.querySelector('[data-workflow-rewrite-fields]'),
             brief: document.querySelector('[data-workflow-brief]'),
             sourceScope: document.querySelector('[data-workflow-source-scope]'),
-            directionLocks: document.querySelector('[data-workflow-direction-locks]'),
-            exclusionLocks: document.querySelector('[data-workflow-exclusion-locks]'),
+            lockBoard: document.querySelector('[data-workflow-lock-board][data-lock-scope="launch"]'),
+            activeLockBoard: document.querySelector('[data-workflow-active-lock-board]'),
             fineOutline: document.querySelector('[data-workflow-fine-outline]'),
             thinking: document.querySelector('[data-workflow-thinking]'),
             workflowModel: document.querySelector('[data-workflow-model]'),
@@ -147,13 +147,9 @@
         if (typeof window.renderWorkflowModelControl === 'function') window.renderWorkflowModelControl();
     }
 
-    function workflowLockConstraints(elements) {
-        const lines = (value) => String(value || '').split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
-        return [
-            ...lines(elements.directionLocks && elements.directionLocks.value).map((text, index) => ({ id: `direction-lock-${index + 1}`, kind: 'direction', text, enforcement: 'soft', weight: 1 })),
-            ...lines(elements.exclusionLocks && elements.exclusionLocks.value).map((text, index) => ({ id: `exclusion-lock-${index + 1}`, kind: 'exclusion', text, enforcement: 'hard', weight: 1 }))
-        ];
-    }
+    // Lock collection / writing-instructions payload live in workflow-locks.js
+    // so launch form, active-run panel and review actions share one model.
+
 
     async function loadGuidedWorkflowRun(runId = workflowState.selectedId) {
         const projectId = currentProjectId();
@@ -198,7 +194,14 @@
                 elements.launcher.dataset.projectId = projectId || '';
                 elements.launcher.dataset.runId = run && run.id || '';
                 elements.launcher.open = !run;
+                if (typeof window.renderWorkflowLockBoards === 'function') {
+                    // Switching run reloads locks unless user is mid-edit on same run.
+                    window.renderWorkflowLockBoards({ forceHydrate: true });
+                }
             }
+        }
+        if (typeof window.renderWorkflowLockBoards === 'function') {
+            window.renderWorkflowLockBoards({ preserveDraft: !!(workflowState.lockDraft && workflowState.lockDraft.dirty) });
         }
         if (elements.launcherTitle) elements.launcherTitle.textContent = run ? '新建另一条流程' : '新建创作流程';
         if (elements.viewGuided) elements.viewGuided.classList.toggle('is-active', !graphMode);
@@ -1093,6 +1096,9 @@
                     brief: elements.brief ? elements.brief.value : '',
                     fineOutlineEnabled: !elements.fineOutline || elements.fineOutline.checked,
                     constraints: workflowLockConstraints(elements),
+                    writingInstructions: typeof workflowWritingInstructionsPayload === 'function'
+                        ? workflowWritingInstructionsPayload(elements)
+                        : undefined,
                     generationPolicy: workflowGenerationLaunchConfig()
                 })
             });

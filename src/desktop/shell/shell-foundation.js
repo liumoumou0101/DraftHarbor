@@ -205,6 +205,19 @@
         pendingVariantId: '',
         pendingVariantApproved: false,
         lastGenerationError: '',
+        lockDraft: {
+            constraints: [],
+            qualityTargets: {
+                dialogueRatioEnabled: false,
+                dialogueRatioMin: 0.25,
+                dialogueRatioMax: 0.35,
+                technicalRegisterMode: 'avoid',
+                technicalRegisterLocked: false,
+                planOutcomeLocked: false
+            },
+            sourceRunId: '',
+            dirty: false
+        },
         generationProgressDetail: {
             phase: 'idle',
             detail: '',

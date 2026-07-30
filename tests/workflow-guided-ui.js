@@ -100,8 +100,11 @@ async function generateAndApprove(page, title) {
     });
 
     await page.fill('[data-workflow-brief]', '续写钟楼谜案，保持悬疑感。');
-    await page.fill('[data-workflow-direction-locks]', '强化林岚的不安');
-    await page.fill('[data-workflow-exclusion-locks]', '不要揭晓幕后凶手');
+    await page.click('[data-workflow-lock-add="direction"]');
+    await page.fill('[data-workflow-lock-list] [data-workflow-lock-row][data-kind="direction"] [data-workflow-lock-text]', '强化林岚的不安');
+    await page.click('[data-workflow-lock-add="exclusion"]');
+    await page.fill('[data-workflow-lock-list] [data-workflow-lock-row][data-kind="exclusion"] [data-workflow-lock-text]', '不要揭晓幕后凶手');
+    await page.selectOption('[data-workflow-lock-list] [data-workflow-lock-row][data-kind="exclusion"] [data-workflow-lock-enforcement]', 'hard');
     await page.check('[data-workflow-thinking]');
     await page.click('[data-workflow-start-guided]');
     await page.waitForSelector('[data-workflow-guided-generate]');

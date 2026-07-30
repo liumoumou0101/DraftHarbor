@@ -14,6 +14,29 @@ assert.strictEqual(report.qualityGate, 'blocked');
 assert.strictEqual(Review.normalizeReviewSeverity('major'), 'error');
 assert.strictEqual(Review.normalizeReviewSeverity('轻微'), 'suggestion');
 assert.strictEqual(Review.normalizeReviewSeverity('致命'), 'critical');
+
+const softExclusion = Review.reviewDraft({
+  text: '不要揭晓凶手。这是正常正文。',
+  constraints: [{ id: 'soft-ex', kind: 'exclusion', text: '不要揭晓凶手', enforcement: 'soft' }]
+});
+assert.ok(softExclusion.findings.some((item) => item.type === 'constraint_violation' && item.enforcement === 'soft'));
+assert.strictEqual(softExclusion.qualityGate, 'passed');
+
+const directionLiteral = Review.reviewDraft({
+  text: '她主动提出与狼交易，却没有复述完整约束句。',
+  constraints: [{ id: 'dir-hard', kind: 'direction', text: '小红帽必须主动提出并完成一次与狼的危险交易', enforcement: 'hard' }]
+});
+assert.ok(directionLiteral.findings.some((item) => item.type === 'direction_literal_absent' && item.enforcement === 'soft'));
+assert.ok(!directionLiteral.findings.some((item) => item.type === 'direction_missing'));
+assert.strictEqual(directionLiteral.qualityGate, 'passed');
+
+const techSoft = Review.reviewDraft({
+  text: '契约的自动生成约束系统检测到了一个它无法归类的操作。',
+  qualityTargets: { technicalRegisterMode: 'avoid', technicalRegisterLocked: false }
+});
+assert.ok(techSoft.findings.some((item) => item.type === 'technical_register_drift' && item.enforcement === 'soft'));
+assert.strictEqual(techSoft.qualityGate, 'passed');
+assert.ok(techSoft.metrics && typeof techSoft.metrics.batch.dialogueRatio === 'number');
 const leakReport = Review.reviewDraft({
   text: '普通正文。',
   scenes: [{

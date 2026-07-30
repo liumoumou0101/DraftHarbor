@@ -1,4 +1,5 @@
 const artifactStore = require('../storage/workflow-artifact-store');
+const QualityMetrics = require('../../src/core/workflow/workflow-quality-metrics');
 
 function clean(value) { return String(value || '').trim(); }
 function sentences(text) { return clean(text).split(/[。！？.!?]+/).map((item) => item.trim()).filter((item) => item.length >= 8); }
@@ -41,7 +42,14 @@ function normalizeFinding(finding = {}, fallback = 'warning') {
 }
 
 function isBlockingFinding(finding = {}) {
-  return ['error', 'critical'].includes(normalizeReviewSeverity(finding.severity));
+  if (typeof QualityMetrics.isBlockingFinding === 'function') {
+    return QualityMetrics.isBlockingFinding({
+      ...finding,
+      severity: normalizeReviewSeverity(finding.severity)
+    });
+  }
+  if (!['error', 'critical'].includes(normalizeReviewSeverity(finding.severity))) return false;
+  return clean(finding.enforcement).toLowerCase() !== 'soft';
 }
 
 function evidenceExcerpt(text, start, end) {
@@ -154,20 +162,104 @@ function reviewDraft(input = {}) {
   const findings = [];
   const seen = new Set();
   for (const sentence of sentences(text)) {
-    if (seen.has(sentence)) findings.push(normalizeFinding({ type: 'duplicate_content', severity: 'warning', text: sentence }));
+    if (seen.has(sentence)) findings.push(normalizeFinding({ type: 'duplicate_content', severity: 'warning', enforcement: 'soft', text: sentence }));
     seen.add(sentence);
   }
   for (const constraint of Array.isArray(input.constraints) ? input.constraints : []) {
+    if (constraint && constraint.enabled === false) continue;
     const value = clean(constraint.text);
     if (!value) continue;
-    if (constraint.kind === 'exclusion' && text.includes(value)) findings.push(normalizeFinding({ type: 'constraint_violation', severity: constraint.enforcement === 'hard' ? 'error' : 'warning', constraintId: constraint.id, text: value }));
-    if (constraint.kind === 'direction' && constraint.enforcement === 'hard' && !text.includes(value)) findings.push(normalizeFinding({ type: 'direction_missing', severity: 'warning', constraintId: constraint.id, text: value }));
+    if (constraint.kind === 'exclusion' && text.includes(value)) {
+      const hard = constraint.enforcement === 'hard';
+      findings.push(normalizeFinding({
+        type: 'constraint_violation',
+        severity: hard ? 'error' : 'warning',
+        enforcement: hard ? 'hard' : 'soft',
+        constraintId: constraint.id,
+        text: value,
+        evidence: value,
+        suggestion: hard ? '正文命中排除硬锁，请改写或调整锁。' : '正文命中排除软锁，可改写、降级或关掉该锁。'
+      }));
+    }
+    // Direction locks guide generation; literal absence must never hard-block.
+    if (constraint.kind === 'direction' && !text.includes(value)) {
+      findings.push(normalizeFinding({
+        type: 'direction_literal_absent',
+        severity: 'info',
+        enforcement: 'soft',
+        constraintId: constraint.id,
+        text: value,
+        evidence: value,
+        suggestion: '方向锁不要求正文逐字出现该句；请结合场景计划与语义审查判断是否兑现。'
+      }));
+    }
   }
   const plan = input.scenePlan && Array.isArray(input.scenePlan.scenes) ? input.scenePlan.scenes : [];
-  if (plan.length && !text) findings.push(normalizeFinding({ type: 'outline_mismatch', severity: 'error', text: '场景计划存在但正文为空' }));
+  if (plan.length && !text) {
+    findings.push(normalizeFinding({ type: 'outline_mismatch', severity: 'error', enforcement: 'hard', text: '场景计划存在但正文为空' }));
+  }
   const scenesList = Array.isArray(input.scenes) ? input.scenes : [];
-  scenesList.forEach((scene) => findings.push(...processLeakFindings(scene)));
-  findings.push(...boundaryFindings(scenesList));
+  scenesList.forEach((scene) => {
+    findings.push(...processLeakFindings(scene).map((finding) => ({ ...finding, enforcement: finding.enforcement || 'hard' })));
+  });
+  findings.push(...boundaryFindings(scenesList).map((finding) => ({ ...finding, enforcement: finding.enforcement || 'hard' })));
+
+  const qualityTargets = input.qualityTargets
+    || (input.writingInstructions && input.writingInstructions.qualityTargets)
+    || {};
+  const writingInstructions = input.writingInstructions && typeof input.writingInstructions === 'object'
+    ? input.writingInstructions
+    : {};
+  const normalizedTargets = QualityMetrics.normalizeQualityTargets({
+    ...qualityTargets,
+    dialogueRatio: qualityTargets.dialogueRatio || writingInstructions.dialogueRatio,
+    mustAvoid: qualityTargets.mustAvoid || writingInstructions.mustAvoid
+  });
+
+  const sceneMetrics = scenesList.map((scene) => {
+    const sceneText = String(scene.text || scene.content || '');
+    const metrics = QualityMetrics.measureProseMetrics(sceneText, normalizedTargets);
+    findings.push(...QualityMetrics.buildQualityFindings({
+      text: sceneText,
+      metrics,
+      qualityTargets: normalizedTargets,
+      sceneId: clean(scene.sceneId || scene.id),
+      revisionId: clean(scene.revisionId),
+      sceneTitle: clean(scene.title)
+    }).map((finding) => normalizeFinding(finding)));
+    return {
+      sceneId: clean(scene.sceneId || scene.id),
+      revisionId: clean(scene.revisionId),
+      title: clean(scene.title),
+      dialogueRatio: metrics.dialogueRatio,
+      totalCharacters: metrics.totalCharacters,
+      technicalHits: metrics.technicalHits,
+      repeatedPhraseHits: metrics.repeatedPhraseHits
+    };
+  });
+
+  const batchMetrics = QualityMetrics.measureProseMetrics(text, normalizedTargets);
+  if (!scenesList.length) {
+    findings.push(...QualityMetrics.buildQualityFindings({
+      text,
+      metrics: batchMetrics,
+      qualityTargets: normalizedTargets
+    }).map((finding) => normalizeFinding(finding)));
+  }
+
+  const sceneTexts = {};
+  scenesList.forEach((scene) => {
+    sceneTexts[clean(scene.sceneId || scene.id)] = String(scene.text || scene.content || '');
+  });
+  const planFulfillment = QualityMetrics.evaluatePlanFulfillment({
+    scenePlan: input.scenePlan,
+    sceneTexts,
+    semanticFulfillment: input.semanticFulfillment || input.planFulfillment
+  });
+  findings.push(...QualityMetrics.planFulfillmentFindings(planFulfillment, {
+    planOutcomeLocked: normalizedTargets.planOutcomeLocked
+  }).map((finding) => normalizeFinding(finding)));
+
   const normalized = findings.map((finding) => normalizeFinding(finding));
   const blocked = normalized.filter(isBlockingFinding);
   return {
@@ -176,7 +268,19 @@ function reviewDraft(input = {}) {
     findings: normalized,
     blockingFindingCount: blocked.length,
     qualityGate: blocked.length ? 'blocked' : 'passed',
-    summary: normalized.length ? `发现 ${normalized.length} 项待处理问题，其中 ${blocked.length} 项阻断问题` : '未发现自动审查问题'
+    summary: normalized.length ? `发现 ${normalized.length} 项待处理问题，其中 ${blocked.length} 项阻断问题` : '未发现自动审查问题',
+    metrics: {
+      batch: {
+        dialogueRatio: batchMetrics.dialogueRatio,
+        totalCharacters: batchMetrics.totalCharacters,
+        technicalHits: batchMetrics.technicalHits,
+        repeatedPhraseHits: batchMetrics.repeatedPhraseHits,
+        dialogueCharacters: batchMetrics.dialogueCharacters
+      },
+      scenes: sceneMetrics,
+      planFulfillment
+    },
+    qualityTargetsSnapshot: normalizedTargets
   };
 }
 
@@ -216,5 +320,6 @@ module.exports = {
   compareDrafts,
   createVariant,
   writeReviewArtifact,
-  detectStaleness
+  detectStaleness,
+  QualityMetrics
 };

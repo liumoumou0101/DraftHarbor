@@ -67,6 +67,23 @@ async function startGuidedRewrite(options = {}) {
   const snapshot = options.readerTransfer
     ? await inputService.createReaderTransferSourceSnapshot({ ...sourceOptions, transfer: options.readerTransfer })
     : await inputService.createWriterSourceSnapshot(sourceOptions);
+  if (options.writingInstructions && typeof options.writingInstructions === 'object') {
+    const CreationGuided = require('./workflow-creation-guided-service');
+    await runtime.writeArtifact(targetPath, {
+      projectId,
+      runId,
+      nodeId: 'source',
+      artifactId: 'rewrite-writing-instructions',
+      artifactType: 'workflow-writing-instructions@1',
+      revisionId: id('instructions-r'),
+      title: '全局写作指令 / 质量锁',
+      summary: '重写运行的全局写作与质量锁',
+      content: CreationGuided.normalizeWritingInstructions(options.writingInstructions),
+      format: 'json',
+      reviewState: 'approved',
+      approvedAt: new Date().toISOString()
+    });
+  }
   await runtime.appendEvent(targetPath, runId, 'rewrite_run_created', 'source', { scope: snapshot.snapshot.scope, characterCount: snapshot.snapshot.characterCount, sceneCount: snapshot.snapshot.content.length, readerEnvelopeId: options.readerTransfer && options.readerTransfer.envelope.envelopeId || '', freshness: options.readerTransfer && options.readerTransfer.freshness || null });
   return { ok: true, runId, summary: created.summary, snapshot: { artifactId: snapshot.artifact.family.id, revisionId: snapshot.artifact.revision.id } };
 }
@@ -107,10 +124,39 @@ async function completeRewriteNode(options = {}) {
   const planArtifact = latest(details.run.artifacts, 'plan');
   if (nodeId === 'review') {
     const parsed = RewriteService.parseJson((options.outputs || [options.output])[0] || '{}');
-    const findings = Array.isArray(parsed.findings) ? parsed.findings.filter((item) => item && typeof item === 'object' && clean(item.severity).toLowerCase() !== 'pass') : [];
+    const semanticFindings = Array.isArray(parsed.findings)
+      ? parsed.findings.filter((item) => item && typeof item === 'object' && clean(item.severity).toLowerCase() !== 'pass')
+      : [];
     const comparison = details.run.artifacts.find((artifact) => artifact.nodeId === 'repair' && artifact.artifactType === 'rewrite-comparison@1');
+    const repaired = details.run.artifacts.filter((artifact) => artifact.nodeId === 'repair' && artifact.artifactType === 'rewrite-text@1');
+    const writing = details.run.artifacts.filter((artifact) => artifact.artifactType === 'workflow-writing-instructions@1').slice(-1)[0];
+    const Review = require('./workflow-review-service');
+    const qualityReport = Review.reviewDraft({
+      text: repaired.map((artifact) => artifact.content).join('\n\n'),
+      scenes: repaired.map((artifact, index) => ({
+        sceneId: clean(artifact.targetRef && artifact.targetRef.sceneId, `rewrite-${index + 1}`),
+        revisionId: artifact.revision.id,
+        title: artifact.title,
+        text: artifact.content
+      })),
+      constraints: details.run.settings.constraints || [],
+      writingInstructions: writing && writing.content,
+      qualityTargets: writing && writing.content && writing.content.qualityTargets
+    });
+    const findings = [
+      ...(qualityReport.findings || []),
+      ...semanticFindings.map((item) => Review.normalizeFinding({ ...item, source: 'ai-semantic-review' }))
+    ];
+    const blocked = findings.filter((item) => Review.isBlockingFinding(item));
     const report = {
-      schemaVersion: 1, kind: 'rewrite-review', summary: clean(parsed.summary, findings.length ? `发现 ${findings.length} 项问题` : '重写审查通过'), findings,
+      schemaVersion: 1,
+      kind: 'rewrite-review',
+      summary: clean(parsed.summary, findings.length ? `发现 ${findings.length} 项问题，其中 ${blocked.length} 项阻断` : '重写审查通过'),
+      findings,
+      blockingFindingCount: blocked.length,
+      qualityGate: blocked.length ? 'blocked' : 'passed',
+      metrics: qualityReport.metrics,
+      qualityTargetsSnapshot: qualityReport.qualityTargetsSnapshot,
       comparisonSummary: comparison ? comparison.content.comparisons.map((item) => ({ targetSceneId: item.result.targetSceneId, characterDelta: item.diff.characterDelta, counts: item.diff.counts })) : []
     };
     const targetPath = runtime.projectPath(options.dataRoot, options.projectId);

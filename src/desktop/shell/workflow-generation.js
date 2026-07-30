@@ -170,10 +170,12 @@
                         mustInclude: [...confirmedBrief.mustInclude, ...workflowLockConstraints(elements).filter((item) => item.kind === 'direction').map((item) => item.text)],
                         avoid: [...confirmedBrief.avoid, ...workflowLockConstraints(elements).filter((item) => item.kind === 'exclusion').map((item) => item.text)]
                     },
-                    writingInstructions: {
-                        text: elements.creationWritingInstructions?.value.trim() || '',
-                        applicableStages: ['direction', 'blueprint', 'compendium', 'plan', 'draft', 'review']
-                    },
+                    writingInstructions: typeof workflowWritingInstructionsPayload === 'function'
+                        ? workflowWritingInstructionsPayload(elements)
+                        : {
+                            text: elements.creationWritingInstructions?.value.trim() || '',
+                            applicableStages: ['direction', 'blueprint', 'compendium', 'plan', 'draft', 'review']
+                        },
                     fineOutlineEnabled: !elements.fineOutline || elements.fineOutline.checked,
                     constraints: workflowLockConstraints(elements),
                     generationPolicy: launch
@@ -213,6 +215,9 @@
                 projectId, scope, sceneId: activeScene && activeScene.id, chapterId: activeScene && activeScene.chapterId,
                 brief: { instruction, targetStyle: elements.rewriteStyle?.value || '', targetTone: elements.rewriteTone?.value || '', targetPov: elements.rewritePov?.value || '', targetLengthRatio: Number(elements.rewriteRatio?.value) || 1 },
                 constraints: workflowLockConstraints(elements),
+                writingInstructions: typeof workflowWritingInstructionsPayload === 'function'
+                    ? workflowWritingInstructionsPayload(elements)
+                    : undefined,
                 generationPolicy: workflowGenerationLaunchConfig()
             }) });
             const result = await response.json().catch(() => ({}));

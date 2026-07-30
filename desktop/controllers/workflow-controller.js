@@ -1,7 +1,21 @@
 const fsp = require('fs/promises');
 
 function createController(dependencies) {
-  const { workflowService, workflowTransferService, workflowGuidedService, workflowCreationGuidedService, workflowRewriteGuidedService, workflowVariantService, workflowTemplateService, readerWorkflowTransferService, projectService, createPreRestoreBackup, readJsonPayload, jsonResponse } = dependencies;
+  const {
+    workflowService,
+    workflowTransferService,
+    workflowGuidedService,
+    workflowCreationGuidedService,
+    workflowRewriteGuidedService,
+    workflowVariantService,
+    workflowTemplateService,
+    readerWorkflowTransferService,
+    workflowLockService,
+    projectService,
+    createPreRestoreBackup,
+    readJsonPayload,
+    jsonResponse
+  } = dependencies;
   async function completeV2GuidedTransfer(payload, dataRoot) {
     const services = [workflowGuidedService, workflowCreationGuidedService, workflowRewriteGuidedService].filter(Boolean);
     let lastError = null;
@@ -359,6 +373,27 @@ function createController(dependencies) {
     try {
       const payload = await readJsonPayload(request);
       jsonResponse(response, 200, await workflowCreationGuidedService.applyWritingInstructionsToCurrentBatch({ ...payload, dataRoot }));
+    } catch (error) {
+      jsonResponse(response, 400, { ok: false, error: error.message });
+    }
+    return true;
+  }
+
+  if (workflowLockService && request.method === 'POST' && parsedUrl.pathname === '/api/workflows/v2/update-run-locks') {
+    try {
+      const payload = await readJsonPayload(request);
+      const result = await workflowLockService.updateRunLocks({ ...payload, dataRoot });
+      let run = null;
+      if (workflowCreationGuidedService && payload.projectId && payload.runId) {
+        try { run = (await workflowCreationGuidedService.getCreationRun(dataRoot, payload.projectId, payload.runId)).run; } catch (_error) { /* try other templates */ }
+      }
+      if (!run && workflowGuidedService && payload.projectId && payload.runId) {
+        try { run = (await workflowGuidedService.getGuidedRun(dataRoot, payload.projectId, payload.runId)).run; } catch (_error) { /* try rewrite */ }
+      }
+      if (!run && workflowRewriteGuidedService && payload.projectId && payload.runId) {
+        try { run = (await workflowRewriteGuidedService.getRewriteRun(dataRoot, payload.projectId, payload.runId)).run; } catch (_error) { /* ignore */ }
+      }
+      jsonResponse(response, 200, { ...result, run });
     } catch (error) {
       jsonResponse(response, 400, { ok: false, error: error.message });
     }

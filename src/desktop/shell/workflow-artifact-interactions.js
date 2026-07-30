@@ -1,3 +1,55 @@
+    window.applyWorkflowFindingLockAction = async function applyWorkflowFindingLockAction(run, finding, index, action) {
+        if (!run || !run.id) throw new Error('请先选择工作流运行');
+        const projectId = typeof currentProjectId === 'function' ? currentProjectId() : '';
+        if (!projectId) throw new Error('请先打开项目');
+        const labels = {
+            harden: '升为硬锁',
+            soften: '降为软锁',
+            disable: '关闭此项',
+            exempt: '豁免本条'
+        };
+        setWorkflowStatus(`正在${labels[action] || '调整锁'}...`, 'info');
+        const response = await fetch('/api/workflows/v2/update-run-locks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                projectId,
+                runId: run.id,
+                findingActions: [{
+                    action,
+                    index,
+                    type: finding && finding.type,
+                    constraintId: finding && finding.constraintId,
+                    sceneId: finding && finding.sceneId,
+                    metricId: finding && finding.metricId
+                }]
+            })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+        if (result.run) {
+            workflowState.runs = (workflowState.runs || []).map((item) => item.id === run.id ? result.run : item);
+            if (nativeEditorState.snapshot) nativeEditorState.snapshot.workflowRuns = workflowState.runs;
+            if (workflowState.selectedArtifactId) {
+                const review = (result.run.artifacts || []).filter((artifact) => artifact.nodeId === 'review').slice(-1)[0];
+                if (review) workflowState.selectedArtifactId = review.id;
+            }
+            if (typeof window.renderWorkflowLockBoards === 'function') {
+                window.renderWorkflowLockBoards({ forceHydrate: true });
+            }
+        } else if (typeof loadGuidedWorkflowRun === 'function') {
+            await loadGuidedWorkflowRun(run.id);
+        } else if (typeof loadWorkflowRuns === 'function') {
+            await loadWorkflowRuns();
+        }
+        if (typeof renderWorkflow === 'function') renderWorkflow();
+        const gate = result.qualityGate === 'blocked'
+            ? `仍有 ${result.blockingFindingCount || 0} 项阻断问题`
+            : '质量门禁已通过';
+        setWorkflowStatus(`${labels[action] || '调锁'}已生效，影响后续生成/重写/审查。${gate}`, 'ok');
+        return result;
+    };
+
     window.setWorkflowGenerationProgress = function setWorkflowGenerationProgress(patch = {}) {
         workflowState.generationProgressDetail = {
             ...(workflowState.generationProgressDetail || {}),

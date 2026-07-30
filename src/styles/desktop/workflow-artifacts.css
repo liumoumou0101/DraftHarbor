@@ -8,6 +8,101 @@
     line-height: 1.8;
 }
 
+.desktop-workflow-lock-board {
+    display: grid;
+    gap: 10px;
+    margin: 10px 0 12px;
+    padding: 12px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.desktop-workflow-lock-board.is-active-run {
+    margin: 0 0 14px;
+    border-color: rgba(var(--desktop-accent-rgb), 0.35);
+    background: rgba(var(--desktop-accent-rgb), 0.05);
+}
+
+.desktop-workflow-lock-board-header {
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.desktop-workflow-lock-board-header p {
+    margin: 4px 0 0;
+}
+
+.desktop-workflow-lock-board-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.desktop-workflow-lock-list {
+    display: grid;
+    gap: 8px;
+}
+
+.desktop-workflow-lock-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) 88px auto auto;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 10px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.12);
+}
+
+.desktop-workflow-lock-row.is-hard {
+    border-color: rgba(220, 80, 80, 0.45);
+}
+
+.desktop-workflow-lock-row.is-disabled {
+    opacity: 0.55;
+}
+
+.desktop-workflow-lock-kind {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--desktop-muted);
+    min-width: 2.5em;
+}
+
+.desktop-workflow-lock-row input[type="text"] {
+    width: 100%;
+    min-width: 0;
+}
+
+.desktop-workflow-lock-enabled {
+    white-space: nowrap;
+}
+
+.desktop-workflow-finding-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+@media (max-width: 900px) {
+    .desktop-workflow-lock-row {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .desktop-workflow-lock-kind {
+        grid-column: 1 / -1;
+    }
+
+    .desktop-workflow-lock-row input[type="text"] {
+        grid-column: 1 / -1;
+    }
+}
+
 .desktop-workflow-artifact-form {
     display: grid;
     gap: 8px;

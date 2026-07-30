@@ -2,15 +2,97 @@
 
 最后更新：2026-07-30。此文件是 DraftHarbor 后续会话的入口；功能状态以当前仓库、`docs/FEATURE_TODO.md`、对应设计/验收文档与本文件共同为准。
 
-## 2026-07-30：本长会话最终决策与下一会话入口
+## 2026-07-30：本会话完成内容（F-09.6H 质量锁）与下一入口
 
-- 本会话已经完成半自动工作流多批次基础、场景级保存/恢复、全局上下文逐阶段注入、审查与定向修复、真正可见的正文流式创作舞台，以及 20 万字和 3.5 万字符两轮真实 DeepSeek 验收。不要从旧的“工作流几乎不可用”结论重新开始。
-- 用户确认长度只需要大致控制。目标字数是软目标、进度参考和诊断数据；不要为了精确凑字数截断正文、强行缩写或机械重写。只有长度偏差同时造成场景职责越界、节奏失衡，或用户明确要求严格长度时，才处理真正的质量问题。
-- 下一优先级是把对话比例、技术说明腔、计划结果兑现、重复句式和伏笔状态等可见质量指标接入既有“锁”机制。默认采用可见软锁，展示目标、实际、证据和偏差；用户明确锁定的要求、批准计划中的必达结果、事实锁和排除锁才可升级为阻断或定向重写。
-- “计划结果兑现”必须采用结构化计划引用加语义证据，至少区分已兑现、延迟到后场、未兑现和用户豁免，不能重复 `direction_missing` 的纯字面误报。
-- F-09.6H 是下一开发切片；F-09.6I 仍处理自然章节装配和统一统计口径，但不再建设正文长度硬预算。F-09.6J 继续处理 usage 缺失和上下文预算。
-- 两个真实测试项目都必须保留：20 万字项目 `f096-real-200k-redhood-20260729`，流式项目 `f096e-real-stream-20k-redhood-20260730`。不要删除、覆盖或原地润色，它们是后续 A/B 与质量锁回归基线。
-- 下一会话开始时先拉取 `main`，阅读本节、`docs/FEATURE_TODO.md` 的 F-09.6G—K，以及 `docs/F096E_REAL_STREAM_20K_ACCEPTANCE_2026-07-30.md`；先检查 Git 状态和保存项目，再制定 F-09.6H 的实现方案。
+### 结论
+
+**F-09.6H 已实现并通过真实 DeepSeek 验收（24/24）。** 不要从「质量锁未做」或「工作流几乎不可用」重开。下一主线切片建议为 **F-09.6I**（批次与读者章节解耦、统一字数口径；长度仍是软目标）。
+
+### 本会话做了什么
+
+1. **产品/锁分配定稿**（用户确认）  
+   - 对话比例：默认**关**；开启后仅 soft 可调区间；本切片无 hard。  
+   - 技术说明腔：默认 **soft + avoid**；可关 / soft / hard；场景级覆盖**未做**（后续债）。  
+   - 排除锁：默认 **soft**，用户显式升 hard。  
+   - 计划 mustInclude/outcome：默认只展示兑现、不阻断；可 `planOutcomeLocked`。  
+   - 字数：永不 hard。  
+   - 系统门禁 G（过程标签/边界重复等）保持 hard。  
+   - 锁必须在生成流程中可调，并影响**从零 / 续写 / 大段重写**后续步骤。  
+
+2. **核心实现**  
+   - `src/core/workflow/workflow-quality-metrics.js`：对话比例、技术腔、重复句式、禁用/慎用词、计划兑现、线索台账、`isBlockingFinding(enforcement)`。  
+   - `desktop/services/workflow-review-service.js`：接入 metrics；`direction_missing` 改为 soft `direction_literal_absent`；排除 soft 不阻断。  
+   - `desktop/services/workflow-lock-service.js` + `POST /api/workflows/v2/update-run-locks`：运行中改 constraints / qualityTargets / findingActions（harden|soften|disable|exempt）。  
+   - `workflow-creation-guided-service` / `workflow-guided-service` / `workflow-rewrite-guided-service`：写作指令与审查链路带 qualityTargets；下一批 plan 注入 `dueThreads`/`mustCloseThreads`。  
+   - 定义快照可更新：`workflow-run-store-v2.writeWorkflowV2RunDefinition`。  
+
+3. **前台（防 UI/逻辑割裂）**  
+   - `src/desktop/shell/workflow-locks.js`：统一 `lockDraft`；新建锁板 + **当前运行锁板**；结构化行（倾向/排除、启用、软/硬、删除）。  
+   - 审查 finding：升硬 / 降软 / 关闭 / 豁免 + 原有「只修复此场景」。  
+   - 调锁后 forceHydrate 锁板，与后端同一 API。  
+   - 片段：`desktop/fragments/workflow.html`；样式：`src/styles/desktop/workflow-artifacts.css`。  
+
+4. **测试**  
+   - `tests/workflow-quality-metrics.js`、`tests/workflow-lock-service.js`  
+   - 更新 `tests/workflow-review-service.js`、`tests/workflow-guided-ui.js`  
+   - 接入 `package.json` 的 `core-test`  
+
+5. **真实 DeepSeek 验收**  
+   - 脚本：`tests/workflow-quality-locks-real-provider-acceptance.js`  
+   - 报告：`docs/F096H_QUALITY_LOCKS_REAL_ACCEPTANCE_20260730.md`（**24/24**）  
+   - 指标：`.ai_state/f096h-quality-locks-real-20260730.json`（无 API Key）  
+   - 保留项目：`f096h-quality-locks-real-20260730`  
+   - 从零 Run：`f096h-locks-creation-20260730`；续写 Run：`f096h-locks-continuation-20260730`  
+   - 配置：读取仓库 `.draftharbor-settings.json` 中 `ai工作流` / `deepseek-v4-pro`（及 Flash canary）。  
+
+### 权威文档
+
+| 文档 | 用途 |
+|---|---|
+| `docs/F096H_QUALITY_LOCKS_DESIGN.md` | 设计、锁分配、前台对齐表 |
+| `docs/F096H_QUALITY_LOCKS_REAL_ACCEPTANCE_20260730.md` | 真实验收清单与结果 |
+| `docs/FEATURE_TODO.md` §F-09.6H | 勾选进度 |
+| `docs/F096E_REAL_STREAM_20K_ACCEPTANCE_2026-07-30.md` | 流式舞台与既有质量 backlog |
+| `docs/F096_200K_REAL_PROVIDER_ACCEPTANCE_2026-07-29.md` | 二十万字基线 |
+
+### 必须保留的测试项目（勿删、勿原地润色正文）
+
+| 项目 ID | 用途 |
+|---|---|
+| `f096-real-200k-redhood-20260729` | 二十万字质量基线 |
+| `f096e-real-stream-20k-redhood-20260730` | 流式舞台基线 |
+| `f096h-quality-locks-real-20260730` | 质量锁真实验收现场 |
+
+### 产品决策（仍有效）
+
+- 目标字数 = **软目标**；禁止为精确字数截断/机械重写。  
+- 质量指标默认可见软锁；用户明确锁定、事实/排除硬锁、系统门禁才可阻断。  
+- 计划结果兑现用语义 + 结构化状态，禁止字面 `direction_missing` 硬误报。  
+
+### 下一会话建议
+
+1. `git status` / 拉取 `main`；阅读本节 + `FEATURE_TODO` F-09.6H（已完成）与 **F-09.6I**。  
+2. 可选人工复查：打开 `f096h-quality-locks-real-20260730`，点「当前运行 · 创作锁」与审查升硬/豁免。  
+3. 新开发优先 **F-09.6I**（自然章节装配、统一字数口径）；勿再默认启动 F-11。  
+4. 后续债：技术说明腔**场景级** `inherit|avoid|allow`；更长真实 A/B；F-09.6J usage/上下文预算。  
+5. 复跑质量锁真实验收：`node tests/workflow-quality-locks-real-provider-acceptance.js`。  
+
+### 本会话关键代码路径（便于检索）
+
+```text
+src/core/workflow/workflow-quality-metrics.js
+desktop/services/workflow-lock-service.js
+desktop/services/workflow-review-service.js
+desktop/services/workflow-creation-guided-service.js
+desktop/services/workflow-guided-service.js
+desktop/services/workflow-rewrite-guided-service.js
+desktop/controllers/workflow-controller.js  # update-run-locks
+src/desktop/shell/workflow-locks.js
+src/desktop/shell/workflow-guided-presentation.js
+src/desktop/shell/workflow-artifact-interactions.js
+desktop/fragments/workflow.html
+tests/workflow-quality-locks-real-provider-acceptance.js
+```
 
 ## 2026-07-30：工作流正文实时创作舞台
 
@@ -53,14 +135,16 @@
 - F-05：避免写法库。
 - F-06：项目资料库管家 Agent。
 - F-08：资料库检索问答。
-- F-09：半自动小说工作流。
+- F-09：半自动小说工作流（主能力完成）。
+- F-09.6A—H：多批持续生成、流式舞台、质量门禁 G、**质量锁 H**（见上文 2026-07-30 节）。
 
 ### 进行中或待反馈
 
+- F-09.6I—K：章节装配与字数口径、上下文预算、分级复测发布门（**下一优先 I**）。
 - F-07：资料库管家辅助联动。F-07.1 已完成；F-07.2/F-07.3 需等待真实使用反馈，不要自动启动。
 - F-10：阅读体验改造。F-10.1—F-10.4D 已完成并通过最终发布验收；不要自动扩张到排除项。
 - F-11：证据化文风工程。已决定推迟到下一个大版本，只保留为长期研究提案；未来需在独立实验分支先重构统一提示词指令/冲突解析，当前主线不得自动启动。
-- 当前优先级：作者人工测试 F-09、F-10 及其他已完成功能，依据真实使用修复缺陷、调整默认值和打磨交互；当前版本继续使用已有全局/项目 Prompt、改写预设、手动要求和避免写法控制风格。
+- 当前优先级：F-09.6I 开发或作者人工测试已完成能力；继续使用已有 Prompt/避免写法控制风格。
 - 2026-07-29：从零创作工作流首次使用真实 DeepSeek Provider 完成 Brief、方向、蓝图、人物与世界观、场景计划、4 场正文、自动审查和正文回流的完整闭环。真实项目为 `红斗篷的挽歌`，Project ID `project-1785255712769-mjcqyd`，Run ID `creation-run-75758728-04ba-4712-a572-f5cbaf78f82f`；本地书库数据不进入 Git。运行生成约 12,500 个中文字符，证明首个闭环成立，也确认当前工作流只生成首批开篇，尚不能按 120,000 目标持续循环生成。
 - 2026-07-29：已修复 DeepSeek 深度思考挤占结构化输出预算导致 JSON 截断的问题。Provider 现在暴露 `finish_reason`；结构化阶段预算提高到 8k–16k；人物与世界观拆为两个批次后合并；非法或 `length` 截断的 JSON 会自动进行一次关闭深度思考的修复；修复仍失败时，响应字符数、尾部、停止原因、usage 和修复状态会进入运行诊断事件。
 - 2026-07-29：首次完整跑通后的产品反馈已整理为 `docs/WORKFLOW_FIRST_FULL_RUN_FEEDBACK_2026-07-29.md`。F-09.6A—E 已完成自动化实现：多批次持续生成、逐场保存与滚动上下文、批次连续性状态、版本化全局写作指令、每步自然语言 AI 重写、模型/深度思考选择、过程进度、三种产物视图、Revision 历史比较与恢复、返回上一步的精确过期标记和统一按钮文案。下一步只做 F-09.6F 真实 DeepSeek 多批复测与缺陷修复，不继续扩大范围。
@@ -215,11 +299,12 @@ F-10 分为三层：
 
 ## 7. 继续开发前检查
 
-1. 阅读本文件、`docs/FEATURE_TODO.md` 和当前功能的设计/开发计划。
-2. 运行 `git status --short`，正常情况下从 `main` 拉取后应为干净工作区；如有本地修改，先确认归属，不得重置用户改动。
-3. 搜索现有 Reader、项目快照、资料提取、工作流转交和导航实现，优先复用基础设施。
-4. 新功能开始、暂停、完成或取消时同步更新 `docs/FEATURE_TODO.md`。
+1. 阅读本文件顶部「本会话完成内容」与 `docs/FEATURE_TODO.md`（尤其 F-09.6H 完成态与 F-09.6I）。
+2. 运行 `git status --short`；如有本地修改，先确认归属，不得重置用户改动。
+3. 若动质量锁：先读 `docs/F096H_QUALITY_LOCKS_DESIGN.md`，复用 `workflow-lock-service` / `workflow-quality-metrics` / `workflow-locks.js`，勿另起门禁体系。
+4. 新功能开始、暂停、完成或取消时同步更新 `docs/FEATURE_TODO.md` 与本文件。
 5. 涉及持久化格式时先写 schema、迁移和兼容测试；涉及正式写入时先写备份、版本和幂等测试。
+6. 质量锁真实验收可复跑：`node tests/workflow-quality-locks-real-provider-acceptance.js`（需本机已保存 DeepSeek 配置）。
 
 ## 8. 发布前验证基线
 

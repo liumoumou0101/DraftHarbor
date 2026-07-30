@@ -85,13 +85,32 @@
                 appendGuidedPreviewItem(preview, `${index + 1}. ${scene.title || '未命名场景'}`, details || scene.outcome || '场景计划');
             });
         }
+        if (content.metrics && content.metrics.batch) {
+            const batch = content.metrics.batch;
+            const targets = content.qualityTargetsSnapshot || {};
+            const dialogueLine = targets.dialogueRatioEnabled
+                ? `对话比例 ${(Number(batch.dialogueRatio || 0) * 100).toFixed(1)}%（目标 ${targets.dialogueRatioMin != null ? `${Math.round(targets.dialogueRatioMin * 100)}%` : '?'}${targets.dialogueRatioMax != null ? `–${Math.round(targets.dialogueRatioMax * 100)}%` : ''}）`
+                : `对话比例 ${(Number(batch.dialogueRatio || 0) * 100).toFixed(1)}%（软指标未启用）`;
+            appendGuidedPreviewItem(preview, '质量指标', [
+                dialogueLine,
+                `技术说明腔命中 ${batch.technicalHits || 0}`,
+                `重复短语样本 ${batch.repeatedPhraseHits || 0}`,
+                Array.isArray(content.metrics.planFulfillment)
+                    ? `计划兑现 ${content.metrics.planFulfillment.filter((item) => item.status === 'fulfilled').length}/${content.metrics.planFulfillment.length}`
+                    : ''
+            ].filter(Boolean).join(' · '));
+        }
         if (Array.isArray(content.findings)) {
             appendGuidedPreviewItem(preview, '审查结论', content.qualityGate === 'blocked'
                 ? `质量门禁未通过：${content.blockingFindingCount || 1} 项阻断问题`
                 : content.findings.length ? `发现 ${content.findings.length} 项需要处理的问题` : '未发现需要处理的问题');
-            content.findings.slice(0, 6).forEach((finding, index) => {
+            content.findings.slice(0, 12).forEach((finding, index) => {
+                const lockLabel = finding.enforcement === 'hard' ? '硬锁' : (finding.enforcement === 'soft' ? '软锁' : '');
+                const exemptLabel = finding.exempted ? '已豁免' : '';
                 const label = [
                     String(finding.severity || 'warning').toUpperCase(),
+                    lockLabel,
+                    exemptLabel,
                     finding.sceneTitle || finding.sceneId || '',
                     finding.type || ''
                 ].filter(Boolean).join(' · ');
@@ -101,9 +120,32 @@
                     finding.message || finding.summary || finding.description || ''
                 ].filter(Boolean).join('；');
                 appendGuidedPreviewItem(preview, `问题 ${index + 1}｜${label}`, detail || JSON.stringify(finding));
+                const run = selectedWorkflowRun();
+                const actions = document.createElement('div');
+                actions.className = 'desktop-workflow-finding-actions';
+                const appendLockAction = (action, text) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'desktop-mini-action';
+                    button.textContent = text;
+                    button.addEventListener('click', () => {
+                        if (typeof window.applyWorkflowFindingLockAction !== 'function') {
+                            setWorkflowStatus('当前版本尚不支持审查页调锁', 'error');
+                            return;
+                        }
+                        window.applyWorkflowFindingLockAction(run, finding, index, action)
+                            .catch((error) => setWorkflowStatus(`调锁失败：${error.message || error}`, 'error'));
+                    });
+                    actions.appendChild(button);
+                };
+                if (run && !finding.exempted) {
+                    if (finding.enforcement !== 'hard') appendLockAction('harden', '升为硬锁');
+                    if (finding.enforcement === 'hard') appendLockAction('soften', '降为软锁');
+                    appendLockAction('disable', '关闭此项');
+                    appendLockAction('exempt', '豁免本条');
+                }
                 const normalizedSeverity = String(finding.severity || '').trim().toLowerCase();
                 if (['error', 'critical', 'major', 'high', '严重', '致命'].includes(normalizedSeverity)) {
-                    const run = selectedWorkflowRun();
                     const matchingDraft = (run?.artifacts || []).find((artifact) => artifact.nodeId === 'draft'
                         && (!run.activeBatchId || artifact.targetRef?.batchId === run.activeBatchId)
                         && (artifact.targetRef?.sceneId === finding.sceneId
@@ -127,9 +169,10 @@
                                 reason: `修复审查问题：${finding.type || 'quality-gate'}`
                             }).catch((error) => setWorkflowStatus(`场景修复失败：${error.message || error}`, 'error'));
                         });
-                        preview.lastElementChild?.appendChild(repair);
+                        actions.appendChild(repair);
                     }
                 }
+                if (actions.childElementCount) preview.lastElementChild?.appendChild(actions);
             });
         }
         if (!preview.childElementCount && content.summary) appendGuidedPreviewItem(preview, '摘要', content.summary);
@@ -145,12 +188,15 @@
 
     window.creationQualityGateBlocked = function creationQualityGateBlocked(run) {
         if (!run || run.templateId !== 'creation-guided') return false;
-        const blocking = new Set(['error', 'critical', 'major', 'high', '严重', '致命']);
         return (run.artifacts || []).some((artifact) => artifact.nodeId === 'review'
             && artifact.content
             && (artifact.content.qualityGate === 'blocked'
-                || (artifact.content.findings || []).some((finding) =>
-                    blocking.has(String(finding?.severity || '').trim().toLowerCase()))));
+                || (artifact.content.findings || []).some((finding) => {
+                    if (String(finding?.enforcement || '').toLowerCase() === 'soft') return false;
+                    if (finding?.exempted) return false;
+                    const severity = String(finding?.severity || '').trim().toLowerCase();
+                    return ['error', 'critical', 'major', 'high', '严重', '致命'].includes(severity);
+                })));
     };
 
     function renderGuidedWorkflowInlineResult(container, run, step) {

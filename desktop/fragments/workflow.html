@@ -121,14 +121,39 @@
                             </div>
                         </section>
                             </section>
-                            <label>
-                        <span>倾向锁（每行一个）</span>
-                        <textarea data-workflow-direction-locks rows="3" placeholder="例如：强化主角与导师之间的不信任"></textarea>
-                            </label>
-                            <label>
-                        <span>排除锁（每行一个）</span>
-                        <textarea data-workflow-exclusion-locks rows="3" placeholder="例如：不要揭晓幕后凶手"></textarea>
-                            </label>
+                            <section class="desktop-workflow-lock-board" data-workflow-lock-board data-lock-scope="launch" aria-label="新建流程的创作锁">
+                                <header class="desktop-workflow-lock-board-header">
+                                    <div>
+                                        <p class="desktop-section-kicker">Locks</p>
+                                        <strong>创作锁</strong>
+                                        <p class="desktop-muted">可开可关、可软可硬。默认软锁只提示；硬锁可阻断后续推进。从零 / 续写 / 重写共用。</p>
+                                    </div>
+                                    <div class="desktop-workflow-lock-board-actions">
+                                        <button type="button" class="desktop-mini-action" data-workflow-lock-add="direction">+ 倾向锁</button>
+                                        <button type="button" class="desktop-mini-action" data-workflow-lock-add="exclusion">+ 排除锁</button>
+                                    </div>
+                                </header>
+                                <div class="desktop-workflow-lock-list" data-workflow-lock-list></div>
+                                <p class="desktop-muted" data-workflow-lock-empty>还没有锁。可添加倾向（希望怎样写）或排除（不要出现什么）。</p>
+                                <details class="desktop-workflow-quality-targets" data-workflow-quality-targets open>
+                                    <summary>质量锁 / 软指标</summary>
+                                    <div class="desktop-workflow-field-grid">
+                                        <label class="desktop-workflow-toggle"><input type="checkbox" data-workflow-dialogue-ratio-enabled><span>启用对话比例软指标（默认关）</span></label>
+                                        <label><span>对话比例下限 %</span><input data-workflow-dialogue-ratio-min type="number" min="0" max="100" step="1" value="25"></label>
+                                        <label><span>对话比例上限 %</span><input data-workflow-dialogue-ratio-max type="number" min="0" max="100" step="1" value="35"></label>
+                                        <label><span>技术说明腔</span>
+                                            <select data-workflow-technical-register-mode>
+                                                <option value="avoid" selected>软锁避免（默认）</option>
+                                                <option value="off">关闭检测</option>
+                                                <option value="allow">允许说明腔</option>
+                                            </select>
+                                        </label>
+                                        <label class="desktop-workflow-toggle"><input type="checkbox" data-workflow-technical-register-locked><span>技术说明腔升为硬锁（可阻断）</span></label>
+                                        <label class="desktop-workflow-toggle"><input type="checkbox" data-workflow-plan-outcome-locked><span>锁定计划必达（未兑现可阻断）</span></label>
+                                    </div>
+                                    <p class="desktop-muted">对话比例默认关闭；技术说明腔默认软提醒。改锁后影响后续生成与重写，不偷偷改已写正文。</p>
+                                </details>
+                            </section>
                             <label class="desktop-workflow-toggle">
                         <input type="checkbox" data-workflow-fine-outline checked>
                         <span>正文前生成可编辑细纲</span>
@@ -210,6 +235,39 @@
                         </footer>
                     </section>
 
+                    <section class="desktop-workflow-lock-board is-active-run" data-workflow-active-lock-board hidden aria-label="当前运行的创作锁">
+                        <header class="desktop-workflow-lock-board-header">
+                            <div>
+                                <p class="desktop-section-kicker">Active Locks</p>
+                                <strong>当前运行 · 创作锁</strong>
+                                <p class="desktop-muted" data-workflow-active-lock-note>与启动区同一套锁。保存后对后续生成、审查、续写与重写生效。</p>
+                            </div>
+                            <div class="desktop-workflow-lock-board-actions">
+                                <button type="button" class="desktop-mini-action" data-workflow-active-lock-add="direction">+ 倾向</button>
+                                <button type="button" class="desktop-mini-action" data-workflow-active-lock-add="exclusion">+ 排除</button>
+                                <button type="button" class="desktop-primary-action" data-workflow-active-lock-save>保存到当前运行</button>
+                            </div>
+                        </header>
+                        <div class="desktop-workflow-lock-list" data-workflow-active-lock-list></div>
+                        <details class="desktop-workflow-quality-targets" data-workflow-active-quality-targets open>
+                            <summary>质量锁 / 软指标（当前运行）</summary>
+                            <div class="desktop-workflow-field-grid">
+                                <label class="desktop-workflow-toggle"><input type="checkbox" data-workflow-active-dialogue-ratio-enabled><span>启用对话比例软指标</span></label>
+                                <label><span>对话比例下限 %</span><input data-workflow-active-dialogue-ratio-min type="number" min="0" max="100" step="1" value="25"></label>
+                                <label><span>对话比例上限 %</span><input data-workflow-active-dialogue-ratio-max type="number" min="0" max="100" step="1" value="35"></label>
+                                <label><span>技术说明腔</span>
+                                    <select data-workflow-active-technical-register-mode>
+                                        <option value="avoid">软锁避免</option>
+                                        <option value="off">关闭检测</option>
+                                        <option value="allow">允许说明腔</option>
+                                    </select>
+                                </label>
+                                <label class="desktop-workflow-toggle"><input type="checkbox" data-workflow-active-technical-register-locked><span>技术说明腔硬锁</span></label>
+                                <label class="desktop-workflow-toggle"><input type="checkbox" data-workflow-active-plan-outcome-locked><span>锁定计划必达</span></label>
+                            </div>
+                        </details>
+                        <p class="desktop-modal-status" data-workflow-active-lock-status aria-live="polite"></p>
+                    </section>
                     <div class="desktop-workflow-stage-actions" data-workflow-stage-actions hidden></div>
                     <div class="desktop-workflow-steps" data-workflow-steps></div>
                     <section class="desktop-workflow-graph" data-workflow-graph aria-label="只读工作流图" hidden></section>

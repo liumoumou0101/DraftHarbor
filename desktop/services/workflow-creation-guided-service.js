@@ -31,10 +31,29 @@ function latestByType(artifacts, artifactType) {
   return artifacts.filter((artifact) => artifact.artifactType === artifactType).slice(-1)[0] || null;
 }
 function normalizeWritingInstructions(input = {}) {
+  const QualityMetrics = require('../../src/core/workflow/workflow-quality-metrics');
   const source = typeof input === 'string' ? { text: input } : input && typeof input === 'object' ? input : {};
   const list = (value) => (Array.isArray(value) ? value : clean(value).split(/\r?\n|，|,/))
     .map((item) => clean(item)).filter(Boolean);
   const stages = list(source.stages || source.applicableStages);
+  const qualityTargets = QualityMetrics.normalizeQualityTargets({
+    ...(source.qualityTargets && typeof source.qualityTargets === 'object' ? source.qualityTargets : {}),
+    dialogueRatio: source.dialogueRatio,
+    dialogueRatioEnabled: source.qualityTargets && source.qualityTargets.dialogueRatioEnabled,
+    dialogueRatioMin: source.qualityTargets && source.qualityTargets.dialogueRatioMin,
+    dialogueRatioMax: source.qualityTargets && source.qualityTargets.dialogueRatioMax,
+    mustAvoid: source.mustAvoid || source.avoid,
+    technicalRegisterMode: source.qualityTargets && source.qualityTargets.technicalRegisterMode,
+    technicalRegisterLocked: source.qualityTargets && source.qualityTargets.technicalRegisterLocked,
+    technicalPatterns: source.qualityTargets && source.qualityTargets.technicalPatterns,
+    bannedTerms: source.qualityTargets && source.qualityTargets.bannedTerms,
+    cautionTerms: source.qualityTargets && source.qualityTargets.cautionTerms,
+    formulaicPatterns: source.qualityTargets && source.qualityTargets.formulaicPatterns,
+    repetitionEnabled: source.qualityTargets && source.qualityTargets.repetitionEnabled,
+    repetitionLocked: source.qualityTargets && source.qualityTargets.repetitionLocked,
+    planOutcomeLocked: source.qualityTargets && source.qualityTargets.planOutcomeLocked,
+    foreshadowingThreads: source.qualityTargets && source.qualityTargets.foreshadowingThreads
+  });
   return {
     schemaVersion: 1,
     kind: 'workflow-writing-instructions',
@@ -43,7 +62,8 @@ function normalizeWritingInstructions(input = {}) {
     dialogueRatio: clean(source.dialogueRatio),
     pacingPreference: clean(source.pacingPreference || source.pacing),
     mustAvoid: list(source.mustAvoid || source.avoid),
-    applicableStages: stages.length ? stages : ['direction', 'blueprint', 'compendium', 'plan', 'draft', 'review']
+    applicableStages: stages.length ? stages : ['direction', 'blueprint', 'compendium', 'plan', 'draft', 'review'],
+    qualityTargets
   };
 }
 function artifactBatchId(artifact) { return clean(artifact && artifact.targetRef && artifact.targetRef.batchId); }
@@ -153,8 +173,11 @@ function normalizeConstraints(options = {}) {
   return (Array.isArray(options.constraints) ? options.constraints : []).map((constraint, index) => ({
     id: clean(constraint.id, `constraint-${index + 1}`),
     kind: ['direction', 'exclusion', 'fact'].includes(constraint.kind) ? constraint.kind : 'direction',
-    text: clean(constraint.text), enforcement: constraint.enforcement === 'hard' ? 'hard' : 'soft',
-    weight: Math.max(0, Math.min(5, Number(constraint.weight) || 1))
+    text: clean(constraint.text),
+    // Default soft unless user explicitly sets hard (exclusion included).
+    enforcement: constraint.enforcement === 'hard' ? 'hard' : 'soft',
+    weight: Math.max(0, Math.min(5, Number(constraint.weight) || 1)),
+    enabled: constraint.enabled !== false
   })).filter((constraint) => constraint.text);
 }
 
@@ -329,6 +352,22 @@ async function prepareCreationNode(options = {}) {
       blueprintStage: activeBatch && activeBatch.blueprintStage || '',
       suggestedSceneCount: activeBatch && activeBatch.suggestedSceneCount || 0,
       progress: details.run.generationProgress,
+      dueThreads: (() => {
+        try {
+          const LockService = require('./workflow-lock-service');
+          return LockService.dueThreadsFromRolling(previousContinuity || {});
+        } catch (_error) {
+          return [];
+        }
+      })(),
+      mustCloseThreads: (() => {
+        try {
+          const LockService = require('./workflow-lock-service');
+          return LockService.dueThreadsFromRolling(previousContinuity || {}).filter((thread) => thread.mustClose);
+        } catch (_error) {
+          return [];
+        }
+      })(),
       previousBatch: previousBatch ? {
         batchId: previousBatch.batchId,
         sequence: previousBatch.sequence,
@@ -353,7 +392,7 @@ async function prepareCreationNode(options = {}) {
       ok: true, nodeId, outputFormat: 'json', prompts: [{
         id: 'creation-semantic-review', title: '新作语义连续性审查',
         prompt: { messages: [
-          { role: 'system', content: '你是严苛的长篇连续性编辑。检查正文对故事蓝图、人物资料、世界规则、场景计划、全局写作指令、必须包含项、人物主动性、对话比例、人物动机、情绪节奏、相邻场景边界和创作过程信息泄漏的遵守情况，并整理供下一批使用的连续性状态。相邻场景边界问题必须区分为 scene_boundary_repetition（重复重演）、previous_scene_overreach（前场越界提前写完下一场）或 scene_state_reset（本场未承接前场结果而重置状态）。severity 只能使用 pass、info、suggestion、warning、error、critical；只有明确违反硬约束、结构损坏或严重连续性错误才能标为 error/critical，启发式文风建议必须标为 suggestion/warning。只返回合法 JSON：{summary,findings:[{type,severity,sceneId,revisionId,relatedSceneId,relatedRevisionId,sceneTitle,evidence,suggestion}],continuityState:{summary,characterStates:{},unresolvedThreads:[],knownFacts:[],lastEnding}}。' },
+          { role: 'system', content: '你是严苛的长篇连续性编辑。检查正文对故事蓝图、人物资料、世界规则、场景计划、全局写作指令、必须包含项、人物主动性、对话比例、人物动机、情绪节奏、相邻场景边界和创作过程信息泄漏的遵守情况，并整理供下一批使用的连续性状态。相邻场景边界问题必须区分为 scene_boundary_repetition（重复重演）、previous_scene_overreach（前场越界提前写完下一场）或 scene_state_reset（本场未承接前场结果而重置状态）。计划结果兑现必须写入 planFulfillment：对每个场景的 outcome 与 mustInclude 给出 fulfilled、deferred、unfulfilled 或 exempt，并附 evidence；语义已兑现时不得因缺少原句而判 unfulfilled。unresolvedThreads 优先返回对象 {threadId,label,status,mustClose,evidence}。severity 只能使用 pass、info、suggestion、warning、error、critical；只有明确违反硬约束、结构损坏或严重连续性错误才能标为 error/critical，启发式文风建议必须标为 suggestion/warning。只返回合法 JSON：{summary,findings:[{type,severity,enforcement,sceneId,revisionId,relatedSceneId,relatedRevisionId,sceneTitle,evidence,suggestion}],planFulfillment:[{sceneId,field,status,evidence,deferredToSceneId}],continuityState:{summary,characterStates:{},unresolvedThreads:[],knownFacts:[],lastEnding}}。' },
           { role: 'user', content: JSON.stringify({ ...context, drafts: drafts.map((artifact) => ({
             sceneId: clean(artifact.targetRef && artifact.targetRef.sceneId),
             revisionId: artifact.revision.id,
@@ -489,6 +528,10 @@ async function completeCreationNode(options = {}) {
   const semantic = outputs[0] ? runtime.parseJson(outputs[0]) : { findings: [] };
   const drafts = currentBatchArtifacts(details.run, 'draft');
   const plan = currentBatchArtifact(details.run, 'plan');
+  const writingInstructionsArtifact = latestByType(details.run.artifacts || [], WRITING_INSTRUCTIONS_TYPE);
+  const writingInstructions = writingInstructionsArtifact && writingInstructionsArtifact.content
+    ? normalizeWritingInstructions(writingInstructionsArtifact.content)
+    : normalizeWritingInstructions({});
   const report = Review.reviewDraft({
     text: drafts.map((artifact) => artifact.content).join('\n\n'),
     scenes: drafts.map((artifact) => ({
@@ -498,12 +541,41 @@ async function completeCreationNode(options = {}) {
       text: artifact.content
     })),
     scenePlan: plan && plan.content,
-    constraints: details.run.settings.constraints || []
+    constraints: details.run.settings.constraints || [],
+    writingInstructions,
+    qualityTargets: writingInstructions.qualityTargets,
+    semanticFulfillment: Array.isArray(semantic.planFulfillment) ? semantic.planFulfillment : []
   });
   const semanticFindings = (Array.isArray(semantic.findings) ? semantic.findings : [])
     .filter((finding) => finding && typeof finding === 'object' && clean(finding.severity).toLowerCase() !== 'pass')
-    .map((finding) => Review.normalizeFinding({ ...finding, source: 'ai-semantic-review' }));
+    .map((finding) => Review.normalizeFinding({
+      ...finding,
+      source: 'ai-semantic-review',
+      enforcement: finding.enforcement === 'hard' ? 'hard' : (finding.enforcement === 'soft' ? 'soft' : undefined)
+    }));
   report.findings.push(...semanticFindings);
+  const lastDraft = drafts[drafts.length - 1];
+  const QualityMetrics = require('../../src/core/workflow/workflow-quality-metrics');
+  const LockService = require('./workflow-lock-service');
+  const semanticContinuity = semantic.continuityState && typeof semantic.continuityState === 'object'
+    ? semantic.continuityState : {};
+  const previousRolling = (details.run.artifacts || []).filter((artifact) => artifact.artifactType === 'rolling-state@1').slice(-1)[0];
+  const continuityState = QualityMetrics.normalizeThreadLedger(
+    previousRolling && previousRolling.content ? previousRolling.content : {},
+    {
+      ...semanticContinuity,
+      completedSceneIds: drafts.map((artifact) => clean(artifact.targetRef && artifact.targetRef.sceneId)).filter(Boolean),
+      summary: clean(semanticContinuity.summary, clean(semantic.summary, report.summary)),
+      lastEnding: clean(semanticContinuity.lastEnding, typeof lastDraft?.content === 'string' ? lastDraft.content.slice(-2000) : '')
+    },
+    writingInstructions
+  );
+  const progress = details.run.generationProgress || {};
+  const targetReached = progress.targetCharacters > 0
+    && progress.completedCharacters >= progress.targetCharacters;
+  if (targetReached || options.includeFinalThreadChecklist === true) {
+    report.findings.push(...LockService.finalThreadFindings(continuityState, {}));
+  }
   report.blockingFindingCount = Review.blockingFindings(report).length;
   report.qualityGate = report.blockingFindingCount ? 'blocked' : 'passed';
   report.summary = report.findings.length
@@ -519,21 +591,6 @@ async function completeCreationNode(options = {}) {
       batchSequence: (details.run.batches || []).find((batch) => batch.batchId === details.run.activeBatchId)?.sequence || 1
     }
   });
-  const lastDraft = drafts[drafts.length - 1];
-  const semanticContinuity = semantic.continuityState && typeof semantic.continuityState === 'object'
-    ? semantic.continuityState : {};
-  const continuityState = {
-    schemaVersion: 1,
-    completedSceneIds: drafts.map((artifact) => clean(artifact.targetRef && artifact.targetRef.sceneId)).filter(Boolean),
-    summary: clean(semanticContinuity.summary, clean(semantic.summary, report.summary)),
-    characterStates: semanticContinuity.characterStates && typeof semanticContinuity.characterStates === 'object'
-      ? semanticContinuity.characterStates : {},
-    unresolvedThreads: Array.isArray(semanticContinuity.unresolvedThreads)
-      ? semanticContinuity.unresolvedThreads.map(clean).filter(Boolean) : [],
-    knownFacts: Array.isArray(semanticContinuity.knownFacts)
-      ? semanticContinuity.knownFacts.map(clean).filter(Boolean) : [],
-    lastEnding: clean(semanticContinuity.lastEnding, typeof lastDraft?.content === 'string' ? lastDraft.content.slice(-2000) : '')
-  };
   await runtime.writeArtifact(targetPath, {
     ...options,
     nodeId: 'review',

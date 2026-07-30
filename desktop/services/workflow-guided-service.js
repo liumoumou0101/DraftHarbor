@@ -120,6 +120,23 @@ async function startGuidedContinuation(options = {}) {
   const snapshot = options.readerTransfer
     ? await inputService.createReaderTransferSourceSnapshot({ ...sourceOptions, transfer: options.readerTransfer })
     : await inputService.createWriterSourceSnapshot(sourceOptions);
+  if (options.writingInstructions && typeof options.writingInstructions === 'object') {
+    const CreationGuided = require('./workflow-creation-guided-service');
+    await guidedRuntime.writeArtifact(targetPath, {
+      projectId,
+      runId,
+      nodeId: 'source',
+      artifactId: 'continuation-writing-instructions',
+      artifactType: 'workflow-writing-instructions@1',
+      revisionId: id('instructions-r'),
+      title: '全局写作指令 / 质量锁',
+      summary: '续写运行的全局写作与质量锁',
+      content: CreationGuided.normalizeWritingInstructions(options.writingInstructions),
+      format: 'json',
+      reviewState: 'approved',
+      approvedAt: new Date().toISOString()
+    });
+  }
   await appendEvent(targetPath, runId, 'guided_run_created', 'source', { scope: snapshot.snapshot.scope, characterCount: snapshot.snapshot.characterCount, readerEnvelopeId: options.readerTransfer && options.readerTransfer.envelope.envelopeId || '', freshness: options.readerTransfer && options.readerTransfer.freshness || null });
   return { ok: true, runId, summary: created.summary, snapshot: { artifactId: snapshot.artifact.family.id, revisionId: snapshot.artifact.revision.id } };
 }
@@ -244,14 +261,30 @@ async function completeGuidedNode(options = {}) {
   if (nodeId === 'review') {
     const drafts = details.run.artifacts.filter((artifact) => artifact.nodeId === 'draft');
     const plan = latestByNode(details.run.artifacts, 'plan');
-    const report = Review.reviewDraft({ text: drafts.map((artifact) => artifact.content).join('\n\n'), scenePlan: plan && plan.content, constraints: options.constraints || details.run.settings.constraints || [] });
+    const writing = details.run.artifacts.filter((artifact) => artifact.artifactType === 'workflow-writing-instructions@1').slice(-1)[0];
+    const report = Review.reviewDraft({
+      text: drafts.map((artifact) => artifact.content).join('\n\n'),
+      scenes: drafts.map((artifact, index) => ({
+        sceneId: clean(artifact.targetRef && artifact.targetRef.sceneId, `draft-${index + 1}`),
+        revisionId: artifact.revision.id,
+        title: artifact.title,
+        text: artifact.content
+      })),
+      scenePlan: plan && plan.content,
+      constraints: options.constraints || details.run.settings.constraints || [],
+      writingInstructions: writing && writing.content,
+      qualityTargets: writing && writing.content && writing.content.qualityTargets,
+      semanticFulfillment: []
+    });
     const semantic = Array.isArray(options.outputs) && clean(options.outputs[0]) ? parseJsonOutput(options.outputs[0]) : null;
     const semanticFindings = semantic && Array.isArray(semantic.findings)
-      ? semantic.findings.filter((finding) => finding && typeof finding === 'object' && clean(finding.severity).toLowerCase() !== 'pass').map((finding) => ({ ...finding, source: 'ai-semantic-review' }))
+      ? semantic.findings.filter((finding) => finding && typeof finding === 'object' && clean(finding.severity).toLowerCase() !== 'pass').map((finding) => Review.normalizeFinding({ ...finding, source: 'ai-semantic-review' }))
       : [];
     report.findings.push(...semanticFindings);
+    report.blockingFindingCount = Review.blockingFindings(report).length;
+    report.qualityGate = report.blockingFindingCount ? 'blocked' : 'passed';
     report.summary = report.findings.length
-      ? `发现 ${report.findings.length} 项待处理问题（含 ${semanticFindings.length} 项语义审查）`
+      ? `发现 ${report.findings.length} 项待处理问题，其中 ${report.blockingFindingCount} 项阻断（含 ${semanticFindings.length} 项语义审查）`
       : clean(semantic && semantic.summary, report.summary);
     await artifactStore.writeArtifactRevision(targetPath, options.runId, {
       id: 'review-result', projectId: options.projectId, runId: options.runId, nodeId: 'review', artifactType: outputType('review'), title: '自动审查报告'

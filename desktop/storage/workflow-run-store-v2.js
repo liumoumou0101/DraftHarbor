@@ -257,6 +257,36 @@ async function readWorkflowV2Run(projectPath, runId) {
   return { summary, definitionSnapshot, state };
 }
 
+async function writeWorkflowV2RunDefinition(projectPath, runId, definitionInput = {}, options = {}) {
+  const id = requireRunId(runId);
+  const current = await readWorkflowV2Run(projectPath, id);
+  if (!current || !current.definitionSnapshot) throw new Error(`workflow v2 run definition not found: ${id}`);
+  const nextDefinition = definitionInput.definition
+    ? definitionInput.definition
+    : (definitionInput.id || definitionInput.templateId || definitionInput.nodes
+      ? definitionInput
+      : {
+        ...(current.definitionSnapshot.definition || {}),
+        ...clonePlain(definitionInput),
+        settings: {
+          ...((current.definitionSnapshot.definition && current.definitionSnapshot.definition.settings) || {}),
+          ...(definitionInput.settings || {})
+        }
+      });
+  const definitionSnapshot = WorkflowDefinition.createWorkflowDefinitionSnapshot(nextDefinition, {
+    capturedAt: options.capturedAt || new Date().toISOString()
+  });
+  await writeJsonAtomic(paths.workflowV2RunDefinitionPath(projectPath, id), definitionSnapshot);
+  const summary = await getWorkflowV2RunSummary(projectPath, id);
+  if (summary) {
+    await upsertWorkflowV2RunSummary(projectPath, {
+      ...summary,
+      updatedAt: definitionSnapshot.capturedAt || new Date().toISOString()
+    }, { expectedRevision: options.expectedIndexRevision });
+  }
+  return definitionSnapshot;
+}
+
 async function recoverWorkflowV2Store(projectPath) {
   if (!(await fileExists(paths.workflowV2Dir(projectPath)))) return [];
   return cleanupAtomicTempFiles(paths.workflowV2Dir(projectPath));
@@ -276,5 +306,6 @@ module.exports = {
   readWorkflowV2RunState,
   writeWorkflowV2RunState,
   readWorkflowV2Run,
+  writeWorkflowV2RunDefinition,
   recoverWorkflowV2Store
 };
