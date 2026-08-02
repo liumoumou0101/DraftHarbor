@@ -119,7 +119,7 @@ function prepareCreationStage(stage, context = {}) {
       prompts: scenePlan.scenes.map((scene) => ({
         id: scene.id,
         title: scene.title,
-        prompt: textPrompt(`你是长篇小说作者。只输出当前场景正文，不解释，不输出标题。严格遵守已确认的故事蓝图摘要、人物与世界观资料、场景节奏和约束。${instructionPriority} 若提供 styleExemplar，只学习其语气、句式、对话节奏与叙事距离，禁止复述或续写例文中的具体情节。正文长度应尽量接近 currentScene.targetWords 指定的中文字符数；除非场景已经自然完成，不要少于该目标的 80%，也不要用重复、总结或无效描写凑长度。若 batchContext.repairReview 存在，只修复其中与 currentScene.id 对应的问题，保留未被指出有问题的事实和推进结果。若提供了当前批次已经完成的真实正文结尾，必须从其事实、人物状态、情绪和动作结果自然承接，不得重置场景。严格停在 currentScene.outcome 或 currentScene.hook 所界定的场景边界，不得提前完成下一场景的核心转折；若前一场已经意外覆盖当前场景的部分内容，应从最新事实继续推进而不是重演。scenePlan、currentScene、batchContext 中的 id、序号、批次名和“场景”等标签只供内部定位，正文绝不能提及“场景 6-1”“上一批”“计划要求”等创作过程信息。`, {
+        prompt: textPrompt(`你是长篇小说作者。只输出当前场景正文，不解释，不输出标题。严格遵守已确认的故事蓝图摘要、人物与世界观资料、场景节奏和约束。${instructionPriority} 若提供 styleExemplar，只学习其语气、句式、对话节奏与叙事距离，禁止复述或续写例文中的具体情节。正文长度应尽量接近 currentScene.targetWords 指定的中文字符数；除非场景已经自然完成，不要少于该目标的 80%，也不要用重复、总结或无效描写凑长度。若 batchContext.repairReview 存在，只修复其中与 currentScene.id 对应的问题，保留未被指出有问题的事实和推进结果。batchContext.currentBatch.completedScenes[*].factAnchors 是前场正文已经成立的权威事实，必须与结尾一起承接，不得改写、忽略或制造相反结果。currentScene.mustInclude 与 outcome 要在语义和行动结果上真实兑现，不要机械照抄计划原句。若方向或约束要求主角取得主动权，关键转折必须来自主角可辨认的选择、拒绝、谈判或明确接受；外力影响可以存在，但不能替代她的决定。对话比例只有在 qualityTargets 明确启用时才是目标；未启用时按场景需要自然安排。严格停在 currentScene.outcome 或 currentScene.hook 所界定的场景边界，不得提前完成下一场景的核心转折；若前一场已经意外覆盖当前场景的部分内容，应从最新事实继续推进而不是重演。scenePlan、currentScene、batchContext 中的 id、序号、批次名和“场景”等标签只供内部定位，正文绝不能提及“场景 6-1”“上一批”“计划要求”等创作过程信息。`, {
           brief,
           selectedDirection,
           blueprint,

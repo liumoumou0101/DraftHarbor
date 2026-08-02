@@ -118,13 +118,18 @@
             const targets = content.qualityTargetsSnapshot || {};
             const dialogueLine = targets.dialogueRatioEnabled
                 ? `对话比例 ${(Number(batch.dialogueRatio || 0) * 100).toFixed(1)}%（目标 ${targets.dialogueRatioMin != null ? `${Math.round(targets.dialogueRatioMin * 100)}%` : '?'}${targets.dialogueRatioMax != null ? `–${Math.round(targets.dialogueRatioMax * 100)}%` : ''}）`
-                : `对话比例 ${(Number(batch.dialogueRatio || 0) * 100).toFixed(1)}%（软指标未启用）`;
+                : `对话比例 ${(Number(batch.dialogueRatio || 0) * 100).toFixed(1)}%（仅观察，未设置目标）`;
             appendGuidedPreviewItem(preview, '质量指标', [
                 dialogueLine,
                 `技术说明腔命中 ${batch.technicalHits || 0}`,
                 `重复短语样本 ${batch.repeatedPhraseHits || 0}`,
                 Array.isArray(content.metrics.planFulfillment)
-                    ? `计划兑现 ${content.metrics.planFulfillment.filter((item) => item.status === 'fulfilled').length}/${content.metrics.planFulfillment.length}`
+                    ? (() => {
+                        const verified = content.metrics.planFulfillment.filter((item) => item.status !== 'unverified');
+                        const fulfilled = verified.filter((item) => item.status === 'fulfilled').length;
+                        const pending = content.metrics.planFulfillment.filter((item) => item.status === 'unverified').length;
+                        return `计划兑现 ${fulfilled}/${verified.length}${pending ? ` · ${pending} 待确认` : ''}`;
+                    })()
                     : ''
             ].filter(Boolean).join(' · '));
         }

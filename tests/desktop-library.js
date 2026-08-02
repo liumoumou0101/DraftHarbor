@@ -264,6 +264,10 @@ async function submitNativeName(page, value) {
         assert.strictEqual(compendiumApiBody.entries[0].title, 'Ada Navigator', 'native compendium UI should save entries');
         await page.click('[data-view-target="writer"]');
         await page.click('[data-native-panel-tab="generate"]');
+        await page.evaluate(() => {
+            const advanced = document.querySelector('[data-native-generation-advanced]');
+            if (advanced) advanced.open = true;
+        });
         await page.click('[data-native-manage-prompts]');
         await page.fill('[data-prompt-manager-title]', 'Test Prose Prompt');
         await page.fill('[data-prompt-manager-system]', 'Write with luminous restraint.');

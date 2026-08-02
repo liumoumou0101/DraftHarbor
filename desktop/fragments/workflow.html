@@ -135,10 +135,10 @@
                                 </header>
                                 <div class="desktop-workflow-lock-list" data-workflow-lock-list></div>
                                 <p class="desktop-muted" data-workflow-lock-empty>还没有锁。可添加倾向（希望怎样写）或排除（不要出现什么）。</p>
-                                <details class="desktop-workflow-quality-targets" data-workflow-quality-targets open>
+                                <details class="desktop-workflow-quality-targets" data-workflow-quality-targets>
                                     <summary>质量锁 / 软指标</summary>
                                     <div class="desktop-workflow-field-grid">
-                                        <label class="desktop-workflow-toggle"><input type="checkbox" data-workflow-dialogue-ratio-enabled><span>启用对话比例软指标（默认关）</span></label>
+                                        <label class="desktop-workflow-toggle"><input type="checkbox" data-workflow-dialogue-ratio-enabled><span>设置对话比例软目标（默认仅观察）</span></label>
                                         <label><span>对话比例下限 %</span><input data-workflow-dialogue-ratio-min type="number" min="0" max="100" step="1" value="25"></label>
                                         <label><span>对话比例上限 %</span><input data-workflow-dialogue-ratio-max type="number" min="0" max="100" step="1" value="35"></label>
                                         <label><span>技术说明腔</span>
@@ -151,7 +151,7 @@
                                         <label class="desktop-workflow-toggle"><input type="checkbox" data-workflow-technical-register-locked><span>技术说明腔升为硬锁（可阻断）</span></label>
                                         <label class="desktop-workflow-toggle"><input type="checkbox" data-workflow-plan-outcome-locked><span>锁定计划必达（未兑现可阻断）</span></label>
                                     </div>
-                                    <p class="desktop-muted">对话比例默认关闭；技术说明腔默认软提醒。改锁后影响后续生成与重写，不偷偷改已写正文。</p>
+                                    <p class="desktop-muted">对话比例默认只展示实际值，不设目标、不阻断；技术说明腔默认软提醒。改锁后影响后续生成与重写，不偷偷改已写正文。</p>
                                 </details>
                             </section>
                             <label class="desktop-workflow-toggle">

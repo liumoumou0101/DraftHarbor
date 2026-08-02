@@ -47,7 +47,7 @@ const rolling = {
 
 const completedScenes = [
   { sceneId: 's1', title: '码头', ending: '码头结束。'.repeat(50) },
-  { sceneId: 's2', title: '铁柜', ending: '铁柜结束。'.repeat(50) },
+  { sceneId: 's2', title: '铁柜', text: `守柜人说明：根脉碎片不可带出港口，无法穿越盐雾屏障。${'她检查铁柜。'.repeat(20)}`, ending: '铁柜结束。'.repeat(50) },
   { sceneId: 's3', title: '菌丝', ending: '菌丝结束。'.repeat(50) }
 ];
 
@@ -149,6 +149,8 @@ assert.ok(assembled.context.batchContext.currentBatch.completedScenes.length ===
 const summaryTotal = assembled.context.batchContext.currentBatch.completedScenes
   .reduce((sum, item) => sum + String(item.summary || '').length, 0);
 assert.ok(summaryTotal <= 1300, `completed scene summaries capped, got ${summaryTotal}`);
+const sceneTwoSummary = assembled.context.batchContext.currentBatch.completedScenes.find((item) => item.sceneId === 's2');
+assert.ok(sceneTwoSummary.factAnchors.some((item) => item.includes('根脉碎片不可带出港口')), 'mid-scene world rule must survive as fact anchor');
 
 // Style exemplar 3k-4k when source long enough
 assert.ok(assembled.context.styleExemplar);

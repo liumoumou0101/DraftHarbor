@@ -1708,14 +1708,14 @@
 
 .desktop-native-generation-output-header strong {
     display: block;
-    color: var(--desktop-text);
+    color: #fffdf7;
     font-size: 13px;
 }
 
 .desktop-native-generation-output-header span {
     display: block;
     margin-top: 3px;
-    color: var(--desktop-muted);
+    color: #d5dbe5;
     font-size: 12px;
     line-height: 1.45;
 }

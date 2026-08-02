@@ -3,7 +3,7 @@
     else root.DraftHarborWorkflowQualityMetrics = factory();
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     const TECHNICAL_REGISTER_MODES = Object.freeze(['off', 'avoid', 'allow']);
-    const FULFILLMENT_STATUSES = Object.freeze(['fulfilled', 'deferred', 'unfulfilled', 'exempt']);
+    const FULFILLMENT_STATUSES = Object.freeze(['fulfilled', 'deferred', 'unfulfilled', 'exempt', 'unverified']);
     const DEFAULT_TECHNICAL_PATTERNS = Object.freeze([
         /自动生成(?:约束)?系统/g,
         /约束系统检测到/g,
@@ -351,6 +351,22 @@
         return findings;
     }
 
+    function planFulfillmentChecklist(scenePlan = {}) {
+        const scenes = Array.isArray(scenePlan.scenes) ? scenePlan.scenes : [];
+        const checklist = [];
+        for (const scene of scenes) {
+            const sceneId = clean(scene && (scene.id || scene.sceneId));
+            if (!sceneId) continue;
+            (Array.isArray(scene.mustInclude) ? scene.mustInclude : []).forEach((item, index) => {
+                const expected = clean(item);
+                if (expected) checklist.push({ sceneId, field: `mustInclude[${index}]`, expected });
+            });
+            const outcome = clean(scene.outcome);
+            if (outcome) checklist.push({ sceneId, field: 'outcome', expected: outcome });
+        }
+        return checklist;
+    }
+
     function evaluatePlanFulfillment(input = {}) {
         const planScenes = input.scenePlan && Array.isArray(input.scenePlan.scenes)
             ? input.scenePlan.scenes
@@ -374,16 +390,10 @@
             });
         }
         const results = [];
-        for (const scene of planScenes) {
-            const sceneId = clean(scene.id || scene.sceneId);
-            const fields = [];
-            if (Array.isArray(scene.mustInclude)) {
-                scene.mustInclude.forEach((item, index) => {
-                    fields.push({ field: `mustInclude[${index}]`, expected: clean(item) });
-                });
-            }
-            if (clean(scene.outcome)) fields.push({ field: 'outcome', expected: clean(scene.outcome) });
-            for (const entry of fields) {
+        const checklist = planFulfillmentChecklist({ scenes: planScenes });
+        for (const check of checklist) {
+            const sceneId = check.sceneId;
+            const entry = { field: check.field, expected: check.expected };
                 // Exact field match only. Do not map sceneId::outcome onto mustInclude[*].
                 const semanticHit = byKey.get(`${sceneId}::${entry.field}`);
                 if (semanticHit && clean(semanticHit.field) === entry.field) {
@@ -403,21 +413,20 @@
                     sceneId,
                     field: entry.field,
                     expected: entry.expected,
-                    status: weakFulfilled ? 'fulfilled' : 'unfulfilled',
+                    status: weakFulfilled ? 'fulfilled' : 'unverified',
                     evidence: weakFulfilled
                         ? '确定性弱信号：关键词部分命中（需语义审查确认）'
-                        : '确定性弱信号：未找到足够关键词；不得单独作为硬阻断',
+                        : '确定性弱信号：未找到足够关键词，等待语义审查确认；不得据此判定未兑现',
                     source: 'deterministic-weak-signal'
                 });
-            }
         }
         return results;
     }
 
     function planFulfillmentFindings(fulfillment = [], options = {}) {
         const locked = options.planOutcomeLocked === true;
-        return fulfillment
-            .filter((item) => item && item.status && item.status !== 'fulfilled' && item.status !== 'exempt')
+        const actionable = fulfillment
+            .filter((item) => item && item.status && !['fulfilled', 'exempt', 'unverified'].includes(item.status))
             .map((item) => ({
                 type: item.status === 'deferred' ? 'plan_outcome_deferred' : 'plan_outcome_unfulfilled',
                 severity: item.status === 'deferred'
@@ -437,6 +446,21 @@
                     ? `结果可能延迟到后场 ${item.deferredToSceneId || ''}`.trim()
                     : '确认本场是否兑现计划结果；可豁免、调整计划，或锁定必达后要求修复。'
             }));
+        const unverified = fulfillment.filter((item) => item && item.status === 'unverified');
+        if (unverified.length) {
+            actionable.push({
+                type: 'plan_fulfillment_review_incomplete',
+                severity: 'info',
+                enforcement: 'soft',
+                source: 'deterministic-weak-signal',
+                metricId: 'plan_fulfillment',
+                fulfillment: 'unverified',
+                exemptable: false,
+                evidence: `${unverified.length} 项计划要求尚未获得逐项语义审查`,
+                suggestion: '补全语义审查后再判断是否需要修改正文。'
+            });
+        }
+        return actionable;
     }
 
     function isBlockingFinding(finding = {}) {
@@ -573,9 +597,19 @@
         const instructed = normalizeQualityTargets(writingInstructions.qualityTargets || {}).foreshadowingThreads;
         const byId = new Map();
 
+        const authoritativeMustCloseIds = new Set([
+            ...prevThreads.map((item) => normalizeThreadEntry(item)).filter(Boolean).filter((item) => item.mustClose).map((item) => item.threadId),
+            ...instructed.map((item) => normalizeThreadEntry(item)).filter(Boolean).filter((item) => item.mustClose).map((item) => item.threadId)
+        ]);
+
         function upsert(raw, options = {}) {
             const incoming = normalizeThreadEntry(raw);
             if (!incoming) return;
+            // Semantic review may discover hooks, but it cannot promote a new hook to a
+            // hard must-close obligation. That authority belongs to persisted/user targets.
+            if (options.semantic && !authoritativeMustCloseIds.has(incoming.threadId)) {
+                incoming.mustClose = false;
+            }
             // User-configured foreshadowing rows default to open only when the thread is new.
             if (options.instructed && !options.forceStatus) {
                 // Keep status from raw when provided; otherwise leave blank so merge can default.
@@ -599,7 +633,7 @@
         }
 
         prevThreads.forEach((item) => upsert(item));
-        semanticThreads.forEach((item) => upsert(item));
+        semanticThreads.forEach((item) => upsert(item, { semantic: true }));
         // Instructed threads must not reopen already-closed ledger entries.
         instructed.forEach((thread) => upsert(thread, { instructed: true }));
 
@@ -652,7 +686,8 @@
             'direction_literal_absent',
             'direction_missing',
             'caution_term_hit',
-            'thread_allowed_open'
+            'thread_allowed_open',
+            'plan_fulfillment_review_incomplete'
         ]);
         const systemHard = new Set([
             'process_label_leak',
@@ -684,6 +719,7 @@
         measureTechnicalRegister,
         measureProseMetrics,
         buildQualityFindings,
+        planFulfillmentChecklist,
         evaluatePlanFulfillment,
         planFulfillmentFindings,
         isBlockingFinding,

@@ -1,3 +1,15 @@
+    function nativeAssistantPanelGroup(panel) {
+        return {
+            generate: 'writing',
+            rewrite: 'writing',
+            characters: 'context',
+            context: 'context',
+            metadata: 'document',
+            structure: 'document',
+            search: 'document',
+            history: 'document'
+        }[panel] || 'writing';
+    }
     function nativeEditorElements() {
         return {
             root: document.querySelector('[data-native-writer]'),
@@ -24,6 +36,7 @@
             paperStatus: document.querySelector('[data-native-paper-status]'),
             editorBody: document.querySelector('.desktop-native-editor-body'),
             editor: document.querySelector('[data-native-scene-editor]'),
+            generationLayer: document.querySelector('[data-native-generation-layer]'), generationLayerContent: document.querySelector('[data-native-generation-layer-content]'),
             contextMenu: document.querySelector('[data-native-context-menu]'),
             contextSelectionActions: document.querySelector('[data-native-context-selection-actions]'),
             contextViewSummary: document.querySelector('[data-native-context-action="view-summary"]'),
@@ -53,6 +66,7 @@
             toggleOutline: document.querySelector('[data-native-toggle-outline]'),
             toggleAssistant: document.querySelector('[data-native-toggle-assistant]'),
             assistantPlacement: document.querySelector('[data-native-assistant-placement]'),
+            assistantGroupTabs: Array.from(document.querySelectorAll('[data-native-assistant-group]')),
             toggleSpecials: document.querySelector('[data-native-toggle-specials]'),
             specials: document.querySelector('[data-native-specials]'),
             specialButtons: Array.from(document.querySelectorAll('[data-native-special-char]')),
@@ -91,8 +105,8 @@
             previewPrompt: document.querySelector('[data-native-preview-prompt]'),
             generate: document.querySelector('[data-native-generate]'),
             cancelGeneration: document.querySelector('[data-native-cancel-generation]'),
-            generationOutput: document.querySelector('[data-native-generation-output]'),
-            generationOutputStatus: document.querySelector('[data-native-generation-output-status]'),
+            generationOutput: document.querySelector('[data-native-generation-output]'), generationOutputStatus: document.querySelector('[data-native-generation-output-status]'),
+            generationOutputDragHandle: document.querySelector('[data-native-generation-drag-handle]'),
             generationResult: document.querySelector('[data-native-generation-result]'),
             reasoning: document.querySelector('[data-native-reasoning]'),
             reasoningText: document.querySelector('[data-native-reasoning-text]'),
@@ -553,6 +567,12 @@
         elements.panelTabs.forEach((tab) => {
             tab.classList.toggle('is-active', tab.dataset.nativePanelTab === nativeEditorState.assistantPanel);
         });
+        const activeAssistantGroup = nativeAssistantPanelGroup(nativeEditorState.assistantPanel);
+        elements.assistantGroupTabs.forEach((tab) => {
+            const isActive = tab.dataset.nativeAssistantGroup === activeAssistantGroup;
+            tab.classList.toggle('is-active', isActive);
+            tab.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
         elements.panels.forEach((panel) => {
             panel.classList.toggle('is-active', panel.dataset.nativePanel === nativeEditorState.assistantPanel);
         });
@@ -827,7 +847,11 @@
         if (elements.addScene) elements.addScene.disabled = !activeChapterId;
         if (elements.renameScene) elements.renameScene.disabled = !activeScene;
         if (elements.deleteScene) elements.deleteScene.disabled = !activeScene || scenes.length <= 1;
-        const siblingScenes = activeScene ? scenes.filter((scene) => scene.chapterId === activeScene.chapterId) : [];
+        const siblingScenes = activeScene
+            ? scenes
+                .filter((scene) => scene.chapterId === activeScene.chapterId)
+                .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+            : [];
         const activeIndex = activeScene ? siblingScenes.findIndex((scene) => scene.id === activeScene.id) : -1;
         if (elements.moveSceneUp) elements.moveSceneUp.disabled = activeIndex <= 0;
         if (elements.moveSceneDown) elements.moveSceneDown.disabled = activeIndex < 0 || activeIndex >= siblingScenes.length - 1;
@@ -882,7 +906,7 @@
             inlineBaseText: '',
             insertionStart: 0,
             insertionEnd: 0,
-            pendingSceneId: '',
+            pendingSceneId: '', pendingEditorChanged: false,
             task: 'fiction-prose'
         };
         compendiumState.entries = Array.isArray(nativeEditorState.snapshot.compendium) ? nativeEditorState.snapshot.compendium : [];

@@ -94,7 +94,10 @@
         searchMatchIndex: -1,
         searchMatchPositions: [],
         assistantPanel: 'generate',
-        assistantPlacement: 'right',
+        // The writer opens with Copilot as a bottom dock so the main writing
+        // surface keeps its width. A user-selected placement is restored by
+        // shell-bootstrap and can still be toggled from the editor toolbar.
+        assistantPlacement: 'bottom',
         typographyOpen: false,
         editorPrefs: {
             fontSize: 18,

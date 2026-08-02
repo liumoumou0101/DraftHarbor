@@ -5,8 +5,8 @@
     const DEFAULT_BUDGETS = Object.freeze({
         lastSceneEnding: 1200,
         previousBatchEnding: 800,
-        completedScenesTotal: 1200,
-        completedSceneEach: 200,
+        completedScenesTotal: 1800,
+        completedSceneEach: 450,
         styleExemplarMin: 3000,
         styleExemplarMax: 4000,
         rolling: 3000,
@@ -394,11 +394,34 @@
         };
     }
 
+    function extractContinuityFactAnchors(text, maxChars = 240) {
+        const source = clean(text);
+        if (!source) return [];
+        const markers = /(?:必须|不得|不能|不可|不许|只能|除非|规则|契约|期限|代价|抵押|失去|名字|身份|永久|无法|仍然|已经|若|如果)/;
+        const sentences = source
+            .split(/(?<=[。！？!?；;])|\n+/)
+            .map(clean)
+            .filter((sentence) => sentence.length >= 6 && markers.test(sentence));
+        const anchors = [];
+        let used = 0;
+        for (const sentence of sentences) {
+            const value = sentence.slice(0, Math.min(140, maxChars - used));
+            if (!value || anchors.includes(value)) continue;
+            anchors.push(value);
+            used += value.length;
+            if (used >= maxChars || anchors.length >= 4) break;
+        }
+        return anchors;
+    }
+
     function buildCompletedSceneSummaries(completedScenes, budgets) {
         const items = list(completedScenes).map((item, index) => ({
             sceneId: clean(item && item.sceneId, `scene-${index + 1}`),
             title: clean(item && item.title, `场景 ${index + 1}`),
-            ending: clean(item && item.ending)
+            ending: clean(item && item.ending),
+            factAnchors: list(item && item.factAnchors).map(clean).filter(Boolean).length
+                ? list(item.factAnchors).map(clean).filter(Boolean)
+                : extractContinuityFactAnchors(item && (item.text || item.content), 260)
         })).filter((item) => item.sceneId);
         if (!items.length) return { summaries: [], lastSceneEnding: '', trims: [] };
 
@@ -411,9 +434,16 @@
         const summaries = items.map((item, index) => {
             const isLast = index === items.length - 1;
             const cap = isLast ? Math.min(budgets.completedSceneEach, Math.max(per, 120)) : per;
+            const anchorBudget = Math.min(Math.floor(cap * 0.55), 260);
+            let factAnchors = item.factAnchors;
+            while (jsonSize(factAnchors) > anchorBudget && factAnchors.length > 1) factAnchors.pop();
+            if (factAnchors.length === 1 && factAnchors[0].length > anchorBudget) {
+                factAnchors = [factAnchors[0].slice(0, anchorBudget)];
+            }
+            const endingCap = Math.max(80, cap - factAnchors.join('').length);
             let tip = item.ending;
-            if (tip.length > cap) {
-                tip = tip.slice(-cap);
+            if (tip.length > endingCap) {
+                tip = tip.slice(-endingCap);
                 trims.push({
                     slot: `completedScenes[${index}]`,
                     beforeChars: item.ending.length,
@@ -425,6 +455,8 @@
             return {
                 sceneId: item.sceneId,
                 title: item.title,
+                factAnchors,
+                endingSummary: tip,
                 summary: tip
             };
         });
@@ -701,6 +733,7 @@
         digestBlueprint,
         selectCompendiumEntries,
         trimRollingState,
+        extractContinuityFactAnchors,
         buildCompletedSceneSummaries,
         buildStyleExemplar,
         assembleContext,

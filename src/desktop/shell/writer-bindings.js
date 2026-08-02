@@ -2,6 +2,8 @@
         const elements = nativeEditorElements();
         if (typeof bindNativeSidebarResize === 'function') bindNativeSidebarResize();
         if (typeof bindNativeGlobalPrompt === 'function') bindNativeGlobalPrompt();
+        if (typeof window.bindNativeGenerationOutputDrag === 'function') window.bindNativeGenerationOutputDrag();
+        if (typeof window.bindNativeGenerationLayer === 'function') window.bindNativeGenerationLayer();
         if (elements.saveButton) {
             elements.saveButton.addEventListener('click', () => {
                 saveNativeScene();
@@ -27,6 +29,8 @@
             elements.assistantPlacement.addEventListener('click', () => {
                 nativeEditorState.assistantPlacement = nativeEditorState.assistantPlacement === 'bottom' ? 'right' : 'bottom';
                 try { window.localStorage.setItem('draftharbor:nativeAssistantPlacement', nativeEditorState.assistantPlacement); } catch (error) { /* ignore */ }
+                const assistantResizer = document.querySelector('[data-native-resize-assistant]');
+                if (assistantResizer) assistantResizer.setAttribute('aria-orientation', nativeEditorState.assistantPlacement === 'bottom' ? 'horizontal' : 'vertical');
                 renderNativeEditor();
             });
         }
@@ -138,6 +142,21 @@
                 }
             });
         });
+        const assistantGroupDefaults = {
+            writing: 'generate',
+            context: 'characters',
+            document: 'metadata'
+        };
+        elements.assistantGroupTabs.forEach((tab) => {
+            tab.addEventListener('click', () => {
+                const group = tab.dataset.nativeAssistantGroup || 'writing';
+                nativeEditorState.assistantPanel = assistantGroupDefaults[group] || 'generate';
+                renderNativeEditor();
+                if (nativeEditorState.assistantPanel === 'metadata' && typeof loadSummaryPrompts === 'function') {
+                    loadSummaryPrompts();
+                }
+            });
+        });
         if (elements.search) {
             elements.search.addEventListener('input', () => {
                 nativeEditorState.searchQuery = elements.search.value;
@@ -154,6 +173,7 @@
                 applyNativeAutoReplace();
                 markNativeDirty();
                 if (nativeEditorState.searchQuery.trim()) updateNativeSearchMatchState();
+                if (typeof window.syncNativeGenerationLayer === 'function') window.syncNativeGenerationLayer();
             });
             ['select', 'mouseup', 'keyup'].forEach((eventName) => {
                 elements.editor.addEventListener(eventName, renderNativeRewrite);
