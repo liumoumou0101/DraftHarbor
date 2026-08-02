@@ -288,6 +288,36 @@
         return ensureWorkflowLockDraft().qualityTargets || defaultWorkflowQualityTargets();
     };
 
+    /**
+     * Client-side mirror of QualityMetrics.allowedFindingLockActions.
+     * Keep in sync with src/core/workflow/workflow-quality-metrics.js.
+     */
+    window.workflowFindingLockActions = function workflowFindingLockActions(finding = {}) {
+        const type = String(finding.type || '').trim();
+        const enforcement = String(finding.enforcement || '').trim().toLowerCase();
+        if (finding.exempted === true) return [];
+        const softOnly = new Set([
+            'dialogue_ratio_below_target',
+            'dialogue_ratio_above_target',
+            'direction_literal_absent',
+            'direction_missing',
+            'caution_term_hit',
+            'thread_allowed_open'
+        ]);
+        const systemHard = new Set([
+            'process_label_leak',
+            'prompt_metadata_leak',
+            'prompt_instruction_leak',
+            'unexpected_markdown_title',
+            'scene_boundary_repetition',
+            'outline_mismatch'
+        ]);
+        if (softOnly.has(type)) return ['disable', 'exempt'];
+        if (systemHard.has(type)) return ['exempt'];
+        if (enforcement === 'hard') return ['soften', 'disable', 'exempt'];
+        return ['harden', 'disable', 'exempt'];
+    };
+
     window.workflowWritingInstructionsPayload = function workflowWritingInstructionsPayload(elements) {
         const qualityTargets = window.workflowQualityTargetsFromElements();
         const text = elements && elements.creationWritingInstructions

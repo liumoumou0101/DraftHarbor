@@ -164,7 +164,6 @@
             writerSamplingHint: document.querySelector('[data-native-sampling-hint]')
         };
     }
-
     function nativeSceneContent(sceneId) {
         const snapshot = nativeEditorState.snapshot;
         if (!snapshot || !snapshot.sceneContents) return '';
@@ -484,7 +483,21 @@
                 .filter((scene) => scene.chapterId === chapter.id)
                 .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
                 .forEach((scene, index) => { scene.order = index; });
+            chapter.sceneIds = (snapshot.scenes || [])
+                .filter((scene) => scene.chapterId === chapter.id)
+                .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+                .map((scene) => scene.id);
         });
+        snapshot.chapterOrder = (snapshot.chapters || []).map((chapter) => chapter.id);
+        snapshot.sceneOrder = (snapshot.chapters || []).flatMap((chapter) => chapter.sceneIds || []);
+    }
+    window.normalizeNativeOrders = normalizeNativeOrders;
+
+    /** Outline label: 「第 N 章 · 章名」; keep if title already starts with 第…章. */
+    function formatNativeChapterOutlineTitle(chapter, index) {
+        const raw = String(chapter && chapter.title || '').trim() || `第 ${index + 1} 章`;
+        if (/^第\s*[0-9一二三四五六七八九十百千零〇两]+章/.test(raw)) return raw;
+        return `第 ${index + 1} 章 · ${raw}`;
     }
 
     function currentNativeScene() {
@@ -618,7 +631,7 @@
 
         normalizeNativeOrders();
         const chapters = [...(snapshot.chapters || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
-        const scenes = [...(snapshot.scenes || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+        const scenes = [...(snapshot.scenes || [])];
         if (!nativeEditorState.activeSceneId && scenes[0]) nativeEditorState.activeSceneId = scenes[0].id;
         const activeScene = currentNativeScene();
         const activeSceneChapter = currentNativeChapter(activeScene);
@@ -627,6 +640,13 @@
         const activeChapterId = nativeEditorState.activeChapterId;
         const activeChapter = currentNativeChapterByState();
         const query = nativeEditorState.searchQuery.trim().toLowerCase();
+
+        // Default outline: expand active chapter (and first chapter if none active) so
+        // hierarchy “第N章 · 章名 → 场景列表” is visible; other chapters stay collapsible.
+        if (!nativeEditorState.expandedChapterIds) nativeEditorState.expandedChapterIds = new Set();
+        if (!query && nativeEditorState.expandedChapterIds.size === 0 && activeChapterId) {
+            nativeEditorState.expandedChapterIds.add(activeChapterId);
+        }
 
         if (elements.projectTitle) elements.projectTitle.textContent = project.name || '未命名项目';
         if (elements.projectSource) elements.projectSource.textContent = nativeEditorState.projectSource === 'project-directory' ? '项目目录' : '旧快照';
@@ -643,8 +663,10 @@
 
         if (elements.sceneList) {
             elements.sceneList.replaceChildren();
-            chapters.forEach((chapter) => {
-                const chapterScenes = scenes.filter((scene) => scene.chapterId === chapter.id);
+            chapters.forEach((chapter, chapterIndex) => {
+                const chapterScenes = scenes
+                    .filter((scene) => scene.chapterId === chapter.id)
+                    .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
                 const visibleScenes = chapterScenes.filter((scene) => {
                     if (!query) return true;
                     const haystack = [
@@ -673,10 +695,10 @@
                 chapterLabel.setAttribute('aria-expanded', String(chapterExpanded));
                 chapterLabel.draggable = true;
                 const chapterName = document.createElement('span');
-                chapterName.textContent = chapter.title || '未命名章节';
+                chapterName.textContent = formatNativeChapterOutlineTitle(chapter, chapterIndex);
                 const chapterCount = document.createElement('span');
                 chapterCount.className = 'desktop-native-chapter-count';
-                chapterCount.textContent = `${chapterScenes.length}`;
+                chapterCount.textContent = `${chapterScenes.length} 场`;
                 chapterLabel.append(chapterName, chapterCount);
                 chapterLabel.addEventListener('click', (event) => {
                     event.preventDefault();
@@ -745,14 +767,18 @@
             });
         }
 
-        if (elements.chapterTitle) elements.chapterTitle.textContent = activeChapter ? activeChapter.title : '场景编辑';
+        const activeChapterIndex = Math.max(0, chapters.findIndex((chapter) => chapter.id === (activeChapter && activeChapter.id)));
+        const activeChapterLabel = activeChapter
+            ? formatNativeChapterOutlineTitle(activeChapter, activeChapterIndex)
+            : '场景编辑';
+        if (elements.chapterTitle) elements.chapterTitle.textContent = activeChapterLabel;
         if (elements.sceneTitle && !nativeEditorState.titleEditing) {
             elements.sceneTitle.textContent = activeScene ? (activeScene.title || '未命名场景') : '选择一个场景';
             elements.sceneTitle.contentEditable = 'false';
             elements.sceneTitle.classList.remove('is-editing');
         }
         if (elements.paperHeading) elements.paperHeading.hidden = !activeScene;
-        if (elements.paperChapter) elements.paperChapter.textContent = activeChapter ? activeChapter.title : '场景编辑';
+        if (elements.paperChapter) elements.paperChapter.textContent = activeChapterLabel;
         if (elements.paperTitle) elements.paperTitle.textContent = activeScene ? (activeScene.title || '未命名场景') : '选择一个场景';
         if (elements.editor) {
             elements.editor.disabled = !activeScene;
@@ -1346,53 +1372,4 @@
         }
         renderNativeEditor();
         markNativeDirty(`已替换 ${count} 处`);
-    }
-
-    function projectExportName(extension) {
-        const project = nativeEditorState.snapshot && nativeEditorState.snapshot.project;
-        const base = String(project && project.name ? project.name : 'DraftHarbor Project')
-            .replace(/[\\/:*?"<>|]+/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim() || 'DraftHarbor Project';
-        return `${base}.${extension}`;
-    }
-
-    function buildNativeExport(format) {
-        const snapshot = nativeEditorState.snapshot;
-        if (!snapshot) return '';
-        flushNativeEditorFields();
-        normalizeNativeOrders();
-        const chapters = [...(snapshot.chapters || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
-        const scenes = [...(snapshot.scenes || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
-        const markdown = format === 'markdown';
-        const lines = [];
-        chapters.forEach((chapter) => {
-            lines.push(markdown ? `# ${chapter.title || '未命名章节'}` : (chapter.title || '未命名章节'));
-            scenes.filter((scene) => scene.chapterId === chapter.id).forEach((scene) => {
-                const content = nativeSceneContent(scene.id).trim();
-                if (scene.title) lines.push('', markdown ? `## ${scene.title}` : scene.title);
-                if (content) lines.push('', content);
-            });
-            lines.push('');
-        });
-        return lines.join('\n').replace(/\n{4,}/g, '\n\n\n').trim() + '\n';
-    }
-
-    async function downloadNativeExport(format) {
-        const elements = nativeEditorElements();
-        const projectId = currentProjectId();
-        if (!projectId) {
-            setNativeSaveStatus('没有可导出的项目', 'error');
-            return;
-        }
-        if (nativeEditorState.dirty) {
-            await saveNativeScene();
-        } else {
-            flushNativeEditorFields();
-        }
-        const extensionMap = { markdown: 'md', text: 'txt', html: 'html', epub: 'epub' };
-        const extension = extensionMap[format] || format;
-        const includeSceneTitles = elements.exportIncludeSceneTitles ? elements.exportIncludeSceneTitles.checked : true;
-        triggerDownload(`/api/export-project-document?${new URLSearchParams({ projectId, format, includeSceneTitles }).toString()}`);
-        setNativeSaveStatus(`已开始导出 ${extension.toUpperCase()}`, 'ok');
     }

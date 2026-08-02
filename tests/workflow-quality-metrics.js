@@ -124,6 +124,87 @@ assert.strictEqual(ledger.schemaVersion, 2);
 assert.ok(ledger.threadLedger.length >= 3);
 assert.ok(ledger.unresolvedThreads.some((item) => item.label.includes('幼狼') || item.label.includes('爪痕')));
 
+// Closed threads must not reopen when semantic/user config re-emits the same id as open.
+const closedPreserved = Quality.normalizeThreadLedger(
+  {
+    threadLedger: [{
+      threadId: 'thread-claw',
+      label: '幼狼爪痕',
+      status: 'closed',
+      mustClose: true,
+      firstSeen: { sceneId: 's1' },
+      lastAdvanced: { sceneId: 's2' },
+      evidence: '已在二场回收'
+    }]
+  },
+  {
+    unresolvedThreads: [{
+      threadId: 'thread-claw',
+      label: '幼狼爪痕（语义重开）',
+      status: 'open',
+      evidence: 'AI 又把它标成 open'
+    }]
+  },
+  {
+    qualityTargets: {
+      foreshadowingThreads: [{ threadId: 'thread-claw', label: '幼狼爪痕', mustClose: true }]
+    }
+  }
+);
+const claw = closedPreserved.threadLedger.find((item) => item.threadId === 'thread-claw');
+assert.ok(claw, 'closed thread should remain in ledger');
+assert.strictEqual(claw.status, 'closed');
+assert.deepStrictEqual(claw.firstSeen, { sceneId: 's1' });
+assert.deepStrictEqual(claw.lastAdvanced, { sceneId: 's2' });
+assert.ok(claw.mustClose === true);
+assert.ok(!closedPreserved.unresolvedThreads.some((item) => item.threadId === 'thread-claw'));
+
+// outcome semantic must not blanket-apply to missing mustInclude fields
+const outcomeOnly = Quality.evaluatePlanFulfillment({
+  scenePlan: {
+    scenes: [
+      { id: 's9', outcome: '打开隐藏门', mustInclude: ['主动与狼交易', '保留乳名'] }
+    ]
+  },
+  sceneTexts: {
+    s9: '她走进森林，什么交易也没有发生。'
+  },
+  semanticFulfillment: [
+    {
+      sceneId: 's9',
+      field: 'outcome',
+      status: 'deferred',
+      deferredToSceneId: 's10',
+      evidence: '开门推迟'
+    }
+  ]
+});
+assert.ok(outcomeOnly.some((item) => item.field === 'outcome' && item.status === 'deferred' && item.source === 'ai-semantic-review'));
+assert.ok(outcomeOnly.filter((item) => item.field.startsWith('mustInclude')).every((item) => item.source === 'deterministic-weak-signal'));
+assert.ok(!outcomeOnly.some((item) => item.field.startsWith('mustInclude') && item.status === 'deferred'));
+
+// banned term findings carry constraintId for lock persistence
+const bannedFindings = Quality.buildQualityFindings({
+  text: '她被指控精神失常。',
+  qualityTargets: { bannedTerms: ['精神失常'] }
+});
+const bannedHit = bannedFindings.find((item) => item.type === 'banned_term_hit');
+assert.ok(bannedHit);
+assert.strictEqual(bannedHit.term, '精神失常');
+assert.ok(bannedHit.constraintId && bannedHit.constraintId.includes('精神失常'));
+
+// soft-only findings never expose harden
+assert.deepStrictEqual(
+  Quality.allowedFindingLockActions({ type: 'dialogue_ratio_below_target', enforcement: 'soft' }).sort(),
+  ['disable', 'exempt'].sort()
+);
+assert.deepStrictEqual(
+  Quality.allowedFindingLockActions({ type: 'direction_literal_absent', enforcement: 'soft' }).sort(),
+  ['disable', 'exempt'].sort()
+);
+assert.ok(Quality.allowedFindingLockActions({ type: 'banned_term_hit', enforcement: 'soft' }).includes('harden'));
+assert.ok(Quality.allowedFindingLockActions({ type: 'technical_register_drift', enforcement: 'hard' }).includes('soften'));
+
 // Legacy blocking: error without enforcement still blocks
 assert.strictEqual(Quality.isBlockingFinding({ severity: 'error' }), true);
 assert.strictEqual(Quality.isBlockingFinding({ severity: 'error', enforcement: 'soft' }), false);

@@ -40,7 +40,16 @@
     }
 
     function countTextCharacters(value) {
+        // Raw diagnostic length (trim + code units). Product body stats live in project-stats.countBodyStats.
         return clean(value).length;
+    }
+
+    function countBodyStatsCharacters(value) {
+        const text = clean(value);
+        if (!text) return 0;
+        const cjk = text.match(/[\u3400-\u9fff]/g) || [];
+        const latin = text.replace(/[\u3400-\u9fff]/g, ' ').match(/[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)*/g) || [];
+        return cjk.length + latin.length;
     }
 
     function artifactRef(input = {}, options = {}) {
@@ -90,8 +99,12 @@
             draftRefs,
             reviewRef: compactRef(input.reviewRef),
             rollingStateRef: compactRef(input.rollingStateRef),
+            // Legacy raw character fields — never rewrite historical values when reading old revisions.
             batchCharacters: nonNegativeInteger(input.batchCharacters, derivedCharacters),
             cumulativeCharacters: nonNegativeInteger(input.cumulativeCharacters, derivedCharacters),
+            // F-09.6I additive body-stats (library authority). Optional; omit/0 means “derive on read”.
+            batchBodyStatsChars: nonNegativeInteger(input.batchBodyStatsChars, 0),
+            cumulativeBodyStatsChars: nonNegativeInteger(input.cumulativeBodyStatsChars, 0),
             terminationReason: TERMINATION_REASONS.includes(terminationReason) ? terminationReason : '',
             createdAt: clean(input.createdAt),
             completedAt: clean(input.completedAt)
@@ -168,6 +181,7 @@
         TERMINATION_REASONS,
         batchIdForSequence,
         countTextCharacters,
+        countBodyStatsCharacters,
         artifactRef,
         createGenerationBatch,
         validateGenerationBatch,

@@ -65,6 +65,12 @@ async function writeText(projectPath, projectId, runId, artifactId, revisionId, 
     assert.strictEqual(scene.content, '第一场工作流正文。');
     assert.strictEqual(scene.sourceRevisionId, 'draft-r1');
     assert.strictEqual(opened.project.currentSceneId, 'workflow-scene-1', 'first transfer into an empty project should open the generated scene');
+    // createProject seed "第 1 章 / 场景 1" must be pruned after real content lands.
+    assert.ok(!opened.project.scenes.some((item) => item.id === 'scene-1' && !String(item.content || '').trim()),
+      'empty seed scene must be removed after workflow transfer');
+    assert.ok(opened.project.chapters.every((chapter) => (chapter.sceneIds || []).length > 0),
+      'empty seed chapter must not remain after workflow transfer');
+    assert.ok(opened.project.chapters.some((chapter) => chapter.title === '工作流章节'));
 
     const updatePreview = await Transfer.previewWriterTransfer({
       dataRoot, projectId: project.id, runId, scenes: [{

@@ -359,6 +359,16 @@ function createController(dependencies) {
     return true;
   }
 
+  if (workflowCreationGuidedService && request.method === 'POST' && parsedUrl.pathname === '/api/workflows/v2/preview-chapter-assembly') {
+    try {
+      const payload = await readJsonPayload(request);
+      jsonResponse(response, 200, await workflowCreationGuidedService.previewChapterAssembly({ ...payload, dataRoot }));
+    } catch (error) {
+      jsonResponse(response, 400, { ok: false, error: error.message });
+    }
+    return true;
+  }
+
   if (workflowCreationGuidedService && request.method === 'POST' && parsedUrl.pathname === '/api/workflows/v2/continue-creation-batch') {
     try {
       const payload = await readJsonPayload(request);

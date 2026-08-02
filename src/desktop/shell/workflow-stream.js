@@ -20,6 +20,7 @@
             streamElapsed: document.querySelector('[data-workflow-stream-elapsed]'),
             streamPosition: document.querySelector('[data-workflow-stream-position]'),
             streamModel: document.querySelector('[data-workflow-stream-model]'),
+            streamUsage: document.querySelector('[data-workflow-stream-usage]'),
             streamFollow: document.querySelector('[data-workflow-stream-follow]'),
             streamFollowLabel: document.querySelector('[data-workflow-stream-follow-label]'),
             streamMinimize: document.querySelector('[data-workflow-stream-minimize]')
@@ -79,6 +80,12 @@
             elements.streamPosition.textContent = `${position}${cumulative}`;
         }
         if (elements.streamModel) elements.streamModel.textContent = state.model ? `由 ${state.model} 实时书写` : '';
+        if (elements.streamUsage) {
+            const label = state.usageHint && state.usageHint.label ? String(state.usageHint.label) : '';
+            const safe = label && !/^输入\s*0\s*tokens/.test(label) ? label : '待估算';
+            elements.streamUsage.textContent = safe;
+            elements.streamUsage.dataset.usageSource = (state.usageHint && state.usageHint.source) || '';
+        }
         if (elements.streamFollow) {
             elements.streamFollow.classList.toggle('is-active', !!state.follow);
             elements.streamFollow.setAttribute('aria-pressed', state.follow ? 'true' : 'false');
@@ -147,6 +154,7 @@
         state.follow = true;
         state.collapsed = false;
         state.model = String(options.model || '');
+        state.usageHint = options.usageHint || state.usageHint || null;
         if (workflowStreamTicker) window.clearInterval(workflowStreamTicker);
         workflowStreamTicker = window.setInterval(() => {
             if (!workflowState.streamPreview.visible || ['complete', 'failed'].includes(workflowState.streamPreview.phase)) {
@@ -231,9 +239,17 @@
         });
     };
 
+    function setWorkflowStreamUsageHint(usageHint) {
+        const state = workflowState.streamPreview;
+        if (!state) return;
+        state.usageHint = usageHint || null;
+        if (state.visible) workflowStreamScheduleRender();
+    }
+
     window.beginWorkflowStreamStage = beginWorkflowStreamStage;
     window.appendWorkflowStreamText = appendWorkflowStreamText;
     window.markWorkflowStreamSaving = markWorkflowStreamSaving;
     window.finishWorkflowStreamStage = finishWorkflowStreamStage;
     window.hideWorkflowStreamStage = hideWorkflowStreamStage;
     window.renderWorkflowStreamStage = renderWorkflowStreamStage;
+    window.setWorkflowStreamUsageHint = setWorkflowStreamUsageHint;

@@ -140,6 +140,13 @@ function assertPreparedGlobalContext(prepared, label) {
     assert.strictEqual(prepared.prompts.length, 1);
     assert.strictEqual(prepared.remainingCount, 2);
     assertPreparedGlobalContext(prepared, 'draft');
+    assert.ok(prepared.contextReport, 'F-09.6J draft prepare should expose contextReport');
+    assert.ok(prepared.usageHint && prepared.usageHint.label, 'F-09.6J draft prepare should expose usageHint label');
+    assert.ok(prepared.usageHint.source === 'estimate' || prepared.usageHint.source === 'provider' || prepared.usageHint.source === 'unavailable');
+    assert.ok(!String(prepared.usageHint.label).includes('0 tokens（接口'), 'must not fake zero provider tokens');
+    assert.ok(prepared.contextReport.assembledChars <= prepared.contextReport.rawChars, 'assembled context should not exceed raw dump');
+    const firstDraftPayload = JSON.parse(prepared.prompts[0].prompt.messages[1].content);
+    assert.ok(firstDraftPayload.selectedDirection, 'draft prepare must merge directions into selectedDirection (assembly keeps directions)');
     await Creation.completeCreationNode({
       ...base,
       outputs: ['苏晚穿过灌满海水的闸门。'],
@@ -153,6 +160,7 @@ function assertPreparedGlobalContext(prepared, label) {
     assert.strictEqual(prepared.prompts[0].outputIndex, 1);
     const secondDraftPayload = JSON.parse(prepared.prompts[0].prompt.messages[1].content);
     assert.ok(secondDraftPayload.batchContext.currentBatch.lastSceneEnding.includes('闸门'));
+    assert.ok(secondDraftPayload.selectedDirection, 'second draft scene must still merge selectedDirection');
     await Creation.completeCreationNode({
       ...base,
       outputs: ['档案馆里保存着她的死亡记录。场景 6-1 的计划要求已经完成。'],
@@ -207,7 +215,16 @@ function assertPreparedGlobalContext(prepared, label) {
       ...base,
       outputs: [JSON.stringify({
         summary: '过程标签已清理',
-        findings: [{ type: 'motivation_gap', severity: 'medium', sceneId: 'archive', evidence: '仍可补强', suggestion: '后续推进' }]
+        findings: [{ type: 'motivation_gap', severity: 'medium', sceneId: 'archive', evidence: '仍可补强', suggestion: '后续推进' }],
+        continuityState: {
+          summary: '过程标签已清理，副本已入内层。',
+          lastEnding: '档案馆里保存着她的死亡记录，她把副本藏进潜水服内层。',
+          characterStates: { 苏晚: { status: '持副本' } },
+          knownFacts: ['死亡记录已取出'],
+          unresolvedThreads: [
+            { threadId: 'death-record-copy', label: '死亡记录副本', status: 'open', mustClose: true, evidence: '藏进潜水服内层' }
+          ]
+        }
       })]
     });
     details = await Creation.getCreationRun(dataRoot, created.project.id, base.runId);
@@ -264,11 +281,29 @@ function assertPreparedGlobalContext(prepared, label) {
 
     prepared = await Creation.prepareCreationNode(base);
     assert.strictEqual(prepared.nodeId, 'plan');
+    assert.ok(prepared.contextReport, 'F-09.6J plan prepare should expose contextReport');
+    assert.ok(prepared.usageHint && prepared.usageHint.label);
     const secondPlanPayload = JSON.parse(prepared.prompts[0].prompt.messages[1].content);
     assert.strictEqual(secondPlanPayload.batchContext.sequence, 2);
     assert.strictEqual(secondPlanPayload.batchContext.userInstruction, '下一批增加主角主动选择，并减少解释。');
-    assert.ok(secondPlanPayload.batchContext.previousBatch.lastSceneEnding.includes('死亡记录'));
-    assert.ok(secondPlanPayload.batchContext.previousBatch.continuityState.summary);
+    // lastSceneEnding may be emptied when identical to rolling lastEnding (dedupe); continuity must still keep the ending.
+    const prevBatch = secondPlanPayload.batchContext.previousBatch;
+    const endingBlob = [
+      prevBatch.lastSceneEnding || '',
+      (prevBatch.continuityState && prevBatch.continuityState.lastEnding) || '',
+      (prevBatch.continuityState && prevBatch.continuityState.summary) || ''
+    ].join('\n');
+    assert.ok(endingBlob.includes('死亡记录'), 'cross-batch continuity keeps ending via rolling or lastSceneEnding');
+    assert.ok(prevBatch.continuityState.summary);
+    const due = secondPlanPayload.batchContext.dueThreads || [];
+    const mustClose = secondPlanPayload.batchContext.mustCloseThreads || [];
+    const openThreads = (prevBatch.continuityState.unresolvedThreads || prevBatch.continuityState.threadLedger || []);
+    assert.ok(
+      due.some((item) => String(item.threadId || item).includes('death-record'))
+        || mustClose.some((item) => String(item.threadId || item).includes('death-record'))
+        || openThreads.some((item) => String(item.threadId || '').includes('death-record')),
+      'due/mustClose threads from previous rolling must survive assembly'
+    );
     assert.ok(secondPlanPayload.writingInstructions.text.includes('第三人称限知'));
     assert.ok(prepared.prompts[0].prompt.messages[0].content.includes('第 2 批'));
     const secondPlan = { scenes: [
@@ -325,6 +360,34 @@ function assertPreparedGlobalContext(prepared, label) {
     await Creation.approveCreationNode(base);
     await Creation.completeCreationNode({ ...base, outputs: [JSON.stringify({ summary: '连续性通过', findings: [] })] });
 
+    const assemblyPreview = await Creation.previewChapterAssembly(base);
+    assert.ok(assemblyPreview.ok);
+    assert.ok(assemblyPreview.assembly.chapters.length >= 1);
+    assert.ok(assemblyPreview.assembly.chapters.every((chapter) => !/^第\s*\d+\s*批/.test(chapter.title)));
+    assert.ok(assemblyPreview.scenes.length >= 4);
+    assert.ok(assemblyPreview.scenes.every((scene) => scene.sceneId && scene.chapterId && scene.source && scene.source.revisionId));
+    assert.ok(assemblyPreview.progress.completedBodyStatsChars > 0 || assemblyPreview.progress.completedCharacters > 0);
+    const renamedAssembly = JSON.parse(JSON.stringify(assemblyPreview.assembly));
+    renamedAssembly.chapters[0].title = '服务端校验后的章名';
+    const renamedPreview = await Creation.previewChapterAssembly({ ...base, assembly: renamedAssembly });
+    assert.strictEqual(renamedPreview.assembly.chapters[0].title, '服务端校验后的章名');
+    const incompleteAssembly = JSON.parse(JSON.stringify(assemblyPreview.assembly));
+    incompleteAssembly.chapters[0].scenes.shift();
+    await assert.rejects(
+      () => Creation.previewChapterAssembly({ ...base, assembly: incompleteAssembly }),
+      /each approved draft exactly once/
+    );
+    const Transfer = require('../desktop/services/workflow-transfer-service');
+    const transferApply = await Transfer.applyWriterTransfer({
+      ...base,
+      applicationId: 'creation-assembly-transfer',
+      scenes: assemblyPreview.scenes
+    });
+    assert.strictEqual(transferApply.ok, true);
+    const afterTransfer = await projectService.openProject(dataRoot, created.project.id);
+    assert.ok(afterTransfer.project.scenes.filter((scene) => scene.sourceRunId).length >= 4);
+    assert.ok(afterTransfer.project.chapters.every((chapter) => !/^第\s*\d+\s*批/.test(chapter.title)));
+
     details = await Creation.completeCreationTransfer({ ...base, applicationId: 'creation-transfer' });
     assert.strictEqual(details.run.status, 'completed');
     assert.strictEqual(details.run.activeNodeId, '');
@@ -334,6 +397,7 @@ function assertPreparedGlobalContext(prepared, label) {
       details.run.generationProgress.completedCharacters,
       details.run.batches.reduce((sum, batch) => sum + batch.batchCharacters, 0)
     );
+    assert.ok(details.run.generationProgress.completedBodyStatsChars > 0);
     assert.strictEqual(details.run.artifacts.filter((artifact) => artifact.nodeId === 'draft').length, 4);
 
     const instructionRun = { dataRoot, projectId: created.project.id, runId: 'creation-instruction-current-run' };

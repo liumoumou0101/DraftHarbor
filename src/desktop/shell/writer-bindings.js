@@ -199,10 +199,10 @@
         if (elements.deleteScene) elements.deleteScene.addEventListener('click', deleteNativeScene);
         if (elements.moveSceneUp) elements.moveSceneUp.addEventListener('click', () => moveNativeScene(-1));
         if (elements.moveSceneDown) elements.moveSceneDown.addEventListener('click', () => moveNativeScene(1));
-        if (elements.exportMarkdown) elements.exportMarkdown.addEventListener('click', () => downloadNativeExport('markdown'));
-        if (elements.exportText) elements.exportText.addEventListener('click', () => downloadNativeExport('text'));
-        if (elements.exportHtml) elements.exportHtml.addEventListener('click', () => downloadNativeExport('html'));
-        if (elements.exportEpub) elements.exportEpub.addEventListener('click', () => downloadNativeExport('epub'));
+        if (elements.exportMarkdown) elements.exportMarkdown.addEventListener('click', () => window.downloadNativeExport('markdown'));
+        if (elements.exportText) elements.exportText.addEventListener('click', () => window.downloadNativeExport('text'));
+        if (elements.exportHtml) elements.exportHtml.addEventListener('click', () => window.downloadNativeExport('html'));
+        if (elements.exportEpub) elements.exportEpub.addEventListener('click', () => window.downloadNativeExport('epub'));
         if (elements.exportPackage) elements.exportPackage.addEventListener('click', downloadNativeProjectPackage);
         if (elements.exportIncludeSceneTitles) elements.exportIncludeSceneTitles.addEventListener('change', saveExportOptions);
         if (elements.beatInput) {

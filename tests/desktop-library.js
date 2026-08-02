@@ -205,16 +205,16 @@ async function submitNativeName(page, value) {
         await page.click('[data-native-panel-tab="structure"]');
         await page.click('[data-native-rename-chapter]');
         await submitNativeName(page, 'Opening Chapter');
-        await page.waitForFunction(() => document.querySelector('[data-native-chapter-title]').textContent === 'Opening Chapter');
+        await page.waitForFunction(() => document.querySelector('[data-native-chapter-title]').textContent === '第 1 章 · Opening Chapter');
         await page.click('[data-native-add-chapter]');
         await submitNativeName(page, 'Disposable Chapter');
-        await page.waitForFunction(() => document.querySelector('[data-native-chapter-title]').textContent === 'Disposable Chapter');
+        await page.waitForFunction(() => document.querySelector('[data-native-chapter-title]').textContent === '第 2 章 · Disposable Chapter');
         page.once('dialog', async (dialog) => {
             assert.strictEqual(dialog.type(), 'confirm');
             await dialog.accept();
         });
         await page.click('[data-native-delete-chapter]');
-        await page.waitForFunction(() => document.querySelector('[data-native-chapter-title]').textContent === 'Opening Chapter');
+        await page.waitForFunction(() => document.querySelector('[data-native-chapter-title]').textContent === '第 1 章 · Opening Chapter');
         await page.click('[data-native-panel-tab="search"]');
         await page.fill('[data-native-search]', 'Second native');
         await page.waitForFunction(() => document.querySelectorAll('[data-native-scene-id]').length === 1);

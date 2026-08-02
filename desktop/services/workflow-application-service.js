@@ -123,6 +123,58 @@ function operationResult(operation, patch) {
   return { ...operation, ...patch, result: patch.result && typeof patch.result === 'object' ? patch.result : operation.result || {} };
 }
 
+function isEmptyPlaceholderScene(scene = {}) {
+  return !String(scene.content || '').trim()
+    && !cleanString(scene.sourceRunId)
+    && !cleanString(scene.sourceArtifactId)
+    && !cleanString(scene.sourceRevisionId);
+}
+
+/**
+ * After workflow transfer creates real scenes, drop createProject seed empties
+ * (e.g. "第 1 章" / "场景 1" with 0 words) so the outline is only narrative chapters.
+ */
+function pruneEmptyPlaceholderStructure(project = {}) {
+  const scenes = Array.isArray(project.scenes) ? project.scenes : [];
+  const chapters = Array.isArray(project.chapters) ? project.chapters : [];
+  const hasContent = scenes.some((scene) => !isEmptyPlaceholderScene(scene));
+  if (!hasContent) return project;
+
+  const removedSceneIds = new Set(
+    scenes.filter((scene) => isEmptyPlaceholderScene(scene)).map((scene) => scene.id)
+  );
+  if (!removedSceneIds.size) return project;
+
+  project.scenes = scenes.filter((scene) => !removedSceneIds.has(scene.id));
+  project.chapters = chapters
+    .map((chapter) => ({
+      ...chapter,
+      sceneIds: (chapter.sceneIds || []).filter((id) => !removedSceneIds.has(id)
+        && project.scenes.some((scene) => scene.id === id))
+    }))
+    .filter((chapter) => (chapter.sceneIds || []).length > 0);
+
+  // If a chapter became empty only because all its scenes were placeholders, drop it.
+  // Also drop chapters that only had placeholders and now have zero scenes.
+  project.chapters.forEach((chapter, index) => {
+    chapter.order = index;
+  });
+  project.scenes.forEach((scene) => {
+    if (!project.chapters.some((chapter) => chapter.id === scene.chapterId) && project.chapters[0]) {
+      scene.chapterId = project.chapters[0].id;
+      if (!project.chapters[0].sceneIds.includes(scene.id)) {
+        project.chapters[0].sceneIds.push(scene.id);
+      }
+    }
+  });
+  project.chapterOrder = project.chapters.map((chapter) => chapter.id);
+  project.sceneOrder = project.scenes.map((scene) => scene.id);
+  if (project.currentSceneId && removedSceneIds.has(project.currentSceneId)) {
+    project.currentSceneId = (project.scenes[0] && project.scenes[0].id) || '';
+  }
+  return project;
+}
+
 async function applyOperation(dataRoot, projectPath, runId, operation) {
   const sourceContent = await artifactStore.readArtifactContent(projectPath, runId, operation.source.sourceArtifactId, operation.source.sourceRevisionId);
   if (operation.kind.startsWith('writer.')) {
@@ -136,8 +188,21 @@ async function applyOperation(dataRoot, projectPath, runId, operation) {
       const chapterData = operation.data.chapter || {};
       let chapter = project.chapters.find((item) => item.id === operation.target.chapterId);
       if (!chapter) {
-        chapter = { id: operation.target.chapterId, title: cleanString(chapterData.title, '未命名章节'), summary: cleanString(chapterData.summary), order: project.chapters.length, sceneIds: [], createdAt: now, updatedAt: now };
+        chapter = {
+          id: operation.target.chapterId,
+          title: cleanString(chapterData.title, '未命名章节'),
+          summary: cleanString(chapterData.summary),
+          order: project.chapters.length,
+          sceneIds: [],
+          createdAt: now,
+          updatedAt: now
+        };
         project.chapters.push(chapter);
+        if (!Array.isArray(project.chapterOrder)) project.chapterOrder = [];
+        if (!project.chapterOrder.includes(chapter.id)) project.chapterOrder.push(chapter.id);
+      } else if (cleanString(chapterData.title) && cleanString(chapterData.title) !== chapter.title) {
+        // Prefer workflow assembly title when writing into an existing chapter shell.
+        chapter.title = cleanString(chapterData.title);
       }
       const sceneData = operation.data.scene || {};
       project.scenes.push({
@@ -156,7 +221,12 @@ async function applyOperation(dataRoot, projectPath, runId, operation) {
       });
       chapter.sceneIds = [...(chapter.sceneIds || []), operation.target.sceneId];
       chapter.updatedAt = now;
+      if (!Array.isArray(project.sceneOrder)) project.sceneOrder = [];
+      if (!project.sceneOrder.includes(operation.target.sceneId)) {
+        project.sceneOrder.push(operation.target.sceneId);
+      }
       if (shouldActivateCreatedScene) project.currentSceneId = operation.target.sceneId;
+      pruneEmptyPlaceholderStructure(project);
     } else {
       const scene = project.scenes.find((item) => item.id === operation.target.sceneId);
       if (!scene) throw new Error(`writer target scene not found: ${operation.target.sceneId}`);
@@ -270,4 +340,11 @@ async function restoreWorkflowApplication(options = {}) {
   return { ok: true, application: restored };
 }
 
-module.exports = { applyWorkflowApplication, restoreWorkflowApplication, buildOperations, ALLOWED_CARD_FIELDS };
+module.exports = {
+  applyWorkflowApplication,
+  restoreWorkflowApplication,
+  buildOperations,
+  ALLOWED_CARD_FIELDS,
+  pruneEmptyPlaceholderStructure,
+  isEmptyPlaceholderScene
+};

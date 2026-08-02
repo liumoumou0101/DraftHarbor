@@ -15,9 +15,23 @@ const STAGES = Object.freeze([
 ]);
 
 const OUTPUT_TYPES = Object.freeze({ plan: 'rewrite-plan@1', rewrite: 'rewrite-text@1', repair: 'rewrite-text@1', review: 'rewrite-review@1' });
+const SOURCE_SNAPSHOT_TYPES = Object.freeze(['writer-source@1', 'reader-source@1']);
 function clean(value, fallback = '') { return String(value === undefined || value === null ? fallback : value).trim(); }
 function id(prefix) { return `${prefix}-${crypto.randomUUID()}`; }
 function latest(artifacts, nodeId) { return artifacts.filter((artifact) => artifact.nodeId === nodeId).slice(-1)[0] || null; }
+
+/** Original snapshot only — never confuse with writing-instructions on the same nodeId. */
+function sourceSnapshotArtifact(artifacts = []) {
+  const list = Array.isArray(artifacts) ? artifacts : [];
+  const byType = list.filter((artifact) => SOURCE_SNAPSHOT_TYPES.includes(clean(artifact && artifact.artifactType)));
+  if (byType.length) return byType[byType.length - 1];
+  return list.find((artifact) => artifact && artifact.id === 'rewrite-source') || null;
+}
+
+function writingInstructionsArtifact(artifacts = []) {
+  const list = Array.isArray(artifacts) ? artifacts : [];
+  return list.filter((artifact) => clean(artifact && artifact.artifactType) === 'workflow-writing-instructions@1').slice(-1)[0] || null;
+}
 
 const runtime = createGuidedRuntime({
   templateId: 'rewrite-guided', stages: STAGES, outputTypes: OUTPUT_TYPES, transferNodeId: 'transfer',
@@ -69,6 +83,7 @@ async function startGuidedRewrite(options = {}) {
     : await inputService.createWriterSourceSnapshot(sourceOptions);
   if (options.writingInstructions && typeof options.writingInstructions === 'object') {
     const CreationGuided = require('./workflow-creation-guided-service');
+    // Keep on source stage for UI listing, but never use as snapshot: look up by artifactType.
     await runtime.writeArtifact(targetPath, {
       projectId,
       runId,
@@ -78,6 +93,7 @@ async function startGuidedRewrite(options = {}) {
       revisionId: id('instructions-r'),
       title: '全局写作指令 / 质量锁',
       summary: '重写运行的全局写作与质量锁',
+      targetRef: { role: 'writing-instructions', internal: false },
       content: CreationGuided.normalizeWritingInstructions(options.writingInstructions),
       format: 'json',
       reviewState: 'approved',
@@ -92,7 +108,8 @@ async function prepareRewriteNode(options = {}) {
   const details = await runtime.getRun(options.dataRoot, options.projectId, options.runId);
   const nodeId = clean(options.nodeId, details.run.activeNodeId);
   if (nodeId !== details.run.activeNodeId) throw new Error(`guided node is not active: ${nodeId}`);
-  const source = latest(details.run.artifacts, 'source');
+  const source = sourceSnapshotArtifact(details.run.artifacts);
+  if (!source) throw new Error('rewrite source snapshot not found');
   const plan = latest(details.run.artifacts, 'plan');
   const rewriteArtifacts = details.run.artifacts.filter((artifact) => artifact.nodeId === 'rewrite');
   if (nodeId === 'review') {
@@ -120,7 +137,8 @@ async function completeRewriteNode(options = {}) {
   if (options.generationFailure) return runtime.recordGenerationFailure(options);
   const details = await runtime.getRun(options.dataRoot, options.projectId, options.runId);
   const nodeId = clean(options.nodeId, details.run.activeNodeId);
-  const source = latest(details.run.artifacts, 'source');
+  const source = sourceSnapshotArtifact(details.run.artifacts);
+  if (!source) throw new Error('rewrite source snapshot not found');
   const planArtifact = latest(details.run.artifacts, 'plan');
   if (nodeId === 'review') {
     const parsed = RewriteService.parseJson((options.outputs || [options.output])[0] || '{}');
@@ -129,7 +147,7 @@ async function completeRewriteNode(options = {}) {
       : [];
     const comparison = details.run.artifacts.find((artifact) => artifact.nodeId === 'repair' && artifact.artifactType === 'rewrite-comparison@1');
     const repaired = details.run.artifacts.filter((artifact) => artifact.nodeId === 'repair' && artifact.artifactType === 'rewrite-text@1');
-    const writing = details.run.artifacts.filter((artifact) => artifact.artifactType === 'workflow-writing-instructions@1').slice(-1)[0];
+    const writing = writingInstructionsArtifact(details.run.artifacts);
     const Review = require('./workflow-review-service');
     const qualityReport = Review.reviewDraft({
       text: repaired.map((artifact) => artifact.content).join('\n\n'),
@@ -187,7 +205,8 @@ async function completeRewriteTransfer(options = {}) {
 }
 
 module.exports = {
-  STAGES, OUTPUT_TYPES, definition, normalizeConstraints, startGuidedRewrite,
+  STAGES, OUTPUT_TYPES, SOURCE_SNAPSHOT_TYPES, definition, normalizeConstraints, startGuidedRewrite,
+  sourceSnapshotArtifact, writingInstructionsArtifact,
   getRewriteRun: runtime.getRun, prepareRewriteNode, completeRewriteNode,
   reviseRewriteArtifact: runtime.reviseArtifact, getRewriteArtifactHistory: runtime.getArtifactHistory, approveRewriteNode: runtime.approveNode,
   completeRewriteTransfer, cancelRewriteRun: runtime.cancelRun,

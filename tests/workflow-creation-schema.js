@@ -66,4 +66,25 @@ assert.strictEqual(bundle.scenePlan.scenes[0].conflictIntensity, 82);
 assert.strictEqual(bundle.scenePlan.scenes[0].targetWords, 4200);
 assert.deepStrictEqual(bundle.scenePlan.scenes[0].mustInclude, ['墓碑']);
 
+const withChapters = Creation.createCreationPackage({
+  brief,
+  blueprint,
+  compendium,
+  scenePlan: {
+    scenes: [{
+      title: '第一次下潜',
+      chapterKey: 'ch-open',
+      chapterTitle: '下潜之前',
+      chapterOrder: 1,
+      chapterBreakBefore: true,
+      goal: '进入潮汐城',
+      conflict: '氧气泄漏',
+      targetWords: 1000
+    }]
+  }
+}, { projectId: 'creation-project' });
+assert.strictEqual(withChapters.scenePlan.scenes[0].chapterKey, 'ch-open');
+assert.strictEqual(withChapters.scenePlan.scenes[0].chapterTitle, '下潜之前');
+assert.strictEqual(withChapters.scenePlan.scenes[0].chapterBreakBefore, true);
+
 console.log('Workflow creation schema test passed.');

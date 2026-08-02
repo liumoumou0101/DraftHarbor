@@ -398,31 +398,27 @@ async function runReviewStage(details, config, metrics) {
   });
 }
 
-async function transferCompletedNovel(details) {
-  const drafts = (details.run.artifacts || []).filter((artifact) =>
-    artifact.nodeId === 'draft'
-    && artifact.revision.reviewState === 'approved'
-  );
-  const scenes = drafts.map((artifact, index) => {
-    const batchSequence = Number(artifact.targetRef?.batchSequence) || 1;
-    return {
-      sceneId: `f096-scene-${String(index + 1).padStart(4, '0')}`,
-      chapterId: `f096-batch-${String(batchSequence).padStart(2, '0')}`,
-      chapterTitle: `第 ${batchSequence} 批`,
-      title: artifact.title,
-      source: {
-        runId: RUN_ID,
-        artifactId: artifact.id,
-        revisionId: artifact.revision.id
-      }
-    };
+async function transferCompletedNovel() {
+  // F-09.6I: use chapter assembly (never default reader chapters to “第 N 批”).
+  const assemblyPreview = await Creation.previewChapterAssembly({
+    dataRoot: DATA_ROOT,
+    projectId: PROJECT_ID,
+    runId: RUN_ID
   });
+  if (!assemblyPreview.ok || !Array.isArray(assemblyPreview.scenes) || !assemblyPreview.scenes.length) {
+    throw new Error('chapter assembly preview is empty');
+  }
+  const badTitle = (assemblyPreview.assembly.chapters || [])
+    .find((chapter) => /^第\s*\d+\s*批/.test(String(chapter.title || '')));
+  if (badTitle) {
+    throw new Error(`chapter assembly still uses batch title: ${badTitle.title}`);
+  }
   await Transfer.applyWriterTransfer({
     dataRoot: DATA_ROOT,
     projectId: PROJECT_ID,
     runId: RUN_ID,
     applicationId: 'f096-real-200k-writer-transfer',
-    scenes
+    scenes: assemblyPreview.scenes
   });
   return Creation.completeCreationTransfer({
     dataRoot: DATA_ROOT,
