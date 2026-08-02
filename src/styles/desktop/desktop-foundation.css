@@ -1865,6 +1865,111 @@ background:
     text-transform: uppercase;
 }
 
+.desktop-workflow-assembly-dialog {
+    width: min(920px, calc(100vw - 48px));
+    max-height: min(88vh, 900px);
+    padding: 0;
+    border: 1px solid var(--desktop-line);
+    border-radius: 12px;
+    background: var(--desktop-panel, #141820);
+    color: var(--desktop-text);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+
+.desktop-workflow-assembly-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.desktop-workflow-assembly-header,
+.desktop-workflow-assembly-actions {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--desktop-line);
+}
+
+.desktop-workflow-assembly-actions {
+    align-items: center;
+    border-bottom: 0;
+    border-top: 1px solid var(--desktop-line);
+    flex-wrap: wrap;
+}
+
+.desktop-workflow-assembly-header h2 {
+    margin: 4px 0 6px;
+    font-size: 18px;
+}
+
+.desktop-workflow-assembly-header p,
+.desktop-workflow-assembly-actions p {
+    margin: 0;
+    color: var(--desktop-muted);
+    font-size: 13px;
+}
+
+.desktop-workflow-assembly-body {
+    display: grid;
+    gap: 12px;
+    padding: 16px 18px;
+    overflow: auto;
+    max-height: min(58vh, 560px);
+}
+
+.desktop-workflow-assembly-chapter {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.desktop-workflow-assembly-chapter-head {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.desktop-workflow-assembly-chapter-head input[type="text"] {
+    width: 100%;
+    min-width: 0;
+}
+
+.desktop-workflow-assembly-chapter-tools,
+.desktop-workflow-assembly-scene-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.desktop-workflow-assembly-scene {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.desktop-workflow-assembly-scene strong {
+    display: block;
+    font-size: 13px;
+}
+
+.desktop-workflow-assembly-scene span {
+    color: var(--desktop-muted);
+    font-size: 12px;
+}
+
+.desktop-workflow-assembly-empty {
+    color: var(--desktop-muted);
+    font-size: 13px;
+}
+
 .desktop-workflow-rewrite-comparisons {
     display: grid;
     gap: 14px;

@@ -24,6 +24,34 @@
         }
         return `${prefix}-${(hash >>> 0).toString(16).padStart(8, '0')}`;
     }
+    window.workflowStableApplicationId = workflowStableApplicationId;
+
+    /**
+     * F-09.6I: load chapter assembly preview and map to writer-transfer scenes.
+     * Chapter rename/reorder can be supplied later via assembly payload; default path is preview-only.
+     */
+    window.buildWorkflowTransferScenesFromAssembly = async function buildWorkflowTransferScenesFromAssembly(projectId, run, assemblyEdits) {
+        const response = await fetch('/api/workflows/v2/preview-chapter-assembly', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId, runId: run.id, assembly: assemblyEdits || undefined })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+        const assembly = result.assembly;
+        if (!assembly || !Array.isArray(assembly.chapters) || !assembly.chapters.length) {
+            throw new Error('章节装配预览为空');
+        }
+        return {
+            scenes: result.scenes,
+            summary: [
+                ...(assembly.chapters || []).map((chapter, index) =>
+                    `${index + 1}. ${chapter.title}（${(chapter.scenes || []).length} 场）`),
+                `正文统计 ${assembly.totals && assembly.totals.bodyStatsChars || 0} · 原始字符 ${assembly.totals && assembly.totals.rawCharacters || 0}`
+            ].join('\n'),
+            assembly
+        };
+    };
 
     window.workflowEventLabel = (type) => ({
         guided_run_created: '流程已创建',
@@ -139,10 +167,16 @@
                     actions.appendChild(button);
                 };
                 if (run && !finding.exempted) {
-                    if (finding.enforcement !== 'hard') appendLockAction('harden', '升为硬锁');
-                    if (finding.enforcement === 'hard') appendLockAction('soften', '降为软锁');
-                    appendLockAction('disable', '关闭此项');
-                    appendLockAction('exempt', '豁免本条');
+                    const allowed = Array.isArray(finding.allowedActions)
+                        ? finding.allowedActions
+                        : (typeof window.workflowFindingLockActions === 'function'
+                            ? window.workflowFindingLockActions(finding)
+                            : null);
+                    const can = (action) => !allowed || allowed.includes(action);
+                    if (can('harden') && finding.enforcement !== 'hard') appendLockAction('harden', '升为硬锁');
+                    if (can('soften') && finding.enforcement === 'hard') appendLockAction('soften', '降为软锁');
+                    if (can('disable')) appendLockAction('disable', '关闭此项');
+                    if (can('exempt')) appendLockAction('exempt', '豁免本条');
                 }
                 const normalizedSeverity = String(finding.severity || '').trim().toLowerCase();
                 if (['error', 'critical', 'major', 'high', '严重', '致命'].includes(normalizedSeverity)) {
@@ -348,7 +382,11 @@
         if (preview.qualityGateBlocked) {
             throw new Error(`质量门禁未通过：当前批次仍有 ${preview.blockingFindingCount || 1} 项阻断问题，请先点击“修复当前批次”并重新审查`);
         }
-        if (!window.confirm(`将开始第 ${preview.nextBatch.sequence} 批。当前已完成 ${preview.progress.completedCharacters}/${preview.progress.targetCharacters || '未设目标'} 字符，是否继续？`)) {
+        const progress = preview.progress || {};
+        const bodyDone = progress.completedBodyStatsChars != null ? progress.completedBodyStatsChars : progress.completedCharacters;
+        const bodyTarget = progress.targetBodyStatsChars != null ? progress.targetBodyStatsChars : progress.targetCharacters;
+        const rawDone = progress.completedRawCharacters != null ? progress.completedRawCharacters : progress.completedCharacters;
+        if (!window.confirm(`将开始第 ${preview.nextBatch.sequence} 批。\n正文统计 ${bodyDone || 0}/${bodyTarget || '未设目标'}（与书库口径一致）\n原始字符 ${rawDone || 0}（诊断）\n是否继续？`)) {
             return;
         }
         workflowState.generating = true;
@@ -386,9 +424,15 @@
         const note = document.createElement('p');
         note.className = 'desktop-workflow-context-note';
         note.dataset.workflowCreationBatchProgress = '';
+        const bodyDone = progress.completedBodyStatsChars != null ? progress.completedBodyStatsChars : progress.completedCharacters;
+        const bodyTarget = progress.targetBodyStatsChars != null ? progress.targetBodyStatsChars : progress.targetCharacters;
+        const rawDone = progress.completedRawCharacters != null ? progress.completedRawCharacters : progress.completedCharacters;
+        const batchBody = active.batchBodyStatsChars != null && active.batchBodyStatsChars > 0
+            ? active.batchBodyStatsChars
+            : active.batchCharacters;
         note.textContent = qualityGateBlocked
             ? `第 ${active.sequence} 批质量门禁未通过：${blockingFindingCount} 项阻断问题。请先修复当前批次并重新审查；继续生成和转入写作区已暂停。`
-            : `第 ${active.sequence} 批已审查 · 本批 ${active.batchCharacters} 字符 · 累计 ${progress.completedCharacters || 0}/${progress.targetCharacters || '未设目标'} 字符`;
+            : `第 ${active.sequence} 批已审查 · 本批正文统计 ${batchBody} · 累计正文统计 ${bodyDone || 0}/${bodyTarget || '未设目标'} · 原始字符 ${rawDone || 0}`;
         const repair = document.createElement('button');
         repair.type = 'button';
         repair.className = 'desktop-secondary-action';
@@ -406,7 +450,11 @@
         next.type = 'button';
         next.className = 'desktop-primary-action';
         next.dataset.workflowCreationContinue = '';
-        next.textContent = progress.targetCharacters && progress.completedCharacters >= progress.targetCharacters ? '仍要继续下一批' : '继续下一批';
+        const reached = (progress.targetBodyStatsChars || progress.targetCharacters)
+            && (progress.completedBodyStatsChars != null
+                ? progress.completedBodyStatsChars >= (progress.targetBodyStatsChars || progress.targetCharacters)
+                : progress.completedCharacters >= progress.targetCharacters);
+        next.textContent = reached ? '仍要继续下一批（目标已达，可写尾声）' : '继续下一批';
         next.disabled = qualityGateBlocked;
         next.addEventListener('click', () => continueCreationFromDecision(run, false).catch((error) => setWorkflowStatus(`继续失败：${error.message || error}`, 'error')));
         container.append(note, repair, adjust, next);

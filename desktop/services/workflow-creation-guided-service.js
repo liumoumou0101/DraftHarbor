@@ -3,6 +3,8 @@ const runStore = require('../storage/workflow-run-store-v2');
 const artifactStore = require('../storage/workflow-artifact-store');
 const CreationSchema = require('../../src/core/workflow/workflow-creation-schema');
 const BatchSchema = require('../../src/core/workflow/workflow-generation-batch-schema');
+const ChapterAssembly = require('../../src/core/workflow/workflow-chapter-assembly');
+const ContextAssembly = require('../../src/core/workflow/workflow-context-assembly');
 const CreationService = require('./workflow-creation-service');
 const Review = require('./workflow-review-service');
 const { createGuidedRuntime } = require('./workflow-guided-runtime-service');
@@ -153,7 +155,14 @@ function decorateCreationRun(run, internalArtifacts) {
   }
   const active = batches.slice().reverse().find((batch) => !['completed', 'cancelled', 'failed'].includes(batch.status))
     || batches[batches.length - 1] || null;
-  const completedCharacters = batches.length ? batches[batches.length - 1].cumulativeCharacters : 0;
+  // Raw length stays on batch.cumulativeCharacters (legacy). Product progress uses body stats.
+  const completedRawCharacters = batches.length ? batches[batches.length - 1].cumulativeCharacters : 0;
+  const drafts = (run.artifacts || []).filter((artifact) => artifact.nodeId === 'draft'
+    && artifact.revision && artifact.revision.reviewState === 'approved'
+    && typeof artifact.content === 'string');
+  const derivedBody = drafts.reduce((sum, artifact) => sum + BatchSchema.countBodyStatsCharacters(artifact.content), 0);
+  const lastBody = batches.length ? Number(batches[batches.length - 1].cumulativeBodyStatsChars) || 0 : 0;
+  const completedBodyStatsChars = lastBody > 0 ? lastBody : derivedBody;
   const brief = latestByType(run.artifacts || [], OUTPUT_TYPES.brief);
   const targetCharacters = batches[0] && batches[0].targetCharacters
     || Number(brief && brief.content && brief.content.targetLength) || 0;
@@ -162,10 +171,15 @@ function decorateCreationRun(run, internalArtifacts) {
     activeBatchId: active ? active.batchId : '',
     batchWarnings: warnings,
     generationProgress: {
-      completedCharacters,
+      // Keep completedCharacters as raw for existing callers/tests; UI should prefer body stats labels.
+      completedCharacters: completedRawCharacters,
       targetCharacters,
-      remainingCharacters: Math.max(0, targetCharacters - completedCharacters),
-      completionRatio: targetCharacters ? Math.min(1, completedCharacters / targetCharacters) : 0
+      remainingCharacters: Math.max(0, targetCharacters - completedBodyStatsChars),
+      completionRatio: targetCharacters ? Math.min(1, completedBodyStatsChars / targetCharacters) : 0,
+      completedBodyStatsChars,
+      completedRawCharacters,
+      targetBodyStatsChars: targetCharacters,
+      remainingBodyStatsChars: Math.max(0, targetCharacters - completedBodyStatsChars)
     }
   };
 }
@@ -323,7 +337,19 @@ async function prepareCreationNode(options = {}) {
       writingInstructionRef.revisionId
     )
     : normalizeWritingInstructions(latestByType(artifacts, WRITING_INSTRUCTIONS_TYPE)?.content);
-  const context = {
+  const allApprovedDrafts = artifacts
+    .filter((artifact) => artifact.nodeId === 'draft'
+      && artifact.revision
+      && artifact.revision.reviewState === 'approved'
+      && typeof artifact.content === 'string'
+      && artifact.content.trim())
+    .map((artifact) => ({
+      sceneId: clean(artifact.targetRef && artifact.targetRef.sceneId, artifact.id),
+      id: artifact.id,
+      title: artifact.title,
+      text: artifact.content
+    }));
+  const fatContext = {
     projectId: options.projectId,
     brief: latestByType(artifacts, OUTPUT_TYPES.brief) && latestByType(artifacts, OUTPUT_TYPES.brief).content,
     writingInstructions,
@@ -340,6 +366,7 @@ async function prepareCreationNode(options = {}) {
     scenePlan: currentBatchArtifact(details.run, 'plan') && currentBatchArtifact(details.run, 'plan').content,
     constraints: details.run.settings.constraints || [],
     fineOutlineEnabled: details.run.settings.fineOutlineEnabled !== false,
+    approvedDrafts: allApprovedDrafts,
     batchContext: {
       batchId: activeBatch && activeBatch.batchId,
       sequence: activeBatch && activeBatch.sequence || 1,
@@ -386,25 +413,84 @@ async function prepareCreationNode(options = {}) {
       }
     }
   };
+
+  // F-09.6J: assemble lean context for plan/draft/review (direction/blueprint/compendium keep fuller raw).
+  const assemblyStage = ['plan', 'draft', 'review'].includes(nodeId) ? nodeId : nodeId;
+  let context = fatContext;
+  let contextReport = null;
+  if (['plan', 'draft', 'review'].includes(nodeId)) {
+    const planForScene = currentBatchArtifact(details.run, 'plan');
+    const planScenes = planForScene && planForScene.content && Array.isArray(planForScene.content.scenes)
+      ? planForScene.content.scenes
+      : [];
+    const completedSceneIdsForDraft = new Set(currentDrafts.map((artifact) => clean(artifact.targetRef && artifact.targetRef.sceneId)));
+    const nextScene = planScenes.find((scene) => !completedSceneIdsForDraft.has(clean(scene.id)));
+    if (nodeId === 'draft' && nextScene) fatContext.currentScene = nextScene;
+    if (nodeId === 'review') {
+      fatContext.drafts = currentBatchArtifacts(details.run, 'draft').map((artifact) => ({
+        sceneId: clean(artifact.targetRef && artifact.targetRef.sceneId),
+        revisionId: artifact.revision.id,
+        title: artifact.title,
+        text: artifact.content
+      }));
+    }
+    const assembled = ContextAssembly.assembleContext(assemblyStage, fatContext);
+    context = assembled.context;
+    contextReport = assembled.report;
+    try {
+      await runtime.appendEvent(
+        runtime.projectPath(options.dataRoot, options.projectId),
+        options.runId,
+        'prompt_context_assembled',
+        nodeId,
+        {
+          stage: assemblyStage,
+          rawChars: contextReport.rawChars,
+          assembledChars: contextReport.assembledChars,
+          estimatedTokensRough: contextReport.estimatedTokensRough,
+          compressionRatio: contextReport.compressionRatio,
+          styleExemplar: contextReport.styleExemplar,
+          selectedCompendiumCount: (contextReport.selectedCompendiumIds || []).length,
+          trimCount: (contextReport.trims || []).length
+        }
+      );
+    } catch (_error) {
+      // Event best-effort; never block generation.
+    }
+  }
+
   if (nodeId === 'review') {
-    const drafts = currentBatchArtifacts(details.run, 'draft');
     return {
-      ok: true, nodeId, outputFormat: 'json', prompts: [{
-        id: 'creation-semantic-review', title: '新作语义连续性审查',
-        prompt: { messages: [
-          { role: 'system', content: '你是严苛的长篇连续性编辑。检查正文对故事蓝图、人物资料、世界规则、场景计划、全局写作指令、必须包含项、人物主动性、对话比例、人物动机、情绪节奏、相邻场景边界和创作过程信息泄漏的遵守情况，并整理供下一批使用的连续性状态。相邻场景边界问题必须区分为 scene_boundary_repetition（重复重演）、previous_scene_overreach（前场越界提前写完下一场）或 scene_state_reset（本场未承接前场结果而重置状态）。计划结果兑现必须写入 planFulfillment：对每个场景的 outcome 与 mustInclude 给出 fulfilled、deferred、unfulfilled 或 exempt，并附 evidence；语义已兑现时不得因缺少原句而判 unfulfilled。unresolvedThreads 优先返回对象 {threadId,label,status,mustClose,evidence}。severity 只能使用 pass、info、suggestion、warning、error、critical；只有明确违反硬约束、结构损坏或严重连续性错误才能标为 error/critical，启发式文风建议必须标为 suggestion/warning。只返回合法 JSON：{summary,findings:[{type,severity,enforcement,sceneId,revisionId,relatedSceneId,relatedRevisionId,sceneTitle,evidence,suggestion}],planFulfillment:[{sceneId,field,status,evidence,deferredToSceneId}],continuityState:{summary,characterStates:{},unresolvedThreads:[],knownFacts:[],lastEnding}}。' },
-          { role: 'user', content: JSON.stringify({ ...context, drafts: drafts.map((artifact) => ({
-            sceneId: clean(artifact.targetRef && artifact.targetRef.sceneId),
-            revisionId: artifact.revision.id,
-            title: artifact.title,
-            text: artifact.content
-          })) }) }
-        ] }
+      ok: true,
+      nodeId,
+      outputFormat: 'json',
+      contextReport,
+      usageHint: contextReport && contextReport.usageHint,
+      prompts: [{
+        id: 'creation-semantic-review',
+        title: '新作语义连续性审查',
+        prompt: {
+          messages: [
+            {
+              role: 'system',
+              content: '你是严苛的长篇连续性编辑。检查正文对故事蓝图、人物资料、世界规则、场景计划、全局写作指令、必须包含项、人物主动性、对话比例、人物动机、情绪节奏、相邻场景边界和创作过程信息泄漏的遵守情况，并整理供下一批使用的连续性状态。相邻场景边界问题必须区分为 scene_boundary_repetition（重复重演）、previous_scene_overreach（前场越界提前写完下一场）或 scene_state_reset（本场未承接前场结果而重置状态）。计划结果兑现必须写入 planFulfillment：对每个场景的 outcome 与 mustInclude 给出 fulfilled、deferred、unfulfilled 或 exempt，并附 evidence；语义已兑现时不得因缺少原句而判 unfulfilled。unresolvedThreads 优先返回对象 {threadId,label,status,mustClose,evidence}。severity 只能使用 pass、info、suggestion、warning、error、critical；只有明确违反硬约束、结构损坏或严重连续性错误才能标为 error/critical，启发式文风建议必须标为 suggestion/warning。只返回合法 JSON：{summary,findings:[{type,severity,enforcement,sceneId,revisionId,relatedSceneId,relatedRevisionId,sceneTitle,evidence,suggestion}],planFulfillment:[{sceneId,field,status,evidence,deferredToSceneId}],continuityState:{summary,characterStates:{},unresolvedThreads:[],knownFacts:[],lastEnding}}。'
+            },
+            { role: 'user', content: JSON.stringify(context) }
+          ]
+        }
       }]
     };
   }
   const prepared = CreationService.prepareCreationStage(nodeId, context);
-  if (nodeId !== 'draft') return { ok: true, nodeId, ...prepared };
+  if (nodeId !== 'draft') {
+    return {
+      ok: true,
+      nodeId,
+      ...prepared,
+      contextReport,
+      usageHint: contextReport && contextReport.usageHint
+    };
+  }
   const plan = currentBatchArtifact(details.run, 'plan');
   const scenes = plan && plan.content && Array.isArray(plan.content.scenes) ? plan.content.scenes : [];
   const completedSceneIds = new Set(currentDrafts.map((artifact) => clean(artifact.targetRef && artifact.targetRef.sceneId)));
@@ -421,7 +507,9 @@ async function prepareCreationNode(options = {}) {
     cumulativeCharacters: details.run.generationProgress.completedCharacters,
     completedCount: completedSceneIds.size,
     totalCount: scenes.length,
-    remainingCount: scenes.length - completedSceneIds.size
+    remainingCount: scenes.length - completedSceneIds.size,
+    contextReport,
+    usageHint: contextReport && contextReport.usageHint
   };
 }
 
@@ -490,9 +578,13 @@ async function syncActiveCreationBatch(options = {}, status, terminationReason =
   const rolling = internal.filter((artifact) => artifact.artifactType === 'rolling-state@1'
     && clean(artifact.targetRef && artifact.targetRef.batchId) === active.batchId).slice(-1)[0];
   const batchCharacters = drafts.reduce((sum, artifact) => sum + BatchSchema.countTextCharacters(artifact.content), 0);
+  const batchBodyStatsChars = drafts.reduce((sum, artifact) => sum + BatchSchema.countBodyStatsCharacters(artifact.content), 0);
   const previousCumulative = (details.run.batches || [])
     .filter((batch) => batch.sequence < active.sequence)
     .reduce((maximum, batch) => Math.max(maximum, batch.cumulativeCharacters), 0);
+  const previousBodyCumulative = (details.run.batches || [])
+    .filter((batch) => batch.sequence < active.sequence)
+    .reduce((maximum, batch) => Math.max(maximum, Number(batch.cumulativeBodyStatsChars) || 0), 0);
   const plannedCharacters = plan && plan.content && Array.isArray(plan.content.scenes)
     ? plan.content.scenes.reduce((sum, scene) => sum + (Number(scene.targetWords) || 0), 0) : active.plannedCharacters;
   await writeCreationBatch({
@@ -507,6 +599,8 @@ async function syncActiveCreationBatch(options = {}, status, terminationReason =
       rollingStateRef: artifactReference(rolling),
       batchCharacters,
       cumulativeCharacters: previousCumulative + batchCharacters,
+      batchBodyStatsChars,
+      cumulativeBodyStatsChars: previousBodyCumulative + batchBodyStatsChars,
       terminationReason,
       completedAt: status === 'completed' ? new Date().toISOString() : ''
     }
@@ -653,9 +747,18 @@ async function previewNextCreationBatch(options = {}) {
   const averageSceneCharacters = active.draftRefs.length
     ? Math.max(1, Math.round(active.batchCharacters / active.draftRefs.length))
     : 3000;
-  const remaining = details.run.generationProgress.remainingCharacters;
+  const remaining = details.run.generationProgress.remainingBodyStatsChars != null
+    ? details.run.generationProgress.remainingBodyStatsChars
+    : details.run.generationProgress.remainingCharacters;
   const suggestedSceneCount = Math.max(1, Math.min(6, Math.ceil(Math.min(remaining || averageSceneCharacters * 4, averageSceneCharacters * 4) / averageSceneCharacters)));
   const blocking = Review.blockingFindings(review && review.content);
+  const progress = details.run.generationProgress || {};
+  const bodyDone = Number(progress.completedBodyStatsChars != null
+    ? progress.completedBodyStatsChars
+    : progress.completedCharacters) || 0;
+  const bodyTarget = Number(progress.targetBodyStatsChars != null
+    ? progress.targetBodyStatsChars
+    : progress.targetCharacters) || 0;
   return {
     ok: true,
     alreadyContinued: false,
@@ -666,9 +769,9 @@ async function previewNextCreationBatch(options = {}) {
       suggestedSceneCount,
       blueprintStage: `承接第 ${active.sequence} 批，推进故事蓝图尚未覆盖的阶段`
     },
-    progress: details.run.generationProgress,
-    targetReached: details.run.generationProgress.targetCharacters > 0
-      && details.run.generationProgress.completedCharacters >= details.run.generationProgress.targetCharacters,
+    progress,
+    // Soft target: body stats authority; never truncates text. Caller may still continue for epilogue.
+    targetReached: bodyTarget > 0 && bodyDone >= bodyTarget,
     qualityGateBlocked: blocking.length > 0,
     blockingFindingCount: blocking.length,
     blockingFindings: blocking,
@@ -855,6 +958,31 @@ async function restartCreationNode(options = {}) {
   return runtime.getRun(options.dataRoot, options.projectId, options.runId);
 }
 
+async function previewChapterAssembly(options = {}) {
+  const details = await runtime.getRun(options.dataRoot, options.projectId, options.runId);
+  const drafts = (details.run.artifacts || []).filter((artifact) => artifact.nodeId === 'draft'
+    && artifact.revision && artifact.revision.reviewState === 'approved');
+  const plans = (details.run.artifacts || []).filter((artifact) => artifact.nodeId === 'plan'
+    && artifact.revision && artifact.revision.reviewState === 'approved');
+  let assembly = ChapterAssembly.buildChapterAssembly({
+    runId: options.runId,
+    drafts,
+    plans
+  });
+  if (options.assembly && typeof options.assembly === 'object') {
+    assembly = ChapterAssembly.reconcileEditedAssembly(assembly, options.assembly);
+  }
+  const scenes = ChapterAssembly.assemblyToTransferScenes(assembly);
+  return {
+    ok: true,
+    projectId: clean(options.projectId),
+    runId: clean(options.runId),
+    assembly,
+    scenes,
+    progress: details.run.generationProgress || {}
+  };
+}
+
 module.exports = {
   STAGES, OUTPUT_TYPES, WRITING_INSTRUCTIONS_TYPE, definition, normalizeConstraints, normalizeWritingInstructions, startGuidedCreation,
   getCreationRun: runtime.getRun, prepareCreationNode, completeCreationNode,
@@ -867,5 +995,6 @@ module.exports = {
   decorateCreationRun,
   previewNextCreationBatch,
   continueCreationBatch,
-  applyWritingInstructionsToCurrentBatch
+  applyWritingInstructionsToCurrentBatch,
+  previewChapterAssembly
 };

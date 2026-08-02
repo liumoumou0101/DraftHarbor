@@ -4,7 +4,7 @@
 
 状态：`未开始`、`进行中`、`待验收`、`已完成`、`阻塞`。
 
-当前主线（2026-07-17）：暂停新增大型能力，进入已完成功能的作者人工测试、缺陷修复和体验打磨；F-11 只保留为下一个大版本的实验研究目标。
+当前主线（2026-08-02）：F-09.6A–J 质量收敛能力已在工作区落地（H 复核修复 + I 章节装配 + J 上下文装配，含真实 DeepSeek 短链路验收）；下一步优先 **Codex 复核未提交工作区** 或 **F-09.6K 分级复测**；暂停扩张 F-11；继续作者人工测试与体验打磨。
 
 2026-07-28 工作流真实作者复验已启动，计划见 `docs/WORKFLOW_REAL_USER_ACCEPTANCE_PLAN_2026-07-28.md`。本轮使用设置中的真实 DeepSeek API，从真实桌面界面复验从零创作、续写、重写、取消恢复、回退重生成、正文/资料回流和重开恢复；测试项目与生成数据保留到软件功能彻底完成后再统一清理。草稿 PR #5 在 P0/P1 阻断清零前保持 Draft。首次基线已确认工作流独立配置为 `ai工作流 / deepseek-v4-pro`，Flash/Pro 在线 canary 通过。第一轮界面修复已过滤 `backups`、`.removed-projects` 和隐藏保留目录；当前运行与新建表单已分区，选中运行后新建表单默认收起；当前结果与主操作移到步骤列表之前，移除步骤/运行列表嵌套滚动；待审批时不再显示无效生成按钮；蓝图、资料、场景和审查结果增加结构化摘要，内部 Review State、节点 ID 和事件名改为中文，诊断记录默认折叠。
 
@@ -206,7 +206,7 @@
 
 | 编号 | 功能 | 状态 | 依赖 | 完成标准 | 下一步 |
 | --- | --- | --- | --- | --- | --- |
-| F-09 | 半自动小说工作流 | 已完成；F-09.6 质量收敛中：A–H 已完成，下一 F-09.6I | 写作模块、资料库、上下文解析、AI 任务与 Provider、工作流存储、备份恢复 | 续写、从零创作和大段重写闭环通过真实 Provider 验收；写作、资料库和工作流双向转交；长篇生成具备细纲确认、版本、锁、恢复、幂等写回和可视化画布 | 2026-07-30：F-09.6H 质量锁真实验收 24/24；下一步 F-09.6I 章节装配与字数口径 |
+| F-09 | 半自动小说工作流 | 已完成；F-09.6 质量收敛中：A–J 已完成（工作区未单独提交），下一 F-09.6K 或 Codex 复核 | 写作模块、资料库、上下文解析、AI 任务与 Provider、工作流存储、备份恢复 | 续写、从零创作和大段重写闭环通过真实 Provider 验收；写作、资料库和工作流双向转交；长篇生成具备细纲确认、版本、锁、恢复、幂等写回和可视化画布 | 2026-08-02：J 真实 DeepSeek 14/14；报告 `F096J_CONTEXT_ASSEMBLY_REAL_ACCEPTANCE_20260802.md`；下一步 Codex 复核或 F-09.6K |
 
 ### F-09 设计文档
 
@@ -469,7 +469,19 @@
 - [x] 从零/续写/重写启动均持久化 `workflow-writing-instructions@1`；审查均接入 qualityTargets。
 - [x] 真实 DeepSeek 质量锁验收：`tests/workflow-quality-locks-real-provider-acceptance.js`，报告 `docs/F096H_QUALITY_LOCKS_REAL_ACCEPTANCE_20260730.md`（24/24 通过）。
 
-**F-09.6H 状态：已完成（2026-07-30）。** 后续债：技术说明腔场景级 `inherit|avoid|allow`；更长链路 A/B。下一切片 **F-09.6I**。
+**F-09.6H 状态：功能已实现（2026-07-30）；2026-07-31 复核修复与 rewrite 回归均已收口。** 后续债：技术说明腔场景级 `inherit|avoid|allow`；更长链路 A/B。下一主线切片 **F-09.6I**。
+
+**2026-07-31 复核问题（Grok 已修复；Codex 已二次确认）**
+
+本次复核针对提交 `7fcdd68 Implement configurable workflow quality locks`。以下项已在工作区修复并通过定向回归：
+
+- [x] **P0：lint 阻断。** `workflowWritingInstructionsPayload` 改为 `window.workflowWritingInstructionsPayload`；真实验收脚本移除未使用 `assert`/`resetCreationRun`，并将 `tryParseJson` 提升到模块作用域。
+- [x] **P1：伏笔台账覆盖。** `normalizeThreadLedger()` 改为字段合并：`closed`/`abandoned` 终态不被后续 open 覆盖；保留 `firstSeen`/`lastAdvanced`；用户配置线索不再强制重开。回归见 `tests/workflow-quality-metrics.js`。
+- [x] **P1：计划兑现语义映射。** `evaluatePlanFulfillment()` 仅按 `sceneId::field` 精确匹配；`mustInclude[i]` 不再继承 `outcome` 语义结果。
+- [x] **P1：审查页调锁持久化/可用性。** `allowedFindingLockActions` + UI 只展示支持动作：对话比例/方向字面缺失 soft-only（无升硬）；`banned_term_hit` 带 `constraintId`/`term`，升硬可持久化为排除硬锁；服务端拒绝不适用动作并钳制 soft-only finding。
+- [x] **P0/P1：rewrite 对比区 F-09.6H 回归。** 写作指令与原文快照同 `nodeId: 'source'` 时，`latest(source)` 取错导致 repair 建 comparison 500。已改为 `sourceSnapshotArtifact()`（按 `writer-source@1`/`reader-source@1`）；UI repair 完成后优先选中 `rewrite-comparison@1`；服务测带 `writingInstructions`。Codex 确认：父提交 `76489cb` UI 测通过，修复前当前工作区稳定失败——**定标为 F-09.6H 引入，非历史债**。
+
+验证：`npx eslint`（相关路径）、质量锁/审查/锁服务、`workflow-guided-ui`、`workflow-rewrite-guided-service`、`workflow-rewrite-guided-ui`、`npm run core-test` 通过。未重复跑真实 Provider 验收（保留 24/24 报告）。
 
 阶段退出条件：
 
@@ -481,36 +493,54 @@
 
 本切片解决写作区只有“第 1 批～第 6 批”、场景标题曾退化为“分场正文”、以及生成进度 209,052 与书库统计 181,109 不一致的问题。
 
-- [ ] 保持 `generation-batch@1` 只作为内部生成与恢复单位，不再默认直接映射为读者章节。
-- [ ] 场景计划增加可选叙事章节引用：稳定 `chapterKey`、章节标题、章内顺序和 `chapterBreakBefore`；字段缺失的旧运行继续使用当前按批次回流的兼容路径。
-- [ ] 在回流前生成可编辑的“章节装配预览”，按叙事章节聚合跨批次场景；用户可调整章名、场景顺序、拆章和并章，确认前不写入项目。
-- [ ] 回流操作 ID 继续使用稳定来源 Revision；调整章节装配后重复提交仍然幂等，不复制场景。
+- [x] 保持 `generation-batch@1` 只作为内部生成与恢复单位，不再默认直接映射为读者章节。
+- [x] 场景计划增加可选叙事章节引用：稳定 `chapterKey`、章节标题、章内顺序和 `chapterBreakBefore`；字段缺失的旧运行走 batch-compat 装配（章名用场景名/`第 N 章`，**禁止**默认「第 N 批」）。
+- [x] 回流前生成章节装配预览（`preview-chapter-assembly` + `workflow-chapter-assembly`）；按叙事章节聚合跨批次场景；确认前不写入项目。
+- [x] **装配面板 UI：** 从零回流打开 `dialog[data-workflow-assembly-dialog]`；支持章改名、章上下移、并入上/下章、场上下移、移到上/下章、此后拆章、恢复默认；确认后转入写作区。
+- [x] 回流操作 ID 继续使用稳定来源 Revision；writer sceneId 使用 draft 产物 ID 避免跨批 plan sceneId 碰撞；重复提交幂等。
 - [x] 逐场单输出时保留真实场景标题；真实测试项目的 25 个标题已从原计划恢复，正文未修改。
-- [ ] 统一目标长度口径：产品目标和停止判断使用与书库一致的“正文统计字数”；同时保留“原始字符数”作为诊断指标。界面必须并列说明两种数字，避免用户看到 20.9 万生成字符却只看到 18.1 万书库字数而无法判断。
-- [ ] 批次清单新增兼容的统计字段或版本化统计快照；不得直接改写旧运行已经保存的 `batchCharacters/cumulativeCharacters`。
-- [ ] 达到目标时按完整场景和完整章节结束，不截断正文；允许用户明确继续补写尾声。
-- [ ] 真实两万字流式样本中，项目目标 20,000、场景计划合计 16,000，实际生成 35,023；四场分别超计划 71.3%、115.5%、103.1%、185.7%。保留计划/实际偏差反馈，但目标长度是软目标：不得仅因超出目标阻断、截断或机械重写；只在同时发生场景职责越界、节奏失衡或用户明确要求时交给相应质量锁处理。
+- [x] 统一目标长度口径：`countBodyStats`/`countWords` 为产品权威；进度增加 `completedBodyStatsChars`/`completedRawCharacters`；停止/继续下一批用正文统计；界面并列展示两种数字。
+- [x] 批次清单新增 `batchBodyStatsChars`/`cumulativeBodyStatsChars`（可选加法字段）；**不改写**旧 `batchCharacters`/`cumulativeCharacters`。
+- [x] 达到目标时软提示「仍要继续下一批（目标已达，可写尾声）」；不截断正文。
+- [x] 真实验收 `workflow-f096-200k-real-provider-acceptance.js` 回流改为 `previewChapterAssembly`，禁止默认 `第 N 批` 章名（重跑完整 20 万字需显式触发，避免默认烧额度）。
+- [x] **Codex 复核修复（2026-08-02）：** 计划场景按 `batchId + sceneId` 关联；章内顺序和同 key `chapterBreakBefore` 生效；编辑装配由服务端校验批准 draft 来源集合不重不漏且不可改映射。
+- [ ] 真实两万字流式样本中的偏差观测债仍作软目标记录（非阻断）。
+
+**F-09.6I 状态（2026-07-31）**：核心 + 装配面板 + 真实验收脚本装配化均已落地。验证：`workflow-chapter-assembly`、`workflow-creation-guided-service`、`workflow-creation-guided-ui`。
+
+真实 DeepSeek 完成证据：`docs/F096I_6K_REAL_ACCEPTANCE_20260731.md`；保留项目 `f096i-real-6k-assembly-20260731`（正文统计 9720 · 2 叙事章 · narrative）。工作区与 J 一并待提交/复核。
 
 阶段退出条件：
 
-1. 跨两个批次的六个场景可以装配为三个自然章节，写作区不出现“第 N 批”默认章名。
-2. 刷新装配预览、重复回流和恢复备份不会改变场景顺序或复制正文。
-3. 目标进度、书库统计和验收报告使用同一权威字数口径，原始字符数仅作为辅助信息。
+1. [x] 跨两个批次的六个场景可以装配为三个自然章节（单测），写作区默认不出现“第 N 批”章名。
+2. [x] 装配面板确认 + 重复回流幂等（UI）。
+3. [x] 目标进度与书库使用同一正文统计口径，原始字符数并列诊断。
 
 ##### F-09.6J 上下文预算与长等待优化（P1，在质量门禁稳定后）
 
-本切片不承诺缩短 Provider 自身推理时间，目标是减少无效输入、让等待原因可解释，并保证压缩上下文后连续性不退化。
+本切片不承诺缩短 Provider 自身推理时间。主价值在 **上下文装配**（少塞无效输入、裁剪可解释、连续性不退化），不在精确 token 会计。
 
-- [ ] 记录各阶段 Prompt 估算 tokens、实际输入 tokens、缓存命中和耗时，按批次/场景展示趋势；不得记录 API Key。
-- [ ] 2026-07-30 真实 DeepSeek 流式运行的四次 usage 均缺失，当前无法得到 token/成本；检查 Provider 当前 `include_usage` 请求与响应兼容性，并在 Provider 不返回 usage 时提供明确的“不可用”状态或本地估算，禁止用 0 冒充真实用量。
-- [ ] 正文 Prompt 改为按当前场景参与人物、地点和线索选择相关资料卡，不再默认携带全部资料正文；硬约束和用户锁定资料始终保留。
-- [ ] 只携带受控长度的最近正文结尾、结构化滚动状态、当前场景计划、到期未解线索和必要蓝图摘要；完整历史继续保存在 Artifact Store，需要时由明确检索补入。
-- [ ] 为滚动状态设置体积预算和确定性裁剪顺序：硬事实/人物当前状态/到期线索优先，已回收线索和远期低权重摘要后移；裁剪必须记录原因。
-- [ ] 规划、JSON 审查和正文使用不同预算；结构化阶段默认关闭无收益的深度思考时，界面仍显示实际模型设置与原因。
-- [x] 正文接收阶段已增加真实流式创作舞台，显示模型处理中、接收正文、校验与保存、本段/累计字符、速度和实际耗时；不伪造百分比或剩余时间。预计输入规模与 tokens 趋势仍随本切片其余预算工作实施。
-- [ ] 用相同 Brief 和固定样本比较压缩前后：后期单场景输入 tokens 目标至少降低 25%，人物状态、关键事实、未解线索和场景承接测试不得退化。
+**用量展示产品定稿（2026-07-31）**：token/成本只做**大概范围**，不值得投入过多精力。业界客户端数字与 DeepSeek 后台账单普遍对不齐；本产品也不追求对齐账单或“算准 tokenizer”。有 Provider usage 则原样展示并标明来源；无则本地粗估（如按字符/粗略系数）并标注「约 / 估算」；**禁止**用 `0` 冒充真实用量，也**禁止**把估算写成精确到个位的“真实 tokens”。不做完整成本仪表盘、缓存命中精算、与控制台对账。
 
-阶段退出条件：三批连续生成中，后期 Prompt 不再随全文近似线性膨胀；输入规模下降达到目标，连续性门禁与人工抽查均不低于基线。
+- [x] **（低精力）** 用量粗显示：prepare 返回 `usageHint`（估算）；流式若有 Provider usage 则升级为「接口回传」；进度条与流式舞台 `data-workflow-stream-usage` 展示 label；禁止用 `0` 冒充真实。不与 DeepSeek 后台对账。
+- [x] 正文 Prompt 改为按当前场景参与人物、地点和线索选择相关资料卡，不再默认携带全部资料正文；硬约束和用户锁定资料始终保留。（`workflow-context-assembly` + creation-guided prepare 接线；本切片默认从零创作）
+- [x] **Codex 复核修复（2026-08-02）：** `author_locked` 资料卡可突破 `compendiumTotal` 软预算，不再因存在前序已选卡而被丢弃。
+- [x] 只携带受控长度的最近正文结尾、结构化滚动状态、当前场景计划、到期未解线索和必要蓝图摘要；完整历史继续保存在 Artifact Store。
+- [x] 为滚动状态设置体积预算和确定性裁剪顺序：硬事实/人物当前状态/到期线索优先，已回收线索后移；裁剪写入 `report.trims` 原因。（字符/字段数上限，不依赖精确 token。）
+- [x] 规划、JSON 审查和正文使用不同上下文策略（`assembleContext(stage)`）；draft 始终保留 `directions` 供 mergeDirections。结构化阶段深度思考仍由既有阶段配置控制，上下文注释展示模型与是否开启思考。
+- [x] 正文接收阶段已增加真实流式创作舞台，显示模型处理中、接收正文、校验与保存、本段/累计字符、速度和实际耗时；不伪造百分比或剩余时间。粗粒度用量展示已补齐。
+- [x] 固定合成样本比较压缩前后：单测要求 assembled ≤ naive * 0.75（≥25% 下降）；due/mustClose 线索与 selectedDirection 不丢。验收看量级与连续性，不看账单。
+
+**F-09.6J 状态（2026-08-02）**：装配内核 + 从零创作 prepare 接线 + usage 粗显示 + 定向回归 + **真实 DeepSeek 验收 14/14** 已收口。
+
+完成证据：
+- 自动化：`node tests/workflow-context-assembly.js`、`node tests/workflow-creation-guided-service.js`、`node tests/workflow-creation-guided-ui.js`、`npm run core-test`
+- 真实 Provider：`node tests/workflow-f096j-context-assembly-real-provider-acceptance.js`
+- 报告：`docs/F096J_CONTEXT_ASSEMBLY_REAL_ACCEPTANCE_20260802.md`
+- 保留项目：`f096j-real-context-assembly-20260802`（Run `f096j-context-creation-20260802`；正文统计 9394；`prompt_context_assembled` ×5）
+- 范围默认从零创作；**续写/大段重写本切片不接线**（已确认可延后，不算 J 未完成）
+
+阶段退出条件：固定样本输入规模量级下降达到目标；连续性字段与 due 线索不退化；usage 有大概、不误导；真实短链路从零创作通过。用量不对齐 Provider 后台。
 
 ##### F-09.6K 修复后的分级复测与发布门（P0/P1）
 
@@ -533,10 +563,12 @@
 ##### F-09.6 当前开发门
 
 - F-09.6A—G 已完成；**F-09.6H 已完成**（质量锁 + 前台可调 + 真实 DeepSeek 24/24）。
-- F-09.6F 二十万字主链路曾跑通，长篇质量门禁仍依赖 H 及后续 I/K；**当前不因 H 完成即发版**。
-- **下一开发切片：F-09.6I**（生成批次与叙事章节解耦、统一字数口径；长度保持软目标）。
+- **F-09.6I 已完成**（章节装配 + 统一字数口径；6K 真实验收见 `docs/F096I_6K_REAL_ACCEPTANCE_20260731.md`）。
+- **F-09.6J 已完成**（上下文装配 + usage 粗显示 + 真实 DeepSeek 14/14；见 `docs/F096J_CONTEXT_ASSEMBLY_REAL_ACCEPTANCE_20260802.md`）。
+- F-09.6F 二十万字主链路曾跑通，长篇质量门禁仍依赖后续 K；**当前不因 J 完成即发版**。
+- **下一开发切片：F-09.6K**（分级复测与发布门）或作者人工复测；也可先做 Codex 对 I/J 未提交工作区的复核。
 - 2026-07-30 产品决策仍有效：长度软目标；质量默认软锁；计划兑现语义优先；`direction_missing` 字面不可 hard。
-- 测试项目必须保留原始正文：`f096-real-200k-redhood-20260729`、`f096e-real-stream-20k-redhood-20260730`、`f096h-quality-locks-real-20260730`。
+- 测试项目必须保留原始正文：`f096-real-200k-redhood-20260729`、`f096e-real-stream-20k-redhood-20260730`、`f096h-quality-locks-real-20260730`、`f096i-real-6k-assembly-20260731`、`f096j-real-context-assembly-20260802`。
 
 ## 规划阶段：阅读功能改造
 

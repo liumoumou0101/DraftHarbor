@@ -35,10 +35,24 @@ function normalizeReviewSeverity(value, fallback = 'warning') {
 }
 
 function normalizeFinding(finding = {}, fallback = 'warning') {
-  return {
+  const normalized = {
     ...finding,
     severity: normalizeReviewSeverity(finding.severity, fallback)
   };
+  // Soft-only product signals must never harden through accidental mutation.
+  if (['direction_literal_absent', 'direction_missing'].includes(clean(normalized.type))) {
+    normalized.enforcement = 'soft';
+    if (['error', 'critical'].includes(normalized.severity)) normalized.severity = 'info';
+  }
+  if (['dialogue_ratio_below_target', 'dialogue_ratio_above_target'].includes(clean(normalized.type))) {
+    normalized.enforcement = 'soft';
+    if (['error', 'critical'].includes(normalized.severity)) normalized.severity = 'warning';
+  }
+  if (typeof QualityMetrics.allowedFindingLockActions === 'function'
+    && !Array.isArray(normalized.allowedActions)) {
+    normalized.allowedActions = QualityMetrics.allowedFindingLockActions(normalized);
+  }
+  return normalized;
 }
 
 function isBlockingFinding(finding = {}) {

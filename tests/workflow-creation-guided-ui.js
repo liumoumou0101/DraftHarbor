@@ -297,14 +297,26 @@ async function generateAndApprove(page, title) {
     await page.click('[data-workflow-guided-transfer-compendium]');
     await page.waitForFunction(() => document.querySelector('[data-workflow-status]').textContent.includes('资料建议已写入资料库'));
     await page.click('[data-workflow-guided-transfer-writer]');
-    await page.waitForFunction(() => document.querySelector('[data-workflow-status]').textContent.includes('正文已转入写作区'));
+    await page.waitForSelector('dialog[data-workflow-assembly-dialog][open]', { timeout: 15000 });
+    await page.waitForSelector('[data-workflow-assembly-chapter]', { timeout: 15000 });
+    // Rename first chapter if input present (must not become 第 N 批).
+    const titleInput = page.locator('[data-workflow-assembly-chapter] input[type="text"]').first();
+    await titleInput.fill('潮水初临');
+    await titleInput.blur();
+    await page.click('[data-workflow-assembly-confirm]');
+    await page.waitForFunction(() => document.querySelector('[data-workflow-status]').textContent.includes('正文已转入写作区'), null, { timeout: 20000 });
+    // Idempotent re-open assembly and confirm again.
     await page.click('[data-workflow-guided-transfer-writer]');
-    await page.waitForFunction(() => document.querySelector('[data-workflow-status]').textContent.includes('正文已转入写作区'));
+    await page.waitForSelector('dialog[data-workflow-assembly-dialog][open]', { timeout: 15000 });
+    await page.waitForSelector('[data-workflow-assembly-chapter]', { timeout: 15000 });
+    await page.click('[data-workflow-assembly-confirm]');
+    await page.waitForFunction(() => document.querySelector('[data-workflow-status]').textContent.includes('正文已转入写作区'), null, { timeout: 20000 });
 
     const opened = await projectService.openProject(dataRoot, creationProjectId);
     const generated = opened.project.scenes.filter((scene) => scene.sourceRunId);
     assert.strictEqual(generated.length, 4);
     assert.ok(generated.every((scene) => scene.sourceArtifactId && scene.sourceRevisionId));
+    assert.ok(opened.project.chapters.every((chapter) => !/^第\s*\d+\s*批/.test(String(chapter.title || ''))));
     assert.strictEqual(await page.evaluate(() => window.__creationThinkingSeen), true);
     assert.strictEqual(await page.evaluate(() => window.__creationGlobalPromptSeen), true, 'workflow provider calls must receive the frozen global prompt');
     const compendiumResponse = await fetch(`${servers.appUrl}/api/compendium?projectId=${encodeURIComponent(creationProjectId)}`);

@@ -117,6 +117,99 @@ const artifactStore = require('../desktop/storage/workflow-artifact-store');
     });
     assert.ok(exclusionHard.constraints.some((item) => item.kind === 'exclusion' && item.enforcement === 'hard'));
 
+    // Seed soft-only + banned-term findings and verify action availability / persistence.
+    await artifactStore.writeArtifactRevision(created.projectPath, runId, {
+      id: 'review-batch-0001',
+      projectId,
+      runId,
+      nodeId: 'review',
+      artifactType: 'draft-review@1',
+      title: '审查'
+    }, {
+      id: 'review-r-banned',
+      summary: 'banned + soft-only',
+      reviewState: 'approved',
+      approvedAt: new Date().toISOString(),
+      payload: { format: 'json' }
+    }, {
+      schemaVersion: 1,
+      kind: 'draft-review',
+      qualityGate: 'passed',
+      blockingFindingCount: 0,
+      findings: [
+        {
+          type: 'banned_term_hit',
+          severity: 'warning',
+          enforcement: 'soft',
+          metricId: 'banned_terms',
+          term: '精神失常',
+          text: '精神失常',
+          constraintId: 'quality-banned-精神失常',
+          evidence: '精神失常'
+        },
+        {
+          type: 'dialogue_ratio_below_target',
+          severity: 'warning',
+          enforcement: 'soft',
+          metricId: 'dialogue_ratio'
+        },
+        {
+          type: 'direction_literal_absent',
+          severity: 'info',
+          enforcement: 'soft',
+          constraintId: details.run.settings.constraints.find((item) => item.kind === 'direction').id,
+          text: '小红帽必须取得主动权'
+        }
+      ],
+      metrics: { batch: {}, scenes: [], planFulfillment: [] }
+    });
+
+    assert.ok(LockService.isActionAllowedForFinding(
+      { type: 'banned_term_hit', enforcement: 'soft' },
+      'harden'
+    ));
+    assert.strictEqual(LockService.isActionAllowedForFinding(
+      { type: 'dialogue_ratio_below_target', enforcement: 'soft' },
+      'harden'
+    ), false);
+    assert.strictEqual(LockService.isActionAllowedForFinding(
+      { type: 'direction_literal_absent', enforcement: 'soft' },
+      'harden'
+    ), false);
+
+    const bannedHard = await LockService.updateRunLocks({
+      dataRoot: root,
+      projectId,
+      runId,
+      findingActions: [{ action: 'harden', type: 'banned_term_hit', metricId: 'banned_terms' }]
+    });
+    assert.ok(
+      bannedHard.constraints.some((item) => item.text === '精神失常' && item.enforcement === 'hard' && item.enabled !== false),
+      'banned_term harden should persist an exclusion hard constraint'
+    );
+
+    const dialogueNoHard = await LockService.updateRunLocks({
+      dataRoot: root,
+      projectId,
+      runId,
+      findingActions: [{ action: 'harden', type: 'dialogue_ratio_below_target', metricId: 'dialogue_ratio' }]
+    });
+    const dialogueFinding = (dialogueNoHard.review && dialogueNoHard.review.findings || [])
+      .find((item) => item.type === 'dialogue_ratio_below_target');
+    assert.ok(!dialogueFinding || dialogueFinding.enforcement === 'soft', 'dialogue ratio must stay soft');
+    assert.notStrictEqual(dialogueNoHard.qualityTargets && dialogueNoHard.qualityTargets.dialogueRatioEnabled, true);
+
+    const directionNoHard = await LockService.updateRunLocks({
+      dataRoot: root,
+      projectId,
+      runId,
+      findingActions: [{ action: 'harden', type: 'direction_literal_absent' }]
+    });
+    const directionFinding = (directionNoHard.review && directionNoHard.review.findings || [])
+      .find((item) => item.type === 'direction_literal_absent');
+    assert.ok(directionFinding && directionFinding.enforcement === 'soft');
+    assert.strictEqual(directionFinding.severity, 'info');
+
     const due = LockService.dueThreadsFromRolling({
       unresolvedThreads: [
         { threadId: 't1', label: '幼狼爪痕', status: 'open', mustClose: true },

@@ -59,15 +59,45 @@
         if (!panel) return;
         const progress = workflowState.generationProgressDetail;
         const elapsed = progress.startedAt ? Math.max(0, Math.round((Date.now() - progress.startedAt) / 1000)) : 0;
+        const usageLabel = progress.usageHint && progress.usageHint.label
+            ? String(progress.usageHint.label)
+            : '';
+        // Never display a bare "0" as if it were real provider usage.
+        const safeUsage = usageLabel && !/^输入\s*0\s*tokens/.test(usageLabel) ? usageLabel : '';
         panel.textContent = [
             progress.phase || '等待操作',
             progress.detail,
             progress.total ? `${progress.current || 0}/${progress.total}` : '',
             progress.characters ? `${progress.characters} 字符` : '',
             progress.cumulativeCharacters ? `累计 ${progress.cumulativeCharacters} 字符` : '',
+            safeUsage,
             elapsed ? `${elapsed} 秒` : ''
         ].filter(Boolean).join(' · ');
         panel.dataset.phase = progress.phase || 'idle';
+        if (safeUsage) panel.dataset.usageSource = progress.usageHint.source || '';
+        else delete panel.dataset.usageSource;
+    };
+
+    window.workflowUsageHintFromMeta = function workflowUsageHintFromMeta(metaUsage = {}, fallback = null) {
+        const inputTokens = Number(metaUsage.prompt_tokens != null ? metaUsage.prompt_tokens : metaUsage.input_tokens != null ? metaUsage.input_tokens : metaUsage.inputTokens);
+        const outputTokens = Number(metaUsage.completion_tokens != null ? metaUsage.completion_tokens : metaUsage.output_tokens != null ? metaUsage.output_tokens : metaUsage.outputTokens);
+        if (Number.isFinite(inputTokens) && inputTokens > 0) {
+            return {
+                source: 'provider',
+                inputTokens,
+                outputTokens: Number.isFinite(outputTokens) ? outputTokens : null,
+                estimatedInputTokens: null,
+                label: `输入 ${Math.round(inputTokens)} tokens（接口回传）`
+            };
+        }
+        if (fallback && fallback.label) return fallback;
+        return {
+            source: 'unavailable',
+            inputTokens: null,
+            outputTokens: null,
+            estimatedInputTokens: null,
+            label: '输入 tokens 不可用'
+        };
     };
 
     window.renderWorkflowArtifactForm = function renderWorkflowArtifactForm(container, content, depth = 0) {

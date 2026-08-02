@@ -1,12 +1,190 @@
 # DraftHarbor 会话交接
 
-最后更新：2026-07-30。此文件是 DraftHarbor 后续会话的入口；功能状态以当前仓库、`docs/FEATURE_TODO.md`、对应设计/验收文档与本文件共同为准。
+最后更新：2026-08-02。此文件是 DraftHarbor 后续会话的入口；功能状态以当前仓库、`docs/FEATURE_TODO.md`、对应设计/验收文档与本文件共同为准。
+
+## 2026-08-02：Codex 复核入口（当前未提交工作区）
+
+### 一句话结论
+
+工作区在 `7fcdd68` 之上包含 **F-09.6H 复核修复 + F-09.6I 章节装配 + F-09.6J 上下文装配**，均尚未单独提交。
+**F-09.6J 已实现并通过真实 DeepSeek 从零创作验收（14/14）**；范围默认只接 **从零创作**，续写/大段重写**故意未接**装配内核。下一产品主线是 **F-09.6K** 或作者人工复测，不是重做 J。
+
+### Codex 复核修复（2026-08-02）
+
+Codex 已接手并修复复核发现的问题：
+
+1. 章节计划改为按 `batchId + sceneId` 关联，避免跨批复用短场景 ID 时被后一批覆盖；补充章内顺序及同 key 强制拆章语义。
+2. `author_locked` 资料卡不再被 `compendiumTotal` 软预算丢弃。
+3. 服务端以批准 draft 装配为权威，客户端只能改章名、顺序、拆并章和移动场景；新增来源不重不漏、不可改映射校验。
+4. 同步章节标题 UI 测试契约和工作流图的双 source 产物计数；清理真实验收脚本 lint。
+5. 将写作区导出与工作流回流辅助逻辑拆为 `writer-export.js`、`workflow-transfer-helpers.js`，恢复桌面 shell 单文件不超过 1400 行的发布门禁。
+
+验证：`npm test` 全量通过（lint、smoke、unit/core/storage/protocol、desktop-mainline）；未重复调用真实 Provider。
+
+### 工作区范围（复核时请一并看）
+
+| 切片 | 状态 | 说明 |
+|---|---|---|
+| F-09.6H 复核修复 | 代码在工作区 | lint / 伏笔台账 / 计划兑现 / 调锁 / rewrite 对比区回归 |
+| F-09.6I | 代码 + 6K 真实验收 | 批次≠读者章节、统一字数口径、装配面板、回流 |
+| F-09.6J | 代码 + 6K 真实验收 14/14 | 上下文装配内核、creation prepare 接线、usage 粗显示 |
+
+### 明确不在本切片范围
+
+- **续写**（`workflow-guided-service`）未调用 `assembleContext`。
+- **大段重写**（`workflow-rewrite-guided-service`）未调用 `assembleContext`。
+- 不与 DeepSeek 后台 token/账单对账；usage 只做「有大概、不误导」。
+- 不启动 F-11；不为精确字数截断正文。
+
+### 建议 Codex 复核关注点
+
+1. **装配正确性：** `src/core/workflow/workflow-context-assembly.js` 预算、资料筛选、滚动状态、styleExemplar、`trims` 原因、draft 是否始终保留 `directions`。
+2. **接线边界：** 仅 `workflow-creation-guided-service.prepareCreationNode` 在 plan/draft/review 调用装配；direction/blueprint/compendium 保持更满上下文。
+3. **连续性：** 跨批 `lastSceneEnding` 可与 rolling `lastEnding` 去重为空；due/mustClose 线索不得丢。
+4. **usage UI：** 进度条与 `data-workflow-stream-usage` 展示 label；禁止假 0；有 Provider usage 时升级为接口回传。
+5. **I 回流：** 章节装配预览/面板、禁止默认「第 N 批」章名、writer sceneId 用 draft 产物 ID。
+6. **测试证据：** 下列命令与真实验收报告；勿删保留项目。
+
+### 验证命令
+
+```powershell
+node tests/workflow-context-assembly.js
+node tests/workflow-chapter-assembly.js
+node tests/workflow-creation-guided-service.js
+node tests/workflow-creation-guided-ui.js
+npm run core-test
+# 真实 Provider（已跑通，保留数据；复跑会恢复已完成 run，默认少烧额度）
+node tests/workflow-real-provider-canary.js
+node tests/workflow-f096j-context-assembly-real-provider-acceptance.js
+```
+
+### 必须保留的测试项目（勿删、勿原地润色正文）
+
+| 项目 ID | 用途 |
+|---|---|
+| `f096-real-200k-redhood-20260729` | 二十万字质量基线 |
+| `f096e-real-stream-20k-redhood-20260730` | 流式舞台基线 |
+| `f096h-quality-locks-real-20260730` | 质量锁真实验收 |
+| `f096i-real-6k-assembly-20260731` | I 章节装配 6K 真实验收 |
+| `f096j-real-context-assembly-20260802` | J 上下文装配 6K 真实验收 |
+
+---
+
+## 2026-08-02：F-09.6J 上下文装配收口
+
+### 结论
+
+**F-09.6J 已按批准方案收口（从零创作路径），并完成真实 DeepSeek 验收 14/14。**
+主价值：按阶段装配提示词（少塞无效输入、裁剪可解释、连续性不退化）。usage 只做粗显示，不对齐账单。续写/重写本切片未接线（产品已确认可延后）。
+
+### 本会话完成
+
+1. **J2 阻塞修复：** `assembleContext('draft')` 始终保留 `directions`，修复 `prepareCreationStage` 的 `direction set requires 2 to 4 directions`。
+2. **服务断言：** `workflow-creation-guided-service` 覆盖 contextReport/usageHint、selectedDirection、跨批结尾（rolling 或 lastSceneEnding）、due/mustClose 线索存活；跨批 ending 去重属预期。
+3. **J3 用量 UI：** 进度条拼接 `usageHint.label`；流式舞台 `data-workflow-stream-usage`；有 Provider usage 时升级为「接口回传」；禁止假 0。
+4. **真实验收脚本：** `tests/workflow-f096j-context-assembly-real-provider-acceptance.js`（可幂等恢复已完成 run；事件路径用 `libraryPaths.projectDir`，勿用 `openProject().projectPath`）。
+5. **文档：** `FEATURE_TODO` §F-09.6J 勾选 + 真实验收证据；下一优先 **F-09.6K**。
+
+### 关键路径
+
+```text
+# J 主路径
+src/core/workflow/workflow-context-assembly.js
+desktop/services/workflow-creation-guided-service.js
+desktop/services/workflow-creation-service.js   # draft 提示词 styleExemplar 说明等
+src/desktop/shell/workflow-artifact-interactions.js
+src/desktop/shell/workflow-generation.js
+src/desktop/shell/workflow-stream.js
+src/desktop/shell/shell-foundation.js
+desktop/fragments/workflow.html
+tests/workflow-context-assembly.js
+tests/workflow-creation-guided-service.js
+tests/workflow-f096j-context-assembly-real-provider-acceptance.js
+
+# 同工作区仍含 I（章节装配）等未提交内容
+src/core/workflow/workflow-chapter-assembly.js
+src/desktop/shell/workflow-chapter-assembly-ui.js
+tests/workflow-chapter-assembly.js
+tests/workflow-f096i-6k-real-provider-acceptance.js
+docs/F096I_6K_REAL_ACCEPTANCE_20260731.md
+docs/F096J_CONTEXT_ASSEMBLY_REAL_ACCEPTANCE_20260802.md
+```
+
+### 真实 DeepSeek 验收（2026-08-02，保留数据）
+
+- 脚本：`tests/workflow-f096j-context-assembly-real-provider-acceptance.js`
+- 项目：`f096j-real-context-assembly-20260802`（勿删）
+- Run：`f096j-context-creation-20260802`
+- 配置：`.draftharbor-settings.json` → `ai工作流` / `deepseek-v4-pro`
+- 正文统计 **9394** · 原始 **11071** · 3 场 · 装配 2 章（`借名` / `债务浮现`）· mode=narrative
+- 装配事件：`prompt_context_assembled` ×5（plan/draft/review）
+- 实测压缩：plan ~0.68、draft ~0.62–0.73、review ~0.53（raw→assembled）
+- 报告：`docs/F096J_CONTEXT_ASSEMBLY_REAL_ACCEPTANCE_20260802.md`
+- 指标：`.ai_state/f096j-real-context-assembly-20260802-metrics.json`
+- 过程说明：首次全量生成与装配断言均成功；验收脚本曾误用 `opened.projectPath`（undefined）导致事件检查假失败，已改为 `libraryPaths.projectDir` 后幂等复验 14/14。报告中的约 1.1 秒和 `callCount=1` 是恢复已完成 Run 后的 canary/幂等复验数据，不代表重新执行了一次完整 6K 生成。
+
+### 下一会话建议
+
+1. **Codex 复核**本节 + `FEATURE_TODO` F-09.6I/J + 上述关键路径 diff。
+2. 可选：作者界面打开 `f096j-real-context-assembly-20260802` 抽查正文与进度条 usage。
+3. 新开发优先 **F-09.6K**（分级复测/发布门）或作者打磨；勿自动启动 F-11。
+4. 后续债：续写/重写接入同一装配内核；技术说明腔场景级 `inherit|avoid|allow`。
 
 ## 2026-07-30：本会话完成内容（F-09.6H 质量锁）与下一入口
 
 ### 结论
 
-**F-09.6H 已实现并通过真实 DeepSeek 验收（24/24）。** 不要从「质量锁未做」或「工作流几乎不可用」重开。下一主线切片建议为 **F-09.6I**（批次与读者章节解耦、统一字数口径；长度仍是软目标）。
+**F-09.6H 已实现并通过真实 DeepSeek 验收（24/24）。** 不要从「质量锁未做」或「工作流几乎不可用」重开。其后 **I/J 已在工作区落地**；历史文案中的「下一主线 I」已过时，以文件顶部 2026-08-02 节为准。
+
+### 2026-07-31 复核结果与 Grok 修复
+
+Codex 针对提交 `7fcdd68` 的复核问题已由 Grok 在同日工作区修复：
+
+- **P0 lint：** `window.workflowWritingInstructionsPayload`；真实验收脚本 lint 清理。
+- **P1 伏笔台账：** `normalizeThreadLedger` 合并字段，保留 closed/abandoned 与 firstSeen/lastAdvanced。
+- **P1 计划兑现：** `evaluatePlanFulfillment` 仅字段精确匹配，不再把 outcome 套到 mustInclude。
+- **P1 调锁：** soft-only finding 不展示/不接受升硬；`banned_term_hit` 可持久化为排除硬锁。
+- **rewrite UI 对比区：** 已确认为 **F-09.6H 回归**，并已修复（见下节）。
+
+验证通过：相关 eslint、质量锁/审查/锁服务、`workflow-guided-ui`、`workflow-rewrite-guided-service`、`workflow-rewrite-guided-ui`、`npm run core-test`。未重跑真实 Provider 验收。
+
+### 2026-07-31：F-09.6I 批次 / 章节 / 字数口径（含装配面板）
+
+- **字数：** `project-stats.countBodyStats` 与书库一致；进度双字段 body/raw；批次 additive `batchBodyStatsChars`。
+- **场景计划：** 可选 `chapterKey` / `chapterTitle` / `chapterOrder` / `chapterBreakBefore`。
+- **装配核心：** `workflow-chapter-assembly.js`（含 split/merge/move/rename）+ `POST /api/workflows/v2/preview-chapter-assembly`。
+- **装配 UI：** `workflow-chapter-assembly-ui.js` + `dialog[data-workflow-assembly-dialog]`；从零点「结束并回流正文」先开装配板，确认后写入；draft 产物 ID 作 writer sceneId。
+- **真实验收脚本：** `workflow-f096-200k-real-provider-acceptance.js` 回流改装配 API，拒绝「第 N 批」章名。
+- **验证：** `workflow-chapter-assembly`、`workflow-creation-guided-service`、`workflow-creation-guided-ui`、`workflow-rewrite-guided-ui` 通过。
+- **真实 6K 验收（2026-07-31，保留数据）：**
+  - 脚本：`tests/workflow-f096i-6k-real-provider-acceptance.js`
+  - 项目：`f096i-real-6k-assembly-20260731`（勿删）
+  - Run：`f096i-6k-creation-20260731`
+  - 正文统计 **9720** · 原始字符 **11612** · 3 场 · 装配 2 叙事章（`账册的扉页` / `菌丝的路径`）· mode=narrative
+  - 报告：`docs/F096I_6K_REAL_ACCEPTANCE_20260731.md`
+  - 指标：`.ai_state/f096i-real-6k-assembly-20260731-metrics.json`
+- **大纲层级修复（同日）：** 回流后剪掉 `createProject` 空种子「第 1 章/场景 1」；侧栏章标题统一为「第 N 章 · 章名」，场景挂在章下可折叠。已清理现场项目 `f096i-real-6k-assembly-20260731`。
+- **F-09.6J 已收口（2026-08-02）：** 见文件顶部；**下一优先 F-09.6K**。
+
+### 2026-07-31：rewrite-guided-ui 对比区 — 归因确认与修复
+
+#### 归因（Codex 二次核实 + Grok 诊断，已一致）
+
+- Codex 初次「父提交 `76489cb` 也失败 → 历史债」**不严谨**；重跑后：**`76489cb` 完整通过**，当前工作区在修复前稳定挂于 L113。
+- 根因：写作指令与原文快照同 `nodeId: 'source'`，`latest(artifacts, 'source')` 取到 `workflow-writing-instructions@1`，repair 建 comparison 时 500；UI 恢复路径只有修复正文、无对比卡。
+- **定标：F-09.6H（`7fcdd68`）引入的回归，非更早独立债。**
+
+#### 已落地修复
+
+1. `desktop/services/workflow-rewrite-guided-service.js`
+   - 新增 `sourceSnapshotArtifact()`：按 `writer-source@1` / `reader-source@1` 取快照。
+   - `prepareRewriteNode` / `completeRewriteNode` 全部改用该函数；写作指令用 `writingInstructionsArtifact()`。
+2. `src/desktop/shell/workflow-generation.js`
+   - repair 完成后优先选中 `rewrite-comparison@1`，保证对比板可见。
+3. `tests/workflow-rewrite-guided-service.js`
+   - 启动时带 `writingInstructions`，断言快照与指令并存且 comparison 仍可建。
+
+验证：`node tests/workflow-rewrite-guided-service.js`、`node tests/workflow-rewrite-guided-ui.js` 通过。
 
 ### 本会话做了什么
 
@@ -62,6 +240,8 @@
 | `f096-real-200k-redhood-20260729` | 二十万字质量基线 |
 | `f096e-real-stream-20k-redhood-20260730` | 流式舞台基线 |
 | `f096h-quality-locks-real-20260730` | 质量锁真实验收现场 |
+| `f096i-real-6k-assembly-20260731` | I 章节装配 6K 现场 |
+| `f096j-real-context-assembly-20260802` | J 上下文装配 6K 现场 |
 
 ### 产品决策（仍有效）
 
@@ -74,7 +254,7 @@
 1. `git status` / 拉取 `main`；阅读本节 + `FEATURE_TODO` F-09.6H（已完成）与 **F-09.6I**。  
 2. 可选人工复查：打开 `f096h-quality-locks-real-20260730`，点「当前运行 · 创作锁」与审查升硬/豁免。  
 3. 新开发优先 **F-09.6I**（自然章节装配、统一字数口径）；勿再默认启动 F-11。  
-4. 后续债：技术说明腔**场景级** `inherit|avoid|allow`；更长真实 A/B；F-09.6J usage/上下文预算。  
+4. 后续债：技术说明腔**场景级** `inherit|avoid|allow`；更长真实 A/B；F-09.6J 以**上下文装配**为主线，usage/token **粗显示即可**（不与 DeepSeek 后台对账、不追求精确）。
 5. 复跑质量锁真实验收：`node tests/workflow-quality-locks-real-provider-acceptance.js`。  
 
 ### 本会话关键代码路径（便于检索）
@@ -140,11 +320,12 @@ tests/workflow-quality-locks-real-provider-acceptance.js
 
 ### 进行中或待反馈
 
-- F-09.6I—K：章节装配与字数口径、上下文预算、分级复测发布门（**下一优先 I**）。
+- F-09.6I—J：已在工作区落地并完成短链路真实验收（**见文件顶部 2026-08-02**）；尚未作为独立提交合入时以工作区 + 本文为准。
+- F-09.6K：分级复测与发布门（**下一主线**）。
 - F-07：资料库管家辅助联动。F-07.1 已完成；F-07.2/F-07.3 需等待真实使用反馈，不要自动启动。
 - F-10：阅读体验改造。F-10.1—F-10.4D 已完成并通过最终发布验收；不要自动扩张到排除项。
 - F-11：证据化文风工程。已决定推迟到下一个大版本，只保留为长期研究提案；未来需在独立实验分支先重构统一提示词指令/冲突解析，当前主线不得自动启动。
-- 当前优先级：F-09.6I 开发或作者人工测试已完成能力；继续使用已有 Prompt/避免写法控制风格。
+- 当前优先级：Codex 复核 I/J 工作区 → F-09.6K 或作者人工测试已完成能力。
 - 2026-07-29：从零创作工作流首次使用真实 DeepSeek Provider 完成 Brief、方向、蓝图、人物与世界观、场景计划、4 场正文、自动审查和正文回流的完整闭环。真实项目为 `红斗篷的挽歌`，Project ID `project-1785255712769-mjcqyd`，Run ID `creation-run-75758728-04ba-4712-a572-f5cbaf78f82f`；本地书库数据不进入 Git。运行生成约 12,500 个中文字符，证明首个闭环成立，也确认当前工作流只生成首批开篇，尚不能按 120,000 目标持续循环生成。
 - 2026-07-29：已修复 DeepSeek 深度思考挤占结构化输出预算导致 JSON 截断的问题。Provider 现在暴露 `finish_reason`；结构化阶段预算提高到 8k–16k；人物与世界观拆为两个批次后合并；非法或 `length` 截断的 JSON 会自动进行一次关闭深度思考的修复；修复仍失败时，响应字符数、尾部、停止原因、usage 和修复状态会进入运行诊断事件。
 - 2026-07-29：首次完整跑通后的产品反馈已整理为 `docs/WORKFLOW_FIRST_FULL_RUN_FEEDBACK_2026-07-29.md`。F-09.6A—E 已完成自动化实现：多批次持续生成、逐场保存与滚动上下文、批次连续性状态、版本化全局写作指令、每步自然语言 AI 重写、模型/深度思考选择、过程进度、三种产物视图、Revision 历史比较与恢复、返回上一步的精确过期标记和统一按钮文案。下一步只做 F-09.6F 真实 DeepSeek 多批复测与缺陷修复，不继续扩大范围。
@@ -299,12 +480,16 @@ F-10 分为三层：
 
 ## 7. 继续开发前检查
 
-1. 阅读本文件顶部「本会话完成内容」与 `docs/FEATURE_TODO.md`（尤其 F-09.6H 完成态与 F-09.6I）。
-2. 运行 `git status --short`；如有本地修改，先确认归属，不得重置用户改动。
+1. 阅读本文件顶部「2026-08-02：Codex 复核入口」与 `docs/FEATURE_TODO.md`（F-09.6I/J 完成态与 F-09.6K）。
+2. 运行 `git status --short`；如有本地修改，先确认归属，不得重置用户改动。当前工作区同时含 H 复核修复、I、J。
 3. 若动质量锁：先读 `docs/F096H_QUALITY_LOCKS_DESIGN.md`，复用 `workflow-lock-service` / `workflow-quality-metrics` / `workflow-locks.js`，勿另起门禁体系。
-4. 新功能开始、暂停、完成或取消时同步更新 `docs/FEATURE_TODO.md` 与本文件。
-5. 涉及持久化格式时先写 schema、迁移和兼容测试；涉及正式写入时先写备份、版本和幂等测试。
-6. 质量锁真实验收可复跑：`node tests/workflow-quality-locks-real-provider-acceptance.js`（需本机已保存 DeepSeek 配置）。
+4. 若动上下文装配：复用 `workflow-context-assembly.js`，默认只影响从零创作 prepare；勿在未设计前强行改续写/重写。
+5. 新功能开始、暂停、完成或取消时同步更新 `docs/FEATURE_TODO.md` 与本文件。
+6. 涉及持久化格式时先写 schema、迁移和兼容测试；涉及正式写入时先写备份、版本和幂等测试。
+7. 真实验收可复跑（需本机 DeepSeek 配置；保留数据）：
+   - J：`node tests/workflow-f096j-context-assembly-real-provider-acceptance.js`
+   - H：`node tests/workflow-quality-locks-real-provider-acceptance.js`
+   - I：`node tests/workflow-f096i-6k-real-provider-acceptance.js`
 
 ## 8. 发布前验证基线
 

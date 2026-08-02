@@ -170,8 +170,8 @@
                         mustInclude: [...confirmedBrief.mustInclude, ...workflowLockConstraints(elements).filter((item) => item.kind === 'direction').map((item) => item.text)],
                         avoid: [...confirmedBrief.avoid, ...workflowLockConstraints(elements).filter((item) => item.kind === 'exclusion').map((item) => item.text)]
                     },
-                    writingInstructions: typeof workflowWritingInstructionsPayload === 'function'
-                        ? workflowWritingInstructionsPayload(elements)
+                    writingInstructions: typeof window.workflowWritingInstructionsPayload === 'function'
+                        ? window.workflowWritingInstructionsPayload(elements)
                         : {
                             text: elements.creationWritingInstructions?.value.trim() || '',
                             applicableStages: ['direction', 'blueprint', 'compendium', 'plan', 'draft', 'review']
@@ -215,8 +215,8 @@
                 projectId, scope, sceneId: activeScene && activeScene.id, chapterId: activeScene && activeScene.chapterId,
                 brief: { instruction, targetStyle: elements.rewriteStyle?.value || '', targetTone: elements.rewriteTone?.value || '', targetPov: elements.rewritePov?.value || '', targetLengthRatio: Number(elements.rewriteRatio?.value) || 1 },
                 constraints: workflowLockConstraints(elements),
-                writingInstructions: typeof workflowWritingInstructionsPayload === 'function'
-                    ? workflowWritingInstructionsPayload(elements)
+                writingInstructions: typeof window.workflowWritingInstructionsPayload === 'function'
+                    ? window.workflowWritingInstructionsPayload(elements)
                     : undefined,
                 generationPolicy: workflowGenerationLaunchConfig()
             }) });
@@ -329,14 +329,21 @@
             });
             let prepared = await preparedResponse.json().catch(() => ({}));
             if (!preparedResponse.ok || !prepared.ok) throw new Error(prepared.error || `HTTP ${preparedResponse.status}`);
+            const estimateUsageHint = prepared.usageHint && prepared.usageHint.label
+                ? prepared.usageHint
+                : (prepared.contextReport && prepared.contextReport.usageHint) || null;
             window.setWorkflowGenerationProgress({
                 phase: '请求模型',
                 detail: step.id === 'draft' && prepared.sequentialDraft
                     ? `第 ${prepared.batchSequence || 1} 批 · 第 ${(prepared.completedCount || 0) + 1}/${prepared.totalCount || 1} 场`
                     : step.title,
                 total: (prepared.prompts || []).length,
-                cumulativeCharacters: prepared.cumulativeCharacters || 0
+                cumulativeCharacters: prepared.cumulativeCharacters || 0,
+                usageHint: estimateUsageHint
             });
+            if (typeof window.setWorkflowStreamUsageHint === 'function') {
+                window.setWorkflowStreamUsageHint(estimateUsageHint);
+            }
             const stageConfig = guidedStageProviderConfig(step.id, run);
             beginWorkflowReasoning(stageConfig, step.title || step.id);
             if (prepared.outputFormat !== 'text') hideWorkflowStreamStage();
@@ -366,12 +373,25 @@
                         current: prepared.sequentialDraft ? (prepared.completedCount || 0) + 1 : index + 1,
                         total: prepared.sequentialDraft ? prepared.totalCount || 1 : prepared.prompts.length,
                         cumulativeCharacters: prepared.cumulativeCharacters || 0,
-                        model: stageConfig.model
+                        model: stageConfig.model,
+                        usageHint: (workflowState.generationProgressDetail && workflowState.generationProgressDetail.usageHint)
+                            || estimateUsageHint
                     });
                 }
                 let progressContentStarted = false;
                 await window.DraftHarborProviderStream.streamGeneration(prompt.prompt, (token, meta) => {
-                    if (meta && meta.type === 'usage') usage.push({ promptId: prompt.id, model: stageConfig.model, ...meta.usage });
+                    if (meta && meta.type === 'usage') {
+                        usage.push({ promptId: prompt.id, model: stageConfig.model, ...meta.usage });
+                        const providerHint = typeof window.workflowUsageHintFromMeta === 'function'
+                            ? window.workflowUsageHintFromMeta(meta.usage || {}, estimateUsageHint)
+                            : estimateUsageHint;
+                        if (providerHint && providerHint.source === 'provider') {
+                            window.setWorkflowGenerationProgress({ usageHint: providerHint });
+                            if (typeof window.setWorkflowStreamUsageHint === 'function') {
+                                window.setWorkflowStreamUsageHint(providerHint);
+                            }
+                        }
+                    }
                     else if (meta && meta.type === 'finish') {
                         finishReason = meta.finishReason || '';
                         outputRecord.finishReason = finishReason;
@@ -492,7 +512,11 @@
                 if (!completeResponse.ok || !completed.ok) throw new Error(completed.error || `HTTP ${completeResponse.status}`);
             }
             const refreshedRun = await loadGuidedWorkflowRun(run.id);
-            const artifact = (refreshedRun.artifacts || []).filter((item) => item.nodeId === step.id).slice(-1)[0];
+            const nodeArtifacts = (refreshedRun.artifacts || []).filter((item) => item.nodeId === step.id);
+            // Prefer rewrite comparison over per-scene repair text so the diff board is shown.
+            const artifact = step.id === 'repair'
+                ? (nodeArtifacts.find((item) => item.artifactType === 'rewrite-comparison@1') || nodeArtifacts.slice(-1)[0])
+                : nodeArtifacts.slice(-1)[0];
             workflowState.selectedArtifactId = artifact ? artifact.id : workflowState.selectedArtifactId;
             await loadWorkflowEvents();
             completionStatus = step.id === 'review'

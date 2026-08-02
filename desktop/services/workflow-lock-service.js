@@ -132,6 +132,13 @@ function applyFindingAction(finding, action) {
   return next;
 }
 
+function isActionAllowedForFinding(finding, action) {
+  const allowed = typeof QualityMetrics.allowedFindingLockActions === 'function'
+    ? QualityMetrics.allowedFindingLockActions(finding)
+    : LOCK_ACTIONS;
+  return Array.isArray(allowed) && allowed.includes(action);
+}
+
 function patchConstraintsFromFindingActions(constraints, findings, actions) {
   const next = constraints.map((item) => ({ ...item }));
   for (const action of actions) {
@@ -139,12 +146,34 @@ function patchConstraintsFromFindingActions(constraints, findings, actions) {
       .map((finding, index) => ({ finding, index }))
       .filter(({ finding, index }) => matchFinding(finding, action, index));
     for (const { finding } of matched) {
-      if (!finding.constraintId && finding.type !== 'constraint_violation' && finding.type !== 'direction_literal_absent') {
+      if (!isActionAllowedForFinding(finding, action.action) && action.action !== 'enable') {
         continue;
       }
-      const text = clean(finding.text || finding.evidence);
-      const index = next.findIndex((item) => item.id === finding.constraintId
+      const isBanned = clean(finding.type) === 'banned_term_hit';
+      if (!finding.constraintId && !isBanned
+        && finding.type !== 'constraint_violation'
+        && finding.type !== 'direction_literal_absent'
+        && finding.type !== 'direction_missing') {
+        continue;
+      }
+      const text = clean(finding.term || finding.text || finding.evidence);
+      const constraintId = clean(finding.constraintId)
+        || (isBanned && text ? QualityMetrics.bannedTermConstraintId(text) : '');
+      let index = next.findIndex((item) => (constraintId && item.id === constraintId)
         || (text && item.text === text));
+      if (index < 0 && isBanned && text && ['harden', 'soften', 'enable'].includes(action.action)) {
+        next.push(normalizeConstraint({
+          id: constraintId || QualityMetrics.bannedTermConstraintId(text),
+          kind: 'exclusion',
+          text,
+          enforcement: action.action === 'harden' ? 'hard' : 'soft',
+          enabled: true,
+          category: 'style',
+          scope: 'workflow'
+        }, next.length));
+        index = next.length - 1;
+        continue;
+      }
       if (index < 0) continue;
       if (action.action === 'harden') next[index] = { ...next[index], enforcement: 'hard', enabled: true };
       if (action.action === 'soften') next[index] = { ...next[index], enforcement: 'soft', enabled: true };
@@ -157,12 +186,15 @@ function patchConstraintsFromFindingActions(constraints, findings, actions) {
 
 function patchQualityTargetsFromFindingActions(qualityTargets, findings, actions) {
   const next = { ...(qualityTargets || {}) };
+  const bannedTerms = new Set(Array.isArray(next.bannedTerms) ? next.bannedTerms.map(clean).filter(Boolean) : []);
   for (const action of actions) {
     const matched = findings.filter((finding, index) => matchFinding(finding, action, index));
+    const actionable = matched.filter((finding) => isActionAllowedForFinding(finding, action.action)
+      || action.action === 'enable');
     // Prefer matched findings; if UI only sent type, still apply target-level lock change.
-    const types = matched.length
-      ? matched.map((finding) => clean(finding.type) || clean(finding.metricId))
-      : [clean(action.type), clean(action.metricId)].filter(Boolean);
+    const types = actionable.length
+      ? actionable.map((finding) => clean(finding.type) || clean(finding.metricId))
+      : (matched.length ? [] : [clean(action.type), clean(action.metricId)].filter(Boolean));
     for (const type of types) {
       if (type === 'technical_register_drift' || type === 'technical_register') {
         if (action.action === 'harden') {
@@ -180,6 +212,7 @@ function patchQualityTargetsFromFindingActions(qualityTargets, findings, actions
       }
       if (type === 'dialogue_ratio_below_target' || type === 'dialogue_ratio_above_target'
         || type === 'dialogue_ratio') {
+        // Dialogue ratio is soft-only: never hard-lock; disable turns the metric off.
         if (action.action === 'disable') next.dialogueRatioEnabled = false;
         if (action.action === 'enable' || action.action === 'soften') next.dialogueRatioEnabled = true;
       }
@@ -192,8 +225,21 @@ function patchQualityTargetsFromFindingActions(qualityTargets, findings, actions
         if (action.action === 'harden') next.repetitionLocked = true;
         if (action.action === 'soften' || action.action === 'disable') next.repetitionLocked = false;
       }
+      if (type === 'banned_term_hit' || type === 'banned_terms') {
+        const terms = actionable
+          .filter((finding) => clean(finding.type) === 'banned_term_hit' || clean(finding.metricId) === 'banned_terms')
+          .map((finding) => clean(finding.term || finding.text))
+          .filter(Boolean);
+        for (const term of terms) {
+          if (action.action === 'disable') bannedTerms.delete(term);
+          if (action.action === 'harden' || action.action === 'soften' || action.action === 'enable') {
+            bannedTerms.add(term);
+          }
+        }
+      }
     }
   }
+  next.bannedTerms = Array.from(bannedTerms);
   return QualityMetrics.normalizeQualityTargets(next);
 }
 
@@ -323,9 +369,18 @@ async function updateRunLocks(options = {}) {
   let reviewContent = null;
   if (reviewArtifact && (findingActions.length || options.reevaluateReview === true)) {
     let findings = reviewFindings.map((finding, index) => {
-      const actions = findingActions.filter((item) => matchFinding(finding, item, index));
+      const actions = findingActions.filter((item) => matchFinding(finding, item, index)
+        && isActionAllowedForFinding(finding, item.action));
       let next = { ...finding };
       for (const item of actions) next = applyFindingAction(next, item.action);
+      // Soft-only findings must never remain hard even if an old review mutated them.
+      if (['direction_literal_absent', 'direction_missing', 'dialogue_ratio_below_target', 'dialogue_ratio_above_target']
+        .includes(clean(next.type))) {
+        next.enforcement = 'soft';
+        if (['error', 'critical'].includes(clean(next.severity).toLowerCase())) {
+          next.severity = clean(next.type).startsWith('direction') ? 'info' : 'warning';
+        }
+      }
       return Review.normalizeFinding(next);
     });
     reviewContent = recomputeReviewGate({
@@ -471,6 +526,7 @@ module.exports = {
   findingKey,
   matchFinding,
   applyFindingAction,
+  isActionAllowedForFinding,
   updateRunLocks,
   dueThreadsFromRolling,
   finalThreadFindings,

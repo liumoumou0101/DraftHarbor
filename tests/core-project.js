@@ -64,11 +64,12 @@ assert.strictEqual(summaryMetadata.scenes[0].summarySource, 'manual', 'scene sum
 
 assert.strictEqual(countWords('Hello world'), 2);
 assert.strictEqual(countWords('\u5979\u8d70\u8fdb\u96e8\u91cc'), 5);
-assert.deepStrictEqual(projectStats(normalized), {
-    chapterCount: 2,
-    sceneCount: 3,
-    wordCount: 11
-});
+const stats = projectStats(normalized);
+assert.strictEqual(stats.chapterCount, 2);
+assert.strictEqual(stats.sceneCount, 3);
+assert.strictEqual(stats.wordCount, 11);
+assert.strictEqual(stats.bodyStatsChars, 11);
+assert.ok(stats.rawCharacters >= stats.wordCount);
 
 const manuscript = buildManuscript(normalized);
 assert.ok(manuscript.includes('# Chapter One'));

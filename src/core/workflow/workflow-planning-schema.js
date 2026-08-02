@@ -56,31 +56,47 @@
 
     function createScenePlan(input = {}) {
         const fineOutlineEnabled = input.fineOutlineEnabled !== false;
-        const scenes = list(input.scenes).map((item, index) => ({
-            id: clean(item.id, makeId('planned-scene', index)),
-            title: clean(item.title, `场景 ${index + 1}`),
-            order: index,
-            povCharacter: clean(item.povCharacter),
-            location: clean(item.location),
-            goal: clean(item.goal),
-            conflict: clean(item.conflict),
-            outcome: clean(item.outcome),
-            emotionalBeat: clean(item.emotionalBeat),
-            participants: uniqueStrings(item.participants || item.characters),
-            turningPoint: clean(item.turningPoint),
-            reveal: clean(item.reveal),
-            hook: clean(item.hook || item.endingHook),
-            emotionalStart: clean(item.emotionalStart),
-            emotionalEnd: clean(item.emotionalEnd),
-            pace: ['slow', 'medium', 'fast'].includes(clean(item.pace)) ? clean(item.pace) : 'medium',
-            conflictIntensity: boundedNumber(item.conflictIntensity),
-            informationDensity: boundedNumber(item.informationDensity),
-            targetWords: Math.round(boundedNumber(item.targetWords, 0, 100000)),
-            mustInclude: uniqueStrings(item.mustInclude),
-            avoid: uniqueStrings(item.avoid),
-            continuity: clean(item.continuity),
-            fineOutline: fineOutlineEnabled ? list(item.fineOutline).map(fineOutlineLine).filter(Boolean) : []
-        }));
+        const scenes = list(input.scenes).map((item, index) => {
+            const chapterKey = clean(item.chapterKey || item.chapterId);
+            const chapterTitle = clean(item.chapterTitle || item.chapterName);
+            const chapterOrderRaw = Number(item.chapterOrder);
+            const sceneOrderInChapterRaw = Number(item.sceneOrderInChapter);
+            return {
+                id: clean(item.id, makeId('planned-scene', index)),
+                title: clean(item.title, `场景 ${index + 1}`),
+                order: index,
+                // Optional narrative chapter refs (F-09.6I). Missing → transfer uses compat assembly.
+                chapterKey,
+                chapterTitle,
+                chapterOrder: Number.isFinite(chapterOrderRaw) && chapterOrderRaw > 0
+                    ? Math.round(chapterOrderRaw)
+                    : 0,
+                sceneOrderInChapter: Number.isFinite(sceneOrderInChapterRaw) && sceneOrderInChapterRaw > 0
+                    ? Math.round(sceneOrderInChapterRaw)
+                    : 0,
+                chapterBreakBefore: item.chapterBreakBefore === true || item.chapterBreakBefore === 'true',
+                povCharacter: clean(item.povCharacter),
+                location: clean(item.location),
+                goal: clean(item.goal),
+                conflict: clean(item.conflict),
+                outcome: clean(item.outcome),
+                emotionalBeat: clean(item.emotionalBeat),
+                participants: uniqueStrings(item.participants || item.characters),
+                turningPoint: clean(item.turningPoint),
+                reveal: clean(item.reveal),
+                hook: clean(item.hook || item.endingHook),
+                emotionalStart: clean(item.emotionalStart),
+                emotionalEnd: clean(item.emotionalEnd),
+                pace: ['slow', 'medium', 'fast'].includes(clean(item.pace)) ? clean(item.pace) : 'medium',
+                conflictIntensity: boundedNumber(item.conflictIntensity),
+                informationDensity: boundedNumber(item.informationDensity),
+                targetWords: Math.round(boundedNumber(item.targetWords, 0, 100000)),
+                mustInclude: uniqueStrings(item.mustInclude),
+                avoid: uniqueStrings(item.avoid),
+                continuity: clean(item.continuity),
+                fineOutline: fineOutlineEnabled ? list(item.fineOutline).map(fineOutlineLine).filter(Boolean) : []
+            };
+        });
         if (!scenes.length) throw new Error('scene plan requires at least one scene');
         return { schemaVersion: 1, kind: 'scene-plan', directionRevisionId: clean(input.directionRevisionId), fineOutlineEnabled, scenes };
     }

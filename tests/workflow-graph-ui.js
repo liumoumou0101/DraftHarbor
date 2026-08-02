@@ -47,7 +47,8 @@ async function assertGraph(page, expected) {
     await page.click('[data-workflow-start-guided]');
     await page.click('[data-workflow-view-graph]');
     await assertGraph(page, { nodeCount: 7, edgeCount: 6, activeNodeId: 'analysis' });
-    assert.ok((await page.locator('[data-workflow-graph-node="source"]').innerText()).includes('1 个产物'));
+    // Source owns both the writer snapshot and the run-scoped writing instructions.
+    assert.ok((await page.locator('[data-workflow-graph-node="source"]').innerText()).includes('2 个产物'));
 
     await page.click('[data-workflow-launcher] > summary');
     await page.selectOption('[data-workflow-mode]', 'creation');

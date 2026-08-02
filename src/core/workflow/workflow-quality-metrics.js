@@ -287,18 +287,22 @@
 
         if (targets.bannedTerms.length && metrics.bannedTermHits > 0) {
             for (const sample of (metrics.bannedSamples || []).slice(0, 5)) {
+                const term = clean(sample.term);
                 findings.push({
                     type: 'banned_term_hit',
                     severity: 'warning',
                     enforcement: 'soft',
                     source: 'deterministic-quality-metrics',
                     metricId: 'banned_terms',
+                    term,
+                    text: term,
+                    constraintId: bannedTermConstraintId(term),
                     sceneId,
                     revisionId,
                     sceneTitle,
                     exemptable: true,
                     evidence: sample.evidence,
-                    suggestion: `避免使用「${sample.term}」。若必须禁止，请将其写入排除硬锁。`
+                    suggestion: `避免使用「${term}」。若必须禁止，请将其写入排除硬锁。`
                 });
             }
         }
@@ -380,9 +384,9 @@
             }
             if (clean(scene.outcome)) fields.push({ field: 'outcome', expected: clean(scene.outcome) });
             for (const entry of fields) {
-                const key = `${sceneId}::${entry.field}`;
-                const semanticHit = byKey.get(key) || byKey.get(`${sceneId}::outcome`);
-                if (semanticHit && (entry.field === semanticHit.field || entry.field.startsWith('mustInclude'))) {
+                // Exact field match only. Do not map sceneId::outcome onto mustInclude[*].
+                const semanticHit = byKey.get(`${sceneId}::${entry.field}`);
+                if (semanticHit && clean(semanticHit.field) === entry.field) {
                     results.push({
                         ...semanticHit,
                         field: entry.field,
@@ -498,55 +502,110 @@
         return { qualityTargets: targets, constraints };
     }
 
+    const TERMINAL_THREAD_STATUSES = Object.freeze(['closed', 'abandoned']);
+
+    function isTerminalThreadStatus(status) {
+        return TERMINAL_THREAD_STATUSES.includes(clean(status).toLowerCase());
+    }
+
+    function normalizeThreadEntry(raw) {
+        if (raw == null) return null;
+        if (typeof raw === 'string') {
+            const label = clean(raw);
+            if (!label) return null;
+            return {
+                threadId: `thread-${label.slice(0, 24)}`,
+                label,
+                status: 'open',
+                mustClose: false,
+                expectedRecoveryStage: '',
+                evidence: '',
+                firstSeen: undefined,
+                lastAdvanced: undefined,
+                abandonReason: ''
+            };
+        }
+        const label = clean(raw.label || raw.text);
+        if (!label) return null;
+        const status = clean(raw.status, 'open') || 'open';
+        return {
+            threadId: clean(raw.threadId) || `thread-${label.slice(0, 24)}`,
+            label,
+            status,
+            mustClose: !!raw.mustClose,
+            expectedRecoveryStage: clean(raw.expectedRecoveryStage),
+            evidence: clean(raw.evidence),
+            firstSeen: raw.firstSeen && typeof raw.firstSeen === 'object' ? raw.firstSeen : undefined,
+            lastAdvanced: raw.lastAdvanced && typeof raw.lastAdvanced === 'object' ? raw.lastAdvanced : undefined,
+            abandonReason: clean(raw.abandonReason)
+        };
+    }
+
+    function mergeThreadEntries(existing, incoming) {
+        if (!existing) return incoming;
+        if (!incoming) return existing;
+        const existingTerminal = isTerminalThreadStatus(existing.status);
+        const incomingTerminal = isTerminalThreadStatus(incoming.status);
+        // Closed/abandoned threads stay closed unless a later source also marks them terminal.
+        const status = existingTerminal && !incomingTerminal
+            ? existing.status
+            : (incoming.status || existing.status || 'open');
+        return {
+            threadId: existing.threadId || incoming.threadId,
+            label: clean(incoming.label) || existing.label,
+            status,
+            mustClose: !!(existing.mustClose || incoming.mustClose),
+            expectedRecoveryStage: clean(incoming.expectedRecoveryStage) || existing.expectedRecoveryStage || '',
+            evidence: clean(incoming.evidence) || existing.evidence || '',
+            firstSeen: existing.firstSeen || incoming.firstSeen,
+            lastAdvanced: incoming.lastAdvanced || existing.lastAdvanced,
+            abandonReason: clean(incoming.abandonReason) || existing.abandonReason || ''
+        };
+    }
+
     function normalizeThreadLedger(previous = {}, semanticContinuity = {}, writingInstructions = {}) {
         const prevThreads = Array.isArray(previous.threadLedger)
             ? previous.threadLedger
             : (Array.isArray(previous.unresolvedThreads) ? previous.unresolvedThreads : []);
         const semanticThreads = Array.isArray(semanticContinuity.unresolvedThreads)
             ? semanticContinuity.unresolvedThreads
-            : [];
+            : (Array.isArray(semanticContinuity.threadLedger) ? semanticContinuity.threadLedger : []);
         const instructed = normalizeQualityTargets(writingInstructions.qualityTargets || {}).foreshadowingThreads;
         const byId = new Map();
 
-        function upsert(raw) {
-            if (raw == null) return;
-            if (typeof raw === 'string') {
-                const label = clean(raw);
-                if (!label) return;
-                const threadId = `thread-${label.slice(0, 24)}`;
-                byId.set(threadId, {
-                    threadId,
-                    label,
-                    status: 'open',
-                    mustClose: false,
-                    expectedRecoveryStage: '',
-                    evidence: ''
+        function upsert(raw, options = {}) {
+            const incoming = normalizeThreadEntry(raw);
+            if (!incoming) return;
+            // User-configured foreshadowing rows default to open only when the thread is new.
+            if (options.instructed && !options.forceStatus) {
+                // Keep status from raw when provided; otherwise leave blank so merge can default.
+                if (!clean(raw && raw.status)) {
+                    delete incoming.status;
+                }
+            }
+            const existing = byId.get(incoming.threadId);
+            if (!existing) {
+                byId.set(incoming.threadId, {
+                    ...incoming,
+                    status: incoming.status || 'open'
                 });
                 return;
             }
-            const label = clean(raw.label || raw.text);
-            if (!label) return;
-            const threadId = clean(raw.threadId) || `thread-${label.slice(0, 24)}`;
-            byId.set(threadId, {
-                threadId,
-                label,
-                status: clean(raw.status, 'open') || 'open',
-                mustClose: !!raw.mustClose,
-                expectedRecoveryStage: clean(raw.expectedRecoveryStage),
-                evidence: clean(raw.evidence),
-                firstSeen: raw.firstSeen && typeof raw.firstSeen === 'object' ? raw.firstSeen : undefined,
-                lastAdvanced: raw.lastAdvanced && typeof raw.lastAdvanced === 'object' ? raw.lastAdvanced : undefined,
-                abandonReason: clean(raw.abandonReason)
+            const merged = mergeThreadEntries(existing, {
+                ...incoming,
+                status: incoming.status || existing.status
             });
+            byId.set(incoming.threadId, merged);
         }
 
-        prevThreads.forEach(upsert);
-        semanticThreads.forEach(upsert);
-        instructed.forEach((thread) => upsert({ ...thread, status: 'open' }));
+        prevThreads.forEach((item) => upsert(item));
+        semanticThreads.forEach((item) => upsert(item));
+        // Instructed threads must not reopen already-closed ledger entries.
+        instructed.forEach((thread) => upsert(thread, { instructed: true }));
 
         const threadLedger = Array.from(byId.values());
         const unresolvedThreads = threadLedger
-            .filter((thread) => !['closed', 'abandoned'].includes(thread.status))
+            .filter((thread) => !isTerminalThreadStatus(thread.status))
             .map((thread) => ({
                 threadId: thread.threadId,
                 label: thread.label,
@@ -574,10 +633,48 @@
         };
     }
 
+    function bannedTermConstraintId(term) {
+        return `quality-banned-${clean(term).slice(0, 24)}`;
+    }
+
+    /**
+     * Supported review-page lock actions per finding type.
+     * Dialogue ratio and direction literal absence never harden (product: soft-only signals).
+     */
+    function allowedFindingLockActions(finding = {}) {
+        const type = clean(finding.type);
+        const enforcement = clean(finding.enforcement).toLowerCase();
+        if (finding.exempted === true) return [];
+
+        const softOnly = new Set([
+            'dialogue_ratio_below_target',
+            'dialogue_ratio_above_target',
+            'direction_literal_absent',
+            'direction_missing',
+            'caution_term_hit',
+            'thread_allowed_open'
+        ]);
+        const systemHard = new Set([
+            'process_label_leak',
+            'prompt_metadata_leak',
+            'prompt_instruction_leak',
+            'unexpected_markdown_title',
+            'scene_boundary_repetition',
+            'outline_mismatch'
+        ]);
+
+        if (softOnly.has(type)) return ['disable', 'exempt'];
+        // System gates stay hard; user may only exempt this finding instance.
+        if (systemHard.has(type)) return ['exempt'];
+        if (enforcement === 'hard') return ['soften', 'disable', 'exempt'];
+        return ['harden', 'disable', 'exempt'];
+    }
+
     return {
         TECHNICAL_REGISTER_MODES,
         FULFILLMENT_STATUSES,
         DEFAULT_TECHNICAL_PATTERNS,
+        TERMINAL_THREAD_STATUSES,
         parseDialogueRatioRange,
         normalizeQualityTargets,
         measureDialogueRatio,
@@ -592,6 +689,10 @@
         isBlockingFinding,
         compileQualityConstraints,
         normalizeThreadLedger,
+        normalizeThreadEntry,
+        mergeThreadEntries,
+        allowedFindingLockActions,
+        bannedTermConstraintId,
         evidenceExcerpt
     };
 });

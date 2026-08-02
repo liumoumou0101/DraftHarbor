@@ -104,6 +104,7 @@
     function isCreationWorkflow(run = selectedWorkflowRun()) {
         return !!(run && run.templateId === 'creation-guided');
     }
+    window.isCreationWorkflow = isCreationWorkflow;
 
     function isRewriteWorkflow(run = selectedWorkflowRun()) {
         return !!(run && run.templateId === 'rewrite-guided');
@@ -848,7 +849,7 @@
             compendium.dataset.workflowGuidedTransferCompendium = '';
             compendium.textContent = '确认并写入资料库';
             compendium.disabled = workflowState.generating;
-            compendium.addEventListener('click', () => transferGuidedCompendiumSuggestions().catch((error) => setWorkflowStatus(`资料回流失败：${error.message || error}`, 'error')));
+            compendium.addEventListener('click', () => window.transferGuidedCompendiumSuggestions().catch((error) => setWorkflowStatus(`资料回流失败：${error.message || error}`, 'error')));
             container.appendChild(writer);
             if (!isRewriteWorkflow(run)) {
                 container.appendChild(compendium);
@@ -1096,8 +1097,8 @@
                     brief: elements.brief ? elements.brief.value : '',
                     fineOutlineEnabled: !elements.fineOutline || elements.fineOutline.checked,
                     constraints: workflowLockConstraints(elements),
-                    writingInstructions: typeof workflowWritingInstructionsPayload === 'function'
-                        ? workflowWritingInstructionsPayload(elements)
+                    writingInstructions: typeof window.workflowWritingInstructionsPayload === 'function'
+                        ? window.workflowWritingInstructionsPayload(elements)
                         : undefined,
                     generationPolicy: workflowGenerationLaunchConfig()
                 })
@@ -1148,75 +1149,69 @@
     }
 
     async function transferGuidedDrafts() {
-        const projectId = currentProjectId();
-        const run = selectedWorkflowRun();
-        const drafts = (run.artifacts || []).filter((artifact) => artifact.nodeId === 'draft' && artifact.revision.reviewState === 'approved');
-        if (!drafts.length) throw new Error('没有已批准的正文产物');
-        const activeScene = (nativeEditorState.snapshot.scenes || []).find((scene) => scene.id === nativeEditorState.activeSceneId);
-        const chapterId = `workflow-${run.id}`;
-        const scenes = drafts.map((artifact, index) => ({
-            sceneId: `${chapterId}-scene-${index + 1}`,
-            chapterId,
-            chapterTitle: `${run.title} · 生成章节`,
-            title: artifact.title,
-            summary: artifact.revision.summary,
-            source: { runId: run.id, artifactId: artifact.id, revisionId: artifact.revision.id }
-        }));
-        const previewResponse = await fetch('/api/workflows/v2/preview-writer-transfer', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, runId: run.id, scenes })
-        });
-        const preview = await previewResponse.json().catch(() => ({}));
-        if (!previewResponse.ok || !preview.ok) throw new Error(preview.error || `HTTP ${previewResponse.status}`);
-        const targetHint = activeScene ? `当前场景所在项目中新建章节` : '项目中新建章节';
-        if (!window.confirm(`将 ${preview.counts.scenes} 个场景转入写作区（${targetHint}），是否继续？`)) return;
-        const response = await fetch('/api/workflows/v2/apply-writer-transfer', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                projectId,
-                runId: run.id,
-                applicationId: workflowStableApplicationId(`guided-writer-${run.id}`, drafts.map((artifact) => artifact.revision.id)),
-                scenes
-            })
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
-        if (result.guidedRun) workflowState.runs = workflowState.runs.map((item) => item.id === run.id ? result.guidedRun : item);
-        const refreshed = await fetchProjectSnapshot({ id: projectId });
-        loadNativeProjectEditor(refreshed, { id: projectId, source: 'project-directory' });
-        loadReaderFromProjectSnapshot(refreshed);
-        await loadProjectLibrary();
-        await loadWorkflowEvents();
-        renderWorkflow();
-        setWorkflowStatus('正文已转入写作区；资料卡需要点击“确认并写入资料库”另行确认。', 'ok');
-    }
+        try {
+            const projectId = currentProjectId();
+            const run = selectedWorkflowRun();
+            const drafts = (run.artifacts || []).filter((artifact) => artifact.nodeId === 'draft' && artifact.revision.reviewState === 'approved');
+            if (!drafts.length) throw new Error('没有已批准的正文产物');
 
-    async function transferGuidedCompendiumSuggestions() {
-        const projectId = currentProjectId();
-        const run = selectedWorkflowRun();
-        const sourceArtifact = isCreationWorkflow(run)
-            ? (run.artifacts || []).find((artifact) => artifact.nodeId === 'compendium' && artifact.revision.reviewState === 'approved')
-            : (run.artifacts || []).find((artifact) => artifact.nodeId === 'analysis' && artifact.revision.reviewState === 'approved');
-        const drafts = isCreationWorkflow(run)
-            ? sourceArtifact && sourceArtifact.content && sourceArtifact.content.entries
-            : sourceArtifact && sourceArtifact.content && sourceArtifact.content.characterCandidates;
-        const candidates = Array.isArray(drafts)
-            ? drafts.map((draft, index) => ({ id: `guided-card-${index + 1}`, draft, source: { runId: run.id, artifactId: sourceArtifact.id, revisionId: sourceArtifact.revision.id } }))
-            : [];
-        if (!candidates.length) throw new Error(isCreationWorkflow(run) ? '人物与世界观阶段没有提供资料卡草稿' : '原文分析没有提供资料卡候选');
-        const previewResponse = await fetch('/api/workflows/v2/preview-compendium-suggestions', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, runId: run.id, candidates })
-        });
-        const preview = await previewResponse.json().catch(() => ({}));
-        if (!previewResponse.ok || !preview.ok) throw new Error(preview.error || `HTTP ${previewResponse.status}`);
-        if (!window.confirm(`发现 ${preview.suggestions.length} 条资料建议。确认后才会写入资料库，是否全部应用？`)) return;
-        const response = await fetch('/api/workflows/v2/apply-compendium-suggestions', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectId, runId: run.id, applicationId: `guided-compendium-${Date.now()}`, candidates, confirmedSuggestionIds: preview.suggestions.map((suggestion) => suggestion.id) })
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
-        await loadCompendium();
-        setWorkflowStatus('已确认的资料建议已写入资料库。', 'ok');
+            // Creation: open editable chapter assembly panel (F-09.6I).
+            if (isCreationWorkflow(run) && typeof window.openWorkflowChapterAssembly === 'function') {
+                setWorkflowStatus('正在打开章节装配预览…', 'info');
+                await window.openWorkflowChapterAssembly(projectId, run);
+                setWorkflowStatus('请在章节装配中调整章名/顺序后确认转入写作区。', 'info');
+                return;
+            }
+
+            // Non-creation templates: single chapter fallback without batch names.
+            const chapterId = `workflow-${run.id}`;
+            const scenes = drafts.map((artifact) => ({
+                sceneId: artifact.targetRef?.sceneId || artifact.id,
+                targetSceneId: artifact.targetRef?.sceneId || artifact.id,
+                chapterId,
+                chapterTitle: window.cleanChapterTitleForTransfer(run.title || '正文', artifact.title),
+                title: artifact.title,
+                summary: artifact.revision.summary,
+                source: { runId: run.id, artifactId: artifact.id, revisionId: artifact.revision.id }
+            }));
+            if (!scenes.length) throw new Error('章节装配结果为空');
+
+            const previewResponse = await fetch('/api/workflows/v2/preview-writer-transfer', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, runId: run.id, scenes })
+            });
+            const preview = await previewResponse.json().catch(() => ({}));
+            if (!previewResponse.ok || !preview.ok) throw new Error(preview.error || `HTTP ${previewResponse.status}`);
+            if (!window.confirm(`将 ${preview.counts.scenes} 个场景转入写作区，是否继续？`)) return;
+            const applicationId = (typeof window.workflowStableApplicationId === 'function'
+                ? window.workflowStableApplicationId
+                : (typeof workflowStableApplicationId === 'function' ? workflowStableApplicationId : null));
+            if (!applicationId) throw new Error('workflowStableApplicationId is unavailable');
+            const response = await fetch('/api/workflows/v2/apply-writer-transfer', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectId,
+                    runId: run.id,
+                    applicationId: applicationId(
+                        `guided-writer-${run.id}`,
+                        drafts.map((artifact) => artifact.revision.id)
+                    ),
+                    scenes
+                })
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+            if (result.guidedRun) workflowState.runs = workflowState.runs.map((item) => item.id === run.id ? result.guidedRun : item);
+            const refreshed = await fetchProjectSnapshot({ id: projectId });
+            loadNativeProjectEditor(refreshed, { id: projectId, source: 'project-directory' });
+            loadReaderFromProjectSnapshot(refreshed);
+            await loadProjectLibrary();
+            await loadWorkflowEvents();
+            renderWorkflow();
+            setWorkflowStatus('正文已转入写作区；资料卡需要点击“确认并写入资料库”另行确认。', 'ok');
+        } catch (error) {
+            window.__lastTransferError = String(error && error.message || error);
+            throw error;
+        }
     }
 
     async function transferGuidedRewrite() {

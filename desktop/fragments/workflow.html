@@ -227,6 +227,7 @@
                                 <div><span>本段字数</span><strong data-workflow-stream-characters>0</strong></div>
                                 <div><span>生成速度</span><strong data-workflow-stream-rate>等待首字</strong></div>
                                 <div><span>已用时间</span><strong data-workflow-stream-elapsed>0:00</strong></div>
+                                <div><span>输入用量</span><strong data-workflow-stream-usage>待估算</strong></div>
                             </aside>
                         </div>
                         <footer class="desktop-workflow-stream-footer">
@@ -268,6 +269,23 @@
                         </details>
                         <p class="desktop-modal-status" data-workflow-active-lock-status aria-live="polite"></p>
                     </section>
+                    <dialog class="desktop-workflow-assembly-dialog" data-workflow-assembly-dialog aria-labelledby="workflow-assembly-title">
+                        <header class="desktop-workflow-assembly-header">
+                            <div>
+                                <p class="desktop-section-kicker">Chapter Assembly</p>
+                                <h2 id="workflow-assembly-title">章节装配预览</h2>
+                                <p data-workflow-assembly-meta>按叙事章节整理场景后再回流；确认前不写入项目。</p>
+                            </div>
+                            <button class="desktop-icon-button" type="button" data-workflow-assembly-close aria-label="关闭">×</button>
+                        </header>
+                        <div class="desktop-workflow-assembly-body" data-workflow-assembly-body></div>
+                        <footer class="desktop-workflow-assembly-actions">
+                            <p class="desktop-reader-hint" data-workflow-assembly-status aria-live="polite"></p>
+                            <button class="desktop-secondary-action" type="button" data-workflow-assembly-reset>恢复默认装配</button>
+                            <button class="desktop-secondary-action" type="button" data-workflow-assembly-close>取消</button>
+                            <button class="desktop-primary-action" type="button" data-workflow-assembly-confirm>确认转入写作区</button>
+                        </footer>
+                    </dialog>
                     <div class="desktop-workflow-stage-actions" data-workflow-stage-actions hidden></div>
                     <div class="desktop-workflow-steps" data-workflow-steps></div>
                     <section class="desktop-workflow-graph" data-workflow-graph aria-label="只读工作流图" hidden></section>

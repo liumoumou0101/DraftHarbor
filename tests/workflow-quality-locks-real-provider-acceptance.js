@@ -11,7 +11,6 @@
  * 4. 审查 finding 升硬 / 豁免 / 降软
  * 5. 续写启动是否持久化 writing-instructions
  */
-const assert = require('assert');
 const fs = require('fs/promises');
 const path = require('path');
 
@@ -131,17 +130,9 @@ async function ensureProject() {
   }
 }
 
-async function resetCreationRun(projectPath) {
-  try {
-    const existing = await runStore.readWorkflowV2Run(projectPath, RUN_ID);
-    if (existing) {
-      // Keep history: use a unique run id if exists and already has drafts
-      return false;
-    }
-  } catch {
-    // ignore
-  }
-  return true;
+function tryParseJson(text) {
+  const cleaned = String(text || '').replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+  return JSON.parse(cleaned);
 }
 
 (async () => {
@@ -377,11 +368,6 @@ async function resetCreationRun(projectPath) {
       nodeId: 'review'
     });
     mark('C4', '准备审查 Prompt 成功', !!(preparedReview && preparedReview.prompts && preparedReview.prompts[0]), preparedReview && preparedReview.prompts && preparedReview.prompts[0] && preparedReview.prompts[0].title);
-
-    function tryParseJson(text) {
-      const cleaned = String(text || '').replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-      return JSON.parse(cleaned);
-    }
 
     let reviewPayload = '';
     const reviewAttempt = await streamText('semantic-review', preparedReview.prompts[0].prompt, {

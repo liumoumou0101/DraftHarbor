@@ -57,7 +57,12 @@ function prepareCreationStage(stage, context = {}) {
       }]
     };
   }
-  const blueprint = CreationSchema.createStoryBlueprint(context.blueprint || {});
+  // F-09.6J: write/plan/review may pass blueprint digest (no full acts). Accept soft shape.
+  const blueprint = context.blueprint && context.blueprint.centralConflict
+    ? (typeof CreationSchema.createStoryBlueprint === 'function' && context.blueprint.acts
+      ? CreationSchema.createStoryBlueprint(context.blueprint)
+      : context.blueprint)
+    : (context.blueprint || {});
   if (stage === 'compendium') {
     return {
       outputFormat: 'json',
@@ -75,7 +80,21 @@ function prepareCreationStage(stage, context = {}) {
       ]
     };
   }
-  const compendium = CreationSchema.createCompendiumDraftBundle(context.compendium || {}, { projectId: context.projectId });
+  // Assembled compendium may already be a slim entries list without full card validation.
+  let compendium = context.compendium;
+  try {
+    if (context.compendium && (context.compendium.entries || context.compendium.cards)) {
+      compendium = CreationSchema.createCompendiumDraftBundle(context.compendium, { projectId: context.projectId });
+    }
+  } catch (_error) {
+    compendium = {
+      schemaVersion: 1,
+      kind: 'compendium-draft-bundle',
+      entries: Array.isArray(context.compendium && context.compendium.entries)
+        ? context.compendium.entries
+        : []
+    };
+  }
   if (stage === 'plan') {
     const fineOutlineEnabled = context.fineOutlineEnabled !== false;
     const batchContext = context.batchContext && typeof context.batchContext === 'object' ? context.batchContext : {};
@@ -88,7 +107,7 @@ function prepareCreationStage(stage, context = {}) {
       prompts: [{
         id: 'creation-scene-plan',
         title: '节奏与场景计划',
-        prompt: jsonPrompt(`${planningInstruction} ${instructionPriority} 若 batchContext.dueThreads 或 mustCloseThreads 非空，本批计划必须推进或明确回收这些未解线索，并在相关场景的 mustInclude/outcome/hook 中体现。fineOutline 必须是字符串数组，每项是一条可直接执行的情节动作，不得返回对象。返回 {fineOutlineEnabled:${fineOutlineEnabled},scenes:[{id,title,povCharacter,location,goal,conflict,outcome,participants,turningPoint,reveal,hook,emotionalStart,emotionalEnd,emotionalBeat,pace:"slow|medium|fast",conflictIntensity:0,informationDensity:0,targetWords:0,mustInclude:[],avoid:[],continuity,fineOutline:["情节动作"]}]}。`, { brief, selectedDirection, blueprint, compendium, constraints, writingInstructions, globalContext, batchContext })
+        prompt: jsonPrompt(`${planningInstruction} ${instructionPriority} 若 batchContext.dueThreads 或 mustCloseThreads 非空，本批计划必须推进或明确回收这些未解线索，并在相关场景的 mustInclude/outcome/hook 中体现。可为场景填写可选叙事章节字段 chapterKey（稳定键）、chapterTitle（读者章名，禁止“第N批”）、chapterOrder、sceneOrderInChapter、chapterBreakBefore（本场前是否新开章）；字段可省略，回流时会再装配。fineOutline 必须是字符串数组，每项是一条可直接执行的情节动作，不得返回对象。返回 {fineOutlineEnabled:${fineOutlineEnabled},scenes:[{id,title,chapterKey,chapterTitle,chapterOrder,sceneOrderInChapter,chapterBreakBefore,povCharacter,location,goal,conflict,outcome,participants,turningPoint,reveal,hook,emotionalStart,emotionalEnd,emotionalBeat,pace:"slow|medium|fast",conflictIntensity:0,informationDensity:0,targetWords:0,mustInclude:[],avoid:[],continuity,fineOutline:["情节动作"]}]}。`, { brief, selectedDirection, blueprint, compendium, constraints, writingInstructions, globalContext, batchContext })
       }]
     };
   }
@@ -100,7 +119,19 @@ function prepareCreationStage(stage, context = {}) {
       prompts: scenePlan.scenes.map((scene) => ({
         id: scene.id,
         title: scene.title,
-        prompt: textPrompt(`你是长篇小说作者。只输出当前场景正文，不解释，不输出标题。严格遵守已确认的故事蓝图、人物与世界观资料、场景节奏和约束。${instructionPriority} 正文长度应尽量接近 currentScene.targetWords 指定的中文字符数；除非场景已经自然完成，不要少于该目标的 80%，也不要用重复、总结或无效描写凑长度。若 batchContext.repairReview 存在，只修复其中与 currentScene.id 对应的问题，保留未被指出有问题的事实和推进结果。若提供了当前批次已经完成的真实正文结尾，必须从其事实、人物状态、情绪和动作结果自然承接，不得重置场景。严格停在 currentScene.outcome 或 currentScene.hook 所界定的场景边界，不得提前完成下一场景的核心转折；若前一场已经意外覆盖当前场景的部分内容，应从最新事实继续推进而不是重演。scenePlan、currentScene、batchContext 中的 id、序号、批次名和“场景”等标签只供内部定位，正文绝不能提及“场景 6-1”“上一批”“计划要求”等创作过程信息。`, { brief, selectedDirection, blueprint, compendium, scenePlan, currentScene: scene, constraints, writingInstructions, globalContext, batchContext })
+        prompt: textPrompt(`你是长篇小说作者。只输出当前场景正文，不解释，不输出标题。严格遵守已确认的故事蓝图摘要、人物与世界观资料、场景节奏和约束。${instructionPriority} 若提供 styleExemplar，只学习其语气、句式、对话节奏与叙事距离，禁止复述或续写例文中的具体情节。正文长度应尽量接近 currentScene.targetWords 指定的中文字符数；除非场景已经自然完成，不要少于该目标的 80%，也不要用重复、总结或无效描写凑长度。若 batchContext.repairReview 存在，只修复其中与 currentScene.id 对应的问题，保留未被指出有问题的事实和推进结果。若提供了当前批次已经完成的真实正文结尾，必须从其事实、人物状态、情绪和动作结果自然承接，不得重置场景。严格停在 currentScene.outcome 或 currentScene.hook 所界定的场景边界，不得提前完成下一场景的核心转折；若前一场已经意外覆盖当前场景的部分内容，应从最新事实继续推进而不是重演。scenePlan、currentScene、batchContext 中的 id、序号、批次名和“场景”等标签只供内部定位，正文绝不能提及“场景 6-1”“上一批”“计划要求”等创作过程信息。`, {
+          brief,
+          selectedDirection,
+          blueprint,
+          compendium,
+          scenePlan,
+          currentScene: scene,
+          constraints,
+          writingInstructions,
+          globalContext,
+          batchContext,
+          styleExemplar: context.styleExemplar || undefined
+        })
       }))
     };
   }

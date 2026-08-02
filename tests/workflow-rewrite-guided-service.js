@@ -22,11 +22,26 @@ const { startDesktopServers } = require('../desktop/local-server');
       ]
     });
     const base = { dataRoot, projectId: 'rewrite-guided-project', runId: 'rewrite-guided-run' };
-    const started = await Rewrite.startGuidedRewrite({ ...base, scope: 'chapter', chapterId: 'chapter-1', brief: { instruction: '压缩开场并强化悬疑', preserve: ['怀表'] } });
+    // Include writingInstructions: F-09.6H regression was latest(source) picking instructions over writer-source.
+    const started = await Rewrite.startGuidedRewrite({
+      ...base,
+      scope: 'chapter',
+      chapterId: 'chapter-1',
+      brief: { instruction: '压缩开场并强化悬疑', preserve: ['怀表'] },
+      writingInstructions: {
+        text: '克制叙述',
+        qualityTargets: { technicalRegisterMode: 'avoid', dialogueRatioEnabled: false }
+      }
+    });
     assert.ok(started.ok);
     let details = await Rewrite.getRewriteRun(dataRoot, base.projectId, base.runId);
     assert.strictEqual(details.run.activeNodeId, 'plan');
-    assert.strictEqual(details.run.artifacts.find((artifact) => artifact.nodeId === 'source').content.intent, 'rewrite');
+    const sourceSnapshot = Rewrite.sourceSnapshotArtifact(details.run.artifacts);
+    const writing = Rewrite.writingInstructionsArtifact(details.run.artifacts);
+    assert.ok(sourceSnapshot && sourceSnapshot.artifactType === 'writer-source@1');
+    assert.strictEqual(sourceSnapshot.content.intent, 'rewrite');
+    assert.ok(writing && writing.artifactType === 'workflow-writing-instructions@1');
+    assert.notStrictEqual(sourceSnapshot.id, writing.id);
 
     let prepared = await Rewrite.prepareRewriteNode(base);
     assert.strictEqual(prepared.nodeId, 'plan');

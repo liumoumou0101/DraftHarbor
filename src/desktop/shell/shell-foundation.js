@@ -252,7 +252,8 @@
             lastTokenAt: 0,
             follow: true,
             collapsed: false,
-            model: ''
+            model: '',
+            usageHint: null
         }
     };
     const recoveryState = {
