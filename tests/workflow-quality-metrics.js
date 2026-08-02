@@ -159,6 +159,15 @@ assert.deepStrictEqual(claw.lastAdvanced, { sceneId: 's2' });
 assert.ok(claw.mustClose === true);
 assert.ok(!closedPreserved.unresolvedThreads.some((item) => item.threadId === 'thread-claw'));
 
+const semanticCannotInventHardThread = Quality.normalizeThreadLedger({}, {
+  unresolvedThreads: [{ threadId: 'ai-hook', label: '模型新发现的悬念', status: 'open', mustClose: true }]
+}, { qualityTargets: {} });
+assert.strictEqual(semanticCannotInventHardThread.threadLedger[0].mustClose, false);
+const instructedHardThread = Quality.normalizeThreadLedger({}, {
+  unresolvedThreads: [{ threadId: 'author-hook', label: '作者伏笔', status: 'open', mustClose: false }]
+}, { qualityTargets: { foreshadowingThreads: [{ threadId: 'author-hook', label: '作者伏笔', mustClose: true }] } });
+assert.strictEqual(instructedHardThread.threadLedger[0].mustClose, true);
+
 // outcome semantic must not blanket-apply to missing mustInclude fields
 const outcomeOnly = Quality.evaluatePlanFulfillment({
   scenePlan: {
@@ -181,7 +190,15 @@ const outcomeOnly = Quality.evaluatePlanFulfillment({
 });
 assert.ok(outcomeOnly.some((item) => item.field === 'outcome' && item.status === 'deferred' && item.source === 'ai-semantic-review'));
 assert.ok(outcomeOnly.filter((item) => item.field.startsWith('mustInclude')).every((item) => item.source === 'deterministic-weak-signal'));
+assert.ok(outcomeOnly.filter((item) => item.field.startsWith('mustInclude')).every((item) => item.status === 'unverified'));
 assert.ok(!outcomeOnly.some((item) => item.field.startsWith('mustInclude') && item.status === 'deferred'));
+const incompletePlanFindings = Quality.planFulfillmentFindings(outcomeOnly, { planOutcomeLocked: true });
+assert.strictEqual(incompletePlanFindings.filter((item) => item.type === 'plan_fulfillment_review_incomplete').length, 1);
+assert.ok(!incompletePlanFindings.some((item) => item.type === 'plan_outcome_unfulfilled'));
+assert.deepStrictEqual(Quality.planFulfillmentChecklist({ scenes: [{ id: 's1', mustInclude: ['甲'], outcome: '乙' }] }), [
+  { sceneId: 's1', field: 'mustInclude[0]', expected: '甲' },
+  { sceneId: 's1', field: 'outcome', expected: '乙' }
+]);
 
 // banned term findings carry constraintId for lock persistence
 const bannedFindings = Quality.buildQualityFindings({

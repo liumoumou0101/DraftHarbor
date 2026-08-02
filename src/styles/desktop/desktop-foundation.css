@@ -1603,7 +1603,7 @@ background:
 
 .desktop-workflow-view.is-active {
     display: grid;
-    grid-template-columns: 320px minmax(0, 1fr);
+    grid-template-columns: 264px minmax(0, 1fr);
     min-height: 0;
 }
 
@@ -1616,8 +1616,8 @@ background:
     display: grid;
     grid-auto-rows: max-content;
     align-content: start;
-    gap: 14px;
-    padding: 20px;
+    gap: 12px;
+    padding: 18px 14px;
     border-right: 1px solid var(--desktop-line);
     background: rgba(255, 255, 255, 0.025);
     overflow-y: auto;
@@ -1652,40 +1652,6 @@ background:
     border: 1px solid var(--desktop-line);
     border-radius: 9px;
     background: rgba(255, 255, 255, 0.025);
-}
-
-.desktop-workflow-launcher > summary {
-    display: flex;
-    padding: 12px 14px;
-    cursor: pointer;
-    color: var(--desktop-text);
-    user-select: none;
-}
-
-.desktop-workflow-launcher > summary > span {
-    display: grid;
-    gap: 3px;
-}
-
-.desktop-workflow-launcher > summary small {
-    color: var(--desktop-muted);
-    font-size: 11px;
-    font-weight: 400;
-}
-
-.desktop-workflow-launcher-body {
-    display: grid;
-    gap: 12px;
-    padding: 0 12px 12px;
-    border-top: 1px solid var(--desktop-line);
-}
-
-.desktop-workflow-launcher-body > :first-child {
-    margin-top: 12px;
-}
-
-.desktop-workflow-launch-fields[hidden] {
-    display: none;
 }
 
 .desktop-workflow-field-grid {

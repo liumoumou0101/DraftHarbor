@@ -124,8 +124,8 @@ function assertPreparedGlobalContext(prepared, label) {
     await Creation.approveCreationNode(base);
 
     const plan = { scenes: [
-      { id: 'dive', title: '第一次下潜', goal: '进入城市', conflict: '氧气泄漏', pace: 'fast', conflictIntensity: 82, targetWords: 4000, fineOutline: ['穿过闸门', '发现墓碑'] },
-      { id: 'archive', title: '死亡档案', goal: '读取记录', conflict: 'AI 封锁', pace: 'medium', conflictIntensity: 68, targetWords: 3800, fineOutline: ['潜入档案馆', '读取记录'] }
+      { id: 'dive', title: '第一次下潜', goal: '进入城市', conflict: '氧气泄漏', outcome: '穿过闸门', mustInclude: ['记住盐印规则'], pace: 'fast', conflictIntensity: 82, targetWords: 4000, fineOutline: ['穿过闸门', '发现墓碑'] },
+      { id: 'archive', title: '死亡档案', goal: '读取记录', conflict: 'AI 封锁', outcome: '取得死亡记录', mustInclude: ['藏好副本'], pace: 'medium', conflictIntensity: 68, targetWords: 3800, fineOutline: ['潜入档案馆', '读取记录'] }
     ] };
     prepared = await Creation.prepareCreationNode(base);
     assert.strictEqual(prepared.nodeId, 'plan');
@@ -149,7 +149,7 @@ function assertPreparedGlobalContext(prepared, label) {
     assert.ok(firstDraftPayload.selectedDirection, 'draft prepare must merge directions into selectedDirection (assembly keeps directions)');
     await Creation.completeCreationNode({
       ...base,
-      outputs: ['苏晚穿过灌满海水的闸门。'],
+      outputs: ['守门人说，盐印不得离开港区，否则会立刻碎裂。苏晚记住规则，穿过灌满海水的闸门。'],
       outputIndexes: [prepared.prompts[0].outputIndex],
       outputTitles: [prepared.prompts[0].title],
       partial: true
@@ -160,6 +160,7 @@ function assertPreparedGlobalContext(prepared, label) {
     assert.strictEqual(prepared.prompts[0].outputIndex, 1);
     const secondDraftPayload = JSON.parse(prepared.prompts[0].prompt.messages[1].content);
     assert.ok(secondDraftPayload.batchContext.currentBatch.lastSceneEnding.includes('闸门'));
+    assert.ok(secondDraftPayload.batchContext.currentBatch.completedScenes[0].factAnchors.some((item) => item.includes('盐印不得离开港区')));
     assert.ok(secondDraftPayload.selectedDirection, 'second draft scene must still merge selectedDirection');
     await Creation.completeCreationNode({
       ...base,
@@ -172,7 +173,7 @@ function assertPreparedGlobalContext(prepared, label) {
     assert.deepStrictEqual(firstBatchDrafts.map((artifact) => artifact.targetRef.batchId), ['batch-0001', 'batch-0001']);
     assert.deepStrictEqual(firstBatchDrafts.map((artifact) => artifact.targetRef.sceneId), ['dive', 'archive']);
     assert.deepStrictEqual(firstBatchDrafts.map((artifact) => artifact.title), ['第一次下潜', '死亡档案']);
-    assert.strictEqual(details.run.batches[0].batchCharacters, '苏晚穿过灌满海水的闸门。'.length + '档案馆里保存着她的死亡记录。场景 6-1 的计划要求已经完成。'.length);
+    assert.strictEqual(details.run.batches[0].batchCharacters, '守门人说，盐印不得离开港区，否则会立刻碎裂。苏晚记住规则，穿过灌满海水的闸门。'.length + '档案馆里保存着她的死亡记录。场景 6-1 的计划要求已经完成。'.length);
     await Creation.approveCreationNode(base);
 
     prepared = await Creation.prepareCreationNode(base);
@@ -180,6 +181,7 @@ function assertPreparedGlobalContext(prepared, label) {
     assertPreparedGlobalContext(prepared, 'review');
     const reviewPayload = JSON.parse(prepared.prompts[0].prompt.messages[1].content);
     assert.ok(reviewPayload.drafts.every((draft) => draft.sceneId && draft.revisionId));
+    assert.ok(reviewPayload.reviewRequirements.planFulfillmentChecklist.length >= 2);
     details = await Creation.completeCreationNode({ ...base, outputs: [JSON.stringify({ summary: '需要补强动机', findings: [{ type: 'motivation_gap', severity: 'medium', sceneTitle: '死亡档案', evidence: '直接冒险', suggestion: '补充选择过程' }, { type: 'constraint', severity: 'pass', sceneTitle: '死亡档案', evidence: '约束通过', suggestion: '无' }] })] });
     assert.strictEqual(details.run.activeNodeId, 'transfer');
     assert.ok(details.run.artifacts.find((artifact) => artifact.nodeId === 'review').content.findings.some((finding) => finding.source === 'ai-semantic-review'));

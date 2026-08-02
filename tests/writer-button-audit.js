@@ -87,7 +87,45 @@ async function openNativeModelSettings(page) {
     await page.focus('.desktop-project-card');
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => document.querySelector('[data-native-project-title]').textContent.includes('Writer Audit Project'));
+    await page.waitForFunction(() => document.querySelector('[data-native-writer]').classList.contains('is-assistant-bottom'));
 
+    for (const inlineConfirmation of [false, true]) {
+      await page.evaluate((isInline) => {
+        const output = document.querySelector('[data-native-generation-output]');
+        const result = document.querySelector('[data-native-generation-result]');
+        output.hidden = false;
+        output.classList.toggle('is-inline-confirmation', isInline);
+        result.hidden = isInline;
+        result.textContent = 'Writer layout generation result.';
+      }, inlineConfirmation);
+      const flow = await page.evaluate(() => {
+        const output = document.querySelector('[data-native-generation-output]').getBoundingClientRect();
+        const footer = document.querySelector('[data-native-paper-footer]').getBoundingClientRect();
+        return { outputBottom: output.bottom, footerTop: footer.top };
+      });
+      assert.ok(flow.outputBottom <= flow.footerTop + 1, 'bottom generation output should stay above the paper footer');
+    }
+    await page.evaluate(() => {
+      const output = document.querySelector('[data-native-generation-output]');
+      output.hidden = true;
+      output.classList.remove('is-inline-confirmation');
+    });
+
+    await page.evaluate(() => {
+      const handle = document.querySelector('[data-native-resize-assistant]');
+      const assistant = document.querySelector('.desktop-native-assistant');
+      const startY = assistant.getBoundingClientRect().top;
+      handle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientY: startY }));
+      document.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientY: startY - 80 }));
+      document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientY: startY - 80 }));
+    });
+    await page.waitForFunction(() => Number.parseFloat(document.querySelector('[data-native-writer]').style.getPropertyValue('--native-assistant-height')) > 0);
+    assert.ok(Number(await page.evaluate(() => localStorage.getItem('draftharbor:nativeAssistantHeight'))) > 0, 'bottom assistant height should persist locally');
+
+    await page.evaluate(() => {
+      const advanced = document.querySelector('[data-native-generation-advanced]');
+      if (advanced) advanced.open = true;
+    });
     await page.click('[data-native-manage-global-prompt]');
     await page.waitForFunction(() => document.querySelector('[data-native-global-prompt-dialog]').open);
     await page.check('[data-native-global-prompt-enabled]');
@@ -115,6 +153,21 @@ async function openNativeModelSettings(page) {
     await page.waitForFunction(() => document.querySelector('[data-native-writer]').classList.contains('is-outline-collapsed'));
     await page.click('[data-native-toggle-outline]');
     await page.waitForFunction(() => !document.querySelector('[data-native-writer]').classList.contains('is-outline-collapsed'));
+
+    // The outline divider is only active in the right-hand assistant layout.
+    await page.click('[data-native-assistant-placement]');
+    await page.waitForFunction(() => !document.querySelector('[data-native-writer]').classList.contains('is-assistant-bottom'));
+
+    await page.evaluate(() => {
+      const handle = document.querySelector('[data-native-resize-assistant]');
+      const assistant = document.querySelector('.desktop-native-assistant');
+      const startX = assistant.getBoundingClientRect().left;
+      handle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: startX }));
+      document.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: startX - 80 }));
+      document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: startX - 80 }));
+    });
+    await page.waitForFunction(() => Number.parseFloat(document.querySelector('[data-native-writer]').style.getPropertyValue('--native-assistant-width')) >= 320);
+    assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('draftharbor:nativeSidebarWidths')).assistant >= 320), 'resized assistant width should persist locally');
 
     await page.evaluate(() => {
       const handle = document.querySelector('[data-native-resize-outline]');
@@ -569,9 +622,83 @@ async function openNativeModelSettings(page) {
     assert.strictEqual(lastGenConfig.enableThinking, true, 'generation config should have enableThinking true');
     assert.strictEqual(lastGenConfig.apiKey, 'writer-audit-test-key', 'global inherit generation config should keep the runtime API key');
     await page.waitForFunction(() => document.querySelector('[data-native-scene-editor]').value.includes('Audit generated text.'));
+    const inlineGenerationLayout = await page.evaluate(() => {
+      const editor = document.querySelector('[data-native-scene-editor]');
+      const body = document.querySelector('.desktop-native-editor-body');
+      const output = document.querySelector('[data-native-generation-output]');
+      const footer = document.querySelector('[data-native-paper-footer]');
+      const bodyRect = body.getBoundingClientRect();
+      const outputRect = output.getBoundingClientRect();
+      const footerRect = footer.getBoundingClientRect();
+      return {
+        selectionStart: editor.selectionStart,
+        selectionEnd: editor.selectionEnd,
+        output: { left: outputRect.left, top: outputRect.top, right: outputRect.right, bottom: outputRect.bottom },
+        body: { left: bodyRect.left, top: bodyRect.top, right: bodyRect.right, bottom: bodyRect.bottom },
+        footer: { top: footerRect.top, bottom: footerRect.bottom }
+      };
+    });
+    assert.strictEqual(inlineGenerationLayout.selectionStart, inlineGenerationLayout.selectionEnd, 'inline generation should leave a caret, not a selected paragraph');
+    assert.ok(inlineGenerationLayout.output.left >= inlineGenerationLayout.body.left - 1, 'generation confirmation should stay inside the editor body on the left');
+    assert.ok(inlineGenerationLayout.output.right <= inlineGenerationLayout.body.right + 1, 'generation confirmation should stay inside the editor body on the right');
+    assert.ok(inlineGenerationLayout.output.top >= inlineGenerationLayout.body.top - 1, 'generation confirmation should stay inside the editor body on top');
+    assert.ok(inlineGenerationLayout.output.bottom <= inlineGenerationLayout.body.bottom + 1, 'generation confirmation should stay inside the editor body on bottom');
+    assert.ok(inlineGenerationLayout.output.bottom <= inlineGenerationLayout.footer.top + 1 || inlineGenerationLayout.output.top >= inlineGenerationLayout.footer.bottom - 1, 'generation confirmation should not cover the paper footer');
+    const generationMark = await page.evaluate(() => {
+      const layer = document.querySelector('[data-native-generation-layer]');
+      const mark = document.querySelector('.desktop-native-editor-generation-mark');
+      return {
+        visible: !!layer && !layer.hidden,
+        text: mark ? mark.textContent : '',
+        color: mark ? getComputedStyle(mark).color : ''
+      };
+    });
+    assert.ok(generationMark.visible, 'pending inline generation should show a dedicated visual mark layer');
+    assert.ok(generationMark.text.includes('Audit generated text.'), 'generation mark should cover the newly inserted text');
+    assert.notStrictEqual(generationMark.color, 'rgba(0, 0, 0, 0)', 'generation mark should keep readable text color');
+    await page.click('[data-native-scene-editor]', { position: { x: 80, y: 80 } });
+    await page.waitForFunction(() => !document.querySelector('[data-native-generation-layer]').hidden);
+
+    await page.evaluate(() => {
+      const handle = document.querySelector('[data-native-generation-drag-handle]');
+      const output = document.querySelector('[data-native-generation-output]');
+      const body = document.querySelector('.desktop-native-editor-body');
+      const start = handle.getBoundingClientRect();
+      const pointerDown = new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: start.left + 4, clientY: start.top + 4, pointerId: 41 });
+      const pointerMove = new PointerEvent('pointermove', { bubbles: true, clientX: -5000, clientY: -5000, pointerId: 41 });
+      const pointerUp = new PointerEvent('pointerup', { bubbles: true, button: 0, clientX: -5000, clientY: -5000, pointerId: 41 });
+      handle.dispatchEvent(pointerDown);
+      handle.dispatchEvent(pointerMove);
+      handle.dispatchEvent(pointerUp);
+      const outputRect = output.getBoundingClientRect();
+      const bodyRect = body.getBoundingClientRect();
+      window.__draftHarborGenerationDragAudit = {
+        left: outputRect.left,
+        top: outputRect.top,
+        right: outputRect.right,
+        bottom: outputRect.bottom,
+        body: { left: bodyRect.left, top: bodyRect.top, right: bodyRect.right, bottom: bodyRect.bottom },
+        stored: localStorage.getItem('draftharbor:nativeGenerationOutputPosition')
+      };
+    });
+    const dragAudit = await page.evaluate(() => window.__draftHarborGenerationDragAudit);
+    assert.ok(dragAudit.left >= dragAudit.body.left - 1 && dragAudit.right <= dragAudit.body.right + 1, 'dragged generation confirmation should clamp horizontally to the editor body');
+    assert.ok(dragAudit.top >= dragAudit.body.top - 1 && dragAudit.bottom <= dragAudit.body.bottom + 1, 'dragged generation confirmation should clamp vertically to the editor body');
+    assert.ok(dragAudit.stored, 'dragged generation confirmation should persist its position');
+    await page.dblclick('[data-native-generation-drag-handle]');
+    await page.waitForFunction(() => !!localStorage.getItem('draftharbor:nativeGenerationOutputPosition'));
     await page.selectOption('[data-native-generation-insert-mode]', 'cursor');
     await page.click('[data-native-accept-generation]');
     await page.waitForFunction(() => document.querySelector('[data-native-scene-editor]').value.includes('Audit generated text.'));
+    await page.waitForFunction(() => document.querySelector('[data-native-generation-layer]').hidden, null, { timeout: 3000 });
+    await page.click('[data-native-save-scene]');
+    await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('已保存'));
+    const acceptedGenerationProjectResponse = await fetch(servers.appUrl + '/api/get-project?projectId=writer-audit-project');
+    const acceptedGenerationProjectData = await acceptedGenerationProjectResponse.json();
+    assert.ok(
+      Object.values(acceptedGenerationProjectData.project.sceneContents || {}).some((content) => String(content || '').includes('Audit generated text.')),
+      'accepted inline generation should be persisted in sceneContents'
+    );
 
     // Test inherit + thinking: should pass enableThinking for DeepSeek
     await page.selectOption('[data-native-profile-select]', 'inherit');

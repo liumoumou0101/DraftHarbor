@@ -8,6 +8,7 @@
 const fs = require('fs/promises');
 const path = require('path');
 const settingsService = require('../desktop/services/settings-service');
+const workflowProviderService = require('../desktop/services/workflow-provider-service');
 const ProviderStream = require('../src/core/generation/provider-stream');
 const projectService = require('../desktop/services/project-service');
 const Creation = require('../desktop/services/workflow-creation-guided-service');
@@ -49,21 +50,13 @@ function parseJson(text) {
 
 async function configuredProviders() {
   const settings = await settingsService.readSettings(DATA_ROOT);
-  const workflowProfileId = clean(settings.workflowGeneration && settings.workflowGeneration.providerProfileId);
-  const workflowProfile = (settings.providerProfiles || []).find((profile) => profile.id === workflowProfileId && clean(profile.apiKey))
-    || (settings.providerProfiles || []).find((profile) => profile.model === 'deepseek-v4-pro' && clean(profile.apiKey))
-    || (settings.providerProfiles || []).find((profile) => /deepseek/i.test(String(profile.model || '')) && clean(profile.apiKey));
-  if (!workflowProfile) throw new Error('未找到已保存的 DeepSeek 配置（.draftharbor-settings.json providerProfiles）');
-  const pro = settingsService.runtimeProviderConfig(settings, {
-    profileId: workflowProfile.id,
-    model: workflowProfile.model || 'deepseek-v4-pro',
-    temperature: 0.7,
-    maxTokens: 4500,
-    enableThinking: false,
-    useProviderDefaults: false
-  });
+  const resolved = workflowProviderService.resolveWorkflowProvider(settings, settings.workflowGeneration || {}, {});
+  const pro = { ...resolved.config, temperature: 0.7, maxTokens: 12000, enableThinking: false, useProviderDefaults: false };
   if (!pro.apiKey || !pro.endpoint) throw new Error('DeepSeek API key 或 endpoint 缺失');
-  return { pro, workflowProfileId: workflowProfile.id, model: pro.model };
+  if (!/deepseek/i.test(`${pro.provider || ''} ${pro.model || ''} ${pro.endpoint || ''}`)) {
+    throw new Error(`当前工作流配置不是 DeepSeek：${pro.model || pro.provider || 'unknown'}`);
+  }
+  return { pro, workflowProfileId: resolved.snapshot.providerProfileId || 'writer-default', model: pro.model };
 }
 
 async function generate(label, prompt, config, metrics) {
@@ -121,10 +114,16 @@ async function generate(label, prompt, config, metrics) {
 }
 
 async function generateJson(label, prompt, config, metrics) {
+  const callStart = metrics.calls.length;
   const output = await generate(label, prompt, config, metrics);
+  const directCall = metrics.calls.slice(callStart).find((item) => item.label === label && !item.error);
   try {
-    return parseJson(output);
+    const parsed = parseJson(output);
+    if (directCall && directCall.finishReason === 'length') throw new Error('JSON output reached max token limit');
+    return parsed;
   } catch {
+    metrics.jsonRepairs = Number(metrics.jsonRepairs || 0) + 1;
+    await saveMetrics(metrics);
     const repairPrompt = {
       messages: [
         {
@@ -138,7 +137,7 @@ async function generateJson(label, prompt, config, metrics) {
       ...config,
       enableThinking: false,
       temperature: 0.1,
-      maxTokens: Math.max(6000, Number(config.maxTokens) || 0)
+      maxTokens: Math.max(16000, Number(config.maxTokens) || 0)
     }, metrics));
   }
 }
@@ -319,6 +318,7 @@ async function writeReport(metrics, checks) {
     // Preserve prior provider call history when resuming a completed run.
     calls: Array.isArray(previousMetrics && previousMetrics.calls) ? previousMetrics.calls.slice() : [],
     model: '',
+    jsonRepairs: 0,
     bodyStatsChars: 0,
     rawCharacters: 0,
     sceneCount: 0,
@@ -410,7 +410,7 @@ async function writeReport(metrics, checks) {
   if (details.run.activeNodeId === 'direction' || (details.run.steps || []).some((s) => s.id === 'direction' && s.status === 'ready')) {
     if (details.run.activeNodeId === 'direction') {
       let prepared = await Creation.prepareCreationNode(base);
-      const output = await generateJson('direction', prepared.prompts[0].prompt, { ...config, maxTokens: 2500, temperature: 0.5 }, metrics);
+      const output = await generateJson('direction', prepared.prompts[0].prompt, { ...config, maxTokens: 8000, temperature: 0.5 }, metrics);
       await Creation.completeCreationNode({ ...base, outputs: [JSON.stringify(output)] });
       details = await Creation.getCreationRun(DATA_ROOT, PROJECT_ID, RUN_ID);
       const dirs = details.run.artifacts.find((a) => a.nodeId === 'direction')?.content?.directions || [];
@@ -431,7 +431,7 @@ async function writeReport(metrics, checks) {
           for (const prompt of prepared.prompts) {
             const piece = await generateJson(`compendium-${prompt.id || outputs.length + 1}`, prompt.prompt, {
               ...config,
-              maxTokens: 2800,
+              maxTokens: 16000,
               temperature: 0.45
             }, metrics);
             outputs.push(JSON.stringify(piece));
@@ -440,7 +440,7 @@ async function writeReport(metrics, checks) {
         } else {
           const output = await generateJson(nodeId, prepared.prompts[0].prompt, {
             ...config,
-            maxTokens: nodeId === 'blueprint' ? 4000 : 3200,
+            maxTokens: nodeId === 'review' ? 8000 : 16000,
             temperature: 0.45
           }, metrics);
           await Creation.completeCreationNode({ ...base, outputs: [JSON.stringify(output)] });
@@ -482,7 +482,7 @@ async function writeReport(metrics, checks) {
       const remaining = Math.max(1800, TARGET_BODY_STATS - bodyNow);
       let plan = await generateJson(`plan-b${batch?.sequence || 1}`, prepared.prompts[0].prompt, {
         ...config,
-        maxTokens: 3500,
+        maxTokens: 16000,
         temperature: 0.4
       }, metrics);
       plan = normalizePlan(plan, batch?.sequence || 1, remaining);
@@ -510,7 +510,7 @@ async function writeReport(metrics, checks) {
         const text = await generate(`draft-${prompt.id || safety}`, prompt.prompt, {
           ...config,
           enableThinking: true,
-          maxTokens: 3500,
+          maxTokens: 12000,
           temperature: 0.72
         }, metrics);
         await Creation.completeCreationNode({
@@ -542,7 +542,7 @@ async function writeReport(metrics, checks) {
         review = await generateJson('review', prepared.prompts[0].prompt, {
           ...config,
           enableThinking: false,
-          maxTokens: 2800,
+          maxTokens: 8000,
           temperature: 0.2
         }, metrics);
       } catch {

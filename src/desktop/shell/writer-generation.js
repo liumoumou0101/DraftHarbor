@@ -1,3 +1,280 @@
+    const NATIVE_GENERATION_OUTPUT_POSITION_KEY = 'draftharbor:nativeGenerationOutputPosition';
+
+    function readNativeGenerationOutputPosition() {
+        try {
+            const raw = window.localStorage.getItem(NATIVE_GENERATION_OUTPUT_POSITION_KEY);
+            if (!raw) return null;
+            const value = JSON.parse(raw);
+            if (!value || !Number.isFinite(Number(value.left)) || !Number.isFinite(Number(value.top))) return null;
+            return { left: Number(value.left), top: Number(value.top) };
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function writeNativeGenerationOutputPosition(position) {
+        if (!position) return;
+        try {
+            window.localStorage.setItem(NATIVE_GENERATION_OUTPUT_POSITION_KEY, JSON.stringify({
+                left: Math.round(position.left),
+                top: Math.round(position.top)
+            }));
+        } catch (error) {
+            /* Ignore unavailable storage (private mode or an embedded test page). */
+        }
+    }
+
+    function clearNativeGenerationOutputPosition() {
+        try {
+            window.localStorage.removeItem(NATIVE_GENERATION_OUTPUT_POSITION_KEY);
+        } catch (error) {
+            /* Ignore unavailable storage. */
+        }
+    }
+
+    function clampNativeGenerationOutputPosition(position, bodyRect, outputRect) {
+        const margin = 12;
+        const maxLeft = Math.max(margin, bodyRect.width - outputRect.width - margin);
+        const maxTop = Math.max(margin, bodyRect.height - outputRect.height - margin);
+        return {
+            left: Math.min(maxLeft, Math.max(margin, Number(position.left) || 0)),
+            top: Math.min(maxTop, Math.max(margin, Number(position.top) || 0))
+        };
+    }
+
+    function defaultNativeGenerationOutputPosition(bodyRect, outputRect) {
+        const editor = document.querySelector('[data-native-scene-editor]');
+        const paperRect = editor && editor.getBoundingClientRect ? editor.getBoundingClientRect() : null;
+        const left = paperRect && paperRect.width
+            ? paperRect.right - bodyRect.left + 16
+            : bodyRect.width - outputRect.width - 16;
+        const top = paperRect && paperRect.height
+            ? paperRect.top - bodyRect.top + 16
+            : 16;
+        return clampNativeGenerationOutputPosition({ left, top }, bodyRect, outputRect);
+    }
+
+    function syncNativeGenerationOutputPosition(options = {}) {
+        const elements = nativeEditorElements();
+        const output = elements.generationOutput;
+        const body = elements.editorBody;
+        if (!output || !body || output.hidden) return null;
+        const bodyRect = body.getBoundingClientRect();
+        const outputRect = output.getBoundingClientRect();
+        if (bodyRect.width < 1 || bodyRect.height < 1 || outputRect.width < 1 || outputRect.height < 1) return null;
+        if (options.reset) clearNativeGenerationOutputPosition();
+        const stored = options.reset ? null : readNativeGenerationOutputPosition();
+        const inlineLeft = Number.parseFloat(output.style.left);
+        const inlineTop = Number.parseFloat(output.style.top);
+        const position = stored || (Number.isFinite(inlineLeft) && Number.isFinite(inlineTop)
+            ? { left: inlineLeft, top: inlineTop }
+            : defaultNativeGenerationOutputPosition(bodyRect, outputRect));
+        const clamped = clampNativeGenerationOutputPosition(position, bodyRect, outputRect);
+        output.style.left = `${Math.round(clamped.left)}px`;
+        output.style.top = `${Math.round(clamped.top)}px`;
+        output.style.right = 'auto';
+        output.style.bottom = 'auto';
+        output.style.transform = 'none';
+        if (options.persist) writeNativeGenerationOutputPosition(clamped);
+        return clamped;
+    }
+
+    function queueNativeGenerationOutputPosition() {
+        const output = nativeEditorElements().generationOutput;
+        if (!output || output.__nativeGenerationPositionFrame) return;
+        const schedule = typeof window.requestAnimationFrame === 'function'
+            ? window.requestAnimationFrame.bind(window)
+            : (callback) => window.setTimeout(callback, 0);
+        output.__nativeGenerationPositionFrame = schedule(() => {
+            output.__nativeGenerationPositionFrame = 0;
+            syncNativeGenerationOutputPosition();
+        });
+    }
+
+    function nativePendingInlineValue(generation) {
+        if (!generation || !generation.pendingSceneId) return '';
+        const base = generation.inlineBaseText || '';
+        const inserted = formatInlineGeneratedText(generation.text || '');
+        return `${base.slice(0, generation.insertionStart)}${inserted}${base.slice(generation.insertionEnd)}`;
+    }
+
+    function isNativePendingInlineValueStable(elements = nativeEditorElements()) {
+        const generation = nativeEditorState.generation;
+        const scene = currentNativeScene();
+        if (!elements.editor || !scene || !generation.pendingSceneId || generation.pendingSceneId !== scene.id) return false;
+        return elements.editor.value === nativePendingInlineValue(generation);
+    }
+
+    function syncNativeGenerationLayer() {
+        const elements = nativeEditorElements();
+        const layer = elements.generationLayer;
+        const content = elements.generationLayerContent;
+        const editor = elements.editor;
+        const generation = nativeEditorState.generation;
+        const scene = currentNativeScene();
+        const isPreviewTask = generation.task === 'rewrite' || generation.task === 'regenerate-selection';
+        const hasPendingInline = !!generation.text
+            && !isPreviewTask
+            && !!scene
+            && generation.pendingSceneId === scene.id
+            && !!editor;
+        if (!layer || !content || !editor || !hasPendingInline) {
+            if (layer) layer.hidden = true;
+            if (content) content.replaceChildren();
+            return false;
+        }
+        if (!isNativePendingInlineValueStable(elements)) {
+            generation.pendingEditorChanged = true;
+            layer.hidden = true;
+            content.replaceChildren();
+            if (elements.generationOutputStatus) {
+                elements.generationOutputStatus.textContent = '正文已修改，无法直接确认；请重新生成或撤回。';
+            }
+            return false;
+        }
+        generation.pendingEditorChanged = false;
+        const body = elements.editorBody;
+        if (!body) return false;
+        const bodyRect = body.getBoundingClientRect();
+        const editorRect = editor.getBoundingClientRect();
+        if (bodyRect.width < 1 || bodyRect.height < 1 || editorRect.width < 1 || editorRect.height < 1) {
+            layer.hidden = true;
+            return false;
+        }
+        const computed = window.getComputedStyle(editor);
+        layer.style.left = `${editorRect.left - bodyRect.left}px`;
+        layer.style.top = `${editorRect.top - bodyRect.top}px`;
+        layer.style.width = `${editorRect.width}px`;
+        layer.style.height = `${editorRect.height}px`;
+        layer.style.padding = '0';
+        layer.style.boxSizing = computed.boxSizing;
+        content.style.width = `${editor.clientWidth}px`;
+        content.style.minHeight = `${Math.max(editor.scrollHeight, editor.clientHeight)}px`;
+        content.style.padding = computed.padding;
+        content.style.boxSizing = computed.boxSizing;
+        content.style.font = computed.font;
+        content.style.lineHeight = computed.lineHeight;
+        content.style.letterSpacing = computed.letterSpacing;
+        content.style.textAlign = computed.textAlign;
+        content.style.textIndent = computed.textIndent;
+        content.style.whiteSpace = computed.whiteSpace;
+        content.style.wordBreak = computed.wordBreak;
+        content.style.overflowWrap = computed.overflowWrap;
+        content.style.tabSize = computed.tabSize;
+        content.style.transform = `translate(${-editor.scrollLeft}px, ${-editor.scrollTop}px)`;
+
+        const value = editor.value || '';
+        const inserted = formatInlineGeneratedText(generation.text || '');
+        const start = Math.max(0, Math.min(value.length, generation.insertionStart));
+        const end = Math.max(start, Math.min(value.length, start + inserted.length));
+        const fragment = document.createDocumentFragment();
+        const before = document.createElement('span');
+        before.textContent = value.slice(0, start);
+        const pending = document.createElement('mark');
+        pending.className = 'desktop-native-editor-generation-mark';
+        pending.textContent = value.slice(start, end);
+        const after = document.createElement('span');
+        after.textContent = value.slice(end);
+        fragment.append(before, pending, after);
+        content.replaceChildren(fragment);
+        layer.hidden = false;
+        return true;
+    }
+
+    function queueNativeGenerationLayer() {
+        const layer = nativeEditorElements().generationLayer;
+        if (!layer || layer.__nativeGenerationLayerFrame) return;
+        const schedule = typeof window.requestAnimationFrame === 'function'
+            ? window.requestAnimationFrame.bind(window)
+            : (callback) => window.setTimeout(callback, 0);
+        layer.__nativeGenerationLayerFrame = schedule(() => {
+            layer.__nativeGenerationLayerFrame = 0;
+            syncNativeGenerationLayer();
+        });
+    }
+
+    function bindNativeGenerationLayer() {
+        const elements = nativeEditorElements();
+        const editor = elements.editor;
+        if (!editor || editor.dataset.nativeGenerationLayerBound === 'true') return;
+        editor.dataset.nativeGenerationLayerBound = 'true';
+        editor.addEventListener('scroll', syncNativeGenerationLayer);
+        window.addEventListener('resize', syncNativeGenerationLayer);
+    }
+
+    function bindNativeGenerationOutputDrag() {
+        const elements = nativeEditorElements();
+        const output = elements.generationOutput;
+        const body = elements.editorBody;
+        const handle = elements.generationOutputDragHandle;
+        if (!output || !body || !handle || handle.dataset.nativeGenerationDragBound === 'true') return;
+        handle.dataset.nativeGenerationDragBound = 'true';
+        let dragState = null;
+
+        const finishDrag = (event) => {
+            if (!dragState) return;
+            const state = dragState;
+            dragState = null;
+            output.classList.remove('is-generation-output-dragging');
+            handle.setAttribute('aria-grabbed', 'false');
+            if (event && handle.releasePointerCapture && handle.hasPointerCapture && handle.hasPointerCapture(event.pointerId)) {
+                try { handle.releasePointerCapture(event.pointerId); } catch (error) { /* ignore */ }
+            }
+            const bodyRect = body.getBoundingClientRect();
+            const outputRect = output.getBoundingClientRect();
+            const position = clampNativeGenerationOutputPosition(state.position, bodyRect, outputRect);
+            output.style.left = `${Math.round(position.left)}px`;
+            output.style.top = `${Math.round(position.top)}px`;
+            writeNativeGenerationOutputPosition(position);
+        };
+
+        handle.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0 || output.hidden) return;
+            event.preventDefault();
+            syncNativeGenerationOutputPosition();
+            const bodyRect = body.getBoundingClientRect();
+            const outputRect = output.getBoundingClientRect();
+            const left = Number.parseFloat(output.style.left);
+            const top = Number.parseFloat(output.style.top);
+            dragState = {
+                clientX: event.clientX,
+                clientY: event.clientY,
+                position: {
+                    left: Number.isFinite(left) ? left : outputRect.left - bodyRect.left,
+                    top: Number.isFinite(top) ? top : outputRect.top - bodyRect.top
+                }
+            };
+            output.classList.add('is-generation-output-dragging');
+            handle.setAttribute('aria-grabbed', 'true');
+            if (handle.setPointerCapture) {
+                try { handle.setPointerCapture(event.pointerId); } catch (error) { /* ignore synthetic pointer events */ }
+            }
+        });
+
+        handle.addEventListener('pointermove', (event) => {
+            if (!dragState) return;
+            event.preventDefault();
+            const bodyRect = body.getBoundingClientRect();
+            const outputRect = output.getBoundingClientRect();
+            const next = clampNativeGenerationOutputPosition({
+                left: dragState.position.left + event.clientX - dragState.clientX,
+                top: dragState.position.top + event.clientY - dragState.clientY
+            }, bodyRect, outputRect);
+            output.style.left = `${Math.round(next.left)}px`;
+            output.style.top = `${Math.round(next.top)}px`;
+        });
+        handle.addEventListener('pointerup', finishDrag);
+        handle.addEventListener('pointercancel', finishDrag);
+        handle.addEventListener('dblclick', (event) => {
+            event.preventDefault();
+            if (dragState) finishDrag(event);
+            syncNativeGenerationOutputPosition({ reset: true, persist: true });
+        });
+        window.addEventListener('resize', () => {
+            if (!dragState) syncNativeGenerationOutputPosition({ persist: true });
+        });
+    }
+
     function renderNativeGeneration() {
         const elements = nativeEditorElements();
         const generation = nativeEditorState.generation;
@@ -77,7 +354,7 @@
                 if (generation.reasoning && !generation.text) {
                     elements.generationOutputStatus.textContent = '正在思考...';
                 } else if (generation.inProgress && generation.text && !isPreviewTask) {
-                    elements.generationOutputStatus.textContent = '正在正文中生成，生成段落已选中。';
+                    elements.generationOutputStatus.textContent = '正在正文中生成，确认后保留，撤回会恢复原文。';
                 } else if (generation.inProgress && generation.text) {
                     elements.generationOutputStatus.textContent = '正在生成预览...';
                 } else {
@@ -86,7 +363,7 @@
             } else if (isPreviewTask) {
                 elements.generationOutputStatus.textContent = '预览结果后点击"保留"替换原文，撤回会保持原文。';
             } else {
-                elements.generationOutputStatus.textContent = '生成内容已在正文中选中，保留后会变为普通正文。';
+                elements.generationOutputStatus.textContent = '生成内容已写入正文，确认后保留，撤回可恢复原文。';
             }
         }
         if (elements.generationResult) {
@@ -241,6 +518,10 @@
                 });
             }
         }
+        if (elements.generationOutput && !elements.generationOutput.hidden) {
+            queueNativeGenerationOutputPosition();
+        }
+        queueNativeGenerationLayer();
     }
 
     function insertNativeHistoryRecord(record) {
@@ -445,6 +726,7 @@
         generation.insertionEnd = end;
         generation.pendingSceneId = scene.id;
         generation.task = task || 'fiction-prose';
+        generation.pendingEditorChanged = false;
         return true;
     }
 
@@ -468,14 +750,19 @@
         const generation = nativeEditorState.generation;
         if (!elements.editor || !scene || generation.pendingSceneId !== scene.id) return;
         const inserted = formatInlineGeneratedText(generation.text || '');
-        const nextValue = `${generation.inlineBaseText.slice(0, generation.insertionStart)}${inserted}${generation.inlineBaseText.slice(generation.insertionEnd)}`;
+        const nextValue = nativePendingInlineValue(generation);
         elements.editor.value = nextValue;
+        generation.pendingEditorChanged = false;
         const cursor = generation.insertionStart + inserted.length;
         if (generation.task === 'rewrite' || generation.task === 'regenerate-selection') {
             elements.editor.selectionStart = cursor;
             elements.editor.selectionEnd = cursor;
         } else {
-            elements.editor.selectionStart = generation.insertionStart;
+            // The generated continuation is already rendered in the正文. Keep the
+            // caret at its end instead of selecting the whole inserted paragraph;
+            // the selection highlight is unreadable on the paper background and
+            // disappears as soon as the user clicks elsewhere.
+            elements.editor.selectionStart = cursor;
             elements.editor.selectionEnd = cursor;
         }
         elements.editor.focus();
@@ -943,6 +1230,13 @@
         const scene = currentNativeScene();
         const generation = nativeEditorState.generation;
         if (!scene || !generation.text || !elements.editor) return;
+        if (!isNativePendingInlineValueStable(elements)) {
+            generation.pendingEditorChanged = true;
+            syncNativeGenerationLayer();
+            setNativeSaveStatus('正文已修改，无法安全确认，请重新生成或先撤回。', 'error');
+            renderNativeGeneration();
+            return;
+        }
         syncInlineGenerationToEditor();
         elements.editor.selectionStart = generation.insertionStart + formatInlineGeneratedText(generation.text || '').length;
         elements.editor.selectionEnd = elements.editor.selectionStart;
@@ -951,6 +1245,7 @@
         generation.reasoning = '';
         generation.inlineBaseText = '';
         generation.pendingSceneId = '';
+        generation.pendingEditorChanged = false;
         flushNativeEditorFields();
         markNativeDirty('已保留生成内容，未保存');
         renderNativeEditor();
@@ -969,6 +1264,7 @@
         generation.reasoning = '';
         generation.inlineBaseText = '';
         generation.pendingSceneId = '';
+        generation.pendingEditorChanged = false;
         generation.task = '';
         nativeEditorState.rewrite.originalText = '';
         nativeEditorState.rewrite.selectionStart = 0;
@@ -1010,6 +1306,7 @@
         generation.reasoning = '';
         generation.inlineBaseText = '';
         generation.pendingSceneId = '';
+        generation.pendingEditorChanged = false;
         generation.task = '';
         nativeEditorState.rewrite.originalText = '';
         nativeEditorState.rewrite.selectionStart = 0;

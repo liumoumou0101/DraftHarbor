@@ -1,4 +1,17 @@
+    function ensureWorkflowLauncherLayout() {
+        const launcher = document.querySelector('[data-workflow-launcher]');
+        const main = document.querySelector('.desktop-workflow-main');
+        const header = main && main.querySelector('.desktop-compendium-editor-header');
+        if (!launcher || !main || !header || launcher.parentElement === main || launcher.closest('.desktop-workflow-setup')) return;
+        const setup = document.createElement('section');
+        setup.className = 'desktop-workflow-setup';
+        setup.setAttribute('aria-label', '新建创作流程设置');
+        setup.appendChild(launcher);
+        main.insertBefore(setup, header);
+    }
+
     function workflowElements() {
+        ensureWorkflowLauncherLayout();
         return {
             projectLabel: document.querySelector('[data-workflow-project-label]'),
             launcher: document.querySelector('[data-workflow-launcher]'),

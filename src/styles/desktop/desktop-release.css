@@ -806,4 +806,210 @@
     color: var(--desktop-paper-text);
 }
 
-.desktop-native-paper-heading[hidden],
+.desktop-native-paper-heading[hidden] {
+    display: none;
+}
+
+/* Phase 64: bottom-docked confirmations participate in the manuscript grid;
+   they sit above the paper footer instead of covering it as a floating layer. */
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode) .desktop-native-editor-body {
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode) .desktop-native-editor-body > textarea {
+    grid-column: 1;
+    grid-row: 2;
+    padding-bottom: calc(22px + var(--native-editor-paragraph-spacing, 0em));
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode) .desktop-native-paper-footer {
+    grid-column: 1;
+    grid-row: 4;
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode) .desktop-native-generation-output {
+    position: static;
+    grid-column: 1;
+    grid-row: 3;
+    width: var(--native-paper-page-width);
+    max-width: calc(100% - 32px);
+    margin: 0 auto 8px;
+    transform: none;
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode) .desktop-native-generation-output.is-inline-confirmation {
+    width: min(620px, calc(100% - 32px));
+    justify-self: center;
+}
+
+@media (min-width: 981px) and (max-height: 820px) {
+    .desktop-native-writer.is-assistant-bottom:not(.is-focus-mode) .desktop-native-generation-output {
+        min-height: 0;
+        gap: 6px;
+        padding: 8px;
+        margin-bottom: 6px;
+    }
+
+    .desktop-native-writer.is-assistant-bottom:not(.is-focus-mode) .desktop-native-generation-output-header {
+        padding-bottom: 4px;
+    }
+
+    .desktop-native-writer.is-assistant-bottom:not(.is-focus-mode) .desktop-native-generation-result {
+        padding: 8px 10px;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+
+    .desktop-native-writer.is-assistant-bottom:not(.is-focus-mode) .desktop-native-generation-actions {
+        padding-top: 6px;
+    }
+
+    .desktop-native-writer.is-assistant-bottom:not(.is-focus-mode) .desktop-native-paper-heading {
+        gap: 3px;
+        padding-block: 3px 2px;
+    }
+
+    .desktop-native-writer.is-assistant-bottom:not(.is-focus-mode) .desktop-native-paper-heading strong {
+        font-size: 18px;
+    }
+}
+
+/* Phase 65: the inline confirmation is a compact, opaque, movable status bar.
+   It no longer reserves a large block in the manuscript or depends on a text
+   selection to communicate that generated content is pending. */
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body.has-generation-output > textarea {
+    padding-bottom: calc(34px + var(--native-editor-paragraph-spacing, 0em));
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor-body {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor-body > textarea,
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-paper-footer {
+    grid-row: auto;
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output,
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output {
+    position: absolute;
+    left: 12px;
+    right: auto;
+    top: 12px;
+    bottom: auto;
+    width: min(320px, calc(100% - 24px));
+    max-height: min(22vh, 190px);
+    min-height: 0;
+    margin: 0;
+    transform: none;
+    grid-column: auto;
+    grid-row: auto;
+    z-index: 8;
+    gap: 6px;
+    padding: 7px;
+}
+
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output.is-inline-confirmation {
+    left: 12px;
+    right: auto;
+    width: min(320px, calc(100% - 24px));
+    max-height: min(22vh, 190px);
+    transform: none;
+}
+
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output-header {
+    gap: 8px;
+    padding-bottom: 4px;
+    cursor: grab;
+    user-select: none;
+}
+
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output-header:active,
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output.is-generation-output-dragging .desktop-native-generation-output-header {
+    cursor: grabbing;
+}
+
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output-header strong {
+    font-size: 12px;
+}
+
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output-header span {
+    margin-top: 2px;
+    font-size: 10px;
+    line-height: 1.35;
+}
+
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output .desktop-native-generation-result {
+    max-height: 88px;
+    padding: 7px 9px;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output .desktop-native-generation-actions {
+    gap: 5px;
+    padding: 5px 0 0;
+}
+
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output .desktop-native-generation-actions button {
+    min-height: 26px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+}
+
+.desktop-native-generation-drag-handle {
+    flex: 0 0 auto;
+    min-height: 22px;
+    padding: 2px 6px;
+    border: 1px solid #586579;
+    border-radius: 5px;
+    background: #283142;
+    color: #d5dbe5;
+    cursor: grab;
+    font-size: 10px;
+    line-height: 1.2;
+    touch-action: none;
+}
+
+.desktop-native-generation-drag-handle:active,
+.desktop-native-generation-output.is-generation-output-dragging .desktop-native-generation-drag-handle {
+    cursor: grabbing;
+}
+
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body.has-generation-output > textarea::selection {
+    background: rgba(var(--desktop-accent-rgb), 0.24);
+    color: var(--desktop-paper-text);
+}
+
+/* Phase 66: mark pending inline prose without using the native textarea selection. */
+.desktop-native-editor-generation-layer[hidden] {
+    display: none !important;
+}
+
+.desktop-native-editor-generation-layer {
+    position: absolute;
+    z-index: 1;
+    overflow: hidden;
+    pointer-events: none;
+    color: transparent;
+    background: transparent;
+    line-height: inherit;
+}
+
+.desktop-native-editor-generation-layer-content {
+    position: relative;
+    display: block;
+    color: transparent;
+    background: transparent;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.desktop-native-editor-generation-mark {
+    color: var(--desktop-paper-text);
+    background: #e7eedc;
+    border-radius: 3px;
+    box-shadow: inset 3px 0 #789873;
+    -webkit-text-fill-color: var(--desktop-paper-text);
+}

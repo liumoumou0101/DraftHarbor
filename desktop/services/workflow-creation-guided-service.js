@@ -5,6 +5,7 @@ const CreationSchema = require('../../src/core/workflow/workflow-creation-schema
 const BatchSchema = require('../../src/core/workflow/workflow-generation-batch-schema');
 const ChapterAssembly = require('../../src/core/workflow/workflow-chapter-assembly');
 const ContextAssembly = require('../../src/core/workflow/workflow-context-assembly');
+const QualityMetrics = require('../../src/core/workflow/workflow-quality-metrics');
 const CreationService = require('./workflow-creation-service');
 const Review = require('./workflow-review-service');
 const { createGuidedRuntime } = require('./workflow-guided-runtime-service');
@@ -407,6 +408,7 @@ async function prepareCreationNode(options = {}) {
         completedScenes: currentDrafts.map((artifact) => ({
           sceneId: clean(artifact.targetRef && artifact.targetRef.sceneId),
           title: artifact.title,
+          text: typeof artifact.content === 'string' ? artifact.content : '',
           ending: typeof artifact.content === 'string' ? artifact.content.slice(-800) : ''
         })),
         lastSceneEnding: currentEnding
@@ -460,6 +462,8 @@ async function prepareCreationNode(options = {}) {
   }
 
   if (nodeId === 'review') {
+    const fulfillmentChecklist = QualityMetrics.planFulfillmentChecklist(context.scenePlan || {});
+    context.reviewRequirements = { planFulfillmentChecklist: fulfillmentChecklist };
     return {
       ok: true,
       nodeId,
@@ -473,7 +477,7 @@ async function prepareCreationNode(options = {}) {
           messages: [
             {
               role: 'system',
-              content: '你是严苛的长篇连续性编辑。检查正文对故事蓝图、人物资料、世界规则、场景计划、全局写作指令、必须包含项、人物主动性、对话比例、人物动机、情绪节奏、相邻场景边界和创作过程信息泄漏的遵守情况，并整理供下一批使用的连续性状态。相邻场景边界问题必须区分为 scene_boundary_repetition（重复重演）、previous_scene_overreach（前场越界提前写完下一场）或 scene_state_reset（本场未承接前场结果而重置状态）。计划结果兑现必须写入 planFulfillment：对每个场景的 outcome 与 mustInclude 给出 fulfilled、deferred、unfulfilled 或 exempt，并附 evidence；语义已兑现时不得因缺少原句而判 unfulfilled。unresolvedThreads 优先返回对象 {threadId,label,status,mustClose,evidence}。severity 只能使用 pass、info、suggestion、warning、error、critical；只有明确违反硬约束、结构损坏或严重连续性错误才能标为 error/critical，启发式文风建议必须标为 suggestion/warning。只返回合法 JSON：{summary,findings:[{type,severity,enforcement,sceneId,revisionId,relatedSceneId,relatedRevisionId,sceneTitle,evidence,suggestion}],planFulfillment:[{sceneId,field,status,evidence,deferredToSceneId}],continuityState:{summary,characterStates:{},unresolvedThreads:[],knownFacts:[],lastEnding}}。'
+              content: '你是严苛的长篇连续性编辑。检查正文对故事蓝图、人物资料、世界规则、场景计划、全局写作指令、必须包含项、人物主动性、对话比例、人物动机、情绪节奏、相邻场景边界和创作过程信息泄漏的遵守情况，并整理供下一批使用的连续性状态。相邻场景边界问题必须区分为 scene_boundary_repetition（重复重演）、previous_scene_overreach（前场越界提前写完下一场）或 scene_state_reset（本场未承接前场结果而重置状态）。计划结果兑现必须逐项覆盖 user 内容中 reviewRequirements.planFulfillmentChecklist 的每一个精确 sceneId+field 键，不得漏项；对每项给出 fulfilled、deferred、unfulfilled 或 exempt 并附正文证据，语义已兑现时不得因缺少原句而判 unfulfilled。unresolvedThreads 优先返回对象 {threadId,label,status,mustClose,evidence}；新发现的叙事悬念必须默认 mustClose:false，只有 user 内容的 mustCloseThreads、dueThreads 或作者明确锁定的伏笔要求才能设为 true，不得自行把有趣悬念升级成硬性终局义务。severity 只能使用 pass、info、suggestion、warning、error、critical；只有明确违反硬约束、结构损坏或严重连续性错误才能标为 error/critical，启发式文风建议必须标为 suggestion/warning。只返回合法 JSON：{summary,findings:[{type,severity,enforcement,sceneId,revisionId,relatedSceneId,relatedRevisionId,sceneTitle,evidence,suggestion}],planFulfillment:[{sceneId,field,status,evidence,deferredToSceneId}],continuityState:{summary,characterStates:{},unresolvedThreads:[],knownFacts:[],lastEnding}}。'
             },
             { role: 'user', content: JSON.stringify(context) }
           ]
