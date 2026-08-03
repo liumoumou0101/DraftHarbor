@@ -1,55 +1,77 @@
 ---
-title: 指令栈设计摘要
-status: Draft rev 2
+title: Directive Stack Design Summary
+status: Draft
+revision: 3
 date: 2026-08-03
-full_doc: docs/DIRECTIVE_STACK_DESIGN.md
+full_design: docs/DIRECTIVE_STACK_DESIGN.md
 ---
 
-# Design Summary: 指令栈（Directive Stack）— rev 2
+# Design Summary: 指令栈（Directive Stack）— rev 3
 
-**Design doc:** `C:\Users\10937\AppData\Local\Temp\grok-10937\grok-design-doc-aa14c2ef.md`  
-**Review (addressed):** `C:\Users\10937\AppData\Local\Temp\grok-10937\grok-design-review-aa14c2ef.md`  
-**Status:** Draft rev 2 · 2026-08-03  
-**Product name:** 指令栈 / **Directive Stack**
+**Full design:** [`docs/DIRECTIVE_STACK_DESIGN.md`](./DIRECTIVE_STACK_DESIGN.md)  
+**Temp copy:** `C:\Users\10937\AppData\Local\Temp\grok-10937\grok-design-doc-aa14c2ef.md`
 
 ## Problem
 
-Flat `settings.globalPrompt` is prepended on every `streamGeneration` call **and** re-embedded in workflow user JSON `globalContext.globalPrompt`. No task scope, dual-channel pollution, weak workshop anti-dilution, no budget/preview, and partial settings saves break naive dual-write.
+Flat `settings.globalPrompt` is prepended on every `streamGeneration` **and** re-embedded in workflow user JSON `globalContext.globalPrompt`. No task scope, dual-channel pollution, weak workshop anti-dilution, no budget/preview; partial settings saves break naive dual-write.
 
 ## Solution
 
-Ordered **Directive Stack** (layers 1–6: app → user global → project → packs → task policy → session/run). **Templates stay builder-owned** (not compiled).  
+**Directive Stack** (layers 1–6 only; templates stay builder-owned).  
+**`streamGeneration` sole mutator** of messages for stack injection.  
+**`directiveStackMode` gate:**
 
-**`streamGeneration` is the sole mutator** of messages for stack injection. Builders only set `taskKind` / `directiveContext`.  
+| Mode | When | Inject |
+|------|------|--------|
+| `parity` | **PR1 default** | `prependGlobalPrompt(config.globalPrompt)` only — behavior = today |
+| `scoped` | **PR2+ default** | `compile(taskKind)` + apply once; never also unscoped prepend |
 
-Compile is filtered by `taskKind`; **system apply and `buildGlobalContextEnvelope` share the same scope rules**.
+**Presence of normalized `directiveStack` alone does not enable scoped compile.**
 
-## Review-driven hard constraints (rev 2)
+## taskKind transport
 
-1. **taskKind transport:** resolution order `config` → `meta.taskKind` → aliases (`fiction-prose`→`writer-prose`) → workflow node map → default **`unknown` (fail-closed structured)**.  
-2. **PR1 = parity only** (compiler + migration + dual-write merge). **PR2 = scope/isolation hard gate** (wire all call sites).  
-3. **Envelope:** workflow-json/review must not put full user jailbreak in `globalContext.globalPrompt`.  
-4. **Partial settings:** `globalPrompt`-only patch updates `userGlobal` content/enabled, **preserves scopes**; deep-merge in `updateSettings`.  
-5. **Call-site matrix 1–18** including `compendium-json`, rewrite/summary, brief/analysis/repair.  
-6. **Project freeze at run launch**; mid-run edits ignored; legacy rehydrate single layer.  
-7. **PR order serial:** PR1 → PR2 → PR3 → PR4 → PR5 (no optimistic parallel).
+Resolution order (scoped mode):
 
-## Default scopes (migrated user_global)
+1. `config.taskKind`
+2. `prompt.meta.taskKind`
+3. `TARGET_TYPE_TASK_KIND[aiTask.target.type]` — authoritative for multi-kind domains
+4. `SAFE_DOMAIN_ACTION_KIND[domain:action]` — prose/draw/rewrite only; **no** ambiguous `compendium:extract|update`
+5. `TASK_KIND_ALIASES[prompt.meta.task]` — e.g. `fiction-prose` → `writer-prose`
+6. `WORKFLOW_NODE_TASK_KIND[nodeId]`
+7. default `unknown` (fail-closed structured)
+
+**AITaskRunner (PR2):** must set `providerConfig.taskKind` + attach `aiTask` summary from task; unit-test agent (`compendium-agent-analysis`) vs reader (`reader-transfer-chunk`) vs draw.
+
+## Dual channel
+
+- **System** isolation: PR2 (`scoped` compile)
+- **User envelope** isolation: PR4 (`buildGlobalContextEnvelope`) — do **not** claim JSON fully clean after PR2
+
+## Dual-write merge
+
+Partial `{ globalPrompt }` patch → update `userGlobal` content/enabled, **preserve scopes**; deep-merge in `updateSettings`.
+
+## Default user_global scopes
 
 `writer-prose | writer-rewrite | workshop-chat | workflow-draft | workflow-rewrite | workflow-repair`  
 
-**Not** default: workflow-json/review/brief/analysis, writer-summary, compendium-json, compendium-agent, reader-extract.
+Not default: workflow-json/review/brief/analysis, writer-summary, compendium-json, compendium-agent, reader-extract.
 
-## PR plan (5, serial)
+## Workflow freeze
+
+**Client-assembled** today (`workflowGenerationLaunchConfig` → POST start-*).  
+PR4: `workflowGenerationLaunchConfig(projectSnapshot)` materializes project layers; every start-* passes project; new project = empty layers OK.
+
+## PR plan (serial)
 
 | PR | Focus |
 |----|--------|
-| 1 | Core stack + migration + dual-write merge; **behavior parity** |
-| 2 | taskKind everywhere + scope enforce + isolation (agent/json/comp-json) |
-| 3 | Project field + UX + workshop `directiveContract` |
-| 4 | Launch freeze + envelope policy + `INSTRUCTION_PRIORITY_TEXT` |
-| 5 | Presets, docs, canary |
+| 1 | Compiler + migration + dual-write; **parity mode** (no inject change) |
+| 2 | taskKind + AITaskRunner + **scoped** mode; **system** isolation |
+| 3 | Project field + UX + workshop contract |
+| 4 | Client freeze + envelope policy + priority constant |
+| 5 | Presets, docs polish, canary |
 
 ## Non-goals
 
-No RAG; not a jailbreak product; no silent jailbreak keyword drop (hard budgets only); don’t break historical freeze semantics beyond intentional scoped rehydrate tightening.
+No RAG; not a jailbreak product; no silent jailbreak keyword drop; historical runs rehydrate with intentional scoped tightening.

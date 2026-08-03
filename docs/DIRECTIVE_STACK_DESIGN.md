@@ -1,11 +1,11 @@
----
-title: 指令栈（Directive Stack）设计方案
-status: Draft rev 2
+﻿---
+title: Directive Stack / 指令栈 Design
+status: Draft
+revision: 3
 date: 2026-08-03
-note: 供回家开发；替代简陋 globalPrompt 全局前缀。本文件为设计文档，非已实现代码。
-full_path: docs/DIRECTIVE_STACK_DESIGN.md
+workspace: D:\soft\DraftHarbor
+supersedes: settings.globalPrompt + prependGlobalPrompt
 ---
-
 # 指令栈（Directive Stack）设计方案：分层写作指令替代全局前缀
 
 | 字段 | 值 |
@@ -13,10 +13,11 @@ full_path: docs/DIRECTIVE_STACK_DESIGN.md
 | **Document** | Directive Stack / 指令栈 Redesign |
 | **Author** | DraftHarbor Systems Architecture |
 | **Date** | 2026-08-03 |
-| **Status** | Draft (rev 2 — review fixes) |
+| **Status** | Draft (rev 3 — residual review fixes) |
 | **Workspace** | `D:\soft\DraftHarbor` |
 | **Supersedes** | 扁平 `settings.globalPrompt` + `prependGlobalPrompt` 单串注入 |
 | **Related** | F-09.6H quality locks、workflow `globalContext` freeze、workshop multi-turn |
+| **Repo copy** | `docs/DIRECTIVE_STACK_DESIGN.md` |
 
 ---
 
@@ -26,13 +27,14 @@ DraftHarbor 当前用设置项 `globalPrompt: { enabled, content }` 作为跨任
 
 本方案将扁平全局前缀替换为 **指令栈（Directive Stack）**——有序、可作用域过滤、可预算截断、可预览的指令编译管线。默认输出**短而稳定的创作契约**（语言、禁 meta、成人虚构合法允许等），题材/尺度/人设放在**项目或任务层**。保留「每次请求重新注入」；不再鼓励「每次注入完整越狱文」。
 
-**Rev 2 硬化约束（审查阻塞项）：**
+**Rev 2–3 硬化约束：**
 
 1. **`taskKind` 是作用域注入的硬前置**——不能只靠 unscoped `config.globalPrompt` flatten。
-2. **双通道同步过滤**——system 栈 **与** workflow user JSON `globalContext` 使用同一 scope 规则。
+2. **双通道同步过滤**——system 栈 **与** workflow user JSON `globalContext` 使用同一 scope 规则（envelope 在 **PR4** 落地；PR2 只保证 system 侧）。
 3. **`streamGeneration` 是 messages 上指令的唯一 mutator**——builders 只附 meta / context，禁止 builder+stream 双前缀。
 4. **模板 / stage system 仍归现有 builder 所有**——不进栈编译，避免双写 template。
 5. **设置 partial patch 有明确 dual-write merge**——旧 UI 只写 `globalPrompt` 不会静默丢编辑。
+6. **Rev 3：** stream **mode 闸门** 与「normalize 总是产出 directiveStack」解耦；**domain:action 别名不可单独区分 agent/reader**；**AITaskRunner 必须转发 taskKind**。
 
 ---
 
@@ -291,20 +293,34 @@ const TASK_KINDS = Object.freeze([
   'unknown'              // fail-closed structured default
 ]);
 
+// prompt.meta.task string aliases (safe, 1:1)
 const TASK_KIND_ALIASES = Object.freeze({
   'fiction-prose': 'writer-prose',
-  'workshop-chat': 'workshop-chat',
-  // AITask domain/action → kind (resolver helper)
+  'workshop-chat': 'workshop-chat'
+});
+
+// Safe domain:action only — NEVER use alone for multi-kind domains (compendium, workflow)
+const SAFE_DOMAIN_ACTION_KIND = Object.freeze({
   'prose:generate': 'writer-prose',
   'prose:rewrite': 'writer-rewrite',
   'prose:regenerate-selection': 'writer-rewrite',
   'summary:summarize': 'writer-summary',
+  'style-guard:repair': 'writer-rewrite',
   'compendium:draw': 'compendium-json',
-  'compendium:rewrite': 'compendium-json',
-  'compendium:extract': 'compendium-json',
-  'compendium:update': 'compendium-json',
-  'workflow:generate': null, // need stage/nodeId
-  'style-guard:repair': 'writer-rewrite'
+  'compendium:rewrite': 'compendium-json'
+  // INTENTIONALLY OMITTED (ambiguous — must use target.type or explicit config.taskKind):
+  // 'compendium:extract'  → shell extract = compendium-json; reader = reader-extract
+  // 'compendium:update'   → agent/QA = compendium-agent (NOT compendium-json)
+  // 'workflow:generate'   → needs nodeId
+});
+
+// Authoritative for multi-kind domains: AITask.target.type (verified live values)
+const TARGET_TYPE_TASK_KIND = Object.freeze({
+  'compendium-draw': 'compendium-json',
+  'compendium-entry': 'compendium-json',       // shell rewrite target
+  'scene-selection': 'compendium-json',       // shell in-project extract
+  'compendium-agent-analysis': 'compendium-agent',
+  'reader-transfer-chunk': 'reader-extract'
 });
 
 const DEFAULT_SCOPES_CREATIVE = Object.freeze([
@@ -316,6 +332,27 @@ const DEFAULT_SCOPES_STRUCTURED_ONLY = Object.freeze([
   'compendium-json', 'compendium-agent', 'reader-extract', 'writer-summary', 'unknown'
 ]);
 ```
+
+**Alias policy (normative):**
+
+| Mechanism | Authority | Use for |
+|-----------|-----------|---------|
+| `config.taskKind` / `prompt.meta.taskKind` | **Highest — call sites should set this** | All paths |
+| `TARGET_TYPE_TASK_KIND[task.target.type]` | Authoritative for multi-kind domains | agent vs shell vs reader |
+| `SAFE_DOMAIN_ACTION_KIND[domain:action]` | Best-effort only | prose/summary/draw/rewrite |
+| `TASK_KIND_ALIASES[prompt.meta.task]` | Best-effort | `fiction-prose` → `writer-prose` |
+| `WORKFLOW_NODE_TASK_KIND[nodeId]` | Authoritative for workflow stages | brief/draft/json/… |
+
+**Do not** map `compendium:update` → `compendium-json` or `compendium:extract` → a single kind. Live collisions:
+
+| Site | domain | action | target.type | Correct kind |
+|------|--------|--------|-------------|--------------|
+| `compendium-agent-runner-service.js` | compendium | update | `compendium-agent-analysis` | `compendium-agent` |
+| `compendium-agent-qa-service.js` | compendium | update | (same class) | `compendium-agent` |
+| `compendium-draw.js` | compendium | draw | `compendium-draw` | `compendium-json` |
+| `compendium-rewrite.js` | compendium | rewrite | `compendium-entry` | `compendium-json` |
+| `compendium-extraction.js` | compendium | extract | `scene-selection` | `compendium-json` |
+| `reader-compendium-extractor-service.js` | compendium | extract | `reader-transfer-chunk` | `reader-extract` |
 
 **Migrated `user_global.scopes` default** = `DEFAULT_SCOPES_CREATIVE`（**含** `workflow-draft` / rewrite/repair；**不含** json/agent/extract/summary）。
 
@@ -443,34 +480,111 @@ debug.warnings.push('user_global_long'); // if content.length > 800
 
 ### D. Compilation pipeline & apply ownership
 
-#### Non-negotiable invariant
+#### Non-negotiable invariant (PR2+)
 
 > **`ProviderStream.streamGeneration` is the sole mutator of `messages` for Directive Stack injection.**  
 > Builders **must not** prepend stack systems into `prompt.messages`.  
-> Builders **must** attach identity for compile: at minimum `prompt.meta.taskKind` (or mappable `prompt.meta.task` / AITask domain:action) and optional `prompt.meta.directiveContext`.  
-> Apply runs **at most once** per request; sets `prompt.meta.instructionStackApplied = true` (and/or internal flag on the messages array reference used for the HTTP body).
+> Builders / runners **must** attach identity for compile (see resolution order).  
+> Apply runs **at most once** per request; sets `prompt.meta.instructionStackApplied = true`.
 
-#### taskKind resolution order (required)
+#### Stream mode gate (PR1 vs PR2+) — normative decision table
+
+**`normalizeDesktopSettings` always produces `directiveStack` after PR1.** That alone **must not** enable scoped compile. Scope compile is gated by **`directiveStackMode`** (or equivalent feature flag), not by presence of the object.
+
+| Condition | Behavior |
+|-----------|----------|
+| `prompt.meta.instructionStackApplied === true` | **no-op** (already applied) |
+| `config.directiveStackMode === 'parity'` **or** mode unset / `'legacy'` (PR1 default) | **`prependGlobalPrompt(messages, config.globalPrompt)` only**; do **not** compile; do **not** fail-closed; ignore resolved taskKind for injection |
+| `config.directiveStackMode === 'scoped'` (PR2+ default once flipped) **and** taskKind resolved (including explicit `'unknown'`) | `compileInstructionStack` + `applyInstructionStack` **once**; **never** also `prependGlobalPrompt` |
+| `scoped` mode **and** taskKind missing after resolution | treat as `'unknown'` fail-closed (structured; no user_global). Optional: `console.warn` / dev throw if `config.strictTaskKind` |
+| Both `globalPrompt` and compile would apply | **Forbidden** — unit test must fail if double prefix detected |
+
+Constants:
+
+```js
+// provider-stream / settings default
+const DIRECTIVE_STACK_MODE_PARITY = 'parity';   // PR1
+const DIRECTIVE_STACK_MODE_SCOPED = 'scoped';   // PR2+
+
+// How mode is chosen:
+// 1. config.directiveStackMode if set
+// 2. else settings.directiveStack.mode if set
+// 3. else 'parity' until PR2 flips default to 'scoped' in one place (provider-stream or settings default)
+```
+
+**Normative statements:**
+
+- **Presence of normalized `directiveStack` alone does not enable scope compile.**
+- Under **parity**, `config.globalPrompt` (user_global mirror string) is the inject source — same as today.
+- Under **scoped**, unscoped `config.globalPrompt` is **never** the inject source; only compile output is.
+- `providerRuntimeConfig` may always expose both `directiveStack` (settings user layers) and `globalPrompt` (mirror for UI/tests/parity inject).
+
+#### taskKind resolution order (required for scoped mode)
 
 ```text
 1. config.taskKind
 2. prompt.meta.taskKind
-3. TASK_KIND_ALIASES[prompt.meta.task]
-4. TASK_KIND_ALIASES[`${task.domain}:${task.action}`] when AITask present on meta
-5. WORKFLOW_NODE_TASK_KIND[config.workflowNodeId || prompt.meta.workflowNodeId]
-6. default: 'unknown'  → structured/isolated (no user_global, no project creative)
+3. TARGET_TYPE_TASK_KIND[config.aiTask.target.type || prompt.meta.aiTask.target.type]
+4. SAFE_DOMAIN_ACTION_KIND[`${domain}:${action}`]  // only safe keys; never ambiguous extract/update alone
+5. TASK_KIND_ALIASES[prompt.meta.task]
+6. WORKFLOW_NODE_TASK_KIND[config.workflowNodeId || prompt.meta.workflowNodeId]
+7. default: 'unknown'  → structured/isolated (no user_global, no project creative)
 ```
 
-#### `config.globalPrompt` when directiveStack exists
+`resolveTaskKind(config, prompt)` implements the above. **Step 3–4 require AITask identity to be present on config/meta** — see AITaskRunner below.
 
-- **禁止**把 unscoped `legacyFlatten(full user_global)` 当作 stream 的注入源。
-- `providerRuntimeConfig` 可继续暴露：
-  - `directiveStack`: normalized settings stack snapshot (user layers only; **not** project),
-  - `globalPrompt`: **mirror of user_global content for legacy UI/tests only**,
-  - 但 `streamGeneration` 在存在 `config.directiveStack` **或** settings 已 normalize 出 directiveStack 时：  
-    **走 compile(taskKind)**，**不**调用 `prependGlobalPrompt(messages, config.globalPrompt)`。
-- 仅当 **纯旧数据路径**（无 directiveStack 字段的极端回退）才 `prependGlobalPrompt`。
-- Workflow freeze：`guidedStageProviderConfig` 传 `directiveStack: snapshot.directiveStack`、`taskKind` from node、以及 **scoped** `globalPrompt` 仅作兼容字段（可等于 envelope digest，见 E）。
+#### AITaskRunner transport (normative PR2)
+
+Today `ai-task-runner.js` only does:
+
+```js
+const providerConfig = { ...(runOptions.providerConfig || {}) };
+await streamGeneration(prompt, onToken, providerConfig);
+// does NOT attach task / taskKind
+```
+
+Therefore resolution steps that need `task` **never fire** unless every call site sets `providerConfig.taskKind` by hand.
+
+**PR2 must change `AITaskRunner.run`:**
+
+```js
+function resolveTaskKindFromAITask(task) {
+  if (!task || typeof task !== 'object') return '';
+  const byTarget = TARGET_TYPE_TASK_KIND[task.target && task.target.type];
+  if (byTarget) return byTarget;
+  const key = `${task.domain || ''}:${task.action || ''}`;
+  return SAFE_DOMAIN_ACTION_KIND[key] || '';
+}
+
+// inside run(), before streamGeneration:
+const providerConfig = { ...(runOptions.providerConfig || {}) };
+if (!providerConfig.taskKind) {
+  providerConfig.taskKind = resolveTaskKindFromAITask(task) || undefined;
+}
+if (providerConfig.taskKind) {
+  // ensure stream resolution sees it
+  if (!prompt.meta) prompt.meta = {};
+  if (!prompt.meta.taskKind) prompt.meta.taskKind = providerConfig.taskKind;
+}
+providerConfig.aiTask = {
+  domain: task.domain,
+  action: task.action,
+  target: task.target && typeof task.target === 'object' ? { type: task.target.type, id: task.target.id } : {}
+};
+// PR2 also sets directiveStackMode: 'scoped' on configs once gate flips
+await streamGeneration(prompt, onToken, providerConfig);
+```
+
+**Unit tests (PR2):**
+
+| runner.run task shape | Expected `providerConfig.taskKind` without explicit config.taskKind |
+|----------------------|---------------------------------------------------------------------|
+| agent `update` + `target.type: compendium-agent-analysis` | `compendium-agent` |
+| reader `extract` + `target.type: reader-transfer-chunk` | `reader-extract` |
+| draw `draw` + `target.type: compendium-draw` | `compendium-json` |
+| shell extract + `target.type: scene-selection` | `compendium-json` |
+
+Direct `streamGeneration` call sites (writer, workshop, workflow shell) still set `config.taskKind` themselves (checklist).
 
 #### compileInstructionStack(context) →
 
@@ -500,41 +614,55 @@ debug.warnings.push('user_global_long'); // if content.length > 800
 
 #### applyInstructionStack(messages, compiled, { mode })
 
-- Prefix unshift; suffix per mode rule above.
+- Prefix unshift; suffix per mode rule above (api vs local).
 - Idempotent if `messages.__instructionStackApplied` or meta flag.
 
 #### streamGeneration integration (pseudocode)
 
 ```js
 async function streamGeneration(prompt, onToken, config) {
-  const messages = /* from prompt */;
-  const meta = prompt && prompt.meta || {};
-  if (!meta.instructionStackApplied) {
-    const taskKind = resolveTaskKind(config, prompt);
-    const compiled = config.compiledDirectives
-      || compileInstructionStack({
-          taskKind,
-          mode: config.mode,
-          directiveStack: config.directiveStack,      // freeze or settings
-          projectDirectiveStack: config.projectDirectiveStack, // usually from freeze
-          sessionContract: config.sessionContract || meta.directiveContext && meta.directiveContext.sessionContract,
-          override: config.directiveOverride || meta.directiveContext && meta.directiveContext.override,
-          writingInstructions: config.writingInstructions,
-          antiDilution: config.antiDilution
-        });
-    messages = applyInstructionStack(messages, compiled, { mode: config.mode });
-    if (prompt && prompt.meta) {
-      prompt.meta.instructionStackApplied = true;
-      prompt.meta.instructionStackDebug = compiled.debug;
+  let messages = Array.isArray(prompt && prompt.messages) ? prompt.messages.slice() : /* ... */;
+  const meta = (prompt && prompt.meta) || {};
+  if (meta.instructionStackApplied) {
+    // send messages as-is
+  } else {
+    const stackMode = config.directiveStackMode
+      || (config.directiveStack && config.directiveStack.mode)
+      || 'parity'; // PR1 default; PR2 flips global default to 'scoped'
+
+    if (stackMode === 'parity' || stackMode === 'legacy') {
+      // PARITY: identical to pre-stack product — unscoped string inject
+      messages = prependGlobalPrompt(messages, config.globalPrompt);
+    } else {
+      // SCOPED (PR2+): compile by taskKind; never also prepend
+      const taskKind = resolveTaskKind(config, prompt); // may be 'unknown'
+      const compiled = config.compiledDirectives || compileInstructionStack({
+        taskKind,
+        mode: config.mode,
+        directiveStack: config.directiveStack,
+        projectDirectiveStack: config.projectDirectiveStack,
+        sessionContract: config.sessionContract
+          || (meta.directiveContext && meta.directiveContext.sessionContract),
+        override: config.directiveOverride
+          || (meta.directiveContext && meta.directiveContext.override),
+        writingInstructions: config.writingInstructions,
+        antiDilution: config.antiDilution
+      });
+      messages = applyInstructionStack(messages, compiled, { mode: config.mode });
+      if (prompt) {
+        prompt.meta = meta;
+        prompt.meta.instructionStackApplied = true;
+        prompt.meta.instructionStackDebug = compiled.debug;
+      }
     }
   }
-  // NEVER also prependGlobalPrompt when compile path ran
+  // requestChat / requestLocal with messages
 }
 ```
 
 #### Preview API
 
-`compileInstructionStack` 纯函数供 UI「本次将发送的指令预览」；预览 **不** 经 stream。
+`compileInstructionStack` 纯函数供 UI「本次将发送的指令预览」；预览 **不** 经 stream。预览调用应传真实 `taskKind` + 当前 freeze/project。
 
 ---
 
@@ -606,22 +734,29 @@ directiveStack: mergeDirectiveStackSettings(current.directiveStack, patch.direct
 
 #### Workflow freeze timing (normative)
 
-**At run start (launch)** — extend `workflowGenerationLaunchConfig(project?)` / start payload builder:
+**Where freeze is built today:** on the **client**, not re-resolved by the server.
 
-1. Resolve **settings** user_global + packs + antiDilution + budgets.
-2. Resolve **current project** `directiveStack` layers (requires `projectId` / snapshot in launch path — guided start already has project context).
-3. Freeze into `generationPolicy.snapshot`:
+- `workflowGenerationLaunchConfig()` builds `generationPolicy.snapshot` (mode/model/`globalPrompt`/…).
+- `workflow-generation.js` POSTs it as `generationPolicy` to `start-creation` / `start-rewrite`.
+- Server stores `options.generationPolicy` as-is (`workflow-creation-guided-service.js`).
+
+**At run start (launch) — client must:**
+
+1. Use `workflowGenerationLaunchConfig(projectSnapshot?)`.
+2. Resolve **settings** user_global + packs + antiDilution + budgets.
+3. If project snapshot present, materialize **project** `directiveStack` layers; create-project-and-start with no project → **empty project layers** (OK).
+4. Freeze into `generationPolicy.snapshot`:
 
 ```js
 snapshot: {
   // existing provider fields...
-  globalPrompt: scopedLegacyMirrorForLaunch, // see below
+  globalPrompt: userGlobalFrozenContent, // legacy sentinel: raw user text
   directiveStack: {
     schemaVersion: 1,
     frozenAt: iso,
     layers: [
-      // materialized texts: user_global, project layers, attached packs as frozen content
-      // each with id, title, content, scopes, placement, source: 'frozen'
+      // materialized: user_global, project layers, attached packs
+      // each: id, title, content, scopes, placement, source: 'frozen'
     ],
     antiDilution: {...},
     budgets: {...}
@@ -629,14 +764,17 @@ snapshot: {
 }
 ```
 
-4. **Mid-run project/settings edits do not affect** in-flight run（与 model/endpoint 冻结同级）。
-5. Stage `prepareCreationStage` / guided fatContext **只读 freeze** + writingInstructions artifacts；**不再**现场读 live settings/project for directives.
+5. **Every** start-* payload builder passes current project into launch config (PR4 acceptance).
+6. **Mid-run** project/settings edits do not affect in-flight run.
+7. Stage prepare / fatContext **only read freeze** + writingInstructions artifacts.
+8. Server re-resolve of project directives: **not required for MVP**.
 
-**`snapshot.globalPrompt` meaning after rev2：**
+**`snapshot.globalPrompt` meaning after rev3:**
 
-- 兼容字段：等于 **user_global frozen content**（便于旧 sentinel 测「启动时冻结了设置里的串」）。
-- **不等于**「每个 stage 都会把这整串塞进 system/envelope」。
-- Stage inject 一律：`compile(taskKind, snapshot.directiveStack)`。
+- 兼容字段：等于 **user_global frozen content**（旧 sentinel）。
+- **不等于**「每个 stage 都把这整串塞进 system/envelope」。
+- System inject (scoped): `compile(taskKind, rehydrate(snapshot.directiveStack))`.
+- User envelope (PR4): `buildGlobalContextEnvelope` — **forbid** unfiltered `snapshot.globalPrompt` copy.
 
 **Old runs (only `snapshot.globalPrompt` string):**
 
@@ -716,7 +854,8 @@ directiveContract: {
 | 级别 | 用例 |
 |------|------|
 | `tests/instruction-stack.js` | 层序、scope、截断顺序、aliases、unknown fail-closed、envelope scoped empty globalPrompt for json、rehydrate legacy snapshot |
-| `tests/provider-stream.js` | 唯一 apply；同时存在 `globalPrompt` 与 `directiveStack` 时 **不**双前缀；taskKind missing → unknown |
+| `tests/provider-stream.js` | **parity**：仍 prepend globalPrompt；**scoped**：唯一 apply，有 globalPrompt+stack 不双前缀；taskKind missing → unknown |
+| `tests/ai-task-runner.js` | 无显式 taskKind 时 agent/reader/draw 仍解析正确 |
 | `tests/settings-service.js` | partial globalPrompt patch 更新 userGlobal 且保留 scopes；directiveStack deep-merge |
 | workshop-prompt / generation | message order；local suffix→user |
 | workflow-creation-* | envelope 不含 full out-of-scope jailbreak；snapshot 仍冻结 user 原文于 layers；priority 常量引用 |
@@ -731,14 +870,18 @@ Real provider canary optional。
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| PR1 无 taskKind 仍全量注入 | Critical | PR1 = parity only；scope 在 PR2 接线后生效（见 PR Plan） |
-| Envelope 仍塞满 jailbreak | Critical | `buildGlobalContextEnvelope` 强制 scope；改测试期望 |
+| PR1 误用 scoped 因 normalize 总有 directiveStack | Critical | **mode 闸门**：parity vs scoped；presence ≠ enable compile |
+| PR1 无 taskKind 仍全量注入 | Expected in PR1 | parity 故意保持今日行为；PR2 翻 scoped |
+| **PR2 后 system 干净、user envelope 仍可能带 raw globalPrompt 直到 PR4** | Med (interim) | **有意分期**；勿把 PR2 标成「JSON 完全去污染」；PR4 关 envelope；FEATURE_TODO 可注 |
+| Envelope 在 PR4 前仍塞满 jailbreak | Med after PR2 / Critical until PR4 | `buildGlobalContextEnvelope` in PR4 |
 | Partial settings 丢编辑 | Critical | dual-write merge + tests |
-| Double injection | High | stream sole mutator invariant + unit test |
-| 旧 workflow json 行为变化 | Med | 有意收紧；rehydrate 默认 scoped；文档说明 |
+| Double injection | High | stream sole mutator + mode table + unit test |
+| AITaskRunner 漏转发 → 误 `unknown` | High | PR2 改 runner + target.type map + unit tests |
+| domain:action 别名撞车 | High | 禁止 ambiguous keys；用 target.type |
+| 旧 workflow json 行为变化 | Med | 有意收紧；rehydrate 默认 scoped |
 | Local mid-system | Med | local suffix→user 单分支 |
 | 预算截断误伤 | Med | 固定顺序；debug.truncated 预览 |
-| `providerRuntimeConfig` extras 覆盖 | Low | freeze 路径继续在 extras 后写入 scoped 字段 |
+| `providerRuntimeConfig` extras 覆盖 | Low | freeze 路径继续在 extras 后写入 |
 
 ---
 
@@ -746,14 +889,15 @@ Real provider canary optional。
 
 ```js
 // instruction-stack.js exports
-TASK_KINDS, TASK_KIND_ALIASES, WORKFLOW_NODE_TASK_KIND,
-DEFAULT_SCOPES_CREATIVE, DEFAULT_BUDGETS,
+TASK_KINDS, TASK_KIND_ALIASES, SAFE_DOMAIN_ACTION_KIND, TARGET_TYPE_TASK_KIND,
+WORKFLOW_NODE_TASK_KIND, DEFAULT_SCOPES_CREATIVE, DEFAULT_BUDGETS,
 INSTRUCTION_PRIORITY_TEXT,
+DIRECTIVE_STACK_MODE_PARITY, DIRECTIVE_STACK_MODE_SCOPED, // or string constants
 normalizeDirectiveLayer, normalizeDirectiveStackSettings, normalizeProjectDirectiveStack,
 mergeDirectiveStackSettings,
 migrateGlobalPromptToDirectiveStack,
 legacyGlobalPromptFromUserGlobal,
-resolveTaskKind,
+resolveTaskKind, resolveTaskKindFromAITask,
 compileInstructionStack,
 applyInstructionStack,
 buildGlobalContextEnvelope,
@@ -762,7 +906,7 @@ summarizeStackForSnapshot,
 builtinPresetPacks
 ```
 
-`prependGlobalPrompt` 保留导出，**仅** legacy 回退与旧单测。
+`prependGlobalPrompt` 保留导出：parity 模式注入 + 旧单测。
 
 ---
 
@@ -806,15 +950,15 @@ Rejected：writer/workshop 在 renderer 直调 stream；core 纯函数更贴合�
 
 ## Rollout Plan
 
-1. **PR1**：compiler + migration + dual-write merge；**行为与今日 parity**（stream 仍可对所有 kind 注入 user_global **仅当** 临时 `legacyParity: true` **或** 尚未传 taskKind 时——见下）。
-2. **PR2**：全 call-site `taskKind` + stream 强制 compile + isolation；**关闭污染**。
+1. **PR1**：compiler + migration + dual-write merge；stream 默认 **`directiveStackMode: 'parity'`** → 仅 `prependGlobalPrompt(config.globalPrompt)`，与今日行为一致。**normalize 产出 directiveStack 不改变注入。**
+2. **PR2**：全 call-site + **AITaskRunner 转发** + 默认翻 **`scoped`**；**system 侧**去污染。Envelope 仍可能脏到 PR4。
 3. **PR3**：UX。
-4. **PR4**：freeze + envelope policy + priority 常量接入 workflow。
+4. **PR4**：client launch freeze（project layers）+ envelope policy + priority 常量。
 5. **PR5**：packs、docs、canary。
 
-**PR1 parity 细节：** 若 `resolveTaskKind` → `unknown` 且 `config.legacyParity !== false` 在过渡旗标下——**Rev2 决定：PR1 默认仍 prepend 旧 globalPrompt 以保绿；PR2 起 `unknown` fail-closed 且禁止 unscoped prepend。** 文档与 PR1 acceptance 写明：**PR1 不宣称已修复 JSON 污染。**
+**PR1 明确不宣称：** JSON/agent 去污染、scoped compile、fail-closed unknown。
 
-Rollback：关 feature 用仅 `prependGlobalPrompt`；或 settings 兼容模式。
+Rollback：`directiveStackMode: 'parity'` 全局默认；或仅 `prependGlobalPrompt`。
 
 ---
 
@@ -845,11 +989,11 @@ Rollback：关 feature 用仅 `prependGlobalPrompt`；或 settings 兼容模式�
 
 2. **Stream 是指令 messages 的唯一 mutator**；builders 只提供 `taskKind` + `directiveContext`；禁止 builder 预 prepend 栈。
 
-3. **taskKind 解析链 + 默认 `unknown` = structured fail-closed**（PR2 起）；`TASK_KIND_ALIASES` 统一映射 `fiction-prose` → `writer-prose` 等。
+3. **taskKind 解析链（PR2 scoped）+ 默认 `unknown` fail-closed**；`TARGET_TYPE_TASK_KIND` 区分 agent/reader/shell；**禁止**用 ambiguous `compendium:extract|update` 单独映射。
 
-4. **PR1 = 编译器 + 迁移 + dual-write merge + 行为 parity**；**不**在 PR1 宣称 scope 治污。治污在 **PR2 全量接线 taskKind** 后生效。
+4. **PR1 = 编译器 + 迁移 + dual-write merge + `directiveStackMode: 'parity'`**；**presence of directiveStack ≠ scoped compile**。治污在 **PR2 翻 `scoped` + 接线** 后生效（system）；envelope 在 **PR4**。
 
-5. **双通道同一 scope**：system compile 与 `buildGlobalContextEnvelope` 共用 freeze + taskKind；json/review 的 `globalContext.globalPrompt` **不得**再塞 full user jailbreak。
+5. **双通道同一 scope（完整态 = PR4）**：system compile 与 `buildGlobalContextEnvelope` 共用 freeze + taskKind；json/review 的 `globalContext.globalPrompt` **不得**再塞 full user jailbreak。
 
 6. **迁移默认 scopes = `DEFAULT_SCOPES_CREATIVE`**（含 workflow-draft / rewrite / repair；不含 json/agent/extract/summary）。
 
@@ -871,6 +1015,12 @@ Rollback：关 feature 用仅 `prependGlobalPrompt`；或 settings 兼容模式�
 
 15. **Alt 5 战术去 prepend 可作紧急止血，不作终态**。
 
+16. **`directiveStackMode` 闸门**：`parity`（PR1）vs `scoped`（PR2+）；normalize 有 stack ≠ 启用 compile。
+
+17. **AITaskRunner 必须注入 taskKind / aiTask 摘要**；多 kind 域用 `target.type`，不用 ambiguous domain:action。
+
+18. **PR2 ≠ JSON 全去污染**；user envelope 残渣到 PR4 是有意分期。
+
 ---
 
 ## PR Plan
@@ -880,40 +1030,52 @@ Rollback：关 feature 用仅 `prependGlobalPrompt`；或 settings 兼容模式�
 **Depends:** none  
 
 **Files:**
-- `src/core/generation/instruction-stack.js` **(new)**
-- `src/core/settings/settings-schema.js`
-- `desktop/services/settings-service.js` — deep-merge globalPrompt + directiveStack；normalize 规则
-- `src/core/generation/provider-stream.js` — 接入 resolve/apply **但** 无 taskKind 时保持 legacy prepend（parity）
-- `desktop.html` — script：`instruction-stack.js` **before** `provider-stream.js`（或紧邻其后且在 shell 前）
+- `src/core/generation/instruction-stack.js` **(new)** — compile/resolve helpers; mode constants
+- `src/core/settings/settings-schema.js` — normalize directiveStack; `mode` default `'parity'`; globalPrompt dual-write
+- `desktop/services/settings-service.js` — deep-merge globalPrompt + directiveStack
+- `src/core/generation/provider-stream.js` — decision table: **default parity → prependGlobalPrompt only**; scoped path may exist behind mode but default off
+- `desktop.html` — script `instruction-stack.js` before/near `provider-stream.js`
 - `tests/instruction-stack.js` **(new)**
-- `tests/provider-stream.js`
-- `tests/settings-service.js`（**非** `tests/settings`）
+- `tests/provider-stream.js` — parity still injects globalPrompt string; scoped path unit-tested with explicit mode
+- `tests/settings-service.js`
 
-**Acceptance:** migration 零丢字；partial globalPrompt 保存不丢 scopes；旧测试绿；**不**要求 json 去污染。
+**Acceptance:**
+- migration 零丢字；partial globalPrompt 保存不丢 scopes
+- 旧 desktop/provider 测试绿
+- **Inject behavior unchanged** vs pre-PR1 for default configs
+- **Does not** require json de-pollution
+- Document in PR description: presence of `directiveStack` does not change inject
 
 ---
 
-### PR2 — taskKind 全量接线 + scope 强制 + isolation（**治污闸门**）
+### PR2 — taskKind wiring + scoped mode + system isolation（**system 治污闸门**）
 
 **Depends:** PR1  
 
-**Files:** 上表 call sites 1–18 全部：
-- `writer-generation.js`, `writer-prompts.js`（若独立）
-- `workshop.js`, `workshop-prompt.js`（meta.taskKind）
-- `compendium-draw.js`, `compendium-rewrite.js`, `compendium-extraction.js`
-- `workflow-provider-config.js` — `guidedStageProviderConfig(nodeId)` 设 `taskKind` + 传 `directiveStack` freeze
-- `workflow-generation.js`, `workflow.js`, `workflow-variant-generation.js`, `workflow-artifact-interactions.js`
-- `desktop/services/compendium-agent-runner-service.js`, `compendium-agent-qa-service.js`, `reader-compendium-extractor-service.js` — `taskKind` + 确保 compile 路径
-- `provider-stream.js` — **移除**「无 taskKind 则 unscoped prepend」；unknown fail-closed
-- `tests/*` 覆盖 scope：json/agent/comp-json 不出现 user_global 全文
+**Files:**
+- `src/core/generation/ai-task-runner.js` — **forward `taskKind` + `aiTask` into providerConfig/prompt.meta** (normative)
+- `src/core/generation/instruction-stack.js` — `resolveTaskKindFromAITask`, TARGET_TYPE map
+- `src/core/generation/provider-stream.js` — default **`directiveStackMode: 'scoped'`** (or settings flip); no double prepend
+- Call sites 1–18:
+  - `writer-generation.js`, writer rewrite/summary paths
+  - `workshop.js`, `workshop-prompt.js`
+  - `compendium-draw.js`, `compendium-rewrite.js`, `compendium-extraction.js` (explicit taskKind still recommended)
+  - `workflow-provider-config.js` — `guidedStageProviderConfig(nodeId)` → taskKind + freeze stack
+  - `workflow-generation.js`, `workflow.js`, `workflow-variant-generation.js`, `workflow-artifact-interactions.js`
+  - `compendium-agent-runner-service.js`, `compendium-agent-qa-service.js`, `reader-compendium-extractor-service.js`
+- Tests: runner without explicit taskKind; agent/reader/draw kinds; system messages lack user_global for json/agent/comp-json
 
-**Acceptance:** checklist 1–18 完成；同时给 `globalPrompt`+`directiveStack` 无双前缀；compendium-json / agent / workflow-json **system 侧**无 user_global。
+**Acceptance:**
+- checklist 1–18 covered (runner auto + explicit)
+- scoped + globalPrompt string present → **single** apply, no double prefix
+- **system 侧** compendium-json / agent / workflow-json 无 user_global
+- **Not claimed:** user JSON `globalContext.globalPrompt` clean (that is PR4)
 
 ---
 
 ### PR3 — Project schema + UX
 
-**Depends:** PR1；**建议 rebase on PR2**（预览才真实）  
+**Depends:** PR2（避免 writer 文件冲突；预览依赖 scoped）  
 
 **Files:**
 - `project-schema.js`, `project-normalize.js`
@@ -923,23 +1085,34 @@ Rollback：关 feature 用仅 `prependGlobalPrompt`；或 settings 兼容模式�
 
 **Acceptance:** 分层编辑、预览 debug、会话契约保存/新会话默认。
 
-**Note:** 不与 PR2 并行改同一 writer 文件；**顺序 PR2 → PR3**。
-
 ---
 
-### PR4 — Workflow freeze + envelope policy + priority constant
+### PR4 — Workflow client freeze + envelope policy + priority constant
 
 **Depends:** PR1 + PR2  
 
-**Files:**
-- `workflow-provider-config.js` — launch 接收 project，冻结 layers
-- `workflow-generation.js` / start guided paths — 传 project directives
-- `workflow-creation-guided-service.js` — fatContext 用 `buildGlobalContextEnvelope`
-- `workflow-creation-service.js` — 使用 envelope；`INSTRUCTION_PRIORITY_TEXT`
-- `workflow-context-assembly.js` if needed
-- tests: creation service/guided/ui sentinels 更新期望
+**Live path today:** freeze is **client-assembled** then POSTed:
+- `workflow-generation.js` ~L161–181: `generationPolicy: workflowGenerationLaunchConfig()` → `/api/workflows/v2/start-creation`
+- ~L221: `start-rewrite`
+- Server stores `options.generationPolicy` as-is (`workflow-creation-guided-service.js` ~L206) — **does not** re-resolve project directives
 
-**Acceptance:** json stage user JSON 的 `globalContext.globalPrompt` 为空或短 digest；snapshot 仍含冻结 user 原文于 layers；priority 字符串单一来源。
+**Files:**
+- `workflow-provider-config.js` — `workflowGenerationLaunchConfig(projectSnapshot)` materializes project layers into `snapshot.directiveStack`
+- `workflow-generation.js` / `workflow.js` — **every** start-* payload passes current project snapshot into launch config
+- Create-project-and-start: **empty project layers OK** by design
+- `workflow-creation-guided-service.js` — fatContext uses `buildGlobalContextEnvelope(taskKind, freeze, WI)` — **no** raw `snapshot.globalPrompt` copy
+- `workflow-creation-service.js` — envelope + `INSTRUCTION_PRIORITY_TEXT`
+- `workflow-context-assembly.js` if needed
+- tests: creation service/guided/ui sentinels
+
+**Acceptance:**
+1. `workflowGenerationLaunchConfig(projectSnapshot)` includes materialized project layers when snapshot present
+2. `start-creation` / `start-rewrite` / other start-* pass current project
+3. New project path: empty project layers OK
+4. json stage user JSON `globalContext.globalPrompt` is `''` or short **applied** digest
+5. snapshot still stores raw user text in frozen layers / legacy `snapshot.globalPrompt` for rehydrate
+6. priority string single source
+7. Optional MVP-out: server warn if projectId present but freeze missing expected layer ids
 
 ---
 
@@ -947,7 +1120,7 @@ Rollback：关 feature 用仅 `prependGlobalPrompt`；或 settings 兼容模式�
 
 **Depends:** PR2–PR4  
 
-**Files:** builtin packs；FEATURE_TODO/handoff；optional `docs/DIRECTIVE_STACK_DESIGN.md`；optional canary test  
+**Files:** builtin packs；FEATURE_TODO/handoff 注明 PR2 system-only / PR4 envelope；repo already has `docs/DIRECTIVE_STACK_DESIGN.md`；optional canary  
 
 **Acceptance:** 三包可附加；isolation 回归；legacy mirror 废弃时间表。
 
@@ -977,16 +1150,19 @@ PR1 → PR2 → PR3 → PR4 → PR5
 
 1. [ ] `desktop.html` script tag for `instruction-stack.js`（先于依赖它的 shell；与 `provider-stream.js` 相邻）。
 2. [ ] `settings-service.updateSettings` deep-merge `globalPrompt` + `directiveStack` + normalize dual-write。
-3. [ ] `providerRuntimeConfig`：暴露 `directiveStack`；stream **不**用 unscoped flatten 注入。
-4. [ ] Freeze 路径 extras 覆盖：`guidedStageProviderConfig` 在 runtime 之后写入 `directiveStack` / `taskKind` / scoped fields。
-5. [ ] Agent/reader：`taskKind` 必填；验证 messages 无 user_global。
-6. [ ] Compendium shell JSON：`taskKind: 'compendium-json'`。
-7. [ ] `applyInstructionStack` local suffix 单分支。
-8. [ ] Tests: `tests/instruction-stack.js`, `tests/settings-service.js`, `tests/provider-stream.js`（非虚构 `tests/settings`）。
-9. [ ] Project `directiveStack` normalize；根 schemaVersion 策略按本文（推荐不 bump）。
-10. [ ] Workshop normalize 保留 `directiveContract`。
-11. [ ] Call-site table 1–18 打勾。
-12. [ ] `INSTRUCTION_PRIORITY_TEXT` 替换 creation-service 内联优先级句。
+3. [ ] `providerRuntimeConfig`：暴露 `directiveStack` + `globalPrompt` mirror；**parity** 用 mirror inject；**scoped** 不用 unscoped flatten。
+4. [ ] Default `directiveStackMode`: PR1 `'parity'` → PR2 `'scoped'`（单点翻转）。
+5. [ ] Freeze 路径 extras 覆盖：`guidedStageProviderConfig` 在 runtime 之后写入 `directiveStack` / `taskKind` / mode。
+6. [ ] **AITaskRunner** 转发 taskKind + aiTask；unit tests for agent/reader/draw。
+7. [ ] Agent/reader/compendium-json：**system** 无 user_global（PR2）；envelope（PR4）。
+8. [ ] `applyInstructionStack` local suffix 单分支。
+9. [ ] Tests: `tests/instruction-stack.js`, `tests/settings-service.js`, `tests/provider-stream.js`, `tests/ai-task-runner.js`。
+10. [ ] Project `directiveStack` normalize；根 schemaVersion 推荐不 bump。
+11. [ ] Workshop normalize 保留 `directiveContract`。
+12. [ ] Call-site table 1–18 打勾。
+13. [ ] `INSTRUCTION_PRIORITY_TEXT` 替换 creation-service 内联优先级句。
+14. [ ] Client start-* 传 `workflowGenerationLaunchConfig(projectSnapshot)`（PR4）。
+15. [ ] FEATURE_TODO：PR2 = system isolation only；PR4 = envelope。
 
 ## Appendix C — Example workshop messages after apply
 
@@ -1002,3 +1178,4 @@ PR1 → PR2 → PR3 → PR4 → PR5
   { role: 'user', content: 'current message' }
 ]
 ```
+
