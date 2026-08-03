@@ -8,6 +8,8 @@ const html = read('desktop/fragments/reader.html');
 const desktop = read('desktop.html');
 const bindings = read('src/desktop/shell/shell-bindings.js');
 const css = read('src/styles/desktop/reader.css');
+const importCss = read('src/styles/desktop/reader-import.css');
+const importWizard = read('src/desktop/shell/reader-import-wizard.js');
 const settings = read('src/desktop/shell/reader-settings.js');
 const transferConsumer = read('src/desktop/shell/reader-transfer-consumer.js');
 const writerTransfer = read('src/desktop/shell/reader-writer-transfer.js');
@@ -25,7 +27,10 @@ for (const hook of [
 
 assert.ok(desktop.includes('src/styles/desktop/reader.css'), 'reader styles must load independently');
 assert.ok(desktop.includes('src/desktop/shell/reader-library.js'), 'reader library module must load independently');
+assert.ok(desktop.includes('src/desktop/shell/reader-project-bridge.js'), 'reader project bridge must load independently');
 assert.ok(desktop.includes('src/desktop/shell/reader-workspace.js'), 'reader workspace module must load independently');
+assert.ok(desktop.includes('src/desktop/shell/reader-import-wizard.js'), 'reader import wizard must load independently');
+assert.ok(desktop.includes('src/styles/desktop/reader-import.css'), 'reader import styles must load independently');
 assert.ok(desktop.includes('src/desktop/shell/reader-reading.js'), 'reader reading module must load independently');
 assert.ok(desktop.includes('src/desktop/shell/reader-settings.js'), 'reader settings module must load independently');
 assert.ok(desktop.includes('src/core/document/reader-layout.js'), 'reader layout core must load before the reading module');
@@ -50,6 +55,18 @@ for (const hook of [
 ]) {
   assert.ok(html.includes(hook), `reader settings must include ${hook}`);
 }
+assert.ok(html.includes('data-reader-appearance-profile'), 'reader settings must expose appearance profiles');
+assert.ok(settings.includes('applyReaderAppearanceProfile'), 'reader settings must apply a named appearance profile');
+assert.ok(settings.includes('appearanceProfileId'), 'reader settings must persist the selected appearance profile');
+for (const hook of [
+  'data-reader-import-dialog', 'data-reader-import-title', 'data-reader-import-chapters',
+  'data-reader-import-encoding', 'data-reader-import-confirm', 'data-reader-font-help', 'data-reader-font-dialog'
+]) {
+  assert.ok(html.includes(hook), `reader import wizard must include ${hook}`);
+}
+assert.ok(bindings.includes("typeof initializeReaderImportWizard === 'function'"), 'reader bindings must initialize the import wizard');
+assert.ok(importWizard.includes('/api/reader/import/file-preview-bytes'), 'reader import wizard must use the byte preview API');
+assert.ok(importWizard.includes('/api/reader/import/confirm'), 'reader import wizard must confirm into the formal library');
 for (const hook of [
   'data-reader-search-form', 'data-reader-search-cancel', 'data-reader-search-results',
   'data-reader-bookmark-create', 'data-reader-bookmarks', 'data-reader-progress-slider',
@@ -59,7 +76,8 @@ for (const hook of [
 }
 for (const hook of [
   'data-reader-selection-toggle', 'data-reader-selection-toolbar', 'data-reader-transfer-dialog',
-  'data-reader-transfer-scope', 'data-reader-transfer-chapters', 'data-reader-transfer-destination'
+  'data-reader-transfer-scope', 'data-reader-transfer-chapters', 'data-reader-transfer-destination',
+  'data-reader-focus-toggle'
 ]) {
   assert.ok(html.includes(hook), `reader transfer selection must include ${hook}`);
 }
@@ -83,6 +101,8 @@ for (const hook of ['data-reader-workflow-dialog', 'data-reader-workflow-project
   assert.ok(targetFragments[2].includes(hook), `workflow transfer preview must include ${hook}`);
 }
 assert.ok(Buffer.byteLength(css, 'utf8') < 24 * 1024, 'reader stylesheet must remain below the 24 KiB shell budget');
+assert.ok(Buffer.byteLength(importCss, 'utf8') < 24 * 1024, 'reader import stylesheet must remain below the 24 KiB shell budget');
+assert.ok(Buffer.byteLength(importWizard, 'utf8') < 20 * 1024, 'reader import wizard must remain below the F-12 soft budget');
 assert.ok(Buffer.byteLength(read('src/desktop/shell/reader-workspace.js'), 'utf8') < 24 * 1024, 'reader workspace module must remain below the 24 KiB budget');
 assert.ok(Buffer.byteLength(read('src/desktop/shell/reader-reading.js'), 'utf8') < 24 * 1024, 'reader reading module must remain below the 24 KiB budget');
 assert.ok(Buffer.byteLength(settings, 'utf8') < 24 * 1024, 'reader settings module must remain below the 24 KiB budget');

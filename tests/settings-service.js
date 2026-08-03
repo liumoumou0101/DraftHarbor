@@ -50,6 +50,23 @@ const SettingsSchema = require('../src/core/settings/settings-schema');
     assert.strictEqual(workflowConfigured.workflowGeneration.providerProfileId, 'workflow-profile', 'workflow provider selection should persist separately from the default writing connection');
     assert.strictEqual(updated.generationDefaults.maxTokens, 777);
 
+    const migratedPrompt = await settingsService.updateSettings(dataRoot, {
+      globalPrompt: { enabled: true, content: 'MIGRATED-DIRECTIVE' }
+    });
+    assert.strictEqual(migratedPrompt.directiveStack.userGlobal.content, 'MIGRATED-DIRECTIVE');
+    const migratedScopes = [...migratedPrompt.directiveStack.userGlobal.scopes];
+    const partialPrompt = await settingsService.updateSettings(dataRoot, {
+      globalPrompt: { content: 'UPDATED-DIRECTIVE' }
+    });
+    assert.strictEqual(partialPrompt.directiveStack.userGlobal.content, 'UPDATED-DIRECTIVE');
+    assert.strictEqual(partialPrompt.directiveStack.userGlobal.enabled, true);
+    assert.deepStrictEqual(partialPrompt.directiveStack.userGlobal.scopes, migratedScopes, 'legacy partial patch must preserve scopes');
+    const scopedPatch = await settingsService.updateSettings(dataRoot, {
+      directiveStack: { userGlobal: { enabled: false } }
+    });
+    assert.strictEqual(scopedPatch.globalPrompt.enabled, false, 'legacy mirror should follow directive stack');
+    assert.strictEqual(scopedPatch.globalPrompt.content, 'UPDATED-DIRECTIVE');
+
     const publicSettings = settingsService.publicSettings(updated);
     assert.strictEqual(publicSettings.providerSettings.apiKey, '');
     assert.strictEqual(publicSettings.providerSettings.hasApiKey, true);

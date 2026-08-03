@@ -104,6 +104,48 @@ function createReaderLibraryService(dependencies = {}) {
     return draft;
   }
 
+  async function previewBytesImport(input = {}) {
+    const originalFileName = cleanString(input.originalFileName || input.fileName);
+    if (!originalFileName || originalFileName.includes('\0')) throw new Error('reader import originalFileName is required');
+    const inferredFormat = formatFromFileName(originalFileName);
+    const format = cleanString(input.format, inferredFormat);
+    if (!['txt', 'md'].includes(format)) throw new Error(`reader import format ${format} is not valid for local-text`);
+    let bytes;
+    if (typeof input.bytes === 'string') {
+      const encoded = input.bytes.trim();
+      if (!encoded || encoded.length > Math.ceil(maxImportBytes * 4 / 3) + 16 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
+        throw new Error('reader import bytes must be a valid base64 payload');
+      }
+      bytes = Buffer.from(encoded, 'base64');
+    } else if (Buffer.isBuffer(input.bytes) || input.bytes instanceof Uint8Array || input.bytes instanceof ArrayBuffer || Array.isArray(input.bytes)) {
+      bytes = Buffer.from(input.bytes);
+    } else {
+      throw new Error('reader import bytes are required');
+    }
+    if (bytes.length > maxImportBytes) throw new Error(`reader import file exceeds ${maxImportBytes} bytes`);
+    const draftId = cleanString(input.draftId, idFactory('reader-import-draft'));
+    const draft = ReaderImport.createReaderImportDraft({
+      draftId,
+      sourceKind: 'local-text',
+      format,
+      originalFileName,
+      bytes,
+      encoding: input.encoding || 'auto',
+      title: input.title,
+      createdAt: input.createdAt || clock()
+    });
+    drafts.set(draftId, {
+      draft,
+      sourceKind: 'local-text',
+      format,
+      encoding: input.encoding || 'auto',
+      originalFileName,
+      sourcePath: '',
+      bytes
+    });
+    return draft;
+  }
+
   function previewPastedImport(input = {}) {
     const draftId = cleanString(input.draftId, idFactory('reader-import-draft'));
     const format = cleanString(input.format, 'plain');
@@ -228,6 +270,7 @@ function createReaderLibraryService(dependencies = {}) {
 
   return {
     previewFileImport,
+    previewBytesImport,
     previewPastedImport,
     retryImportDraft,
     correctImportDraft,

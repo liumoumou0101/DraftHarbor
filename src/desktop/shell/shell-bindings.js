@@ -1,33 +1,18 @@
+    /* global initializeReaderImportWizard */
+
     function bindReader() {
         loadReaderState();
         renderReader();
         const elements = readerElements();
         migrateLegacyReaderState();
         if (typeof initializeReaderWorkspace === 'function') initializeReaderWorkspace();
+        if (typeof initializeReaderImportWizard === 'function') initializeReaderImportWizard();
 
         if (elements.migrationConfirm) {
             elements.migrationConfirm.addEventListener('click', () => migrateLegacyReaderState('confirm'));
         }
         if (elements.migrationAbandon) {
             elements.migrationAbandon.addEventListener('click', () => migrateLegacyReaderState('abandon'));
-        }
-
-        if (elements.file) {
-            elements.file.addEventListener('change', async () => {
-                try {
-                    await importReaderFile(elements.file.files && elements.file.files[0]);
-                } catch (error) {
-                    console.warn('Failed to import reader file:', error);
-                    if (elements.content) {
-                        elements.content.replaceChildren();
-                        const message = document.createElement('p');
-                        message.textContent = error.message || String(error);
-                        elements.content.appendChild(message);
-                    }
-                } finally {
-                    elements.file.value = '';
-                }
-            });
         }
 
         let scrollSaveTimer = null;

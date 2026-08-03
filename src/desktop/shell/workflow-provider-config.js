@@ -1,10 +1,18 @@
-    function workflowGenerationLaunchConfig() {
+    function workflowGenerationLaunchConfig(projectSnapshot) {
         const settings = normalizeDesktopSettings(settingsState.settings || {});
         const configured = (settings.workflowGeneration || {}).providerProfileId || 'inherit';
         const profileId = configured === 'inherit' ? '' : configured;
         const selectedModel = workflowState.workflowModel || 'inherit';
         const config = runtimeProviderConfig({ ...(profileId ? { profileId } : {}), ...(selectedModel !== 'inherit' ? { model: selectedModel } : {}) });
         const profile = profileId ? (settings.providerProfiles || []).find((item) => item.id === profileId) : null;
+        const project = projectSnapshot || (typeof nativeEditorState !== 'undefined' && nativeEditorState.snapshot) || {};
+        const directiveSnapshot = window.DraftHarborInstructionStack
+            && typeof window.DraftHarborInstructionStack.createDirectiveSnapshot === 'function'
+            ? window.DraftHarborInstructionStack.createDirectiveSnapshot({
+                directiveStack: settings.directiveStack,
+                projectDirectiveStack: project.directiveStack
+            })
+            : null;
         return {
             providerProfileId: configured,
             snapshot: {
@@ -20,6 +28,8 @@
                 temperature: config.temperature,
                 maxTokens: config.maxTokens,
                 globalPrompt: config.globalPrompt || '',
+                directivePolicyVersion: directiveSnapshot ? 1 : undefined,
+                directiveStack: directiveSnapshot || undefined,
                 enableThinking: workflowState.workflowThinking !== false,
                 useProviderDefaults: !!config.useProviderDefaults
             }
@@ -85,6 +95,11 @@
             review: 8000
         };
         const minimum = minimums[nodeId] || 3000;
+        const taskKind = window.DraftHarborInstructionStack
+            && window.DraftHarborInstructionStack.WORKFLOW_NODE_TASK_KIND[nodeId]
+            || 'unknown';
+        const versionedDirectives = Number(snapshot.directivePolicyVersion) >= 1
+            && snapshot.directiveStack && Array.isArray(snapshot.directiveStack.layers);
         return {
             ...config,
             mode: snapshot.mode || config.mode,
@@ -95,6 +110,10 @@
             model: snapshot.model || config.model,
             temperature: snapshot.temperature === undefined ? config.temperature : snapshot.temperature,
             globalPrompt: snapshot.globalPrompt === undefined ? config.globalPrompt : snapshot.globalPrompt,
+            directiveStackMode: versionedDirectives ? 'scoped' : 'parity',
+            frozenDirectiveStack: versionedDirectives ? snapshot.directiveStack : undefined,
+            taskKind,
+            workflowNodeId: nodeId,
             enableThinking: thinking,
             firstResponseTimeoutMs: 90000,
             idleTimeoutMs: 120000,

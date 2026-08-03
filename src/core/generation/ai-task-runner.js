@@ -3,16 +3,18 @@
         module.exports = factory(
             require('./ai-task-contract'),
             require('./ai-task-history'),
-            require('./generation-result')
+            require('./generation-result'),
+            require('./instruction-stack')
         );
     } else {
         root.DraftHarborAITaskRunner = factory(
             root.DraftHarborAITaskContract,
             root.DraftHarborAITaskHistory,
-            root.DraftHarborGenerationResult
+            root.DraftHarborGenerationResult,
+            root.DraftHarborInstructionStack
         );
     }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (AITaskContract, AITaskHistory, GenerationResult) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (AITaskContract, AITaskHistory, GenerationResult, InstructionStack) {
     function stripJsonFence(value) {
         return String(value || '').trim()
             .replace(/^```(?:json)?\s*/i, '')
@@ -139,6 +141,17 @@
             const providerConfig = { ...(runOptions.providerConfig || {}) };
             if (controller && !providerConfig.signal) providerConfig.signal = controller.signal;
             const prompt = runOptions.prompt || { messages: [] };
+            providerConfig.aiTask = {
+                domain: task.domain,
+                action: task.action,
+                target: task.target && typeof task.target === 'object'
+                    ? { type: task.target.type, id: task.target.id }
+                    : {}
+            };
+            if (!providerConfig.taskKind && InstructionStack
+                && typeof InstructionStack.resolveTaskKindFromAITask === 'function') {
+                providerConfig.taskKind = InstructionStack.resolveTaskKindFromAITask(task) || 'unknown';
+            }
             const messages = Array.isArray(prompt.messages) ? prompt.messages : [];
             const promptText = prompt && typeof prompt.asString === 'function' ? prompt.asString() : '';
             const startedAt = new Date().toISOString();

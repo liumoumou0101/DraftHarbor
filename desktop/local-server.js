@@ -26,6 +26,7 @@ const workflowVariantService = require('./services/workflow-variant-service');
 const workflowTemplateService = require('./services/workflow-template-service');
 const projectAssetQueryService = require('./services/project-asset-query-service');
 const readerLibraryService = require('./services/reader-library-service');
+const { createReaderProjectLibraryService } = require('./services/reader-project-library-service');
 const readerMigrationService = require('./services/reader-migration-service');
 const { createReaderTransferService } = require('./services/reader-transfer-service');
 const { createReaderWriterTransferService } = require('./services/reader-writer-transfer-service');
@@ -690,6 +691,7 @@ const handleReaderApi = createReaderController({
   readerStore: readerDocumentStore,
   readerStateStore,
   readerLibraryService,
+  readerProjectLibraryService: createReaderProjectLibraryService({ projectService, digest: readerDocumentStore.sha256 }),
   readerMigrationService,
   readerTransferService,
   readJsonPayload,

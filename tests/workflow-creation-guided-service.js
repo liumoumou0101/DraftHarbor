@@ -6,6 +6,7 @@ const projectService = require('../desktop/services/project-service');
 const Creation = require('../desktop/services/workflow-creation-guided-service');
 const eventStore = require('../desktop/storage/workflow-event-store-v2');
 const { startDesktopServers } = require('../desktop/local-server');
+const InstructionStack = require('../src/core/generation/instruction-stack');
 
 const GLOBAL_PROMPT_SENTINEL = 'WORKFLOW-GLOBAL-PROMPT-SENTINEL';
 const WRITING_INSTRUCTION_SENTINEL = '使用克制的第三人称限知';
@@ -22,6 +23,35 @@ function assertPreparedGlobalContext(prepared, label) {
   let servers = null;
   try {
     const created = await projectService.createProject(dataRoot, { id: 'creation-guided-project', title: '从零创作测试' });
+    const scopedSentinel = 'SCOPED-WORKFLOW-DIRECTIVE-MUST-NOT-ENTER-USER-JSON';
+    const scopedStack = InstructionStack.normalizeDirectiveStackSettings({}, { enabled: true, content: scopedSentinel });
+    const scopedSnapshot = InstructionStack.createDirectiveSnapshot({ directiveStack: scopedStack });
+    await Creation.startGuidedCreation({
+      dataRoot,
+      projectId: created.project.id,
+      runId: 'creation-guided-scoped-run',
+      brief: { title: '隔离测试', premise: '验证指令只进入 system。', targetWords: 1000 },
+      generationPolicy: {
+        providerProfileId: 'inherit',
+        snapshot: {
+          globalPrompt: scopedSentinel,
+          directivePolicyVersion: 1,
+          directiveStack: scopedSnapshot
+        }
+      }
+    });
+    const scopedPrepared = await Creation.prepareCreationNode({
+      dataRoot,
+      projectId: created.project.id,
+      runId: 'creation-guided-scoped-run',
+      nodeId: 'direction'
+    });
+    scopedPrepared.prompts.forEach((item) => {
+      const userPayload = JSON.parse(item.prompt.messages[1].content);
+      assert.strictEqual(userPayload.globalContext.globalPrompt, '', 'versioned scoped run must not repeat directive content in user JSON');
+      assert.strictEqual(userPayload.globalContext.directiveContext.taskKind, 'workflow-json');
+      assert.ok(!item.prompt.messages[1].content.includes(scopedSentinel));
+    });
     const base = { dataRoot, projectId: created.project.id, runId: 'creation-guided-run' };
     const started = await Creation.startGuidedCreation({
       ...base,

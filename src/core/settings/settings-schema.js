@@ -5,6 +5,14 @@
         root.DraftHarborSettingsSchema = factory();
     }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+    var InstructionStack = null;
+    try {
+        if (typeof require === 'function') {
+            InstructionStack = require('../generation/instruction-stack');
+        }
+    } catch (e) {
+        InstructionStack = typeof globalThis !== 'undefined' ? globalThis.DraftHarborInstructionStack : null;
+    }
     var CompendiumAgentPolicy = null;
     try {
         if (typeof require === 'function') {
@@ -215,6 +223,24 @@
         const providerInput = input.providerSettings || input.provider || input.ai || input;
         const generationInput = input.generationDefaults || input.generation || input;
         const localInput = input.localModelSettings || input.localModel || input;
+        const legacyGlobalPrompt = normalizeGlobalPrompt(input.globalPrompt || input.globalPromptPrefix || {});
+        const directiveStack = InstructionStack && typeof InstructionStack.normalizeDirectiveStackSettings === 'function'
+            ? InstructionStack.normalizeDirectiveStackSettings(input.directiveStack || {}, legacyGlobalPrompt)
+            : {
+                schemaVersion: 1,
+                mode: 'parity',
+                userGlobal: {
+                    id: 'user_global',
+                    title: '用户全局创作指令',
+                    enabled: legacyGlobalPrompt.enabled,
+                    content: legacyGlobalPrompt.content,
+                    scopes: [],
+                    source: 'migrated_globalPrompt'
+                }
+            };
+        const globalPrompt = InstructionStack && typeof InstructionStack.legacyGlobalPromptFromUserGlobal === 'function'
+            ? InstructionStack.legacyGlobalPromptFromUserGlobal(directiveStack)
+            : legacyGlobalPrompt;
         return {
             version: 1,
             projectSaveLocation: cleanString(input.projectSaveLocation),
@@ -226,7 +252,8 @@
             appearance: normalizeAppearanceSettings(input.appearance || input.appearanceSettings || {}),
             compendiumAgent: normalizeCompendiumAgentSettings(input.compendiumAgent),
             workflowGeneration: normalizeWorkflowGeneration(input.workflowGeneration),
-            globalPrompt: normalizeGlobalPrompt(input.globalPrompt || input.globalPromptPrefix || {}),
+            globalPrompt,
+            directiveStack,
             globalStyleGuardRules: Array.isArray(input.globalStyleGuardRules) ? input.globalStyleGuardRules : [],
             updatedAt: input.updatedAt || ''
         };
@@ -261,6 +288,8 @@
                 maxTokens: defaults.maxTokens,
                 useProviderDefaults: defaults.useProviderDefaults,
                 globalPrompt: settings.globalPrompt.enabled ? settings.globalPrompt.content : '',
+                directiveStack: settings.directiveStack,
+                directiveStackMode: settings.directiveStack.mode,
                 ...extras,
                 profileId: selectedProfile.id
             };
@@ -278,6 +307,8 @@
             maxTokens: defaults.maxTokens,
             useProviderDefaults: defaults.useProviderDefaults,
             globalPrompt: settings.globalPrompt.enabled ? settings.globalPrompt.content : '',
+            directiveStack: settings.directiveStack,
+            directiveStackMode: settings.directiveStack.mode,
             ...extras
         };
     }
@@ -341,6 +372,8 @@
         normalizeAppearanceSettings,
         normalizeCompendiumAgentSettings,
         normalizeGlobalPrompt,
+        normalizeDirectiveStackSettings: InstructionStack && InstructionStack.normalizeDirectiveStackSettings,
+        mergeDirectiveStackSettings: InstructionStack && InstructionStack.mergeDirectiveStackSettings,
         normalizeDesktopSettings,
         normalizeWorkflowGeneration,
         providerRuntimeConfig,

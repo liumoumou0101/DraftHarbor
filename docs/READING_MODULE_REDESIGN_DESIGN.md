@@ -7,6 +7,8 @@
 - 前置分析：[F-10 阅读功能改造设计分析 0.2](READING_MODULE_REDESIGN_DISCOVERY.md)
 - 开发计划：[F-10 阅读体验改造开发计划 0.1](READING_MODULE_REDESIGN_DEVELOPMENT_PLAN.md)
 
+> 历史说明：本文件记录已经完成的 F-10 数据、安全与首版阅读体验设计。2026-08-03 起，Reader 作为稿湾第三核心模块进入 F-12 Reader 2.0 产品级重设计；新的产品和视觉范围见 [Reader 2.0 专业小说阅读器产品设计](READING_MODULE_2_0_DESIGN.md)。F-10 的 Reader Document、Locator、Store 和 Transfer 边界继续有效。
+
 ## 1. 背景
 
 稿湾当前阅读器已经支持当前项目、TXT/Markdown 导入、章节识别、目录、章节切换、滚动位置和基础排版，但它仍以单个浏览器状态中的本地文本预览为中心。长篇正文被放入 `localStorage`，项目正文转换时丢失场景与段落来源，阅读位置依赖章节内滚动比例，外部文档也没有稳定身份和可追溯版本，因此不能可靠承担长期阅读或跨模块转交。

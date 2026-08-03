@@ -24,6 +24,14 @@
                             <button class="desktop-secondary-action" type="button" data-workshop-delete disabled>删除对话</button>
                         </div>
                     </header>
+                    <div class="desktop-workshop-output-panel">
+                        <label class="desktop-native-writer-check">
+                            <input type="checkbox" data-workshop-contract-enabled>
+                            <span>启用本会话指令</span>
+                        </label>
+                        <textarea data-workshop-contract-content rows="2" placeholder="只用于本次 Workshop 对话，例如讨论边界、角色口吻或本轮目标。"></textarea>
+                        <button class="desktop-secondary-action" type="button" data-workshop-contract-save>保存会话指令</button>
+                    </div>
                     <div class="desktop-workshop-messages" data-workshop-messages></div>
                     <div class="desktop-workshop-empty-state" data-workshop-empty hidden>
                         <div class="desktop-workshop-empty-content" data-workshop-empty-content></div>

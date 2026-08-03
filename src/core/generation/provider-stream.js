@@ -1,8 +1,11 @@
 (function (root, factory) {
-    const api = factory(root);
+    const instructionStack = typeof module === 'object' && module.exports
+        ? require('./instruction-stack')
+        : root.DraftHarborInstructionStack;
+    const api = factory(root, instructionStack);
     if (typeof module === 'object' && module.exports) module.exports = api;
     else root.DraftHarborProviderStream = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (runtime) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (runtime, InstructionStack) {
     const MODEL_CAPABILITIES = Object.freeze({
         'deepseek-v4-flash': Object.freeze({
             label: 'DeepSeek V4 Flash',
@@ -40,6 +43,48 @@
         const prefix = String(value || '').trim();
         if (!prefix) return Array.isArray(messages) ? messages : [];
         return [{ role: 'system', content: prefix }, ...(Array.isArray(messages) ? messages : [])];
+    }
+
+    function prepareDirectiveMessages(messages, prompt, config) {
+        const source = Array.isArray(messages) ? messages : [];
+        const stackMode = config.directiveStackMode
+            || (config.directiveStack && config.directiveStack.mode)
+            || 'parity';
+        // Scoped mode must fail closed if the compiler is unavailable. Falling
+        // back to legacy prepend would re-pollute JSON/agent/reader requests.
+        if (!InstructionStack) {
+            return {
+                messages: stackMode === 'scoped'
+                    ? source
+                    : prependGlobalPrompt(source, config.globalPrompt),
+                debug: null
+            };
+        }
+        if (stackMode !== 'scoped') {
+            return {
+                messages: prependGlobalPrompt(source, config.globalPrompt),
+                debug: null
+            };
+        }
+        const taskKind = InstructionStack.resolveTaskKind(config, prompt);
+        const compiled = config.compiledDirectives || InstructionStack.compileInstructionStack({
+            taskKind,
+            directiveStack: config.directiveStack,
+            projectDirectiveStack: config.projectDirectiveStack,
+            frozenDirectiveStack: config.frozenDirectiveStack,
+            sessionDirective: config.sessionDirective
+                || (prompt && prompt.meta && prompt.meta.directiveContext && prompt.meta.directiveContext.sessionDirective),
+            directiveOverride: config.directiveOverride
+                || (prompt && prompt.meta && prompt.meta.directiveContext && prompt.meta.directiveContext.override),
+            globalPrompt: config.globalPrompt
+        });
+        if (typeof config.onDirectiveStackDebug === 'function') {
+            config.onDirectiveStackDebug(compiled.debug);
+        }
+        return {
+            messages: InstructionStack.applyInstructionStack(source, compiled),
+            debug: compiled.debug
+        };
     }
 
     async function consumeEventStream(response, visit, onActivity) {
@@ -280,16 +325,18 @@
         const mode = activeSettings.mode || activeSettings.aiMode || 'local';
         try {
             if (mode === 'api') {
-                const chatMessages = prependGlobalPrompt(
+                const prepared = prepareDirectiveMessages(
                     messages || [{ role: 'user', content: String(prompt || '') }],
-                    activeSettings.globalPrompt
+                    prompt,
+                    activeSettings
                 );
+                const chatMessages = prepared.messages;
                 const result = await requestChat(chatMessages, emit, activeSettings, watchdog.touch);
                 if (!contentCharacters) throw providerError('provider_empty_response', 'AI Provider 没有返回可用正文。');
                 return result;
             }
             const serialized = messages
-                ? messagesToChatML(prependGlobalPrompt(messages, activeSettings.globalPrompt))
+                ? messagesToChatML(prepareDirectiveMessages(messages, prompt, activeSettings).messages)
                 : String(prompt && typeof prompt.asString === 'function' ? prompt.asString() : prompt || '');
             const result = await requestLocal(serialized, emit, activeSettings, watchdog.touch);
             if (!contentCharacters) throw providerError('provider_empty_response', '本地生成服务没有返回可用正文。');
@@ -301,5 +348,5 @@
         }
     }
 
-    return Object.freeze({ MODEL_CAPABILITIES, STREAM_TIMEOUT_DEFAULTS, getModelCapability, messagesToChatML, prependGlobalPrompt, streamGeneration });
+    return Object.freeze({ MODEL_CAPABILITIES, STREAM_TIMEOUT_DEFAULTS, getModelCapability, messagesToChatML, prependGlobalPrompt, prepareDirectiveMessages, streamGeneration });
 });

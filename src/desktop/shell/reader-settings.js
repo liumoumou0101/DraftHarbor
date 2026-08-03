@@ -1,8 +1,9 @@
     const READER_PREFERENCE_KEYS = Object.freeze([
-        'layoutMode', 'pageTransition', 'themeId', 'fontFamilyId', 'fontSize', 'lineHeight',
-        'letterSpacing', 'paragraphSpacing', 'pageMargin', 'textWidth', 'textAlign', 'indent', 'reducedMotionOverride'
+        'layoutMode', 'pageTransition', 'themeId', 'fontFamilyId', 'fontId', 'fontCatalogVersion', 'fontSize', 'lineHeight',
+        'letterSpacing', 'paragraphSpacing', 'pageMargin', 'textWidth', 'textAlign', 'indent', 'reducedMotionOverride', 'appearanceProfileId'
     ]);
     let readerSettingsSaveTimer = null;
+    let readerApplyingAppearanceProfile = false;
 
     function readerDefaultPreferences() {
         const schema = window.DraftHarborReaderDocumentSchema;
@@ -10,9 +11,9 @@
             ? schema.createReaderGlobalPreferences({})
             : {
                 schemaVersion: 1, layoutMode: 'flow', pageTransition: 'fade', themeId: 'dark',
-                fontFamilyId: 'system', fontSize: 18, lineHeight: 1.8, letterSpacing: 0,
+                fontFamilyId: 'system', fontId: 'builtin:default', fontCatalogVersion: 1, fontSize: 18, lineHeight: 1.8, letterSpacing: 0,
                 paragraphSpacing: 1.05, pageMargin: 48, textWidth: 760, textAlign: 'start', indent: true,
-                reducedMotionOverride: undefined
+                reducedMotionOverride: undefined, appearanceProfileId: 'default'
             };
     }
 
@@ -36,6 +37,8 @@
             pageTransition: readerState.pageTransition,
             themeId: readerState.theme,
             fontFamilyId: readerState.fontFamily,
+            fontId: readerState.fontId,
+            fontCatalogVersion: readerState.fontCatalogVersion,
             fontSize: readerState.fontSize,
             lineHeight: readerState.lineHeight,
             letterSpacing: readerState.letterSpacing,
@@ -44,7 +47,8 @@
             textWidth: readerState.textWidth,
             textAlign: readerState.textAlign,
             indent: readerState.indent,
-            reducedMotionOverride: readerState.reducedMotionOverride
+            reducedMotionOverride: readerState.reducedMotionOverride,
+            appearanceProfileId: readerState.appearanceProfileId
         });
     }
 
@@ -59,6 +63,9 @@
         readerState.pageTransition = preferences.pageTransition === 'curl' ? 'none' : preferences.pageTransition;
         readerState.theme = preferences.themeId;
         readerState.fontFamily = preferences.fontFamilyId;
+        readerState.fontId = preferences.fontId || readerState.fontId || 'builtin:default';
+        readerState.fontCatalogVersion = preferences.fontCatalogVersion || 1;
+        readerState.appearanceProfileId = preferences.appearanceProfileId || 'default';
         readerState.fontSize = preferences.fontSize;
         readerState.lineHeight = preferences.lineHeight;
         readerState.letterSpacing = preferences.letterSpacing;
@@ -96,17 +103,34 @@
 
     function syncReaderSettingsControls() {
         const values = {
+            '[data-reader-font-size]': readerState.fontSize,
+            '[data-reader-line-height]': readerState.lineHeight,
             '[data-reader-letter-spacing]': readerState.letterSpacing,
+            '[data-reader-width]': readerState.textWidth,
+            '[data-reader-paragraph-spacing]': readerState.paragraphSpacing,
             '[data-reader-page-margin]': readerState.pageMargin,
             '[data-reader-text-align]': readerState.textAlign,
             '[data-reader-layout-mode]': readerState.layoutMode,
             '[data-reader-page-transition]': readerState.pageTransition,
+            '[data-reader-appearance-profile]': readerState.appearanceProfileId,
             '[data-reader-preference-scope]': readerState.preferenceScope,
             '[data-reader-reduced-motion]': readerState.reducedMotionOverride === true ? 'reduce' : readerState.reducedMotionOverride === false ? 'allow' : 'system'
         };
         Object.entries(values).forEach(([selector, value]) => {
             const control = document.querySelector(selector);
             if (control && value !== undefined) control.value = String(value);
+        });
+        const outputValues = {
+            'font-size': `${readerState.fontSize} px`,
+            'line-height': Number(readerState.lineHeight).toFixed(2),
+            'letter-spacing': Number(readerState.letterSpacing).toFixed(2),
+            width: `${readerState.textWidth} px`,
+            'paragraph-spacing': Number(readerState.paragraphSpacing).toFixed(2),
+            'page-margin': `${readerState.pageMargin} px`
+        };
+        Object.entries(outputValues).forEach(([key, value]) => {
+            const output = document.querySelector(`[data-reader-value-for="${key}"]`);
+            if (output) output.textContent = value;
         });
         const scope = document.querySelector('[data-reader-preference-scope]');
         if (scope) scope.querySelector('option[value="document"]').disabled = !readerState.activeDocumentId;
@@ -192,9 +216,14 @@
 
     function updateReaderSetting(mutator) {
         const locator = typeof captureReaderPositionLocator === 'function' ? captureReaderPositionLocator() : null;
-        mutator();
+        const wasApplyingAppearanceProfile = readerApplyingAppearanceProfile;
+        const mutationResult = mutator();
+        if (!wasApplyingAppearanceProfile && !readerApplyingAppearanceProfile && mutationResult !== 'appearance-profile') {
+            readerState.appearanceProfileId = 'custom';
+        }
         readerState.anchorLocator = locator || readerState.anchorLocator;
         applyReaderSettings();
+        syncReaderSettingsControls();
         saveReaderState();
         scheduleReaderPreferenceSave();
     }
@@ -202,6 +231,36 @@
     function bindReaderSetting(selector, eventName, mutator) {
         const control = document.querySelector(selector);
         control?.addEventListener(eventName, () => updateReaderSetting(() => mutator(control)));
+    }
+
+    function applyReaderAppearanceProfile(profileId) {
+        const preferencesApi = window.DraftHarborReaderPreferences;
+        const preset = preferencesApi && preferencesApi.PROFILE_PRESETS && preferencesApi.PROFILE_PRESETS[profileId];
+        if (!preset) return '';
+        readerApplyingAppearanceProfile = true;
+        try {
+            Object.assign(readerState, {
+                appearanceProfileId: profileId,
+                layoutMode: preset.layoutMode,
+                pageTransition: preset.pageTransition,
+                theme: preset.themeId,
+                fontFamily: preset.fontFamilyId,
+                fontId: preset.fontId,
+                fontCatalogVersion: preset.fontCatalogVersion || 1,
+                fontSize: preset.fontSize,
+                lineHeight: preset.lineHeight,
+                letterSpacing: preset.letterSpacing,
+                paragraphSpacing: preset.paragraphSpacing,
+                pageMargin: preset.pageMargin,
+                textWidth: preset.textWidth,
+                textAlign: preset.textAlign,
+                indent: preset.indent,
+                reducedMotionOverride: preset.reducedMotionOverride
+            });
+        } finally {
+            readerApplyingAppearanceProfile = false;
+        }
+        return 'appearance-profile';
     }
 
     function initializeReaderSettings() {
@@ -213,6 +272,10 @@
         bindReaderSetting('[data-reader-page-transition]', 'change', (control) => { readerState.pageTransition = control.value || 'none'; });
         bindReaderSetting('[data-reader-reduced-motion]', 'change', (control) => {
             readerState.reducedMotionOverride = control.value === 'reduce' ? true : control.value === 'allow' ? false : undefined;
+        });
+        bindReaderSetting('[data-reader-appearance-profile]', 'change', (control) => applyReaderAppearanceProfile(control.value || 'default'));
+        document.querySelectorAll('[data-reader-font-size], [data-reader-line-height], [data-reader-width], [data-reader-paragraph-spacing]').forEach((control) => {
+            control.addEventListener('input', () => window.setTimeout(syncReaderSettingsControls, 0));
         });
         document.querySelector('[data-reader-preference-scope]')?.addEventListener('change', (event) => {
             readerState.preferenceScope = event.currentTarget.value === 'document' && readerState.activeDocumentId ? 'document' : 'global';

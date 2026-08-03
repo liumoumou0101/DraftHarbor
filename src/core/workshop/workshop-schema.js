@@ -37,11 +37,19 @@
 
     function createWorkshopSession(input = {}) {
         const now = timestamp(input.createdAt || input.created);
+        const rawContract = input.directiveContract && typeof input.directiveContract === 'object'
+            ? input.directiveContract : {};
         return {
             id: cleanString(input.id, makeId('workshop')),
             projectId: cleanString(input.projectId),
             title: cleanString(input.title || input.name, '新对话') || '新对话',
             messages: Array.isArray(input.messages) ? input.messages.map(createWorkshopMessage) : [],
+            directiveContract: {
+                enabled: !!rawContract.enabled,
+                content: cleanString(rawContract.content),
+                reinforcedAt: cleanString(rawContract.reinforcedAt),
+                pinMode: ['off', 'tail', 'sandwich'].includes(rawContract.pinMode) ? rawContract.pinMode : 'off'
+            },
             createdAt: timestamp(input.createdAt || input.created || now),
             updatedAt: timestamp(input.updatedAt || input.modified || now)
         };

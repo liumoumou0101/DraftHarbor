@@ -21,6 +21,7 @@ assert.strictEqual(emptyProject.sceneOrder[0], emptyProject.scenes[0].id);
 assert.strictEqual(emptyProject.currentSceneId, emptyProject.scenes[0].id);
 
 const normalizedEmpty = normalizeProject({ project: { id: 'p-empty', name: 'No Content' } });
+assert.deepStrictEqual(normalizedEmpty.directiveStack, { schemaVersion: 1, layers: [] }, 'projects should default to an empty directive stack');
 assert.strictEqual(normalizedEmpty.title, 'No Content');
 assert.strictEqual(normalizedEmpty.chapters.length, 1);
 assert.strictEqual(normalizedEmpty.scenes.length, 1);

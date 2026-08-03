@@ -26,6 +26,21 @@ async function updateSettings(dataRoot, patch = {}) {
   if (Object.prototype.hasOwnProperty.call(providerPatch, 'apiKey') && !String(providerPatch.apiKey || '').trim() && current.providerSettings.apiKey) {
     providerPatch.apiKey = current.providerSettings.apiKey;
   }
+  let directiveStack = typeof SettingsSchema.mergeDirectiveStackSettings === 'function'
+    ? SettingsSchema.mergeDirectiveStackSettings(current.directiveStack, patch.directiveStack || {})
+    : { ...(current.directiveStack || {}), ...(patch.directiveStack || {}) };
+  if (patch.globalPrompt && typeof patch.globalPrompt === 'object') {
+    directiveStack = {
+      ...directiveStack,
+      userGlobal: {
+        ...((directiveStack && directiveStack.userGlobal) || {}),
+        ...(Object.prototype.hasOwnProperty.call(patch.globalPrompt, 'enabled')
+          ? { enabled: !!patch.globalPrompt.enabled } : {}),
+        ...(Object.prototype.hasOwnProperty.call(patch.globalPrompt, 'content')
+          ? { content: String(patch.globalPrompt.content || '') } : {})
+      }
+    };
+  }
   return writeSettings(dataRoot, {
     ...current,
     ...patch,
@@ -49,7 +64,12 @@ async function updateSettings(dataRoot, patch = {}) {
     workflowGeneration: {
       ...current.workflowGeneration,
       ...(patch.workflowGeneration || {})
-    }
+    },
+    globalPrompt: {
+      ...current.globalPrompt,
+      ...(patch.globalPrompt || {})
+    },
+    directiveStack
   });
 }
 

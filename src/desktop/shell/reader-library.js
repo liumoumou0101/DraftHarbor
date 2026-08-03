@@ -28,7 +28,9 @@
             const title = document.createElement('strong');
             title.textContent = item.title || '未命名文档';
             const meta = document.createElement('span');
-            meta.textContent = `${item.format || 'text'} · ${item.revisionCount || 1} 个版本`;
+            const source = item.sourceKind === 'project' ? '项目作品' : item.format === 'md' ? 'Markdown' : '本地文本';
+            const count = Number(item.characterCount) > 0 ? ` · ${Number(item.characterCount).toLocaleString()} 字` : '';
+            meta.textContent = `${source} · ${item.revisionCount || 1} 个版本${count}`;
             button.append(title, meta);
             button.addEventListener('click', () => openReaderLibraryDocument(item.documentId));
             container.appendChild(button);

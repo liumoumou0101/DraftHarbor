@@ -7,6 +7,7 @@ function createController(dependencies) {
     readerStore,
     readerStateStore,
     readerLibraryService,
+    readerProjectLibraryService,
     readerMigrationService,
     readerTransferService,
     readJsonPayload,
@@ -33,13 +34,23 @@ function createController(dependencies) {
     if (!pathname.startsWith('/api/reader/')) return false;
 
     if (request.method === 'GET' && pathname === '/api/reader/documents') {
-      return respond(response, async () => ({ ok: true, ...(await readerStore.listReaderDocuments(dataRoot)) }));
+      return respond(response, async () => {
+        const library = await readerStore.listReaderDocuments(dataRoot);
+        const projects = readerProjectLibraryService
+          ? await readerProjectLibraryService.listDocuments(dataRoot)
+          : [];
+        return { ok: true, index: library.index, documents: [...library.documents, ...projects] };
+      });
     }
 
     if (request.method === 'GET' && pathname === '/api/reader/document') {
       return respond(response, async () => {
         const documentId = cleanString(parsedUrl.searchParams.get('documentId'));
         if (!documentId) throw new Error('reader documentId is required');
+        if (documentId.startsWith('project:') && readerProjectLibraryService) {
+          const metadata = await readerProjectLibraryService.readMetadata(dataRoot, documentId.slice('project:'.length));
+          return { ok: true, metadata };
+        }
         const metadata = await readerStore.readReaderDocumentMetadata(dataRoot, documentId);
         if (!metadata) throw new Error('reader document not found');
         return { ok: true, metadata };
@@ -51,6 +62,16 @@ function createController(dependencies) {
         const documentId = cleanString(parsedUrl.searchParams.get('documentId'));
         const chapterId = cleanString(parsedUrl.searchParams.get('chapterId'));
         if (!documentId || !chapterId) throw new Error('reader documentId and chapterId are required');
+        if (documentId.startsWith('project:') && readerProjectLibraryService) {
+          const result = await readerProjectLibraryService.readChapter(
+            dataRoot,
+            documentId.slice('project:'.length),
+            parsedUrl.searchParams.get('revisionId'),
+            chapterId
+          );
+          if (!result) throw new Error('reader chapter not found');
+          return { ok: true, documentId, revision: result.revision, chapter: result.chapter };
+        }
         const metadata = await readerStore.readReaderDocumentMetadata(dataRoot, documentId);
         if (!metadata) throw new Error('reader document not found');
         const revisionId = cleanString(parsedUrl.searchParams.get('revisionId')) || metadata.activeRevisionId;
@@ -69,6 +90,10 @@ function createController(dependencies) {
       return respond(response, async () => {
         const documentId = cleanString(parsedUrl.searchParams.get('documentId'));
         if (!documentId) throw new Error('reader documentId is required');
+        if (documentId.startsWith('project:') && readerProjectLibraryService) {
+          const contents = await readerProjectLibraryService.readContents(dataRoot, documentId.slice('project:'.length));
+          return { ok: true, documentId, contents };
+        }
         const documentMetadata = await readerStore.readReaderDocumentMetadata(dataRoot, documentId);
         if (!documentMetadata) throw new Error('reader document not found');
         const revisionId = cleanString(parsedUrl.searchParams.get('revisionId')) || documentMetadata.activeRevisionId;
@@ -219,6 +244,7 @@ function createController(dependencies) {
 
     const importActions = {
       '/api/reader/import/file-preview': async (payload) => readerLibraryService.previewFileImport(payload),
+      '/api/reader/import/file-preview-bytes': async (payload) => readerLibraryService.previewBytesImport(payload),
       '/api/reader/import/paste-preview': async (payload) => readerLibraryService.previewPastedImport(payload),
       '/api/reader/import/retry': async (payload) => readerLibraryService.retryImportDraft(payload.draftId, payload),
       '/api/reader/import/correct': async (payload) => readerLibraryService.correctImportDraft(payload.draftId, payload.corrections || payload),

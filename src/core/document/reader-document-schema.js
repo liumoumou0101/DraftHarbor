@@ -15,6 +15,7 @@
     const THEME_IDS = Object.freeze(['dark', 'paper', 'sepia']);
     const FONT_FAMILY_IDS = Object.freeze(['system', 'serif', 'sans-serif', 'kai']);
     const TEXT_ALIGNMENTS = Object.freeze(['start', 'justify']);
+    const APPEARANCE_PROFILE_IDS = Object.freeze(['default', 'paper', 'focus', 'custom']);
 
     function cleanString(value, fallback = '') {
         const text = value === null || value === undefined ? fallback : String(value);
@@ -284,6 +285,15 @@
         const pageTransition = input.pageTransition === undefined ? 'fade' : assertEnum(input.pageTransition, PAGE_TRANSITIONS, 'reader pageTransition');
         const themeId = input.themeId === undefined ? 'dark' : assertEnum(input.themeId, THEME_IDS, 'reader themeId');
         const fontFamilyId = input.fontFamilyId === undefined ? 'system' : assertEnum(input.fontFamilyId, FONT_FAMILY_IDS, 'reader fontFamilyId');
+        const fontId = cleanString(input.fontId, {
+            system: 'builtin:default',
+            serif: 'builtin:serif',
+            'sans-serif': 'builtin:sans',
+            kai: 'builtin:kai'
+        }[fontFamilyId] || 'builtin:default');
+        if (!/^[a-z0-9][a-z0-9:._-]{1,119}$/i.test(fontId)) throw new Error('reader fontId is invalid');
+        const appearanceProfileId = input.appearanceProfileId === undefined
+            ? 'default' : assertEnum(input.appearanceProfileId, APPEARANCE_PROFILE_IDS, 'reader appearanceProfileId');
         const textAlign = input.textAlign === undefined ? 'start' : assertEnum(input.textAlign, TEXT_ALIGNMENTS, 'reader textAlign');
         const reducedMotionOverride = input.reducedMotionOverride;
         if (![undefined, null, true, false].includes(reducedMotionOverride)) {
@@ -295,6 +305,8 @@
             pageTransition,
             themeId,
             fontFamilyId,
+            fontId,
+            fontCatalogVersion: Math.max(1, Math.floor(Number(input.fontCatalogVersion) || 1)),
             fontSize: finiteNumber(input.fontSize, 18, 12, 48),
             lineHeight: finiteNumber(input.lineHeight, 1.8, 1.2, 3),
             letterSpacing: finiteNumber(input.letterSpacing, 0, -0.05, 0.3),
@@ -303,7 +315,8 @@
             textWidth: finiteNumber(input.textWidth, 760, 420, 1400),
             textAlign,
             indent: input.indent !== false,
-            reducedMotionOverride: reducedMotionOverride === null ? undefined : reducedMotionOverride
+            reducedMotionOverride: reducedMotionOverride === null ? undefined : reducedMotionOverride,
+            appearanceProfileId
         };
     }
 
@@ -352,6 +365,7 @@
         THEME_IDS,
         FONT_FAMILY_IDS,
         TEXT_ALIGNMENTS,
+        APPEARANCE_PROFILE_IDS,
         normalizeText,
         createReaderBlock,
         createReaderChapter,

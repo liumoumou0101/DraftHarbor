@@ -687,7 +687,10 @@
     function nativeGenerationConfig(signal) {
         const effectiveProfile = writerEffectiveProfile();
         const selectedModel = writerSelectedModelId(effectiveProfile);
-        const extras = { signal };
+        const extras = {
+            signal,
+            projectDirectiveStack: nativeEditorState.snapshot && nativeEditorState.snapshot.directiveStack
+        };
         if (writerModelOverride.profileId && writerModelOverride.profileId !== 'inherit') {
             extras.profileId = writerModelOverride.profileId;
         }
@@ -894,7 +897,7 @@
                 }
                 syncInlineGenerationToEditor();
                 renderNativeGeneration();
-            }, nativeGenerationConfig(generation.abortController && generation.abortController.signal));
+            }, { ...nativeGenerationConfig(generation.abortController && generation.abortController.signal), taskKind: 'writer-prose' });
             if (!generation.text.trim()) {
                 throw new Error('AI provider returned an empty response.');
             }
@@ -1190,7 +1193,7 @@
                 if (meta && meta.type && meta.type !== 'content') return;
                 summary += token;
                 if (scope === 'scene' && elements.summary) elements.summary.value = summary;
-            }, nativeGenerationConfig(generation.abortController && generation.abortController.signal));
+            }, { ...nativeGenerationConfig(generation.abortController && generation.abortController.signal), taskKind: 'writer-summary' });
             summary = cleanNativeSummaryText(summary);
             if (!summary) throw new Error('AI provider returned an empty response.');
             if (scope === 'chapter') {

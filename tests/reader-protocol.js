@@ -39,7 +39,8 @@ async function jsonRequest(handler, pathname, method = 'GET', body) {
     assert.strictEqual(preview.body.draft.chapters[0].title, '第一章');
 
     const before = await jsonRequest(handler, '/api/reader/documents');
-    assert.strictEqual(before.body.documents.length, 0);
+    assert.strictEqual(before.body.documents.length, 1);
+    assert.strictEqual(before.body.documents[0].documentId, 'project:protocol-writer-target');
 
     const confirmed = await jsonRequest(handler, '/api/reader/import/confirm', 'POST', {
       draftId: 'protocol-reader-draft',
@@ -53,7 +54,7 @@ async function jsonRequest(handler, pathname, method = 'GET', body) {
     assert.ok(!Object.hasOwn(confirmed.body, 'sourceCopy'), 'confirm response must not expose local source paths');
 
     const listed = await jsonRequest(handler, '/api/reader/documents');
-    assert.strictEqual(listed.body.documents.length, 1);
+    assert.strictEqual(listed.body.documents.length, 2);
     assert.ok(!JSON.stringify(listed.body).includes('PROTOCOL_SECRET_BODY'), 'list API must not include prose');
     assert.ok(!JSON.stringify(listed.body).includes(dataRoot), 'list API must not expose storage paths');
 

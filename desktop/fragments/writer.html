@@ -280,7 +280,7 @@
                                         <div class="desktop-native-prompt-toolbar">
                                             <select data-native-prompt-template aria-label="正文提示词模板"></select>
                                             <button class="desktop-secondary-action" type="button" data-native-manage-prompts>管理</button>
-                                            <button class="desktop-secondary-action" type="button" data-native-manage-global-prompt>全局前缀</button>
+                                            <button class="desktop-secondary-action" type="button" data-native-manage-global-prompt>指令栈</button>
                                         </div>
                                         <div class="desktop-native-insert-options">
                                             <span>写入位置</span>
@@ -564,21 +564,29 @@
                             <header class="desktop-native-summary-dialog-header">
                                 <div>
                                     <p class="desktop-section-kicker">Global Prompt</p>
-                                    <h2>全局写作前缀</h2>
+                                    <h2>用户全局创作指令</h2>
                                 </div>
-                                <span>所有 AI 写作请求</span>
+                                <span>按创作任务作用域注入</span>
                             </header>
                             <label class="desktop-native-writer-check">
                                 <input type="checkbox" data-native-global-prompt-enabled>
-                                <span>启用全局写作前缀</span>
+                                <span>启用用户全局创作指令</span>
                             </label>
                             <label class="desktop-native-global-prompt-field">
                                 <span>前缀内容</span>
-                                <textarea data-native-global-prompt-content rows="9" placeholder="作为所有 AI 请求的首条 system 指令，例如固定世界观、特殊词汇或跨模板规则。"></textarea>
+                                <textarea data-native-global-prompt-content rows="9" placeholder="用于正文、改写、Workshop 和工作流正文，例如语言、叙事风格或跨模板创作规则。题材与尺度更适合放在项目指令中。"></textarea>
                             </label>
-                            <small data-native-global-prompt-status>关闭后不会发送；不会覆盖项目模板，而是优先于项目模板发送。</small>
+                            <label class="desktop-native-writer-check">
+                                <input type="checkbox" data-native-project-directive-enabled>
+                                <span>启用当前项目指令</span>
+                            </label>
+                            <label class="desktop-native-global-prompt-field">
+                                <span>当前项目 · 题材、尺度、人设与风格</span>
+                                <textarea data-native-project-directive-content rows="7" placeholder="只随当前项目保存，例如题材边界、角色关系、叙事尺度、风格约束或明确禁止项。"></textarea>
+                            </label>
+                            <small data-native-global-prompt-status>关闭后不会发送；JSON、摘要、资料库 Agent 与 Reader 默认不会收到这里的内容。</small>
                             <div class="desktop-native-generation-actions">
-                                <button class="desktop-primary-action" type="submit">保存前缀</button>
+                                <button class="desktop-primary-action" type="submit">保存指令栈</button>
                                 <button class="desktop-secondary-action" type="button" data-native-global-prompt-cancel>取消</button>
                             </div>
                         </form>

@@ -17,11 +17,14 @@ const WorkshopPrompt = require('../src/core/workshop/workshop-prompt');
     const session = WorkshopSchema.createWorkshopSession({
       projectId: 'workshop-project',
       title: 'Brainstorm',
+      directiveContract: { enabled: true, content: 'Keep the discussion in character.', reinforcedAt: '2026-08-03T00:00:00.000Z', pinMode: 'off' },
       messages: [{ role: 'user', content: 'hello' }]
     });
     const saved = await workshopService.saveSession(dataRoot, 'workshop-project', session);
     assert.strictEqual(saved.ok, true);
     assert.strictEqual(saved.session.messages.length, 1);
+    assert.strictEqual(saved.session.directiveContract.enabled, true);
+    assert.strictEqual(saved.session.directiveContract.content, 'Keep the discussion in character.');
 
     const appended = await workshopService.appendMessage(dataRoot, 'workshop-project', session.id, {
       role: 'assistant',
@@ -45,6 +48,7 @@ const WorkshopPrompt = require('../src/core/workshop/workshop-prompt');
     const apiListBody = await apiList.json();
     assert.ok(apiList.ok && apiListBody.ok, 'workshop list API should return ok');
     assert.strictEqual(apiListBody.sessions.length, 1);
+    assert.strictEqual(apiListBody.sessions[0].directiveContract.content, 'Keep the discussion in character.');
 
     const apiAppend = await fetch(servers.appUrl + '/api/workshop-message', {
       method: 'POST',

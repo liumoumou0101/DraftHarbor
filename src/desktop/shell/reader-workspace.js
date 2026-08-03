@@ -92,6 +92,11 @@
         readerState.controlsVisible = !readerState.controlsVisible;
         const shell = document.querySelector('[data-reader-shell]');
         if (shell) shell.dataset.readerControlsVisible = readerState.controlsVisible ? 'true' : 'false';
+        const focusToggle = document.querySelector('[data-reader-focus-toggle]');
+        if (focusToggle) {
+            focusToggle.setAttribute('aria-pressed', readerState.controlsVisible ? 'false' : 'true');
+            focusToggle.textContent = readerState.controlsVisible ? '专注阅读' : '显示控件';
+        }
     }
 
     function readerWorkspaceChapterIndex() {
@@ -248,6 +253,10 @@
             if (!chapterId) throw new Error('文档没有可阅读章节');
             await loadReaderWorkspaceChapter(chapterId, locator);
             if (typeof initializeReaderNavigationDocument === 'function') initializeReaderNavigationDocument();
+            if (!statePayload.state && typeof queueReaderDocumentStateWrite === 'function' && typeof captureReaderPositionLocator === 'function') {
+                const initialLocator = captureReaderPositionLocator();
+                if (initialLocator) queueReaderDocumentStateWrite({ positionLocator: initialLocator });
+            }
             setReaderDrawer('');
         } catch (error) {
             const content = document.querySelector('[data-reader-content]');
@@ -264,8 +273,12 @@
         const elements = readerWorkspaceElements();
         if (!elements.shell) return;
         loadReaderLibrary().then((documents) => {
-            if (!readerState.document && !readerState.apiMode && documents[0]) {
-                openReaderLibraryDocument(documents[0].documentId);
+            if (!readerState.document && !readerState.apiMode) {
+                // Reader 2.0 opens on the library surface. Never silently select the
+                // first book: the user may want to import, inspect metadata, or
+                // continue a different title.
+                setReaderDrawer('left');
+                if (!documents.length) selectReaderLeftTab('library');
             }
         });
         if (typeof initializeReaderSettings === 'function') initializeReaderSettings();
@@ -277,6 +290,17 @@
         document.querySelector('[data-reader-left-close]')?.addEventListener('click', () => setReaderDrawer(''));
         document.querySelector('[data-reader-settings-close]')?.addEventListener('click', () => setReaderDrawer(''));
         document.querySelector('[data-reader-scrim]')?.addEventListener('click', () => setReaderDrawer(''));
+        document.querySelector('[data-reader-focus-toggle]')?.addEventListener('click', () => {
+            handleReaderWorkspaceEscape();
+            if (!readerState.controlsVisible) elements.content?.focus({ preventScroll: true });
+        });
+        const fontDialog = document.querySelector('[data-reader-font-dialog]');
+        document.querySelector('[data-reader-font-help]')?.addEventListener('click', () => {
+            if (fontDialog && typeof fontDialog.showModal === 'function') fontDialog.showModal();
+            else fontDialog?.setAttribute('open', 'open');
+        });
+        document.querySelector('[data-reader-font-close]')?.addEventListener('click', () => fontDialog?.close());
+        fontDialog?.addEventListener('cancel', (event) => { event.preventDefault(); fontDialog.close(); });
         document.querySelector('[data-reader-empty-library]')?.addEventListener('click', (event) => setReaderDrawer('left', event.currentTarget));
         document.querySelectorAll('[data-reader-tab]').forEach((button) => {
             button.addEventListener('click', () => selectReaderLeftTab(button.dataset.readerTab));

@@ -4,12 +4,13 @@
             require('../document/scene-ordering'),
             require('./project-schema'),
             require('../knowledge/compendium-schema'),
-            require('../prompt/prompt-template-schema')
+            require('../prompt/prompt-template-schema'),
+            require('../generation/instruction-stack')
         );
     } else {
-        root.DraftHarborProjectNormalize = factory(root.DraftHarborSceneOrdering, root.DraftHarborProjectSchema, root.DraftHarborCompendiumSchema, root.DraftHarborPromptTemplateSchema);
+        root.DraftHarborProjectNormalize = factory(root.DraftHarborSceneOrdering, root.DraftHarborProjectSchema, root.DraftHarborCompendiumSchema, root.DraftHarborPromptTemplateSchema, root.DraftHarborInstructionStack);
     }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (SceneOrdering, ProjectSchema, CompendiumSchema, PromptTemplateSchema) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (SceneOrdering, ProjectSchema, CompendiumSchema, PromptTemplateSchema, InstructionStack) {
     const CURRENT_SCHEMA_VERSION = ProjectSchema ? ProjectSchema.CURRENT_SCHEMA_VERSION : 1;
 
     function nowIso() {
@@ -174,6 +175,9 @@
             ,styleGuardRules: typeof window !== 'undefined' && window.DraftHarborAvoidanceRules
                 ? window.DraftHarborAvoidanceRules.normalizeRules(raw.styleGuardRules)
                 : cleanArray(raw.styleGuardRules)
+            ,directiveStack: InstructionStack && typeof InstructionStack.normalizeProjectDirectiveStack === 'function'
+                ? InstructionStack.normalizeProjectDirectiveStack(raw.directiveStack)
+                : { schemaVersion: 1, layers: cleanArray(raw.directiveStack && raw.directiveStack.layers) }
         };
 
         return SceneOrdering.reindexProjectOrder(project);

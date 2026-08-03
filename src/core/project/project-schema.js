@@ -100,6 +100,7 @@
             workflowRuns: []
             ,readerApplications: []
             ,styleGuardRules: []
+            ,directiveStack: { schemaVersion: 1, layers: [] }
         };
     }
 

@@ -9,6 +9,9 @@
             list: document.querySelector('[data-workshop-session-list]'),
             title: document.querySelector('[data-workshop-title]'),
             deleteButton: document.querySelector('[data-workshop-delete]'),
+            contractEnabled: document.querySelector('[data-workshop-contract-enabled]'),
+            contractContent: document.querySelector('[data-workshop-contract-content]'),
+            contractSave: document.querySelector('[data-workshop-contract-save]'),
             messages: document.querySelector('[data-workshop-messages]'),
             emptyState: document.querySelector('[data-workshop-empty]'),
             emptyContent: document.querySelector('[data-workshop-empty-content]'),
@@ -62,6 +65,16 @@
         if (elements.newButton) elements.newButton.disabled = !projectId || workshopState.generating;
         if (elements.deleteButton) elements.deleteButton.disabled = !session || workshopState.generating;
         if (elements.title) elements.title.textContent = session ? session.title : '选择或新建对话';
+        if (elements.contractEnabled) {
+            elements.contractEnabled.disabled = !session || workshopState.generating;
+            elements.contractEnabled.checked = !!(session && session.directiveContract && session.directiveContract.enabled);
+        }
+        if (elements.contractContent) {
+            elements.contractContent.disabled = !session || workshopState.generating;
+            const contractText = session && session.directiveContract ? session.directiveContract.content || '' : '';
+            if (elements.contractContent.value !== contractText) elements.contractContent.value = contractText;
+        }
+        if (elements.contractSave) elements.contractSave.disabled = !session || workshopState.generating;
         if (elements.input && elements.input.value !== workshopState.input) elements.input.value = workshopState.input;
         if (elements.input) elements.input.disabled = !session || workshopState.generating;
         if (elements.inputRow) elements.inputRow.hidden = !session;
@@ -265,6 +278,30 @@
         renderWorkshop();
     }
 
+    async function saveWorkshopDirectiveContract() {
+        const elements = workshopElements();
+        const session = selectedWorkshopSession();
+        if (!session) return;
+        const enabled = !!(elements.contractEnabled && elements.contractEnabled.checked);
+        const content = elements.contractContent ? elements.contractContent.value.trim() : '';
+        if (enabled && !content) {
+            setWorkshopStatus('启用会话指令前请填写内容。', 'error');
+            return;
+        }
+        session.directiveContract = {
+            enabled,
+            content,
+            reinforcedAt: new Date().toISOString(),
+            pinMode: 'off'
+        };
+        const saved = await saveWorkshopSession(session);
+        const index = workshopState.sessions.findIndex((item) => item.id === saved.id);
+        if (index >= 0) workshopState.sessions[index] = saved;
+        if (nativeEditorState.snapshot) nativeEditorState.snapshot.workshopSessions = workshopState.sessions;
+        setWorkshopStatus(enabled ? '会话指令已启用。' : '会话指令已关闭。', 'ok');
+        renderWorkshop();
+    }
+
     async function sendWorkshopMessage() {
         const projectId = currentProjectId();
         const session = selectedWorkshopSession();
@@ -300,7 +337,20 @@
                 if (meta && meta.type && meta.type !== 'content') return;
                 assistantMessage.content += token;
                 renderWorkshop();
-            }, runtimeProviderConfig());
+            }, runtimeProviderConfig({
+                taskKind: 'workshop-chat',
+                projectDirectiveStack: nativeEditorState.snapshot && nativeEditorState.snapshot.directiveStack,
+                sessionDirective: session.directiveContract && session.directiveContract.enabled
+                    ? {
+                        id: 'run_session',
+                        title: 'Workshop 会话指令',
+                        enabled: true,
+                        content: session.directiveContract.content,
+                        scopes: ['workshop-chat'],
+                        source: 'session'
+                    }
+                    : null
+            }));
             const saved = await saveWorkshopSession(session);
             const index = workshopState.sessions.findIndex((item) => item.id === saved.id);
             if (index >= 0) workshopState.sessions[index] = saved;
@@ -474,6 +524,7 @@
         const elements = workshopElements();
         if (elements.newButton) elements.newButton.addEventListener('click', createWorkshopSession);
         if (elements.deleteButton) elements.deleteButton.addEventListener('click', deleteWorkshopSession);
+        if (elements.contractSave) elements.contractSave.addEventListener('click', saveWorkshopDirectiveContract);
         if (elements.input) {
             elements.input.addEventListener('input', () => {
                 workshopState.input = elements.input.value;

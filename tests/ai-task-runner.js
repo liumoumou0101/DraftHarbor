@@ -23,6 +23,8 @@ function proseTask(overrides = {}) {
         streamGeneration: async (prompt, onToken, config) => {
             assert.strictEqual(config.model, 'test-model');
             assert.ok(config.signal, 'runner should provide an AbortSignal');
+            assert.strictEqual(config.taskKind, 'writer-rewrite', 'runner should normalize task identity for Directive Stack');
+            assert.strictEqual(config.aiTask.target.type, 'scene', 'runner should forward a safe task summary');
             onToken('Reasoning', { type: 'reasoning' });
             onToken('Rewritten', { type: 'content' });
             onToken(' text.');

@@ -13,6 +13,7 @@
                             <div class="desktop-reader-toolbar-group desktop-reader-toolbar-group-end">
                                 <button class="desktop-reader-tool" type="button" data-reader-add-bookmark disabled>添加书签</button>
                                 <button class="desktop-reader-tool" type="button" data-reader-selection-toggle disabled>选择范围</button>
+                                <button class="desktop-reader-tool" type="button" data-reader-focus-toggle aria-pressed="false">专注阅读</button>
                                 <button class="desktop-reader-tool" type="button" data-reader-settings-toggle aria-expanded="false" aria-controls="reader-settings-drawer">阅读设置</button>
                             </div>
                         </header>
@@ -72,7 +73,7 @@
                                     <span>导入 txt / md</span>
                                     <input type="file" data-reader-file accept=".txt,.md,text/plain,text/markdown">
                                 </label>
-                                <p class="desktop-reader-hint">文件仅在本机处理。旧导入入口暂时保留兼容。</p>
+                                <p class="desktop-reader-hint">文件会先进入导入预览；确认后写入本地书库，可在确认前校正书名与章节。</p>
                                 <div class="desktop-reader-sidebar-group" data-reader-migration hidden>
                                     <p class="desktop-reader-hint" data-reader-migration-message></p>
                                     <div class="desktop-reader-actions" data-reader-migration-actions hidden>
@@ -121,19 +122,27 @@
                             </section>
                             <section class="desktop-reader-settings-section" aria-labelledby="reader-typography-title">
                             <h3 id="reader-typography-title">排版</h3>
-                            <label><span>字号</span><input type="range" data-reader-font-size min="15" max="26" step="1"></label>
-                            <label><span>行距</span><input type="range" data-reader-line-height min="1.45" max="2.2" step="0.05"></label>
-                            <label><span>字距</span><input type="range" data-reader-letter-spacing min="-0.02" max="0.12" step="0.01"></label>
-                            <label><span>版心宽度</span><input type="range" data-reader-width min="620" max="980" step="20"></label>
-                            <label><span>段落间距</span><input type="range" data-reader-paragraph-spacing min="0.4" max="1.6" step="0.05"></label>
-                            <label><span>页边距</span><input type="range" data-reader-page-margin min="20" max="96" step="4"></label>
+                            <label><span>字号 <output data-reader-value-for="font-size">18 px</output></span><input type="range" data-reader-font-size min="15" max="26" step="1"></label>
+                            <label><span>行距 <output data-reader-value-for="line-height">1.8</output></span><input type="range" data-reader-line-height min="1.45" max="2.2" step="0.05"></label>
+                            <label><span>字距 <output data-reader-value-for="letter-spacing">0</output></span><input type="range" data-reader-letter-spacing min="-0.02" max="0.12" step="0.01"></label>
+                            <label><span>版心宽度 <output data-reader-value-for="width">760 px</output></span><input type="range" data-reader-width min="620" max="980" step="20"></label>
+                            <label><span>段落间距 <output data-reader-value-for="paragraph-spacing">1.05</output></span><input type="range" data-reader-paragraph-spacing min="0.4" max="1.6" step="0.05"></label>
+                            <label><span>页边距 <output data-reader-value-for="page-margin">48 px</output></span><input type="range" data-reader-page-margin min="20" max="96" step="4"></label>
                             <label><span>字体</span><select data-reader-font-family><option value="system">系统默认</option><option value="serif">宋体 / 衬线</option><option value="sans-serif">黑体 / 无衬线</option><option value="kai">楷体</option></select></label>
                             <p class="desktop-reader-hint" data-reader-font-status aria-live="polite">使用系统字体栈</p>
+                            <button class="desktop-secondary-action" type="button" data-reader-font-help>字体安装与识别</button>
                             <label><span>对齐</span><select data-reader-text-align><option value="start">自然对齐</option><option value="justify">两端对齐</option></select></label>
                             <label class="desktop-reader-check"><input type="checkbox" data-reader-indent><span>段首缩进</span></label>
                             </section>
                             <section class="desktop-reader-settings-section" aria-labelledby="reader-appearance-title">
                             <h3 id="reader-appearance-title">外观与翻页</h3>
+                            <label><span>阅读方案</span><select data-reader-appearance-profile>
+                                <option value="default">默认阅读</option>
+                                <option value="paper">纸张小说</option>
+                                <option value="focus">专注长读</option>
+                                <option value="custom">自定义</option>
+                            </select></label>
+                            <p class="desktop-reader-hint">方案会一次调整主题、字号、版心和行距；之后仍可逐项微调。</p>
                             <label><span>主题</span><select data-reader-theme><option value="dark">深色</option><option value="paper">纸张</option><option value="sepia">护眼</option></select></label>
                             <label><span>布局</span><select data-reader-layout-mode aria-describedby="reader-layout-hint"><option value="flow">连续阅读</option><option value="single-page">单页</option><option value="double-page">双页</option><option value="auto">自动</option></select></label>
                             <p class="desktop-reader-hint" id="reader-layout-hint">自动布局会在空间不足时安全降为单页，阅读位置保持不变。</p>
@@ -175,6 +184,50 @@
                             <button class="desktop-primary-action" type="button" data-reader-transfer-destination="compendium">生成资料卡</button>
                             <button class="desktop-primary-action" type="button" data-reader-transfer-destination="workflow">去半自动工作流</button>
                         </footer>
+                    </dialog>
+
+                    <dialog class="desktop-reader-import-dialog" data-reader-import-dialog aria-labelledby="reader-import-title">
+                        <header class="desktop-reader-transfer-header">
+                            <div>
+                                <p class="desktop-section-kicker">Library Import</p>
+                                <h2 id="reader-import-title">确认导入书库</h2>
+                            </div>
+                            <button class="desktop-reader-tool" type="button" data-reader-import-close>关闭</button>
+                        </header>
+                        <div class="desktop-reader-import-body">
+                            <p class="desktop-reader-hint" data-reader-import-status aria-live="polite">正在准备导入预览…</p>
+                            <div class="desktop-reader-import-meta">
+                                <strong data-reader-import-file-name>未选择文件</strong>
+                                <span data-reader-import-summary>0 章 · 0 字</span>
+                            </div>
+                            <label class="desktop-reader-import-title-field"><span>书名</span><input type="text" data-reader-import-title maxlength="200" autocomplete="off"></label>
+                            <label class="desktop-reader-import-encoding" data-reader-import-encoding-wrap hidden><span>编码</span><select data-reader-import-encoding></select></label>
+                            <p class="desktop-reader-hint" data-reader-import-encoding-hint hidden>未能可靠识别编码，请选择后重新解析。</p>
+                            <div class="desktop-reader-import-chapters" data-reader-import-chapters aria-label="导入章节预览"></div>
+                        </div>
+                        <footer class="desktop-reader-transfer-actions">
+                            <button class="desktop-secondary-action" type="button" data-reader-import-cancel>取消</button>
+                            <button class="desktop-primary-action" type="button" data-reader-import-confirm disabled>确认并加入书库</button>
+                        </footer>
+                    </dialog>
+
+                    <dialog class="desktop-reader-font-dialog" data-reader-font-dialog aria-labelledby="reader-font-dialog-title">
+                        <header class="desktop-reader-transfer-header">
+                            <div>
+                                <p class="desktop-section-kicker">Typography</p>
+                                <h2 id="reader-font-dialog-title">字体安装与识别</h2>
+                            </div>
+                            <button class="desktop-reader-tool" type="button" data-reader-font-close>关闭</button>
+                        </header>
+                        <div class="desktop-reader-import-body">
+                            <p>Reader 会优先使用你选择的字体；如果系统没有该字体，会自动回退到可用字体，并在设置面板显示实际字体。</p>
+                            <ol class="desktop-reader-font-steps">
+                                <li>在操作系统中安装字体文件（通常为 <code>.ttf</code> 或 <code>.otf</code>）。</li>
+                                <li>重启 DraftHarbor，让 Chromium 字体目录重新枚举。</li>
+                                <li>回到阅读设置选择对应字体；之后可以扩展字体目录而无需改变正文数据。</li>
+                            </ol>
+                            <p class="desktop-reader-hint">当前版本只维护稳定字体 ID，不会把字体文件复制进书库，也不会联网下载字体。</p>
+                        </div>
                     </dialog>
 
                     <button class="desktop-reader-scrim" type="button" data-reader-scrim aria-label="关闭阅读面板" tabindex="-1"></button>

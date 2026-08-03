@@ -6,6 +6,7 @@ const BatchSchema = require('../../src/core/workflow/workflow-generation-batch-s
 const ChapterAssembly = require('../../src/core/workflow/workflow-chapter-assembly');
 const ContextAssembly = require('../../src/core/workflow/workflow-context-assembly');
 const QualityMetrics = require('../../src/core/workflow/workflow-quality-metrics');
+const InstructionStack = require('../../src/core/generation/instruction-stack');
 const CreationService = require('./workflow-creation-service');
 const Review = require('./workflow-review-service');
 const { createGuidedRuntime } = require('./workflow-guided-runtime-service');
@@ -196,6 +197,28 @@ function normalizeConstraints(options = {}) {
   })).filter((constraint) => constraint.text);
 }
 
+function normalizeGenerationPolicy(input = {}) {
+  const policy = input && typeof input === 'object' ? input : {};
+  const snapshot = policy.snapshot && typeof policy.snapshot === 'object' ? policy.snapshot : null;
+  if (!snapshot || !(Number(snapshot.directivePolicyVersion) >= 1)) {
+    return { ...policy, ...(snapshot ? { snapshot: { ...snapshot } } : {}) };
+  }
+  const normalized = InstructionStack.normalizeProjectDirectiveStack(snapshot.directiveStack || {});
+  return {
+    ...policy,
+    snapshot: {
+      ...snapshot,
+      directivePolicyVersion: 1,
+      directiveStack: {
+        schemaVersion: 1,
+        directivePolicyVersion: 1,
+        mode: 'scoped',
+        layers: normalized.layers.map((layer) => ({ ...layer, source: 'frozen' }))
+      }
+    }
+  };
+}
+
 function definition(options = {}) {
   return {
     id: 'creation-guided-definition', templateId: 'creation-guided', templateVersion: 1,
@@ -203,7 +226,7 @@ function definition(options = {}) {
     automationLevel: 'semi_automatic',
     nodes: STAGES.map((stage, index) => ({ ...stage, config: { requiresApproval: !['brief', 'review'].includes(stage.id) }, position: { x: index * 240, y: 0 } })),
     edges: STAGES.slice(1).map((stage, index) => ({ id: `creation-edge-${index + 1}`, fromNodeId: STAGES[index].id, fromPortId: 'next', toNodeId: stage.id, toPortId: 'previous' })),
-    settings: { fineOutlineEnabled: options.fineOutlineEnabled !== false, constraints: normalizeConstraints(options), generationPolicy: options.generationPolicy || { providerProfileId: 'inherit' } }
+    settings: { fineOutlineEnabled: options.fineOutlineEnabled !== false, constraints: normalizeConstraints(options), generationPolicy: normalizeGenerationPolicy(options.generationPolicy || { providerProfileId: 'inherit' }) }
   };
 }
 
@@ -350,14 +373,26 @@ async function prepareCreationNode(options = {}) {
       title: artifact.title,
       text: artifact.content
     }));
+  const generationSnapshot = details.run.settings.generationPolicy
+    && details.run.settings.generationPolicy.snapshot || {};
+  const versionedDirectives = Number(generationSnapshot.directivePolicyVersion) >= 1
+    && generationSnapshot.directiveStack && Array.isArray(generationSnapshot.directiveStack.layers);
+  const taskKind = InstructionStack.WORKFLOW_NODE_TASK_KIND[nodeId] || 'unknown';
+  const compiledDirectives = versionedDirectives
+    ? InstructionStack.compileInstructionStack({
+      taskKind,
+      frozenDirectiveStack: generationSnapshot.directiveStack
+    })
+    : null;
   const fatContext = {
     projectId: options.projectId,
     brief: latestByType(artifacts, OUTPUT_TYPES.brief) && latestByType(artifacts, OUTPUT_TYPES.brief).content,
     writingInstructions,
     globalContext: {
-      globalPrompt: clean(details.run.settings.generationPolicy
-        && details.run.settings.generationPolicy.snapshot
-        && details.run.settings.generationPolicy.snapshot.globalPrompt),
+      globalPrompt: versionedDirectives ? '' : clean(generationSnapshot.globalPrompt),
+      directiveContext: versionedDirectives
+        ? InstructionStack.buildDirectiveAuditEnvelope(compiledDirectives, generationSnapshot.directivePolicyVersion)
+        : undefined,
       writingInstructions
     },
     directions: directionArtifact && directionArtifact.content,
@@ -988,7 +1023,7 @@ async function previewChapterAssembly(options = {}) {
 }
 
 module.exports = {
-  STAGES, OUTPUT_TYPES, WRITING_INSTRUCTIONS_TYPE, definition, normalizeConstraints, normalizeWritingInstructions, startGuidedCreation,
+  STAGES, OUTPUT_TYPES, WRITING_INSTRUCTIONS_TYPE, definition, normalizeConstraints, normalizeGenerationPolicy, normalizeWritingInstructions, startGuidedCreation,
   getCreationRun: runtime.getRun, prepareCreationNode, completeCreationNode,
   reviseCreationArtifact: runtime.reviseArtifact, approveCreationNode,
   getCreationArtifactHistory: runtime.getArtifactHistory,

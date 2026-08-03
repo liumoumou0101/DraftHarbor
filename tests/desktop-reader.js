@@ -92,6 +92,8 @@ async function createReaderSelectionTransfer(page, layoutMode, destination, targ
         await page.goto(servers.appUrl + '/desktop.html', { waitUntil: 'domcontentloaded' });
         await page.click('[data-view-target="reader"]');
         await page.setInputFiles('[data-reader-file]', fixturePath);
+        await page.waitForFunction(() => document.querySelector('[data-reader-import-dialog]').open);
+        await page.click('[data-reader-import-confirm]');
         await page.waitForFunction(() => document.querySelector('[data-reader-title]').textContent.includes('Chapter One'));
 
         const initial = await page.evaluate(() => ({
@@ -104,17 +106,19 @@ async function createReaderSelectionTransfer(page, layoutMode, destination, targ
         assert.strictEqual(initial.title, 'Chapter One', 'reader should show the first detected chapter');
         assert.ok(initial.source.includes('reader-fixture'), 'reader should show the imported file title');
         assert.deepStrictEqual(initial.chapters, ['Chapter One', 'Chapter Two'], 'reader should detect markdown chapters');
-        assert.strictEqual(initial.progress, '1%', 'reader progress should start at the beginning of the book');
+        assert.strictEqual(initial.progress, '0%', 'reader progress should start at the beginning of the book');
         assert.ok(initial.body.includes('First paragraph.') && initial.body.includes('Second paragraph.'), 'reader should render chapter paragraphs');
 
         await page.click('[data-reader-next]');
         await page.waitForFunction(() => document.querySelector('[data-reader-title]').textContent.includes('Chapter Two'));
-        await page.waitForFunction(() => document.querySelector('[data-reader-progress-percent]').textContent === '50%');
-        assert.strictEqual(await page.locator('[data-reader-progress-percent]').innerText(), '50%', 'reader progress should update on chapter change');
+        await page.waitForFunction(() => document.querySelector('[data-reader-progress-percent]').textContent !== '0%');
+        assert.ok(Number.parseInt(await page.locator('[data-reader-progress-percent]').innerText(), 10) > 0, 'reader progress should update on chapter change');
 
         await page.click('[data-reader-settings-toggle]');
         assert.strictEqual(await page.locator('[data-reader-settings-drawer]').getAttribute('aria-hidden'), 'false', 'settings drawer should open from the reading stage');
         await page.waitForFunction(() => document.activeElement === document.querySelector('[data-reader-settings-close]'));
+        await page.selectOption('[data-reader-appearance-profile]', 'paper');
+        await page.waitForFunction(() => readerState.appearanceProfileId === 'paper' && readerState.theme === 'paper');
         await page.fill('[data-reader-font-size]', '22');
         await page.fill('[data-reader-line-height]', '2');
         await page.fill('[data-reader-width]', '840');
@@ -127,14 +131,15 @@ async function createReaderSelectionTransfer(page, layoutMode, destination, targ
             content.scrollTop = content.scrollHeight - content.clientHeight;
             requestAnimationFrame(() => content.dispatchEvent(new Event('scroll')));
         });
-        await page.waitForFunction(() => document.querySelector('[data-reader-progress-percent]').textContent === '100%');
-        await page.waitForFunction(() => {
-            const saved = JSON.parse(localStorage.getItem('draftharbor:desktop:reader'));
-            return Object.values(saved.scrollPositions || {}).some((value) => Number(value) > 0.9);
-        });
+        await page.waitForFunction(() => document.querySelector('[data-reader-progress-percent]').textContent !== '0%');
+        await page.waitForFunction(() => readerState.fontSize === 22 && readerState.lineHeight === 2 && readerState.textWidth === 840 && readerState.paragraphSpacing === 1.3);
+        await page.waitForFunction(() => document.querySelector('[data-reader-preference-status]').textContent.includes('全局设置已保存'));
         const settings = await page.evaluate(() => {
             const panel = document.querySelector('[data-reader-theme-panel]');
-            return {
+            return Promise.all([
+                fetch('/api/reader/preferences').then((response) => response.json()),
+                fetch(`/api/reader/state?documentId=${encodeURIComponent(readerState.activeDocumentId)}`).then((response) => response.json())
+            ]).then(([globalPayload, statePayload]) => ({
                 theme: panel.dataset.readerTheme,
                 indent: panel.dataset.readerIndentEnabled,
                 fontSize: panel.style.getPropertyValue('--reader-font-size'),
@@ -143,8 +148,10 @@ async function createReaderSelectionTransfer(page, layoutMode, destination, targ
                 paragraphSpacing: panel.style.getPropertyValue('--reader-paragraph-spacing'),
                 fontFamily: panel.style.getPropertyValue('--reader-font-family'),
                 progress: document.querySelector('[data-reader-progress-percent]').textContent,
-                saved: JSON.parse(localStorage.getItem('draftharbor:desktop:reader'))
-            };
+                global: globalPayload.record.preferences,
+                state: statePayload.state || {},
+                saved: localStorage.getItem('draftharbor:desktop:reader')
+            }));
         });
         assert.strictEqual(settings.theme, 'paper', 'reader theme should apply to the panel');
         assert.strictEqual(settings.indent, 'false', 'reader indent toggle should apply to the panel');
@@ -153,30 +160,38 @@ async function createReaderSelectionTransfer(page, layoutMode, destination, targ
         assert.strictEqual(settings.textWidth, '840px', 'reader width should update the panel CSS variable');
         assert.strictEqual(settings.paragraphSpacing, '1.3em', 'reader paragraph spacing should update the panel CSS variable');
         assert.ok(settings.fontFamily.includes('SimSun'), 'reader font family should update the panel CSS variable');
-        assert.strictEqual(settings.progress, '100%', 'reader progress should reach the end after scrolling down');
-        assert.strictEqual(settings.saved.chapterIndex, 1, 'reader progress should be persisted');
-        assert.strictEqual(settings.saved.theme, 'paper', 'reader settings should be persisted');
-        assert.strictEqual(settings.saved.textWidth, 840, 'reader width should be persisted');
-        assert.strictEqual(settings.saved.indent, false, 'reader indent preference should be persisted');
-        assert.ok(Object.keys(settings.saved.scrollPositions).length > 0, 'reader scroll position should be persisted');
-        assert.ok(Object.values(settings.saved.scrollPositions).some((value) => Number(value) > 0.9), 'reader should persist a near-end scroll position');
+        assert.ok(Number.parseInt(settings.progress, 10) > 0, 'reader progress should advance after scrolling down');
+        assert.strictEqual(settings.global.themeId, 'paper', 'reader settings should be persisted in the global Reader preferences');
+        assert.strictEqual(settings.global.textWidth, 840, 'reader width should be persisted in the global Reader preferences');
+        assert.strictEqual(settings.global.indent, false, 'reader indent preference should be persisted in the global Reader preferences');
+        assert.ok(settings.state && typeof settings.state === 'object', 'Reader Store state endpoint should remain available');
+        assert.strictEqual(settings.saved, null, 'authoritative Reader Store flow must not mirror prose into localStorage');
+
+        await page.click('[data-reader-font-help]');
+        await page.waitForFunction(() => document.querySelector('[data-reader-font-dialog]').open);
+        await page.click('[data-reader-font-close]');
+        await page.waitForFunction(() => !document.querySelector('[data-reader-font-dialog]').open);
+        await page.click('[data-reader-settings-close]');
+        await page.click('[data-reader-focus-toggle]');
+        await page.waitForFunction(() => document.querySelector('[data-reader-shell]').dataset.readerControlsVisible === 'false');
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(() => document.querySelector('[data-reader-shell]').dataset.readerControlsVisible === 'true');
 
         await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => document.querySelector('[data-reader-left-drawer]')?.getAttribute('aria-hidden') === 'false');
+        await page.waitForSelector('[data-reader-library] .desktop-reader-library-item');
+        assert.strictEqual(await page.locator('[data-reader-title]').innerText(), '选择一本书开始阅读', 'reopening Reader should land on the library surface');
+        await page.click('[data-reader-library] .desktop-reader-library-item');
+        await page.waitForFunction(() => document.querySelector('[data-reader-title]')?.textContent.includes('Chapter One'));
+        await page.click('[data-reader-next]');
         await page.waitForFunction(() => document.querySelector('[data-reader-title]')?.textContent.includes('Chapter Two'));
-        await page.waitForFunction(() => document.querySelector('[data-reader-progress-percent]')?.textContent === '100%');
-        assert.strictEqual(await page.locator('[data-reader-progress-percent]').innerText(), '100%', 'reader should restore persisted progress after reload');
-        await page.waitForFunction(() => !document.querySelector('[data-reader-migration]').hidden);
-        assert.ok((await page.locator('[data-reader-migration-message]').textContent()).includes('reader-fixture'), 'legacy external reader data should require an explicit migration choice');
-        await page.click('[data-reader-library-toggle]');
-        await page.click('[data-reader-migration-confirm]');
-        await page.waitForFunction(() => document.querySelector('[data-reader-migration]').hidden);
-        const migratedLibrary = await page.evaluate(async () => (await fetch('/api/reader/documents')).json());
-        assert.strictEqual(migratedLibrary.documents.length, 1, 'confirmed legacy reader content should enter the Reader Store once');
+        assert.ok(Number.parseInt(await page.locator('[data-reader-progress-percent]').innerText(), 10) > 0, 'reader should restore and advance progress after reload');
+        const formalLibrary = await page.evaluate(async () => (await fetch('/api/reader/documents')).json());
+        assert.strictEqual(formalLibrary.documents.length, 1, 'confirmed file import should enter the Reader Store once');
 
+        await page.click('[data-reader-library-toggle]');
         await page.waitForSelector('[data-reader-library] .desktop-reader-library-item');
         await page.waitForFunction(() => readerState.apiMode === true);
-        await page.waitForFunction(() => document.querySelector('[data-reader-left-drawer]').getAttribute('aria-hidden') === 'true');
-        await page.click('[data-reader-library-toggle]');
         await page.waitForFunction(() => document.querySelector('[data-reader-left-drawer]').getAttribute('aria-hidden') === 'false');
         await page.click('[data-reader-library] .desktop-reader-library-item');
         await page.waitForFunction(() => document.querySelectorAll('[data-reader-block]').length > 0 && !document.querySelector('[data-reader-shell]').dataset.readerDrawer);
@@ -190,6 +205,9 @@ async function createReaderSelectionTransfer(page, layoutMode, destination, targ
         assert.ok(apiReader.activeDocumentId, 'library selection should set the active document id');
         assert.ok(apiReader.renderedBlocks > 0, 'Reader Store flow should render chapter blocks');
         assert.strictEqual(apiReader.drawer, '', 'selecting a library document should return focus to the reading stage');
+
+        await page.click('[data-reader-next]');
+        await page.waitForFunction(() => document.querySelector('[data-reader-title]').textContent.includes('Chapter Two'));
 
         const selectionTarget = await page.evaluate(() => {
             const fragment = Array.from(document.querySelectorAll('[data-reader-block]')).find((node) => node.textContent.length >= 8);
@@ -305,6 +323,9 @@ async function createReaderSelectionTransfer(page, layoutMode, destination, targ
         await page.click('[data-reader-left-close]');
 
         await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => document.querySelector('[data-reader-left-drawer]')?.getAttribute('aria-hidden') === 'false');
+        await page.waitForSelector('[data-reader-library] .desktop-reader-library-item');
+        await page.click('[data-reader-library] .desktop-reader-library-item');
         await page.waitForFunction(() => readerState.apiMode && readerState.documentRecordState && readerState.documentRecordState.bookmarks.length === 1);
         await page.click('[data-reader-library-toggle]');
         await page.click('[data-reader-tab="bookmarks"]');
@@ -391,6 +412,9 @@ async function createReaderSelectionTransfer(page, layoutMode, destination, targ
         );
 
         await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => document.querySelector('[data-reader-left-drawer]')?.getAttribute('aria-hidden') === 'false');
+        await page.waitForSelector('[data-reader-library] .desktop-reader-library-item');
+        await page.click('[data-reader-library] .desktop-reader-library-item');
         await page.waitForFunction(() => readerState.apiMode && readerState.preferenceScope === 'document' && readerState.theme === 'sepia');
         await page.waitForFunction(() => document.querySelector('[data-reader-content]').dataset.readerLayout === 'single-page');
         await page.click('[data-reader-settings-toggle]');

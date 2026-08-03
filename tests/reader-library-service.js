@@ -42,6 +42,22 @@ const { createReaderLibraryService } = require('../desktop/services/reader-libra
     assert.ok(draft.chapters[0].blocks.every((block) => !Object.hasOwn(block, 'html')));
     assert.strictEqual((await readerStore.listReaderDocuments(dataRoot)).documents.length, 0, 'preview must not enter the formal index');
 
+    const byteDraft = await service.previewBytesImport({
+      draftId: 'browser-bytes-draft',
+      originalFileName: 'browser-book.txt',
+      bytes: Buffer.from('第一章\n\n浏览器导入正文。', 'utf8').toString('base64'),
+      createdAt: '2026-07-15T08:30:00.000Z'
+    });
+    assert.strictEqual(byteDraft.sourceKind, 'local-text');
+    assert.strictEqual(byteDraft.chapters[0].blocks[0].text, '浏览器导入正文。');
+    const byteCommit = await service.confirmImportDraft(dataRoot, 'browser-bytes-draft', {
+      documentId: 'browser-bytes-book',
+      revisionId: 'browser-bytes-book-r1',
+      createdAt: '2026-07-15T08:31:00.000Z'
+    });
+    assert.strictEqual(byteCommit.sourceCopied, true);
+    assert.deepStrictEqual(await fs.readFile(byteCommit.sourceCopy), Buffer.from('第一章\n\n浏览器导入正文。', 'utf8'));
+
     draft = service.correctImportDraft('file-draft', { title: '校正后的书名' });
     draft = service.splitImportChapter('file-draft', {
       chapterId: draft.chapters[0].chapterId,
@@ -122,7 +138,7 @@ const { createReaderLibraryService } = require('../desktop/services/reader-libra
       format: 'plain',
       text: '# 标题\n\n正文'
     });
-    assert.strictEqual((await readerStore.listReaderDocuments(dataRoot)).documents.length, 1, 'temporary pasted text must not be indexed');
+    assert.strictEqual((await readerStore.listReaderDocuments(dataRoot)).documents.length, 2, 'temporary pasted text must not be indexed');
     pasted = service.retryImportDraft('paste-draft', { format: 'md' });
     assert.strictEqual(pasted.chapters[0].title, '标题');
     const pastedCommit = await service.confirmImportDraft(dataRoot, 'paste-draft', {
@@ -131,7 +147,7 @@ const { createReaderLibraryService } = require('../desktop/services/reader-libra
       createdAt: '2026-07-15T12:00:00.000Z'
     });
     assert.strictEqual(pastedCommit.sourceCopied, false);
-    assert.strictEqual((await readerStore.listReaderDocuments(dataRoot)).documents.length, 2);
+    assert.strictEqual((await readerStore.listReaderDocuments(dataRoot)).documents.length, 3);
 
     const empty = service.previewPastedImport({ draftId: 'empty-paste', text: '  \r\n  ' });
     assert.ok(empty.warnings.includes('empty-content'));

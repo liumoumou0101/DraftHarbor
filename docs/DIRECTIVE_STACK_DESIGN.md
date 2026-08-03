@@ -1,7 +1,7 @@
 ﻿---
 title: Directive Stack / 指令栈 Design
 status: Draft
-revision: 3
+revision: 4-codex
 date: 2026-08-03
 workspace: D:\soft\DraftHarbor
 supersedes: settings.globalPrompt + prependGlobalPrompt
@@ -13,11 +13,160 @@ supersedes: settings.globalPrompt + prependGlobalPrompt
 | **Document** | Directive Stack / 指令栈 Redesign |
 | **Author** | DraftHarbor Systems Architecture |
 | **Date** | 2026-08-03 |
-| **Status** | Draft (rev 3 — residual review fixes) |
+| **Status** | Draft (rev 4 — Codex corrections over Grok rev 3) |
 | **Workspace** | `D:\soft\DraftHarbor` |
 | **Supersedes** | 扁平 `settings.globalPrompt` + `prependGlobalPrompt` 单串注入 |
 | **Related** | F-09.6H quality locks、workflow `globalContext` freeze、workshop multi-turn |
 | **Repo copy** | `docs/DIRECTIVE_STACK_DESIGN.md` |
+
+---
+
+## Codex 修订说明（rev 4，规范性覆盖）
+
+> **版本边界：** 本节是 Codex 对 Grok rev 3 的修订层。为保留审计线索，后文 rev 3 的完整分析和候选设计继续保留；凡后文与本节冲突，以本节为准。简版规范及给 Grok 的交接留言见 [`DIRECTIVE_STACK_DESIGN_SUMMARY.md`](./DIRECTIVE_STACK_DESIGN_SUMMARY.md)。
+
+**实现状态（Codex，2026-08-03）：** rev 4 V1 已在当前工作树落地；完整 `npm test` 与 `npm run writer-audit` 通过。当前采用 C6 的过渡方案：客户端用共享函数物化规范化项目层，服务端统一校验并最终定稿 snapshot；尚未改成服务端按 `projectId` 主动读取 settings/project。后续增强见本节 C7/C9，不能用后文 rev 3 的旧 PR 顺序覆盖。
+
+### C1. 保留的 rev 3 结论
+
+以下结论经当前代码核对成立并继续作为实现基础：
+
+1. `globalPrompt` 无 task scope，经 `providerRuntimeConfig` 进入正文、JSON、Agent、Reader 等不同调用。
+2. workflow 同时在 system prepend 与 user JSON `globalContext.globalPrompt` 中携带正文，存在双通道重复。
+3. `taskKind` 是作用域编译的硬前置；多义任务不能只靠 `domain:action`。
+4. `streamGeneration` 是 system 指令的唯一 apply 所有者；Builder 只拥有任务模板和业务 payload。
+5. 迁移必须处理旧 UI 的 partial `{ globalPrompt }` patch，并保留 scopes。
+6. 新 workflow run 必须冻结指令来源，避免运行中 settings/project 编辑改变结果。
+
+### C2. 修正：双通道改为真正单通道
+
+rev 3 的 `userContextEnvelope.directiveStack.layers/textDigest` 仍会把已经进入 system 的指令正文再次放入 user JSON，只是从“未过滤重复”变成了“过滤后重复”。rev 4 明确：
+
+- 模型可见的 Directive Stack 正文只进入 system messages，恰好一次。
+- workflow user JSON 不携带 `globalPrompt` 正文、applied layer content 或 text digest 正文。
+- envelope 只允许审计元数据，例如：
+
+```js
+{
+  directiveContext: {
+    schemaVersion: 1,
+    taskKind: 'workflow-json',
+    appliedLayerIds: ['app_defaults', 'task_policy'],
+    snapshotVersion: 1,
+    digestHash: 'sha256-or-stable-short-hash'
+  },
+  writingInstructions: { /* 业务输入，非 stack 副本 */ }
+}
+```
+
+- `buildGlobalContextEnvelope` 改名或收缩为 `buildDirectiveAuditEnvelope`；它消费已经编译出的 debug/metadata，不重新编译正文。
+
+### C3. 修正：禁止跨请求 `instructionStackApplied` 标记
+
+rev 3 伪代码复制 `prompt.messages` 后只在复制值上 apply，却把 `prompt.meta.instructionStackApplied = true` 写回原 Prompt。复用同一 Prompt 重试时，第二次会认为已 apply，但原 messages 没有注入内容，造成指令丢失。
+
+rev 4 规则：
+
+- 不修改传入的 `prompt`、`prompt.meta` 或 `prompt.messages`。
+- 每次 `streamGeneration` invocation 从原始 messages 创建 request-local 副本并 apply 一次。
+- debug 通过回调/返回记录或 request-local 对象暴露，不用跨调用哨兵。
+- 因为 stream 是唯一 apply 所有者，不支持 Builder 预编译后再要求 stream 猜测是否已注入。
+
+### C4. 修正：scoped 必须原子启用
+
+rev 3 把 system isolation 放在 PR2、user envelope 清理放在 PR4。这样 PR2 默认 scoped 后，结构化任务仍会从 user JSON 看到完整用户全局文本，只是权重发生变化，产品却可能声称已经隔离。
+
+rev 4 发布闸门：
+
+1. compiler/migration、taskKind、workflow freeze、user JSON 清理全部可以分提交实现，但默认保持 `parity`。
+2. 只有最终 Provider 请求测试同时证明 system 与 user payload 都正确后，才在一个原子变更中把默认切为 `scoped`。
+3. UI 的“按任务类型注入”说明在原子切换之后发布。
+
+### C5. 修正：旧 Run 保留 legacy 语义
+
+rev 3 默认把只有 `snapshot.globalPrompt` 的旧 Run 重解释为 creative scopes，这会使升级后恢复的 JSON 阶段丢失原有全局文本，破坏冻结和可复现性。
+
+rev 4 规则：
+
+- 旧快照没有 `directivePolicyVersion` 时，按 `legacy-unscoped` 执行原有行为。
+- 新快照写入 `directivePolicyVersion: 1`、`directiveStack` 和明确 mode。
+- 不静默清洁历史 Run；若用户希望迁移，创建新 Run 或显式执行迁移。
+- legacy 与 scoped 路径都必须有恢复测试。
+
+### C6. 修正：冻结由服务层最终定稿
+
+客户端仍可收集 UI 中尚未持久化的单次 override，但持久化 settings/project 层应由服务层按 `projectId` 读取、规范化并生成最终 snapshot。原因是避免每个 `start-*` 入口重复传完整项目并承担冻结规则。
+
+若当前架构短期无法完全服务端化，则采用过渡方案：
+
+1. 客户端只传规范化 `project.directiveStack` 和单次 override，不传完整 project。
+2. 服务端校验 schema、scope 和长度后写入最终 snapshot。
+3. 所有 start 入口调用同一 `finalizeDirectiveSnapshot`，不得各自组装。
+
+### C7. 修正：V1 收缩为四层
+
+V1 只编译：
+
+| Order | Layer | 说明 |
+|---:|---|---|
+| 1 | `app_defaults` | 极短、中性、按任务族选择；不得重复 Builder 已有的 JSON/no-Markdown 文案 |
+| 2 | `user_global` | 旧 globalPrompt 迁移来源，默认仅创作 scopes |
+| 3 | `project` | 题材、尺度、人设、项目级风格与禁区 |
+| 4 | `run_session` | Workshop 会话或本次 override |
+
+延后到后续版本：`profile_pack`、attached pack、自由 placement/priority、sandwich/tail pin、复杂 `contract` 对象、自动预算截断。
+
+### C8. 修正：默认契约不包含成人题材声明
+
+成人文学是合法的项目创作需求，但不是每个项目的默认上下文。rev 4 的 `app_defaults` 仅包含中性跨项目规则，例如语言跟随、连续性、禁止泄漏创作过程 meta、服从本任务输出格式。
+
+成人尺度、题材边界和明确允许项只在用户显式配置的 `project` 或 `run_session` 层出现；系统不内置硬越狱预设，也不基于关键词静默删除用户规则。
+
+### C9. 修正：长度处理不静默截断
+
+按 JavaScript 字符数截断自由文本尾部可能切断否定词、条件或结构，使约束语义反转。V1：
+
+- 编辑和预览时显示字符/token 粗估与警告。
+- 超过安全总上限时拒绝发送并提示用户缩短，或需要用户显式确认；不静默截断。
+- 固定 app/task 文案由代码保证短小。
+- 后续预算器若实现，必须按完整段落或 tokenizer 边界裁剪，并把结果展示给用户。
+
+### C10. 修正：Canonical taskKind，而不是永久多重猜测
+
+V1 可保留 rev 3 的 resolver 作为迁移适配器，但调用链最终必须收敛到一个规范化 `taskKind`：
+
+1. Builder/业务调用点显式设置 `taskKind`。
+2. `AITaskRunner` 在进入 Provider 前根据 `target.type` 规范化并写入 request-local config。
+3. workflow node 在统一 provider config 中映射。
+4. 开发/测试环境缺失时抛错；生产环境记录 warning 并回退 `unknown`，隔离用户/项目创作层。
+5. `target.type`、`meta.task`、`domain:action` 只作为过渡输入，不允许不同层各自重新解析。
+
+### C11. 修订后的实施顺序
+
+```text
+A compiler + migration + dual-write (parity)
+  → B canonical taskKind wiring (parity)
+  → C versioned workflow freeze + remove directive正文 from user JSON (parity)
+  → D atomically enable scoped system compile + clean envelope
+  → E project/session UX
+  → Later packs / paragraph-token budget / canary-proven anti-dilution
+```
+
+阶段 D 是唯一对默认模型输入语义进行切换的闸门。A–C 可以独立合并，但不能提前向用户声称完成 scope isolation。
+
+### C12. 修订后的最终请求验收
+
+除 rev 3 的单元测试外，必须捕获发往 Provider 的最终 request body：
+
+1. `writer-prose` / `workflow-draft`：用户和项目目标文本各出现恰好一次。
+2. `workflow-json` / `compendium-agent` / `reader-extract`：目标创作文本在整个 request body 出现零次。
+3. 同一 Prompt 对象调用两次：每个 request 各出现一次。
+4. 旧 Run 恢复：保持 legacy-unscoped；新 Run 恢复：保持 scoped snapshot。
+5. 缺失 `taskKind`：开发测试失败；生产 `unknown` fail-closed 并产生可观察 warning。
+
+### 给 Grok 的交接留言
+
+Grok：你在 rev 3 中对现有调用链、`taskKind` 多义冲突、dual-write 和 stream 单一所有者的分析是本修订版的基础。Codex 已按 C2–C12 实现 V1；接手时请先审查当前 diff、`tests/instruction-stack.js` 和 versioned/legacy workflow 测试。不要使用跨请求 `instructionStackApplied`；不要把 applied 指令正文复制进 workflow user JSON；旧 Run 必须保留 legacy 语义；成人题材只来自显式 project/session 层。后续应先做真实 Provider canary 和 UI 体验复核，V1 暂缓的 packs、tail sandwich 和自动截断不能在没有证据时直接恢复。若实现选择与本节不同，请先更新 decision log 和最终请求验收。
 
 ---
 

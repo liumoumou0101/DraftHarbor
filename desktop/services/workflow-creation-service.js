@@ -32,6 +32,8 @@ function prepareCreationStage(stage, context = {}) {
     ? context.globalContext : {};
   const globalContext = {
     globalPrompt: clean(sourceGlobalContext.globalPrompt || context.globalPrompt),
+    directiveContext: sourceGlobalContext.directiveContext && typeof sourceGlobalContext.directiveContext === 'object'
+      ? sourceGlobalContext.directiveContext : undefined,
     writingInstructions
   };
   const instructionPriority = '指令优先级固定为：事实与硬约束 > 已批准蓝图和场景计划 > 当前批次用户意见 > 全局写作指令 > 模型默认倾向。若发生冲突，遵守高优先级内容，并在结构化结果的 notes 或 avoid 中明确记录冲突，不得静默覆盖。';
