@@ -6,6 +6,8 @@
     }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     const LAYOUT_MODES = Object.freeze(['flow', 'single-page', 'double-page', 'auto']);
+    const BREAK_AFTER = Object.freeze(' \t\r\n.,!?;:，。！？；：、，。！？；：、)）】》」』”’〕〉》〉》.!?'.split(''));
+    const BREAK_BEFORE = Object.freeze('([{（【《「『“‘'.split(''));
 
     function finiteNumber(value, fallback, minimum, maximum) {
         const number = Number(value);
@@ -32,25 +34,76 @@
         const fontSize = finiteNumber(input.fontSize, 18, 12, 48);
         const lineHeight = finiteNumber(input.lineHeight, 1.8, 1.2, 3);
         const pageMargin = finiteNumber(input.pageMargin, 48, 12, 160);
+        const fontWeight = finiteNumber(input.fontWeight, 400, 300, 900);
+        const bookSpine = finiteNumber(input.bookSpine, 28, 0, 96);
         const letterSpacing = finiteNumber(input.letterSpacing, 0, -0.05, 0.3);
-        const usableWidth = Math.max(120, width - pageMargin * 2);
+        const usableWidth = Math.max(120, width - pageMargin * 2 - bookSpine * 0.25);
         const usableHeight = Math.max(fontSize * lineHeight * 3, height - pageMargin * 2);
-        const averageGlyphWidth = fontSize * Math.max(0.72, 0.95 + letterSpacing);
+        const weightFactor = 1 + ((fontWeight - 400) / 500) * 0.06;
+        const averageGlyphWidth = fontSize * Math.max(0.72, (0.95 + letterSpacing) * weightFactor);
         const charactersPerLine = Math.max(8, Math.floor(usableWidth / averageGlyphWidth));
         const linesPerPage = Math.max(3, Math.floor((usableHeight / (fontSize * lineHeight)) * 0.58));
         return Math.max(64, charactersPerLine * linesPerPage);
     }
 
+    function isClosingPunctuation(character) {
+        return !!character && BREAK_AFTER.includes(character) && !' \t\r\n'.includes(character);
+    }
+
+    function isCombiningMarkAt(text, offset) {
+        const codePoint = text.codePointAt(offset);
+        return Number.isFinite(codePoint) && (
+            (codePoint >= 0x300 && codePoint <= 0x36f)
+            || (codePoint >= 0x1ab0 && codePoint <= 0x1aff)
+            || (codePoint >= 0x1dc0 && codePoint <= 0x1dff)
+            || (codePoint >= 0x20d0 && codePoint <= 0x20ff)
+            || (codePoint >= 0xfe20 && codePoint <= 0xfe2f)
+        );
+    }
+
     function safeEndOffset(text, candidate, start) {
         let offset = Math.max(start + 1, Math.min(text.length, candidate));
-        const code = text.charCodeAt(offset);
-        if (offset < text.length && code >= 0xDC00 && code <= 0xDFFF) offset -= 1;
-        return Math.max(start + 1, offset);
+        if (offset < text.length && text.charCodeAt(offset) >= 0xDC00 && text.charCodeAt(offset) <= 0xDFFF) offset -= 1;
+        while (offset > start && isCombiningMarkAt(text, offset)) offset -= 1;
+        if (offset < text.length && BREAK_BEFORE.includes(text[offset])) offset += 1;
+        return Math.max(start + 1, Math.min(text.length, offset));
+    }
+
+    function isNaturalBreak(text, offset, start) {
+        if (offset <= start || offset >= text.length) return offset > start;
+        const before = text[offset - 1];
+        const after = text[offset];
+        if (BREAK_BEFORE.includes(after) || isCombiningMarkAt(text, offset)) return false;
+        if (BREAK_AFTER.includes(before)) return true;
+        if (/\s/u.test(before)) return true;
+        if (/\p{Script=Han}/u.test(before) && !isClosingPunctuation(after)) return true;
+        const beforeWord = /[\p{L}\p{N}]/u.test(before);
+        const afterWord = /[\p{L}\p{N}]/u.test(after);
+        return !(beforeWord && afterWord);
+    }
+
+    function preferredBreakOffset(text, candidate, start, options = {}) {
+        const hard = safeEndOffset(text, candidate, start);
+        if (hard >= text.length || options.keepWords === false && options.keepPunctuation === false) return hard;
+        const window = Math.max(8, Math.floor(finiteNumber(options.breakWindow, 48, 8, 160)));
+        const lower = Math.max(start + 1, hard - window);
+        for (let offset = hard; offset >= lower; offset -= 1) {
+            if (isNaturalBreak(text, offset, start)) return safeEndOffset(text, offset, start);
+        }
+        const upper = Math.min(text.length, hard + window);
+        for (let offset = hard + 1; offset <= upper; offset += 1) {
+            if (isNaturalBreak(text, offset, start)) return safeEndOffset(text, offset, start);
+        }
+        return hard;
     }
 
     function buildReaderPages(chapterInput = {}, options = {}) {
         const blocks = Array.isArray(chapterInput.blocks) ? chapterInput.blocks : [];
         const capacity = Math.max(64, Math.floor(finiteNumber(options.capacity, 1200, 64, 1000000)));
+        const widowLines = Math.max(1, Math.floor(finiteNumber(options.widowLines, 2, 1, 4)));
+        const orphanLines = Math.max(1, Math.floor(finiteNumber(options.orphanLines, 2, 1, 4)));
+        const minimumTail = Math.max(4, Math.floor(capacity * Math.min(0.3, 0.08 + widowLines * 0.04)));
+        const breakOptions = { ...options, breakWindow: options.breakWindow || Math.min(64, Math.max(16, Math.floor(capacity * 0.25))) };
         const pages = [];
         let page = { pageIndex: 0, weight: 0, segments: [] };
 
@@ -65,7 +118,7 @@
             const blockId = String(block && block.blockId || `block-${blockIndex + 1}`);
             const type = String(block && block.type || 'paragraph');
             const heading = type === 'heading' || type === 'scene-title';
-            if (heading && page.segments.length && capacity - page.weight < Math.min(120, Math.ceil(capacity * 0.15))) commitPage();
+            if (heading && page.segments.length && capacity - page.weight < Math.min(120, Math.ceil(capacity * (0.05 + orphanLines * 0.05)))) commitPage();
             if (!text.length) {
                 if (page.weight >= capacity) commitPage();
                 page.segments.push({ blockId, blockIndex, type, startOffset: 0, endOffset: 0 });
@@ -76,7 +129,10 @@
             while (startOffset < text.length) {
                 if (page.weight >= capacity) commitPage();
                 const remaining = Math.max(1, capacity - page.weight);
-                const endOffset = safeEndOffset(text, startOffset + remaining, startOffset);
+                let candidate = startOffset + remaining;
+                const tail = text.length - candidate;
+                if (tail > 0 && tail < minimumTail && candidate - startOffset > minimumTail) candidate = text.length - minimumTail;
+                const endOffset = preferredBreakOffset(text, candidate, startOffset, breakOptions);
                 page.segments.push({ blockId, blockIndex, type, startOffset, endOffset });
                 page.weight += endOffset - startOffset;
                 startOffset = endOffset;
@@ -130,6 +186,11 @@
             viewportWidth: Math.round(finiteNumber(input.viewportWidth, 0, 0, 100000)),
             viewportHeight: Math.round(finiteNumber(input.viewportHeight, 0, 0, 100000)),
             actualFontFamily: String(input.actualFontFamily || ''),
+            fontCatalogVersion: Math.max(1, Math.floor(Number(input.fontCatalogVersion) || 1)),
+            fontWeight: finiteNumber(input.fontWeight, 400, 300, 900),
+            bookSpine: finiteNumber(input.bookSpine, 28, 0, 96),
+            orphanLines: finiteNumber(input.orphanLines, 2, 1, 4),
+            widowLines: finiteNumber(input.widowLines, 2, 1, 4),
             fontSize: finiteNumber(input.fontSize, 18, 12, 48),
             lineHeight: finiteNumber(input.lineHeight, 1.8, 1.2, 3),
             letterSpacing: finiteNumber(input.letterSpacing, 0, -0.05, 0.3),
@@ -149,6 +210,7 @@
         pageIndexForLocator,
         locatorPositionForPage,
         flowWindowForAnchor,
+        preferredBreakOffset,
         layoutCacheKey
     };
 });

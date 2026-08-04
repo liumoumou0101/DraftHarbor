@@ -1,8 +1,8 @@
 # Reader 2.0 专业小说阅读器开发计划
 
 - 计划版本：0.1
-- 日期：2026-08-03
-- 状态：开发中；F-12.1 导入/书库主线、F-12.2 契约基础和 F-12.0D 结构门禁已落地
+- 日期：2026-08-04
+- 状态：开发中；F-12.1—F-12.12 已落地，下一阶段进入后续格式扩展评估
 - 功能编号：F-12
 - 产品设计：[Reader 2.0 专业小说阅读器产品设计](READING_MODULE_2_0_DESIGN.md)
 - 历史实现：[F-10 阅读体验改造开发计划](READING_MODULE_REDESIGN_DEVELOPMENT_PLAN.md)
@@ -23,7 +23,21 @@
 - 项目投影桥接从 `reader.js` 拆为独立模块；新增 Reader 2.0 结构门禁，新增模块按 20 KiB 软预算检查。
 - 书库摘要现在聚合 Reader 外部书籍与项目作品；项目作品通过只读投影路由打开，不把正文复制进 Reader Store。
 - Preferences v2、内置阅读方案、字体目录/回退和批注/位置历史契约已建立并接入核心测试；旧偏好字段继续兼容。
-- 现有 Reader Document、State、Transfer、迁移与跨模块边界保持不变；字体目录、更多主题和批注工作包继续按后续阶段推进。
+- Preferences v2 已接入正式全局偏好存储和 legacy 迁移；状态栏、HUD、翻页输入、减少动态和稳定 `fontId` 均进入版本化模型。
+- Theme V1 只接受受控颜色 token，并校验正文/纸张及控件对比度；内置方案不可被调用方覆盖，用户方案和用户主题使用稳定 ID。
+- Font Provider 已提供 `list/get/probe/load/register/remove/resolve` 完整接口，正式阅读 CSS 字体栈通过 Provider 解析并暴露缺失/失败回退状态。
+- F-12.5 已接通快捷外观条与六分区外观工作室；正文保持可见，修改先进入可撤销会话，支持全局/单书作用域、保存/删除用户方案和版本冲突保护。
+- Theme V1 已扩展白纸、书籍纸、暖黄、护眼、墨灰和 OLED 六个内置主题；环境、正文、控件、纸张、晕影和阴影均通过 Reader token/状态属性控制。
+- 纸张材质支持纯色、柔纸和细纹；细纹使用项目内原创 `assets/reader/paper-grain.svg` 并保留 CSS 降级，许可记录见 `docs/READER_ASSET_LICENSES.md`。
+- 外观重排使用瞬时程序滚动并保留流式比例，避免平滑滚动动画覆盖进度末端的精确定位。
+- 批注使用独立 Annotation Store，不修改项目正文或外部源文件；增删改、原子写入、并发冲突和最多 100 条位置历史均已接入 Reader API。
+- 翻章现在立即持久化 Locator，章内滚动继续防抖写入；桌面验收覆盖刷新后恢复到上次章节。
+- F-12.6 已接通中文分页边界、孤行/寡行控制、字重/书脊/字体目录版本缓存键，以及中英混排和 emoji 的 UTF-16 安全切分。
+- 翻页输入已统一按钮、键盘、滚轮和触控滑动；设置面板、对话框、正文选区和可关闭的输入开关会抑制误翻，连续输入合并为单次页目标。
+- `reader-transition.js` 已提供 fade/slide/cover/none 的统一 Adapter；减少动态效果会降级到无动画，curl 仍保持实验适配器和禁用状态。
+- 底部状态栏已支持章节、页码、百分比、已读字符、预计时间、显示方式、字段选择和自动隐藏；状态栏状态属性与表单控件保持独立。
+- F-12.6 桌面回归已覆盖方案切换、状态栏、动效、选区抑制、键盘/滚轮/触控翻页和关闭输入开关；视觉性能 p95 继续由 F-12.9 统一验收。
+- 现有 Reader Document、State、Transfer、迁移与跨模块边界保持不变；F-12.9 发布门禁、F-12.10 用户字体管理、F-12.11 TTS/自动阅读和 F-12.12 EPUB 格式扩展已完成，下一阶段进入后续格式扩展评估。
 
 ### 2.1 可以直接保留
 
@@ -39,13 +53,24 @@
 
 - 可见文件导入已改为字节预览与确认写入 Reader Store；旧 `importReaderFile` 不再由 UI 绑定。
 - 导入后的正文、书库、书签和选区已统一进入 Reader Store 权威流。
-- 进入 Reader 默认显示空阅读器而不是书库。
-- 应用标题栏、Reader 顶栏、章节栏和底栏长期同时出现。
+- 进入 Reader 默认显示可管理书库；打开具体文档后进入阅读舞台。
+- Reader HUD 已接管应用标题栏、全局导航、阅读顶栏、章节导航栏和底栏的专注/自动隐藏状态；F-12.6 已补齐状态栏字段选择与自动隐藏。
 - 主题只覆盖正文区域，纸张与外层阅读环境割裂。
 - 设置面板是单列参数清单，没有阅读方案、纸张材质、实时数值和快捷层。
 - 当前字体仅是固定枚举，不能承载用户字体目录、加载状态或缺失回退。
 - 视觉验收偏重对比度和无溢出，缺少与选定视觉目标的像素级/截图级比较。
 - Reader 结构预算已经接近上限：`reader.css` 约 23.5 KiB、`reader-navigation.js` 约 22.5 KiB，而现有 Reader 专项硬门禁为单文件 24 KiB；本轮新增导入、项目投影和契约均保持独立文件，不继续堆入总控模块。
+
+### 2.3 2026-08-04 F-12.4 实现记录
+
+- 新增 `src/core/document/reader-hud.js`，冻结 `visible`、`idle`、`hidden`、`panel-open`、`selection-active` 五态及面板/选区/对话框自动隐藏规则。
+- 新增 `src/desktop/shell/reader-hud.js`，统一处理输入唤醒、空闲计时、焦点移出隐藏控件、对话框/抽屉/选区协调和 `Esc` 优先级。
+- 专注阅读切换会同步收起桌面左导航、应用标题栏和上下文条；退出 Reader 或退出专注模式时恢复原桌面壳层状态。
+- Reader 设置抽屉、导入/字体/详情/转交对话框和文本选区会进入保护态，不会在自动隐藏计时中被错误遮蔽；隐藏 HUD 时焦点回到正文容器。
+- `reader-hud.css` 独立于 Reader 基础样式加载，覆盖 HUD 过渡、全局 chrome 协调和减少动态路径；已有导入/转交样式继续保持独立。
+- 核心、结构和桌面 Reader 回归新增 HUD 状态、专注收起/恢复、自动隐藏后鼠标恢复与离开 Reader 恢复壳层断言。
+
+F-12.4 的边界是壳层和可见性状态机；完整快捷外观、可选状态栏字段、更多主题与纸张材质分别进入 F-12.5/F-12.6，不在本阶段把视觉参数重新写入 HUD 控制器。
 
 ## 3. 开发原则
 
@@ -71,9 +96,9 @@
 | M3 完整阅读工具 | F-12.7 | 导航、书签、高亮、批注和位置历史完整 |
 | M4 稿湾联动 | F-12.8 | 选择后安全转写作、资料库和工作流 |
 | M5 发布 | F-12.9 | 性能、无障碍、视觉、迁移、安装和恢复验收 |
-| M6 扩展包 | F-12.10—F-12.12 | 用户字体、TTS、EPUB 等后续能力 |
+| M6 扩展包 | F-12.12 | EPUB 等后续能力 |
 
-工作量使用相对点表示复杂度，不直接等于日历时间。基础版本 F-12.0—F-12.9 预估约 150–190 点，视觉资产质量、用户字体解析和仿真翻页可能单独增加工作量。
+工作量使用相对点表示复杂度，不直接等于日历时间。基础版本 F-12.0—F-12.11 预估约 165–215 点，视觉资产质量、用户字体解析和仿真翻页可能单独增加工作量。
 
 ## 5. 依赖与关键路径
 
@@ -88,6 +113,8 @@ F-12.0 视觉与交互冻结
                       └─ F-12.7 导航与批注
                           └─ F-12.8 稿湾转交
                               └─ F-12.9 发布验收
+                                  └─ F-12.10 用户字体管理
+                                      └─ F-12.11 TTS/自动阅读
 ```
 
 F-12.3 和 F-12.4 在 F-12.2 契约冻结后可以并行；F-12.5 的视觉组件和 F-12.6 的纯核心测试可以部分并行。跨阶段不得提前把临时正文、字体路径或纸张资产写入错误 Store。
@@ -171,6 +198,14 @@ F-12.3 和 F-12.4 在 F-12.2 契约冻结后可以并行；F-12.5 的视觉组�
 - 所有新导入只进入 Reader Store。
 - 不再出现正文已打开但书库为空的状态。
 - 旧 localStorage 只承担可验证迁移。
+
+### 2.2 2026-08-04 F-12.3 实现记录
+
+- 书库接口聚合项目作品、本地文本和粘贴文本，并为摘要附加章节、字数、版本、健康状态、最近阅读时间和估算进度；损坏摘要降级为可见错误状态，不把正文放进列表响应。
+- 新增版本化 Library View Store：筛选、排序、网格/列表、收藏、移出书架和自定义书架均只保存稳定文档 ID 与视图状态。
+- 书库 UI 增加继续阅读卡、来源筛选、标题/进度/最近阅读排序、搜索、收藏、书架选择和响应式卡片视图。
+- 书籍详情对话框展示来源、格式、章节、字数、版本、阅读状态和目录预览；正文仍通过单章接口按需读取，详情响应不包含正文。
+- 本地书籍支持从详情入口重新导入到同一文档的新版本；项目作品明确显示只读投影并保留 Writer 作为正文所有者。
 
 ## 8. F-12.2 新偏好、字体、主题与批注契约
 
@@ -326,28 +361,28 @@ F-12.3 和 F-12.4 在 F-12.2 契约冻结后可以并行；F-12.5 的视觉组�
 
 目标：在现有纯核心基础上提升小说排版和翻页手感。
 
-### F-12.6A 中文分页质量（8 点）
+### F-12.6A 中文分页质量（8 点，已完成）
 
 - 扩展分页测量输入，覆盖字重、缩进、书脊和实际字体目录版本。
 - 处理长段、对话、标题、中英混排、破折号、省略号和 emoji。
 - 添加基础孤行控制；无法满足时以无丢字和 Locator 正确为最高优先级。
 - 单/双页在相同 Locator 上往返等价。
 
-### F-12.6B 翻页输入协调（7 点）
+### F-12.6B 翻页输入协调（7 点，已完成）
 
 - 统一按钮、热区、滚轮、键盘和触控手势。
 - 文本选择、批注输入、设置面板和对话框打开时抑制误翻。
 - 快速连续输入合并最终目标，权威位置只防抖写入一次。
 - 用户可关闭点击热区或交换方向键行为。
 
-### F-12.6C 动效适配器（6 点）
+### F-12.6C 动效适配器（6 点，已完成）
 
 - 把 fade、slide、cover、none 放入统一 `transitionAdapter`。
 - 动效不改变页定义、DOM 阅读顺序或 Locator。
 - 减少动态强制降级，页面仍可键盘操作。
 - curl 只建立实验适配器和性能门禁，不承诺首发开放。
 
-### F-12.6D 状态栏与进度（5 点）
+### F-12.6D 状态栏与进度（5 点，已完成）
 
 - 支持页码、章节、百分比、已读字符和预计时间字段。
 - 用户可选择字段、顺序和自动隐藏。
@@ -359,6 +394,8 @@ F-12.3 和 F-12.4 在 F-12.2 契约冻结后可以并行；F-12.5 的视觉组�
 - 四种布局、所有输入和三种正式动效无丢字、重复和误翻。
 - 字体、窗口和纸张设置改变后恢复同一 Locator。
 - 视觉反馈 p95 满足预算，减少动态路径完整。
+
+F-12.6 实现证据：`npm run reader-core-test`、`npm run reader-shell-test` 和针对性 ESLint 已通过；桌面回归覆盖 1280×820 阅读窗口、真实导入章节、单页分页、状态栏字段、cover Adapter、选区抑制、滚轮/触控滑动及输入开关。视觉反馈 p95 留在 F-12.9 的统一性能验收中，不在本阶段重复建立第二套基准。
 
 ## 13. F-12.7 导航、书签、高亮与批注
 
@@ -397,6 +434,8 @@ F-12.3 和 F-12.4 在 F-12.2 契约冻结后可以并行；F-12.5 的视觉组�
 - 所有标记使用 Locator/Range，不修改正文。
 - 更新 Revision 后恢复精度透明可见。
 
+F-12.7 实现证据：新增 `reader-bookmarks.js` 与 `reader-annotation-ui.js`，导航中心接通目录/搜索/书签/批注/历史五类入口；书签扩展颜色、分类、备注和最近访问字段；选区可直接创建高亮、下划线或批注并在正文渲染 Range 标记；批注/书签跨 Revision 显示 exact/approximate/unresolved；位置历史通过 Reader API 原子写入并保持 100 条上限。`npm run reader-core-test`、`npm run reader-storage-test`、`npm run reader-protocol-test`、`npm run reader-shell-test`、`npm run smoke`、`npm run reader-release-acceptance` 和排除两个用户自有真实 Provider 夹具后的全仓 ESLint 已通过。
+
 ## 14. F-12.8 选择与稿湾转交
 
 目标：在不干扰普通阅读的前提下，复用已验证的 Envelope 闭环。
@@ -427,6 +466,8 @@ F-12.3 和 F-12.4 在 F-12.2 契约冻结后可以并行；F-12.5 的视觉组�
 - 普通阅读没有跨模块噪声。
 - 所有范围在三布局下生成等价 Envelope。
 - 失败、重试、返回和目标应用不破坏阅读状态。
+
+F-12.8 实现证据：选择工具栏已将高亮、批注、书签、复制作为第一层动作，将写作、资料库和工作流收纳在“发送到稿湾”入口；选择范围统一生成不可变 Transfer Envelope，三类目标分别支持预览/应用、fresh/stale/missing 与新 Revision 提示。项目稿源返回时会重新打开对应 `project:` Reader 投影并恢复源 Locator；普通文档、项目文档、流式/单页/双页布局、失败保留选择和跨模块返回均有桌面回归覆盖。`npm run reader-shell-test`、排除两个用户自有真实 Provider 夹具后的全仓 ESLint 和 `git diff --check` 已通过。
 
 ## 15. F-12.9 综合质量与发布
 
@@ -472,6 +513,8 @@ F-12.3 和 F-12.4 在 F-12.2 契约冻结后可以并行；F-12.5 的视觉组�
 - 视觉实现通过选定目标对照。
 - 所有迁移、安全、长篇、字体失败和跨模块闭环通过。
 
+F-12.9 实现证据：新增 `tests/reader-accessibility-acceptance.js`，覆盖可见控件可访问名称、Reader 对话框/Tablist、抽屉 inert、Escape 关闭与焦点回收、减少动态效果，以及 100%/125%/150%/200% 四档缩放；新增 `reader-accessibility-acceptance` 和 `reader-quality-acceptance` npm 入口。`reader-quality-acceptance` 已通过 Reader Shell、百万字性能（1,000,311 UTF-16 字符，最新运行观察堆增长 81.69 MiB）、12/12 来源×目标矩阵、120 个压力 Envelope、布局审计和四场景视觉审计（对比度 11.81—13.90）。`npm run smoke`、`npm run unit`、`npm run desktop-mainline-test`、排除两个用户自有真实 Provider 夹具后的全仓 ESLint、`git diff --check`、`npm run pack`、`npm run packaged-smoke`、`npm run dist` 和 `npm run installed-smoke` 均已通过；安装冒烟验证了临时安装、启动、项目持久化、备份和卸载。
+
 ## 16. F-12.10 用户字体安装与管理
 
 本阶段可以在 Reader 2.0 主版本之后开启，但基础接口必须已由 F-12.2/F-12.5 完成。
@@ -503,6 +546,8 @@ F-12.3 和 F-12.4 在 F-12.2 契约冻结后可以并行；F-12.5 的视觉组�
 - 用户安装字体不需要修改操作系统。
 - 删除、缺失、重装和重启均保持方案与阅读位置可解释。
 
+F-12.10 实现证据：新增 `desktop/storage/reader-font-store.js` 与 `/api/reader/fonts` 字体目录/文件接口，使用内容摘要生成稳定 `user:<sha256>` ID，限制 20 MiB、TTF/OTF/WOFF2 签名与匹配扩展名，并以原子 catalog 写入和 per-catalog 锁避免半提交；TTF/OTF 读取 `name` 与 `OS/2` 表识别 family、full name、weight、style，WOFF2 使用安全文件名回退。新增 `src/desktop/shell/reader-fonts.js`、字体安装/删除/预览 UI、缺失状态和安全回退；用户字体只保存在 `DraftHarbor Library/reader-fonts`，不修改系统字体、不上传网络、不把文件写入书库。`node tests/reader-font-store.js`、`npm run reader-core-test`、`npm run reader-storage-test`、`npm run reader-shell-test`、`npm run reader-accessibility-acceptance`、`npm run reader-quality-acceptance`、排除两个用户自有真实 Provider 夹具后的全仓 ESLint、`node tests/release-config.js` 和 `git diff --check` 均已通过。
+
 ## 17. F-12.11 TTS 与自动阅读
 
 - 选择本地系统语音或未来可插拔语音 Provider。
@@ -513,6 +558,8 @@ F-12.3 和 F-12.4 在 F-12.2 契约冻结后可以并行；F-12.5 的视觉组�
 
 本阶段不阻塞 Reader 2.0 主版本。
 
+F-12.11 实现证据：新增 `src/core/document/reader-tts.js`，提供设置归一化、UTF-16/emoji 安全切分、段落队列、章节推进和状态转换；新增 `src/desktop/shell/reader-tts.js`，只调用浏览器本机 `speechSynthesis`，不上传正文或调用远程语音服务。Reader 已提供声音刷新、语速、音量、段落停顿、自动进章、定时停止、暂停/继续/停止和朗读状态提示；每个朗读片段用 Reader Locator 同步正文和位置 Store，打开面板、选择文本、翻页、导航、窗口失焦时按统一冲突规则暂停或停止。`node tests/reader-tts.js`、`npm run reader-core-test`、`npm run reader-shell-test`、`npm run reader-accessibility-acceptance`、`npm run reader-quality-acceptance`、排除两个用户自有真实 Provider 夹具后的全仓 ESLint、`npm run unit`、`node tests/release-config.js` 和 `git diff --check` 均已通过；桌面测试使用本机语音模拟覆盖开始/暂停/继续/选择文本暂停/停止及设置持久化。
+
 ## 18. F-12.12 EPUB 与格式扩展
 
 - 新格式通过 Import Adapter 生成 Reader Document，不绕过导入草稿。
@@ -521,6 +568,8 @@ F-12.3 和 F-12.4 在 F-12.2 契约冻结后可以并行；F-12.5 的视觉组�
 - 格式扩展不修改 Reader Locator、State、Annotation 或 Transfer 主契约。
 
 本阶段不阻塞 Reader 2.0 主版本。
+
+F-12.12 实现证据：新增 `src/core/document/reader-epub-adapter.js`，使用现有 `jszip` 读取受控 EPUB 容器，校验 `mimetype`、`META-INF/container.xml`、OPF manifest/spine 和内部资源路径；按 spine 顺序将 XHTML 的标题、段落、强调文本、代码和本地图片说明转换为 Reader 受控块。适配器拒绝路径穿越、压缩炸弹、过大条目、过深/过多 XML、符号链接、脚本、样式、任意 HTML 和远程资源；Reader 导入服务保留 EPUB 原始字节为 `.epub` 源副本，正式内容仍通过导入草稿、Reader Document/Revision 提交。新增 `tests/reader-epub-adapter.js`、`tests/reader-epub-import.js`，并更新桌面文件选择器、源副本清理和结构门禁；`npm run reader-core-test`、`npm run reader-storage-test`、`npm run reader-shell-test`、`npm run reader-quality-acceptance`、排除两个用户自有真实 Provider 夹具后的全仓 ESLint、`npm run unit`、`node tests/release-config.js` 与 `git diff --check` 通过。
 
 ## 19. 建议代码边界
 

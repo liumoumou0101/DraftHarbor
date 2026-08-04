@@ -34,6 +34,10 @@ const { createReaderCompendiumTransferService } = require('./services/reader-com
 const projectFileStore = require('./storage/project-file-store');
 const readerDocumentStore = require('./storage/reader-document-store');
 const readerStateStore = require('./storage/reader-state-store');
+const readerAnnotationStore = require('./storage/reader-annotation-store');
+const readerLibraryViewStore = require('./storage/reader-library-view-store');
+const readerAppearanceStore = require('./storage/reader-appearance-store');
+const readerFontStore = require('./storage/reader-font-store');
 const readerTransferStore = require('./storage/reader-transfer-store');
 const { projectDir, projectsRoot } = require('./storage/library-paths');
 const { legacySnapshotToProject, projectToLegacySnapshot, projectToLibrarySummary } = require('./services/project-snapshot-adapter');
@@ -690,6 +694,10 @@ const readerWorkflowTransferService = createReaderWorkflowTransferService({ read
 const handleReaderApi = createReaderController({
   readerStore: readerDocumentStore,
   readerStateStore,
+  readerAnnotationStore,
+  readerLibraryViewStore,
+  readerAppearanceStore,
+  readerFontStore,
   readerLibraryService,
   readerProjectLibraryService: createReaderProjectLibraryService({ projectService, digest: readerDocumentStore.sha256 }),
   readerMigrationService,

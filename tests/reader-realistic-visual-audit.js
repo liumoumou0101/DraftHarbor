@@ -48,12 +48,9 @@ function contrast(foreground, background) {
     await page.goto(`${servers.appUrl}/desktop.html`, { waitUntil: 'domcontentloaded' });
     await page.click('[data-view-target="reader"]');
     await page.setInputFiles('[data-reader-file]', fixturePath);
+    await page.waitForFunction(() => document.querySelector('[data-reader-import-dialog]')?.open === true);
+    await page.click('[data-reader-import-confirm]');
     await page.waitForFunction(() => document.querySelector('[data-reader-title]')?.textContent.includes('第一章'));
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() => !document.querySelector('[data-reader-migration]')?.hidden);
-    await page.click('[data-reader-library-toggle]');
-    await page.click('[data-reader-migration-confirm]');
-    await page.waitForFunction(() => document.querySelector('[data-reader-migration]')?.hidden);
     await page.waitForFunction(() => readerState.apiMode && readerState.contents.length >= 4);
     await page.waitForFunction(() => document.querySelector('[data-reader-left-drawer]')?.getAttribute('aria-hidden') === 'true');
     const issues = [];

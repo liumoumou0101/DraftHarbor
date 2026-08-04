@@ -1,3 +1,5 @@
+/* global readerState */
+
 const assert = require('assert');
 const fs = require('fs/promises');
 const os = require('os');
@@ -198,6 +200,15 @@ async function assertConsumed(page, envelopeIds, destination) {
     await page.click('[data-reader-writer-apply]');
     await page.waitForFunction(() => !document.querySelector('[data-reader-writer-dialog]').open && document.querySelector('[data-native-project-title]').textContent === 'Source Project');
     assert.strictEqual(await page.evaluate(() => window.currentProjectId()), envelopeIds.sourceProjectId, 'explicit locate should open the selected source project');
+    await page.click('[data-reader-source-bar="writer"] [data-reader-source-return]');
+    await page.waitForFunction(() => document.getElementById('desktop-root').dataset.view === 'reader');
+    await page.waitForFunction((documentId) => readerState.activeDocumentId === documentId, `project:${envelopeIds.sourceProjectId}`);
+    const projectReturnLocator = await page.evaluate(async (envelopeId) => {
+      const payload = await (await fetch(`/api/reader/transfer?envelopeId=${encodeURIComponent(envelopeId)}`)).json();
+      return payload.transfer.envelope.sourceLocators[0];
+    }, envelopeIds.crossProject);
+    await page.waitForFunction((locator) => readerState.anchorLocator && readerState.anchorLocator.blockId === locator.blockId, projectReturnLocator);
+    assert.strictEqual(await page.evaluate(() => readerState.documentMetadata.title), 'Source Project', 'returning from a project-source transfer should reopen its Reader projection');
 
     await openTransfer(page, envelopeIds, 'workflow', envelopeIds.failure);
     await page.route('**/api/workflows/reader-transfer/apply', (route) => route.fulfill({

@@ -58,6 +58,15 @@ async function jsonRequest(handler, pathname, method = 'GET', body) {
     assert.ok(!JSON.stringify(listed.body).includes('PROTOCOL_SECRET_BODY'), 'list API must not include prose');
     assert.ok(!JSON.stringify(listed.body).includes(dataRoot), 'list API must not expose storage paths');
 
+    const libraryView = await jsonRequest(handler, '/api/reader/library-view', 'POST', {
+      view: { viewMode: 'list', sortBy: 'title', sourceFilter: 'local-text', favoriteDocumentIds: ['protocol-reader-book'] },
+      updatedAt: '2026-07-15T07:30:00.000Z'
+    });
+    assert.strictEqual(libraryView.response.status, 200);
+    assert.strictEqual(libraryView.body.record.view.viewMode, 'list');
+    const reopenedLibraryView = await jsonRequest(handler, '/api/reader/library-view');
+    assert.strictEqual(reopenedLibraryView.body.record.view.favoriteDocumentIds[0], 'protocol-reader-book');
+
     const metadata = await jsonRequest(handler, '/api/reader/document?documentId=protocol-reader-book');
     assert.strictEqual(metadata.response.status, 200);
     assert.ok(!JSON.stringify(metadata.body).includes('PROTOCOL_SECRET_BODY'), 'metadata API must not include prose');
@@ -221,6 +230,54 @@ async function jsonRequest(handler, pathname, method = 'GET', body) {
       updatedAt: '2026-07-15T10:00:00.000Z'
     });
     assert.strictEqual(preferences.body.record.preferences.themeId, 'paper');
+    assert.strictEqual(preferences.body.record.preferences.schemaVersion, 2);
+
+    const appearanceList = await jsonRequest(handler, '/api/reader/appearances');
+    assert.strictEqual(appearanceList.response.status, 200);
+    assert.deepStrictEqual(appearanceList.body.profiles, [], 'appearance store should start empty');
+    const appearanceCreated = await jsonRequest(handler, '/api/reader/appearances', 'POST', {
+      profile: {
+        profileId: 'user:protocol-appearance',
+        name: '协议外观',
+        preferences: {
+          themeId: 'oled', paperMaterial: 'grain', paperShadow: false, paperVignette: false,
+          fontSize: 22, appearanceProfileId: 'custom'
+        }
+      },
+      expectedUpdatedAt: ''
+    });
+    assert.strictEqual(appearanceCreated.response.status, 200);
+    assert.strictEqual(appearanceCreated.body.profile.profileId, 'user:protocol-appearance');
+    assert.strictEqual(appearanceCreated.body.profile.preferences.appearanceProfileId, 'user:protocol-appearance');
+    assert.strictEqual(appearanceCreated.body.profile.preferences.themeId, 'oled');
+    assert.strictEqual(appearanceCreated.body.profile.preferences.paperMaterial, 'grain');
+    assert.strictEqual(appearanceCreated.body.profile.preferences.paperShadow, false);
+    const appearanceConflict = await jsonRequest(handler, '/api/reader/appearances', 'POST', {
+      profile: { profileId: 'user:protocol-appearance', name: '过期修改', preferences: { themeId: 'white' } },
+      expectedUpdatedAt: '2026-07-15T00:00:00.000Z'
+    });
+    assert.strictEqual(appearanceConflict.response.status, 409, 'stale appearance writes must conflict');
+    const appearanceUpdated = await jsonRequest(handler, '/api/reader/appearances', 'POST', {
+      profile: { profileId: 'user:protocol-appearance', name: '协议外观更新', preferences: { themeId: 'eye' } },
+      expectedUpdatedAt: appearanceCreated.body.record.updatedAt
+    });
+    assert.strictEqual(appearanceUpdated.response.status, 200);
+    assert.strictEqual(appearanceUpdated.body.profile.name, '协议外观更新');
+    assert.strictEqual(appearanceUpdated.body.profile.preferences.themeId, 'eye');
+    const appearanceDeleted = await jsonRequest(
+      handler,
+      `/api/reader/appearances?profileId=user%3Aprotocol-appearance&expectedUpdatedAt=${encodeURIComponent(appearanceUpdated.body.record.updatedAt)}`,
+      'DELETE'
+    );
+    assert.strictEqual(appearanceDeleted.response.status, 200);
+    assert.strictEqual(appearanceDeleted.body.profileId, 'user:protocol-appearance');
+    const appearanceAfterDelete = await jsonRequest(handler, '/api/reader/appearances');
+    assert.deepStrictEqual(appearanceAfterDelete.body.profiles, [], 'deleted appearance profiles must disappear from the list');
+    const invalidAppearance = await jsonRequest(handler, '/api/reader/appearances', 'POST', {
+      profile: { profileId: 'not-a-user-profile', name: '非法方案', preferences: {} }
+    });
+    assert.strictEqual(invalidAppearance.response.status, 400, 'appearance profile ids must be server-validated');
+
     const state = await jsonRequest(handler, '/api/reader/state', 'POST', {
       state: {
         documentId: 'protocol-reader-book',
@@ -232,6 +289,45 @@ async function jsonRequest(handler, pathname, method = 'GET', body) {
     assert.strictEqual(state.body.state.documentId, 'protocol-reader-book');
     const reopenedState = await jsonRequest(handler, '/api/reader/state?documentId=protocol-reader-book');
     assert.strictEqual(reopenedState.body.state.updatedAt, '2026-07-15T10:00:00.000Z');
+
+    const annotation = await jsonRequest(handler, '/api/reader/annotations', 'POST', {
+      annotation: {
+        annotationId: 'protocol-annotation-1',
+        documentId: 'protocol-reader-book',
+        revisionId: 'protocol-reader-r1',
+        type: 'note',
+        range: { start: { chapterId, blockId: chapter.body.chapter.blocks[0].blockId, offset: 0 }, end: { chapterId, blockId: chapter.body.chapter.blocks[0].blockId, offset: 8 } },
+        excerpt: '协议摘录',
+        note: '协议批注'
+      },
+      updatedAt: '2026-07-15T10:10:00.000Z'
+    });
+    assert.strictEqual(annotation.response.status, 200);
+    assert.strictEqual(annotation.body.record.annotations[0].note, '协议批注');
+    const annotations = await jsonRequest(handler, '/api/reader/annotations?documentId=protocol-reader-book');
+    assert.strictEqual(annotations.body.record.annotations.length, 1);
+
+    const history = await jsonRequest(handler, '/api/reader/history', 'POST', {
+      entry: {
+        documentId: 'protocol-reader-book',
+        revisionId: 'protocol-reader-r1',
+        locator: { chapterId, blockId: chapter.body.chapter.blocks[0].blockId, offset: 8 },
+        visitedAt: '2026-07-15T10:11:00.000Z'
+      },
+      updatedAt: '2026-07-15T10:11:00.000Z'
+    });
+    assert.strictEqual(history.body.record.history.items.length, 1);
+    const filteredHistory = await jsonRequest(handler, '/api/reader/history?documentId=protocol-reader-book');
+    assert.strictEqual(filteredHistory.body.record.history.items[0].locator.offset, 8);
+
+    const deletedAnnotation = await jsonRequest(handler, '/api/reader/annotations/delete', 'POST', {
+      documentId: 'protocol-reader-book',
+      annotationId: 'protocol-annotation-1',
+      expectedUpdatedAt: annotation.body.record.updatedAt,
+      updatedAt: '2026-07-15T10:12:00.000Z'
+    });
+    assert.strictEqual(deletedAnnotation.body.deleted, true);
+    assert.strictEqual(deletedAnnotation.body.record.annotations.length, 0);
 
     const migration = await jsonRequest(handler, '/api/reader/migration', 'POST', { legacyState: null });
     assert.strictEqual(migration.body.migration.canClearLegacyState, true);

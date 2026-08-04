@@ -607,7 +607,7 @@ async function cleanupReaderDocumentStore(dataRoot) {
       sourceEntries = [];
     }
     for (const sourceEntry of sourceEntries) {
-      if (!sourceEntry.isFile() || !/\.(txt|md)$/i.test(sourceEntry.name)) continue;
+      if (!sourceEntry.isFile() || !/\.(txt|md|epub)$/i.test(sourceEntry.name)) continue;
       const resolved = path.resolve(sourceDir, sourceEntry.name);
       if (referencedSourceFiles.has(resolved)) continue;
       if (!resolved.startsWith(`${path.resolve(sourceDir)}${path.sep}`)) {

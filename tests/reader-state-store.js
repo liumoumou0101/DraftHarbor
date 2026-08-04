@@ -77,7 +77,18 @@ const stateStore = require('../desktop/storage/reader-state-store');
       fontSize: 22
     }, { updatedAt: '2026-07-15T08:00:00.000Z' });
     assert.strictEqual(preferences.preferences.layoutMode, 'double-page');
+    assert.strictEqual(preferences.preferences.schemaVersion, 2);
     assert.strictEqual((await stateStore.readReaderGlobalPreferences(dataRoot)).preferences.fontSize, 22);
+
+    await fs.writeFile(paths.readerPreferencesPath(dataRoot), JSON.stringify({
+      schemaVersion: 1,
+      kind: 'reader-global-preferences',
+      updatedAt: '2026-07-15T08:30:00.000Z',
+      preferences: { schemaVersion: 1, themeId: 'sepia', fontFamilyId: 'kai', fontSize: 20 }
+    }), 'utf8');
+    const migratedPreferences = await stateStore.readReaderGlobalPreferences(dataRoot);
+    assert.strictEqual(migratedPreferences.preferences.schemaVersion, 2);
+    assert.strictEqual(migratedPreferences.preferences.fontId, 'builtin:kai');
     await assert.rejects(
       () => stateStore.writeReaderGlobalPreferences(dataRoot, { layoutMode: 'flow' }, {
         expectedUpdatedAt: '2026-07-15T07:00:00.000Z',

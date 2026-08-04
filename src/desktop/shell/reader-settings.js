@@ -1,29 +1,37 @@
     const READER_PREFERENCE_KEYS = Object.freeze([
         'layoutMode', 'pageTransition', 'themeId', 'fontFamilyId', 'fontId', 'fontCatalogVersion', 'fontSize', 'lineHeight',
-        'letterSpacing', 'paragraphSpacing', 'pageMargin', 'textWidth', 'textAlign', 'indent', 'reducedMotionOverride', 'appearanceProfileId'
+        'letterSpacing', 'paragraphSpacing', 'pageMargin', 'textWidth', 'textAlign', 'indent', 'paperMaterial', 'paperShadow', 'paperVignette', 'reducedMotionOverride', 'appearanceProfileId',
+        'statusBarMode', 'statusBarFields', 'statusBarAutoHide', 'hudMode', 'keyboardPageTurn', 'pointerPageTurn', 'touchPageTurn'
     ]);
     let readerSettingsSaveTimer = null;
-    let readerApplyingAppearanceProfile = false;
 
     function readerDefaultPreferences() {
+        const preferencesApi = window.DraftHarborReaderPreferences;
         const schema = window.DraftHarborReaderDocumentSchema;
-        return schema && typeof schema.createReaderGlobalPreferences === 'function'
-            ? schema.createReaderGlobalPreferences({})
+        return preferencesApi && typeof preferencesApi.createReaderPreferencesV2 === 'function'
+            ? preferencesApi.createReaderPreferencesV2({})
+            : schema && typeof schema.createReaderGlobalPreferences === 'function'
+                ? schema.createReaderGlobalPreferences({})
             : {
-                schemaVersion: 1, layoutMode: 'flow', pageTransition: 'fade', themeId: 'dark',
+            schemaVersion: 2, layoutMode: 'flow', pageTransition: 'fade', themeId: 'dark',
                 fontFamilyId: 'system', fontId: 'builtin:default', fontCatalogVersion: 1, fontSize: 18, lineHeight: 1.8, letterSpacing: 0,
                 paragraphSpacing: 1.05, pageMargin: 48, textWidth: 760, textAlign: 'start', indent: true,
-                reducedMotionOverride: undefined, appearanceProfileId: 'default'
+                paperMaterial: 'flat', paperShadow: true, paperVignette: true,
+                reducedMotionOverride: undefined, appearanceProfileId: 'default', statusBarMode: 'auto',
+                statusBarFields: ['chapter', 'page', 'percent'], statusBarAutoHide: true
             };
     }
 
     function normalizeReaderPreferences(input) {
+        const preferencesApi = window.DraftHarborReaderPreferences;
         const schema = window.DraftHarborReaderDocumentSchema;
         const source = { ...readerDefaultPreferences(), ...(input || {}) };
         if (source.fontFamilyId === 'yahei') source.fontFamilyId = 'sans-serif';
         try {
-            return schema && typeof schema.createReaderGlobalPreferences === 'function'
-                ? schema.createReaderGlobalPreferences(source)
+            return preferencesApi && typeof preferencesApi.migrateReaderPreferences === 'function'
+                ? preferencesApi.migrateReaderPreferences(source)
+                : schema && typeof schema.createReaderGlobalPreferences === 'function'
+                    ? schema.createReaderGlobalPreferences(source)
                 : source;
         } catch (error) {
             console.warn('Invalid reader preferences; defaults restored:', error);
@@ -47,8 +55,18 @@
             textWidth: readerState.textWidth,
             textAlign: readerState.textAlign,
             indent: readerState.indent,
+            paperMaterial: readerState.paperMaterial,
+            paperShadow: readerState.paperShadow,
+            paperVignette: readerState.paperVignette,
             reducedMotionOverride: readerState.reducedMotionOverride,
-            appearanceProfileId: readerState.appearanceProfileId
+            appearanceProfileId: readerState.appearanceProfileId,
+            statusBarMode: readerState.statusBarMode,
+            statusBarFields: readerState.statusBarFields,
+            statusBarAutoHide: readerState.statusBarAutoHide,
+            hudMode: readerState.hudMode,
+            keyboardPageTurn: readerState.keyboardPageTurn,
+            pointerPageTurn: readerState.pointerPageTurn,
+            touchPageTurn: readerState.touchPageTurn
         });
     }
 
@@ -74,7 +92,17 @@
         readerState.textWidth = preferences.textWidth;
         readerState.textAlign = preferences.textAlign;
         readerState.indent = preferences.indent;
+        readerState.paperMaterial = preferences.paperMaterial || 'flat';
+        readerState.paperShadow = preferences.paperShadow !== false;
+        readerState.paperVignette = preferences.paperVignette !== false;
         readerState.reducedMotionOverride = preferences.reducedMotionOverride;
+        readerState.statusBarMode = preferences.statusBarMode || 'auto';
+        readerState.statusBarFields = Array.isArray(preferences.statusBarFields) ? preferences.statusBarFields : ['chapter', 'page', 'percent'];
+        readerState.statusBarAutoHide = preferences.statusBarAutoHide !== false;
+        readerState.hudMode = preferences.hudMode || 'auto';
+        readerState.keyboardPageTurn = preferences.keyboardPageTurn !== false;
+        readerState.pointerPageTurn = preferences.pointerPageTurn !== false;
+        readerState.touchPageTurn = preferences.touchPageTurn !== false;
     }
 
     function applyReaderPreferenceModel() {
@@ -90,8 +118,15 @@
     }
 
     function readerEffectiveTransition() {
-        if (readerState.effectiveLayoutMode === 'flow' || readerReducedMotionActive()) return 'none';
-        return ['fade', 'slide', 'none'].includes(readerState.pageTransition) ? readerState.pageTransition : 'none';
+        if (readerState.effectiveLayoutMode === 'flow') return 'none';
+        const transitionApi = window.DraftHarborReaderTransition;
+        if (transitionApi && typeof transitionApi.createReaderTransitionAdapter === 'function') {
+            return transitionApi.createReaderTransitionAdapter({
+                transition: readerState.pageTransition,
+                reducedMotion: readerReducedMotionActive()
+            }).transition;
+        }
+        return ['fade', 'slide', 'cover', 'none'].includes(readerState.pageTransition) ? readerState.pageTransition : 'none';
     }
 
     function updateReaderPreferenceStatus(message) {
@@ -132,19 +167,61 @@
             const output = document.querySelector(`[data-reader-value-for="${key}"]`);
             if (output) output.textContent = value;
         });
+        const statusMode = document.querySelector('[data-reader-status-bar-mode]');
+        if (statusMode) statusMode.value = readerState.statusBarMode || 'auto';
+        document.querySelectorAll('[data-reader-status-field]').forEach((control) => {
+            control.checked = (readerState.statusBarFields || []).includes(control.value);
+        });
+        const statusAutoHide = document.querySelector('[data-reader-status-bar-auto-hide]');
+        if (statusAutoHide) statusAutoHide.checked = readerState.statusBarAutoHide !== false;
+        const quickTheme = document.querySelector('[data-reader-quick-theme]');
+        if (quickTheme) {
+            const themeIds = window.DraftHarborReaderTheme && window.DraftHarborReaderTheme.BUILTIN_THEME_IDS || ['white', 'paper', 'warm', 'eye', 'ink', 'oled'];
+            quickTheme.value = themeIds.includes(readerState.theme) ? readerState.theme : 'ink';
+        }
+        const quickFontFamily = document.querySelector('[data-reader-quick-font-family]');
+        if (quickFontFamily) quickFontFamily.value = readerState.fontFamily;
+        const quickLayout = document.querySelector('[data-reader-quick-layout]');
+        if (quickLayout) quickLayout.value = readerState.layoutMode;
+        const quickFontSize = document.querySelector('[data-reader-quick-font-size]');
+        if (quickFontSize) quickFontSize.textContent = `${readerState.fontSize} px`;
         const scope = document.querySelector('[data-reader-preference-scope]');
         if (scope) scope.querySelector('option[value="document"]').disabled = !readerState.activeDocumentId;
         const reset = document.querySelector('[data-reader-preference-reset]');
         if (reset) reset.disabled = readerState.preferenceScope !== 'document' || !Object.keys(readerState.preferenceOverrides || {}).length;
+        const deleteProfile = document.querySelector('[data-reader-appearance-delete]');
+        if (deleteProfile) deleteProfile.disabled = !/^user:/.test(readerState.appearanceProfileId || '');
         const status = document.querySelector('[data-reader-font-status]');
         if (status) {
             const actual = readerState.actualFontFamily || readerFontStack().split(',')[0].replace(/["']/g, '');
             status.textContent = readerState.fontFallback ? `首选字体不可用，已回退到 ${actual}` : `当前字体：${actual}`;
         }
+        const material = document.querySelector('[data-reader-paper-material]');
+        if (material) material.value = readerState.paperMaterial || 'flat';
+        const shadow = document.querySelector('input[data-reader-paper-shadow]');
+        if (shadow) shadow.checked = readerState.paperShadow !== false;
+        const vignette = document.querySelector('input[data-reader-paper-vignette]');
+        if (vignette) vignette.checked = readerState.paperVignette !== false;
+        const keyboardTurn = document.querySelector('[data-reader-keyboard-page-turn]');
+        if (keyboardTurn) keyboardTurn.checked = readerState.keyboardPageTurn !== false;
+        const pointerTurn = document.querySelector('[data-reader-pointer-page-turn]');
+        if (pointerTurn) pointerTurn.checked = readerState.pointerPageTurn !== false;
+        const touchTurn = document.querySelector('[data-reader-touch-page-turn]');
+        if (touchTurn) touchTurn.checked = readerState.touchPageTurn !== false;
         const stage = document.querySelector('[data-reader-theme-panel]');
         if (stage) {
             stage.dataset.readerMotion = readerReducedMotionActive() ? 'reduce' : 'allow';
             stage.dataset.readerTransition = readerEffectiveTransition();
+            stage.dataset.readerMaterial = readerState.paperMaterial || 'flat';
+            stage.dataset.readerPaperShadow = readerState.paperShadow === false ? 'false' : 'true';
+            stage.dataset.readerVignette = readerState.paperVignette === false ? 'false' : 'true';
+            stage.dataset.readerStatusBarState = readerState.statusBarMode || 'auto';
+            stage.dataset.readerStatusAutoHide = readerState.statusBarAutoHide === false ? 'false' : 'true';
+        }
+        const shell = document.querySelector('[data-reader-shell]');
+        if (shell) {
+            shell.dataset.readerStatusBarState = readerState.statusBarMode || 'auto';
+            shell.dataset.readerStatusAutoHide = readerState.statusBarAutoHide === false ? 'false' : 'true';
         }
     }
 
@@ -214,11 +291,10 @@
         }, 350);
     }
 
-    function updateReaderSetting(mutator) {
+    function updateReaderSetting(mutator, { markCustom = true } = {}) {
         const locator = typeof captureReaderPositionLocator === 'function' ? captureReaderPositionLocator() : null;
-        const wasApplyingAppearanceProfile = readerApplyingAppearanceProfile;
         const mutationResult = mutator();
-        if (!wasApplyingAppearanceProfile && !readerApplyingAppearanceProfile && mutationResult !== 'appearance-profile') {
+        if (markCustom && mutationResult !== 'appearance-profile') {
             readerState.appearanceProfileId = 'custom';
         }
         readerState.anchorLocator = locator || readerState.anchorLocator;
@@ -228,43 +304,16 @@
         scheduleReaderPreferenceSave();
     }
 
-    function bindReaderSetting(selector, eventName, mutator) {
+    function bindReaderSetting(selector, eventName, mutator, options) {
         const control = document.querySelector(selector);
-        control?.addEventListener(eventName, () => updateReaderSetting(() => mutator(control)));
-    }
-
-    function applyReaderAppearanceProfile(profileId) {
-        const preferencesApi = window.DraftHarborReaderPreferences;
-        const preset = preferencesApi && preferencesApi.PROFILE_PRESETS && preferencesApi.PROFILE_PRESETS[profileId];
-        if (!preset) return '';
-        readerApplyingAppearanceProfile = true;
-        try {
-            Object.assign(readerState, {
-                appearanceProfileId: profileId,
-                layoutMode: preset.layoutMode,
-                pageTransition: preset.pageTransition,
-                theme: preset.themeId,
-                fontFamily: preset.fontFamilyId,
-                fontId: preset.fontId,
-                fontCatalogVersion: preset.fontCatalogVersion || 1,
-                fontSize: preset.fontSize,
-                lineHeight: preset.lineHeight,
-                letterSpacing: preset.letterSpacing,
-                paragraphSpacing: preset.paragraphSpacing,
-                pageMargin: preset.pageMargin,
-                textWidth: preset.textWidth,
-                textAlign: preset.textAlign,
-                indent: preset.indent,
-                reducedMotionOverride: preset.reducedMotionOverride
-            });
-        } finally {
-            readerApplyingAppearanceProfile = false;
-        }
-        return 'appearance-profile';
+        control?.addEventListener(eventName, () => updateReaderSetting(() => mutator(control), options));
     }
 
     function initializeReaderSettings() {
+        window.initializeReaderFonts?.();
+        window.initializeReaderTts?.();
         loadReaderPreferences();
+        window.loadReaderAppearanceProfiles?.();
         bindReaderSetting('[data-reader-letter-spacing]', 'input', (control) => { readerState.letterSpacing = Number(control.value) || 0; });
         bindReaderSetting('[data-reader-page-margin]', 'input', (control) => { readerState.pageMargin = Number(control.value) || 48; });
         bindReaderSetting('[data-reader-text-align]', 'change', (control) => { readerState.textAlign = control.value || 'start'; });
@@ -273,7 +322,26 @@
         bindReaderSetting('[data-reader-reduced-motion]', 'change', (control) => {
             readerState.reducedMotionOverride = control.value === 'reduce' ? true : control.value === 'allow' ? false : undefined;
         });
-        bindReaderSetting('[data-reader-appearance-profile]', 'change', (control) => applyReaderAppearanceProfile(control.value || 'default'));
+        bindReaderSetting('[data-reader-status-bar-mode]', 'change', (control) => { readerState.statusBarMode = control.value || 'auto'; });
+        document.querySelectorAll('[data-reader-status-field]').forEach((control) => {
+            control.addEventListener('change', () => {
+                const fields = Array.from(document.querySelectorAll('[data-reader-status-field]:checked')).map((item) => item.value);
+                readerState.statusBarFields = fields.length ? fields : ['chapter'];
+                updateReaderSetting(() => undefined);
+            });
+        });
+        bindReaderSetting('[data-reader-status-bar-auto-hide]', 'change', (control) => { readerState.statusBarAutoHide = control.checked; });
+        bindReaderSetting('[data-reader-paper-material]', 'change', (control) => { readerState.paperMaterial = control.value || 'flat'; });
+        bindReaderSetting('input[data-reader-paper-shadow]', 'change', (control) => { readerState.paperShadow = control.checked; });
+        bindReaderSetting('input[data-reader-paper-vignette]', 'change', (control) => { readerState.paperVignette = control.checked; });
+        bindReaderSetting('[data-reader-keyboard-page-turn]', 'change', (control) => { readerState.keyboardPageTurn = control.checked; });
+        bindReaderSetting('[data-reader-pointer-page-turn]', 'change', (control) => { readerState.pointerPageTurn = control.checked; });
+        bindReaderSetting('[data-reader-touch-page-turn]', 'change', (control) => { readerState.touchPageTurn = control.checked; });
+        bindReaderSetting('[data-reader-font-family]', 'change', (control) => {
+            readerState.fontId = window.readerFontIdForSelection?.(control) || control.value || 'builtin:default';
+            readerState.fontFamily = window.readerFontFamilyForSelection?.(control) || control.value || 'system';
+        });
+        bindReaderSetting('[data-reader-appearance-profile]', 'change', (control) => window.applyReaderAppearanceProfile?.(control.value || 'default'), { markCustom: false });
         document.querySelectorAll('[data-reader-font-size], [data-reader-line-height], [data-reader-width], [data-reader-paragraph-spacing]').forEach((control) => {
             control.addEventListener('input', () => window.setTimeout(syncReaderSettingsControls, 0));
         });
@@ -303,3 +371,15 @@
         syncReaderSettingsControls();
         updateReaderPreferenceStatus();
     }
+
+    window.readerPreferenceSnapshot = readerPreferenceSnapshot;
+    window.readerEffectivePreferences = readerEffectivePreferences;
+    window.syncReaderSettingsControls = syncReaderSettingsControls;
+    window.restoreReaderPreferenceSnapshot = function restoreReaderPreferenceSnapshot(snapshot) {
+        const preferences = normalizeReaderPreferences(snapshot || {});
+        assignReaderPreferences(preferences);
+        applyReaderSettings();
+        syncReaderSettingsControls();
+        saveReaderState();
+        scheduleReaderPreferenceSave();
+    };

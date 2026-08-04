@@ -9,6 +9,7 @@
     const HISTORY_SCHEMA_VERSION = 1;
     const TYPES = Object.freeze(['highlight', 'underline', 'note']);
     const COLORS = Object.freeze(['yellow', 'blue', 'green', 'pink', 'gray']);
+    const RECOVERY_PRECISIONS = Object.freeze(['exact', 'approximate', 'unresolved']);
     const MAX_HISTORY = 100;
 
     function cleanString(value, fallback = '') {
@@ -42,6 +43,7 @@
         const revisionId = cleanString(input.revisionId);
         if (!documentId || !revisionId) throw new Error('reader annotation documentId and revisionId are required');
         if (!input.range || typeof input.range !== 'object' || Array.isArray(input.range)) throw new Error('reader annotation range is required');
+        if (!input.range.start || !input.range.end) throw new Error('reader annotation range start and end are required');
         const note = cleanString(input.note).slice(0, 4000);
         const now = validTimestamp(input.updatedAt || input.createdAt, 'reader annotation updatedAt');
         return {
@@ -51,6 +53,7 @@
             revisionId,
             type: enumValue(input.type, TYPES, 'highlight', 'reader annotation type'),
             color: enumValue(input.color, COLORS, 'yellow', 'reader annotation color'),
+            recoveryPrecision: enumValue(input.recoveryPrecision, RECOVERY_PRECISIONS, 'exact', 'reader annotation recoveryPrecision'),
             range: clone(input.range),
             excerpt: cleanString(input.excerpt).slice(0, 1000),
             note,
@@ -60,7 +63,8 @@
     }
 
     function createReaderPositionHistory(input = {}) {
-        const items = Array.isArray(input.items) ? input.items : [];
+        const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+        const items = Array.isArray(source.items) ? source.items : [];
         const normalized = items.slice(-MAX_HISTORY).map((item) => {
             const documentId = cleanString(item.documentId);
             if (!documentId) throw new Error('reader history documentId is required');
@@ -68,6 +72,8 @@
                 documentId,
                 revisionId: cleanString(item.revisionId),
                 locator: clone(item.locator || null),
+                source: cleanString(item.source, 'navigation').slice(0, 40) || 'navigation',
+                label: cleanString(item.label).slice(0, 200),
                 visitedAt: validTimestamp(item.visitedAt, 'reader history visitedAt')
             };
         });
@@ -84,6 +90,7 @@
         HISTORY_SCHEMA_VERSION,
         TYPES,
         COLORS,
+        RECOVERY_PRECISIONS,
         MAX_HISTORY,
         createReaderAnnotation,
         createReaderPositionHistory,

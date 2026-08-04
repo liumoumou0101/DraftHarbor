@@ -38,6 +38,23 @@ const baseKey = Layout.layoutCacheKey({
 assert.notStrictEqual(baseKey, Layout.layoutCacheKey(JSON.parse(baseKey.replace('"r1"', '"r2"'))), 'revision must invalidate pagination cache');
 assert.notStrictEqual(baseKey, Layout.layoutCacheKey({ ...JSON.parse(baseKey), viewportWidth: 1000 }), 'viewport must invalidate pagination cache');
 assert.notStrictEqual(baseKey, Layout.layoutCacheKey({ ...JSON.parse(baseKey), actualFontFamily: 'SimSun' }), 'actual font must invalidate pagination cache');
+assert.notStrictEqual(baseKey, Layout.layoutCacheKey({ ...JSON.parse(baseKey), fontCatalogVersion: 2 }), 'font catalog changes must invalidate pagination cache');
+assert.notStrictEqual(baseKey, Layout.layoutCacheKey({ ...JSON.parse(baseKey), fontWeight: 700 }), 'font weight changes must invalidate pagination cache');
+assert.notStrictEqual(baseKey, Layout.layoutCacheKey({ ...JSON.parse(baseKey), bookSpine: 44 }), 'book spine changes must invalidate pagination cache');
+
+const qualityText = '你好，世界。English words stay together，下一句继续！😀混合文本；“引用内容”结束。'.repeat(5);
+const qualityPages = Layout.buildReaderPages({ blocks: [{ blockId: 'quality', type: 'paragraph', text: qualityText }] }, {
+  capacity: 64, orphanLines: 2, widowLines: 2
+});
+const qualitySegments = qualityPages.flatMap((page) => page.segments);
+assert.strictEqual(qualitySegments.map((segment) => qualityText.slice(segment.startOffset, segment.endOffset)).join(''), qualityText, 'mixed Chinese/English/emoji pagination must preserve every UTF-16 unit');
+assert.ok(qualitySegments.every((segment) => {
+  const startsAtLowSurrogate = qualityText.charCodeAt(segment.startOffset) >= 0xDC00 && qualityText.charCodeAt(segment.startOffset) <= 0xDFFF;
+  const endsBeforeLowSurrogate = segment.endOffset < qualityText.length && qualityText.charCodeAt(segment.endOffset) >= 0xDC00 && qualityText.charCodeAt(segment.endOffset) <= 0xDFFF;
+  return !startsAtLowSurrogate && !endsBeforeLowSurrogate;
+}), 'pagination must not split an emoji surrogate pair');
+assert.ok(qualitySegments.slice(1).every((segment) => !'，。！？；：、)]）】》」』”’'.includes(qualityText[segment.startOffset])), 'pages must not start with closing punctuation');
+assert.ok(Layout.preferredBreakOffset('alpha beta gamma', 8, 0) <= 6, 'English words should prefer a natural whitespace break');
 
 const millionChapter = { blocks: Array.from({ length: 1000 }, (_, index) => ({ blockId: `b${index}`, type: 'paragraph', text: '字'.repeat(1000) })) };
 const startedAt = Date.now();

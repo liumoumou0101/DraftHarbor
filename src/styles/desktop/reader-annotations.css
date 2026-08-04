@@ -1,0 +1,41 @@
+.desktop-reader-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.desktop-reader-selection-toolbar { gap: 8px; flex-wrap: wrap; }
+.desktop-reader-bookmark-open[data-reader-bookmark-color="yellow"] { border-left: 3px solid #e2bd65; }
+.desktop-reader-bookmark-open[data-reader-bookmark-color="blue"] { border-left: 3px solid #75a9df; }
+.desktop-reader-bookmark-open[data-reader-bookmark-color="green"] { border-left: 3px solid #79bd92; }
+.desktop-reader-bookmark-open[data-reader-bookmark-color="pink"] { border-left: 3px solid #df91a8; }
+.desktop-reader-bookmark-open[data-reader-bookmark-color="gray"] { border-left: 3px solid #9ca6b2; }
+.desktop-reader-bookmark-meta,
+.desktop-reader-annotation-meta,
+.desktop-reader-history-meta { display: flex; gap: 8px; color: var(--desktop-faint); font-size: 11px; }
+.desktop-reader-bookmark-controls { grid-template-columns: minmax(0, 1fr) minmax(100px, auto) minmax(100px, auto) auto auto; }
+.desktop-reader-bookmark-controls textarea { grid-column: 1 / -1; min-height: 50px; resize: vertical; }
+.desktop-reader-bookmark-controls select,
+.desktop-reader-bookmark-controls textarea { padding: 7px 9px; border: 1px solid var(--desktop-line-strong); border-radius: 8px; background: rgba(255, 255, 255, 0.045); color: var(--desktop-text); font: inherit; font-size: 11px; }
+.desktop-reader-annotations,
+.desktop-reader-history { display: grid; gap: 8px; margin-top: 14px; }
+.desktop-reader-annotation,
+.desktop-reader-history-item { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--desktop-line); border-radius: 9px; background: rgba(255, 255, 255, 0.025); }
+.desktop-reader-annotation-open,
+.desktop-reader-history-open { display: grid; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--desktop-text); text-align: left; cursor: pointer; }
+.desktop-reader-annotation-open span,
+.desktop-reader-history-open span { color: var(--desktop-muted); font-size: 11px; line-height: 1.5; }
+.desktop-reader-annotation-actions,
+.desktop-reader-history-toolbar { display: flex; flex-wrap: wrap; gap: 6px; }
+.desktop-reader-annotation-mark { border-radius: 2px; }
+.desktop-reader-annotation-mark[data-reader-annotation-color="yellow"] { background: rgba(226, 189, 101, 0.34); }
+.desktop-reader-annotation-mark[data-reader-annotation-color="blue"] { background: rgba(117, 169, 223, 0.3); }
+.desktop-reader-annotation-mark[data-reader-annotation-color="green"] { background: rgba(121, 189, 146, 0.3); }
+.desktop-reader-annotation-mark[data-reader-annotation-color="pink"] { background: rgba(223, 145, 168, 0.3); }
+.desktop-reader-annotation-mark[data-reader-annotation-color="gray"] { background: rgba(156, 166, 178, 0.28); }
+.desktop-reader-annotation-mark[data-reader-annotation-type="underline"] { background: transparent; text-decoration: underline 2px currentColor; text-decoration-color: rgba(var(--desktop-accent-rgb), 0.8); text-underline-offset: 3px; }
+.desktop-reader-annotation-mark[data-reader-annotation-type="note"] { border-bottom: 2px dotted rgba(var(--desktop-accent-rgb), 0.8); }
+.desktop-reader-annotation-dialog { width: min(560px, calc(100% - 32px)); }
+.desktop-reader-annotation-dialog label { display: grid; gap: 7px; color: var(--desktop-muted); font-size: 12px; }
+.desktop-reader-annotation-dialog select,
+.desktop-reader-annotation-dialog textarea { padding: 8px 10px; border: 1px solid var(--desktop-line-strong); border-radius: 8px; background: rgba(255, 255, 255, 0.045); color: var(--desktop-text); font: inherit; }
+@media (max-width: 560px) {
+    .desktop-reader-bookmark-controls { grid-template-columns: 1fr 1fr; }
+    .desktop-reader-bookmark-controls input,
+    .desktop-reader-bookmark-controls textarea { grid-column: 1 / -1; }
+}

@@ -77,6 +77,24 @@
     }
 
     function readerFontStack() {
+        if (typeof window.readerFontResolution === 'function') {
+            const managed = window.readerFontResolution(readerState.fontId || 'builtin:default');
+            if (managed?.actual) {
+                readerState.actualFontFamily = managed.actual.family;
+                readerState.fontFallback = managed.fallback;
+                readerState.fontCatalogVersion = managed.actual.catalogVersion || readerState.fontCatalogVersion || 1;
+                return managed.actual.family;
+            }
+        }
+        const providerApi = window.DraftHarborReaderFontProvider;
+        if (providerApi && typeof providerApi.createReaderFontProvider === 'function') {
+            if (!readerFontStack.provider) readerFontStack.provider = providerApi.createReaderFontProvider();
+            const resolved = readerFontStack.provider.resolve(readerState.fontId || 'builtin:default');
+            readerState.actualFontFamily = resolved.actual.displayName || resolved.actual.family;
+            readerState.fontFallback = resolved.fallback;
+            readerState.fontCatalogVersion = readerFontStack.provider.snapshot().catalogVersion;
+            return resolved.actual.family;
+        }
         if (readerState.fontFamily === 'serif') {
             return '"SimSun", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif';
         }
@@ -216,7 +234,25 @@
         if (elements.themePanel) {
             elements.themePanel.dataset.readerTheme = readerState.theme;
             elements.themePanel.dataset.readerIndentEnabled = readerState.indent ? 'true' : 'false';
+            elements.themePanel.dataset.readerMaterial = readerState.paperMaterial || 'flat';
+            elements.themePanel.dataset.readerPaperShadow = readerState.paperShadow === false ? 'false' : 'true';
+            elements.themePanel.dataset.readerVignette = readerState.paperVignette === false ? 'false' : 'true';
+            const themeApi = window.DraftHarborReaderTheme;
+            try {
+                const theme = themeApi && themeApi.createReaderTheme({ themeId: readerState.theme });
+                if (theme && theme.tokens) {
+                    Object.entries(theme.tokens).forEach(([key, value]) => elements.themePanel.style.setProperty(`--reader-${key}`, value));
+                    const effect = String(theme.tokens.effect || '').replace(/^#/, '');
+                    if (/^[0-9a-f]{6}$/i.test(effect)) {
+                        const channels = [0, 2, 4].map((offset) => Number.parseInt(effect.slice(offset, offset + 2), 16));
+                        elements.themePanel.style.setProperty('--reader-effect-rgb', channels.join(', '));
+                    }
+                }
+            } catch (_) {
+                // A user theme without a registered token set falls back to the last safe CSS theme.
+            }
             elements.themePanel.style.setProperty('--reader-font-size', `${readerState.fontSize}px`);
+            elements.themePanel.style.setProperty('--reader-font-weight', String(readerState.fontWeight || 400));
             elements.themePanel.style.setProperty('--reader-line-height', String(readerState.lineHeight));
             elements.themePanel.style.setProperty('--reader-width', `${readerState.textWidth}px`);
             elements.themePanel.style.setProperty('--reader-paragraph-spacing', `${readerState.paragraphSpacing}em`);

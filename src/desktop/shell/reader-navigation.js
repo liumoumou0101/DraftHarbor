@@ -1,3 +1,5 @@
+    /* global bindReaderTouchZone bindReaderContinuousInput recordReaderPositionHistory createReaderBookmarkAtCurrentPosition renderReaderBookmarks */
+
     function readerNavigationElements() {
         return {
             searchForm: document.querySelector('[data-reader-search-form]'),
@@ -15,38 +17,10 @@
         };
     }
 
-    function readerBookmarkList() {
-        return readerState.documentRecordState && Array.isArray(readerState.documentRecordState.bookmarks)
-            ? readerState.documentRecordState.bookmarks : [];
-    }
-
     function readerSetNavigationStatus(kind, message) {
         const elements = readerNavigationElements();
         const target = kind === 'search' ? elements.searchStatus : elements.bookmarkStatus;
         if (target) target.textContent = message;
-    }
-
-    async function persistReaderNavigationState(bookmarks) {
-        if (!readerState.activeDocumentId) return null;
-        if (typeof queueReaderDocumentStateWrite === 'function') {
-            return queueReaderDocumentStateWrite({ bookmarks: Array.isArray(bookmarks) ? bookmarks : readerBookmarkList() });
-        }
-        const existing = readerState.documentRecordState || {};
-        const locator = typeof captureReaderPositionLocator === 'function'
-            ? captureReaderPositionLocator() || existing.positionLocator : existing.positionLocator;
-        const nextState = {
-            documentId: readerState.activeDocumentId,
-            positionLocator: locator || null,
-            updatedAt: new Date().toISOString(),
-            preferenceOverrides: readerState.preferenceOverrides || existing.preferenceOverrides || {},
-            bookmarks: Array.isArray(bookmarks) ? bookmarks : readerBookmarkList()
-        };
-        const payload = await readerApi('/api/reader/state', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ state: nextState })
-        });
-        readerState.documentRecordState = payload.state;
-        return payload.state;
     }
 
     function readerSearchLocator(chapter, match, query) {
@@ -72,7 +46,7 @@
             excerpt.textContent = result.excerpt;
             button.append(title, excerpt);
             button.addEventListener('click', async () => {
-                await navigateReaderToLocator(result.locator, { highlight: true });
+                await navigateReaderToLocator(result.locator, { highlight: true, historySource: 'search', historyLabel: result.excerpt });
                 setReaderDrawer('');
             });
             elements.searchResults.appendChild(button);
@@ -145,126 +119,6 @@
         }
     }
 
-    function readerBookmarkExcerpt(locator) {
-        const chapter = readerState.currentChapter;
-        const block = chapter && chapter.blocks.find((item) => item.blockId === locator.blockId);
-        if (!block) return '';
-        const text = String(block.text || '');
-        const offset = Math.max(0, Math.min(text.length, Number(locator.offset) || 0));
-        return text.slice(Math.max(0, offset - 36), Math.min(text.length, offset + 84)).trim();
-    }
-
-    function readerBookmarkId() {
-        if (window.crypto && typeof window.crypto.randomUUID === 'function') return `bookmark-${window.crypto.randomUUID()}`;
-        return `bookmark-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    }
-
-    async function createReaderBookmarkAtCurrentPosition() {
-        const locator = typeof captureReaderPositionLocator === 'function' ? captureReaderPositionLocator() : null;
-        if (!locator) {
-            readerSetNavigationStatus('bookmark', '当前位置暂时无法创建书签。');
-            return;
-        }
-        const chapterIndex = readerState.contents.findIndex((item) => item.chapterId === locator.chapterId);
-        const bookmark = {
-            bookmarkId: readerBookmarkId(),
-            title: `${readerState.contents[chapterIndex] && readerState.contents[chapterIndex].title || '阅读位置'} · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-            excerpt: readerBookmarkExcerpt(locator),
-            locator,
-            createdAt: new Date().toISOString()
-        };
-        try {
-            await persistReaderNavigationState([...readerBookmarkList(), bookmark]);
-            readerState.bookmarkResolutions.set(bookmark.bookmarkId, { resolution: 'exact', locator });
-            renderReaderBookmarks();
-            readerSetNavigationStatus('bookmark', '书签已保存。');
-        } catch (error) {
-            readerSetNavigationStatus('bookmark', `书签保存失败：${error.message || error}`);
-        }
-    }
-
-    async function updateReaderBookmark(bookmarkId, title) {
-        const bookmarks = readerBookmarkList().map((bookmark) => bookmark.bookmarkId === bookmarkId
-            ? { ...bookmark, title: String(title || '').trim() || '书签' } : bookmark);
-        await persistReaderNavigationState(bookmarks);
-        renderReaderBookmarks();
-        readerSetNavigationStatus('bookmark', '书签标题已更新。');
-    }
-
-    async function deleteReaderBookmark(bookmarkId) {
-        const persistence = persistReaderNavigationState(readerBookmarkList().filter((bookmark) => bookmark.bookmarkId !== bookmarkId));
-        readerState.bookmarkResolutions.delete(bookmarkId);
-        renderReaderBookmarks();
-        try {
-            await persistence;
-            readerSetNavigationStatus('bookmark', '书签已删除。');
-        } catch (error) {
-            renderReaderBookmarks();
-            readerSetNavigationStatus('bookmark', `书签删除失败：${error.message || error}`);
-        }
-    }
-
-    function bookmarkResolutionLabel(resolution) {
-        const labels = { exact: '精确', approximate: '近似', unresolved: '需确认', pending: '检查中' };
-        return labels[resolution] || labels.pending;
-    }
-
-    function renderReaderBookmarks() {
-        const container = readerNavigationElements().bookmarks;
-        if (!container) return;
-        container.replaceChildren();
-        const bookmarks = readerBookmarkList();
-        if (!bookmarks.length) {
-            const empty = document.createElement('p');
-            empty.className = 'desktop-reader-hint';
-            empty.textContent = '还没有书签。';
-            container.appendChild(empty);
-            return;
-        }
-        bookmarks.forEach((bookmark) => {
-            const resolution = readerState.bookmarkResolutions.get(bookmark.bookmarkId) || {
-                resolution: bookmark.locator.revisionId === readerState.activeRevisionId ? 'exact' : 'pending',
-                locator: bookmark.locator
-            };
-            const card = document.createElement('article');
-            card.className = 'desktop-reader-bookmark';
-            const open = document.createElement('button');
-            open.type = 'button';
-            open.className = 'desktop-reader-bookmark-open';
-            const heading = document.createElement('strong');
-            heading.textContent = bookmark.title;
-            const excerpt = document.createElement('span');
-            excerpt.textContent = bookmark.excerpt || '无摘要';
-            const accuracy = document.createElement('small');
-            accuracy.dataset.readerBookmarkAccuracy = resolution.resolution;
-            accuracy.textContent = `恢复：${bookmarkResolutionLabel(resolution.resolution)}`;
-            open.append(heading, excerpt, accuracy);
-            open.addEventListener('click', async () => {
-                await navigateReaderToLocator(resolution.locator || bookmark.locator, { highlight: true });
-                setReaderDrawer('');
-            });
-            const controls = document.createElement('div');
-            controls.className = 'desktop-reader-bookmark-controls';
-            const titleInput = document.createElement('input');
-            titleInput.type = 'text';
-            titleInput.value = bookmark.title;
-            titleInput.setAttribute('aria-label', `编辑书签：${bookmark.title}`);
-            const save = document.createElement('button');
-            save.type = 'button';
-            save.className = 'desktop-secondary-action';
-            save.textContent = '保存标题';
-            save.addEventListener('click', () => updateReaderBookmark(bookmark.bookmarkId, titleInput.value));
-            const remove = document.createElement('button');
-            remove.type = 'button';
-            remove.className = 'desktop-reader-tool';
-            remove.textContent = '删除';
-            remove.addEventListener('click', () => deleteReaderBookmark(bookmark.bookmarkId));
-            controls.append(titleInput, save, remove);
-            card.append(open, controls);
-            container.appendChild(card);
-        });
-    }
-
     async function readerRevisionSnapshot() {
         const key = `${readerState.activeDocumentId}:${readerState.activeRevisionId}`;
         if (readerState.revisionSnapshotPromise && readerState.revisionSnapshotKey === key) return readerState.revisionSnapshotPromise;
@@ -280,27 +134,6 @@
         return readerState.revisionSnapshotPromise;
     }
 
-    async function refreshReaderBookmarkResolutions() {
-        const bookmarks = readerBookmarkList();
-        readerState.bookmarkResolutions.clear();
-        bookmarks.forEach((bookmark) => readerState.bookmarkResolutions.set(bookmark.bookmarkId, {
-            resolution: bookmark.locator.revisionId === readerState.activeRevisionId ? 'exact' : 'pending',
-            locator: bookmark.locator
-        }));
-        renderReaderBookmarks();
-        if (!bookmarks.some((bookmark) => bookmark.locator.revisionId !== readerState.activeRevisionId)) return;
-        try {
-            const revision = await readerRevisionSnapshot();
-            bookmarks.forEach((bookmark) => {
-                const resolved = window.DraftHarborReaderLocator.resolveReaderLocator(bookmark.locator, revision);
-                readerState.bookmarkResolutions.set(bookmark.bookmarkId, { resolution: resolved.resolution, locator: resolved.locator });
-            });
-            renderReaderBookmarks();
-        } catch (error) {
-            readerSetNavigationStatus('bookmark', `书签精确度检查失败：${error.message || error}`);
-        }
-    }
-
     async function navigateReaderToLocator(locator, options = {}) {
         if (!locator || !readerState.activeDocumentId) return false;
         let target = locator;
@@ -311,6 +144,9 @@
         await loadReaderWorkspaceChapter(target.chapterId, target);
         readerState.anchorLocator = target;
         renderReaderWorkspace();
+        if (!options.skipHistory && typeof recordReaderPositionHistory === 'function') {
+            await recordReaderPositionHistory(target, { source: options.historySource || 'navigation', label: options.historyLabel || '' });
+        }
         if (options.highlight) {
             window.requestAnimationFrame(() => {
                 const node = document.querySelector(`[data-reader-block="${CSS.escape(target.blockId)}"]`);
@@ -363,26 +199,6 @@
         updateReaderWorkspaceProgress();
     }
 
-    function readerHasTextSelection() {
-        return !!String(window.getSelection && window.getSelection() || '').trim();
-    }
-
-    function bindReaderTouchZone(control, delta) {
-        if (!control) return;
-        control.addEventListener('pointerdown', (event) => {
-            control.dataset.readerSelectionSuppressed = readerHasTextSelection() ? 'true' : 'false';
-            if (control.dataset.readerSelectionSuppressed === 'true') event.preventDefault();
-        });
-        control.addEventListener('click', (event) => {
-            if (control.dataset.readerSelectionSuppressed === 'true' || readerHasTextSelection()) {
-                control.dataset.readerSelectionSuppressed = 'false';
-                event.preventDefault();
-                return;
-            }
-            queueReaderPageTurn(delta);
-        });
-    }
-
     function initializeReaderNavigationDocument() {
         const elements = readerNavigationElements();
         if (elements.addBookmark) elements.addBookmark.disabled = !readerState.apiMode;
@@ -418,5 +234,6 @@
         });
         bindReaderTouchZone(elements.touchPrevious, -1);
         bindReaderTouchZone(elements.touchNext, 1);
+        bindReaderContinuousInput(document.querySelector('[data-reader-content]'));
         renderReaderBookmarks();
     }

@@ -1,0 +1,230 @@
+.desktop-reader-reading-center {
+    display: grid;
+    justify-items: center;
+    gap: 3px;
+    min-width: 0;
+}
+
+.desktop-reader-quick-appearance {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-width: 0;
+    color: var(--reader-mutedText, var(--desktop-faint));
+    font-size: 11px;
+}
+
+.desktop-reader-quick-appearance select,
+.desktop-reader-quick-appearance output {
+    min-height: 25px;
+    padding: 3px 6px;
+    border: 1px solid rgba(var(--desktop-accent-rgb), 0.22);
+    border-radius: 6px;
+    background: var(--reader-control, rgba(255, 255, 255, 0.05));
+    color: var(--reader-controlText, var(--desktop-muted));
+    font: inherit;
+}
+
+.desktop-reader-quick-appearance output {
+    display: inline-grid;
+    min-width: 42px;
+    place-items: center;
+    border-color: transparent;
+    background: transparent;
+}
+
+.desktop-reader-quick-appearance .desktop-reader-tool {
+    min-height: 25px;
+    padding: 3px 7px;
+    font-size: 11px;
+}
+
+.desktop-reader-status-bar {
+    min-width: 0;
+    color: var(--reader-mutedText, var(--desktop-faint));
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.desktop-reader-page-deck.is-reader-transitioning[data-reader-transition="cover"][data-reader-direction="next"] { animation: reader-page-cover-next 240ms cubic-bezier(0.22, 0.72, 0.25, 1) both; }
+.desktop-reader-page-deck.is-reader-transitioning[data-reader-transition="cover"][data-reader-direction="previous"] { animation: reader-page-cover-previous 240ms cubic-bezier(0.22, 0.72, 0.25, 1) both; }
+@keyframes reader-page-cover-next { from { opacity: 0.8; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+@keyframes reader-page-cover-previous { from { opacity: 0.8; transform: translateX(-100%); } to { opacity: 1; transform: translateX(0); } }
+
+.desktop-reader-status-fields {
+    display: grid;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+}
+
+.desktop-reader-status-fields > span {
+    color: var(--desktop-muted);
+    font-size: 11px;
+}
+
+.desktop-reader-studio-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--desktop-line);
+}
+
+.desktop-reader-studio-tabs button {
+    min-height: 31px;
+    padding: 5px 4px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--desktop-muted);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.desktop-reader-studio-tabs button[aria-selected="true"] {
+    border-color: rgba(var(--desktop-accent-rgb), 0.48);
+    background: rgba(var(--desktop-accent-rgb), 0.13);
+    color: var(--desktop-text);
+}
+
+.desktop-reader-appearance-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.desktop-reader-appearance-actions button {
+    flex: 1 1 120px;
+}
+
+.desktop-reader-stage {
+    background: radial-gradient(circle at 50% -15%, rgba(146, 164, 184, 0.09), transparent 34%), var(--reader-environment, var(--reader-shell-surface, #121419));
+}
+
+.desktop-reader-stage[data-reader-vignette="true"] {
+    box-shadow: inset 0 0 120px rgba(var(--reader-effect-rgb, 0, 0, 0), 0.12);
+}
+
+.desktop-reader-stage[data-reader-vignette="false"] {
+    box-shadow: none;
+}
+
+.desktop-reader-content {
+    background: var(--reader-page, #121419);
+    color: var(--reader-text, #dce0e6);
+}
+
+.desktop-reader-stage[data-reader-material="soft"] .desktop-reader-content {
+    background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 36%, rgba(0, 0, 0, 0.035));
+}
+
+.desktop-reader-stage[data-reader-material="grain"] .desktop-reader-content {
+    background-image: url("../../../assets/reader/paper-grain.svg"), radial-gradient(rgba(100, 80, 50, 0.08) 0.65px, transparent 0.8px);
+    background-size: 12px 12px, 5px 5px;
+}
+
+.desktop-reader-stage[data-reader-paper-shadow="false"] .desktop-reader-page {
+    box-shadow: none;
+}
+
+.desktop-reader-stage[data-reader-paper-shadow="false"] .desktop-reader-page-deck {
+    filter: none;
+}
+
+.desktop-reader-topbar,
+.desktop-reader-reading-bar,
+.desktop-reader-bottombar,
+.desktop-reader-drawer {
+    background-color: color-mix(in srgb, var(--reader-material, var(--reader-control, #20242a)) 88%, transparent);
+}
+
+.desktop-reader-font-import {
+    gap: 6px;
+}
+
+.desktop-reader-font-import input[type="file"] {
+    width: 100%;
+    min-width: 0;
+    color: var(--desktop-muted);
+    font-size: 11px;
+}
+
+.desktop-reader-font-list {
+    display: grid;
+    gap: 7px;
+    max-height: 230px;
+    overflow: auto;
+}
+
+.desktop-reader-font-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 3px 8px;
+    padding: 8px 9px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: rgba(var(--desktop-accent-rgb), 0.04);
+}
+
+.desktop-reader-font-item > strong,
+.desktop-reader-font-item > span,
+.desktop-reader-font-item > p {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.desktop-reader-font-item > span {
+    color: var(--desktop-muted);
+    font-size: 10px;
+}
+
+.desktop-reader-font-item > button {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    align-self: center;
+}
+
+.desktop-reader-font-preview {
+    margin: 0;
+    color: var(--desktop-text);
+    font-size: 16px;
+    line-height: 1.55;
+}
+
+.desktop-reader-tts-status {
+    min-width: 0;
+    max-width: 230px;
+    overflow: hidden;
+    color: var(--desktop-muted);
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.desktop-reader-tts-status[data-tone="error"] {
+    color: var(--desktop-danger, #d58a8a);
+}
+
+[data-reader-tts-toggle][aria-pressed="true"] {
+    color: var(--desktop-accent);
+}
+
+@media (max-width: 860px) {
+    .desktop-reader-quick-appearance {
+        max-width: 100%;
+        overflow-x: auto;
+        justify-content: start;
+    }
+}
+
+@media (max-width: 560px) {
+    .desktop-reader-quick-appearance select[data-reader-quick-font-family],
+    .desktop-reader-quick-appearance select[data-reader-quick-layout] {
+        display: none;
+    }
+}

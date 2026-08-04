@@ -1,3 +1,5 @@
+    /* global readerCanPageTurn readerReducedMotionActive */
+
     let readerReflowTimer = null;
     let readerFlowShiftFrame = null;
 
@@ -70,10 +72,10 @@
         const height = content ? content.clientHeight : 700;
         let effective = window.DraftHarborReaderLayout.effectiveLayoutMode(readerState.layoutMode, width, {
             minimumPageWidth: 360,
-            gap: 28
+            gap: readerState.bookSpine || 28
         });
         if (effective !== 'flow' && height < 420) effective = 'flow';
-        const gap = 28;
+        const gap = Math.max(0, Math.min(96, Number(readerState.bookSpine) || 28));
         const pageWidth = effective === 'double-page' ? Math.max(320, (width - gap - 48) / 2) : Math.min(980, Math.max(320, width - 48));
         const pageHeight = Math.max(120, height - 36);
         const actualFontFamily = readerActualFontFamily(content);
@@ -89,6 +91,11 @@
             viewportWidth: metrics.width,
             viewportHeight: metrics.height,
             actualFontFamily: metrics.actualFontFamily,
+            fontCatalogVersion: readerState.fontCatalogVersion || 1,
+            fontWeight: readerState.fontWeight || 400,
+            bookSpine: readerState.bookSpine || 28,
+            orphanLines: readerState.orphanLines || 2,
+            widowLines: readerState.widowLines || 2,
             fontSize: readerState.fontSize,
             lineHeight: readerState.lineHeight,
             letterSpacing: readerState.letterSpacing || 0,
@@ -124,6 +131,17 @@
         return lines * lineHeight + lineHeight * (readerState.paragraphSpacing || 1.05);
     }
 
+    function setReaderFlowScrollTop(content, value) {
+        if (!content) return;
+        const previousScrollBehavior = content.style.scrollBehavior;
+        content.style.scrollBehavior = 'auto';
+        content.scrollTop = value;
+        window.requestAnimationFrame(() => {
+            if (previousScrollBehavior) content.style.scrollBehavior = previousScrollBehavior;
+            else content.style.removeProperty('scroll-behavior');
+        });
+    }
+
     function renderReaderFlow(locator, options = {}) {
         const content = document.querySelector('[data-reader-content]');
         const blocks = readerState.currentChapter.blocks || [];
@@ -150,14 +168,14 @@
         content.appendChild(bottomSpacer);
         if (previousRatio !== null) {
             const max = Math.max(0, content.scrollHeight - content.clientHeight);
-            content.scrollTop = max * previousRatio;
+            setReaderFlowScrollTop(content, max * previousRatio);
         } else if (locator && locator.blockId) {
             window.requestAnimationFrame(() => {
                 const target = content.querySelector(`[data-reader-block="${CSS.escape(locator.blockId)}"]`);
-                if (target) target.scrollIntoView({ block: 'start' });
+                if (target) target.scrollIntoView({ block: 'start', behavior: 'auto' });
             });
         } else {
-            content.scrollTop = 0;
+            setReaderFlowScrollTop(content, 0);
         }
     }
 
@@ -214,6 +232,10 @@
                 pageHeight: metrics.pageHeight,
                 fontSize: readerState.fontSize,
                 lineHeight: readerState.lineHeight,
+                fontWeight: readerState.fontWeight || 400,
+                bookSpine: readerState.bookSpine || 28,
+                orphanLines: readerState.orphanLines || 2,
+                widowLines: readerState.widowLines || 2,
                 letterSpacing: readerState.letterSpacing || 0,
                 pageMargin: readerState.pageMargin || 48
             });
@@ -244,26 +266,33 @@
     function renderReaderReading(options = {}) {
         if (!readerState.currentChapter || !window.DraftHarborReaderLayout) return;
         const metrics = readerLayoutMetrics();
+        if (!metrics.content) return;
         const locator = options.locator || readerState.anchorLocator || readerState.documentRecordState && readerState.documentRecordState.positionLocator;
         readerState.effectiveLayoutMode = metrics.effective;
         readerState.anchorLocator = locator || null;
         metrics.content.dataset.readerLayout = metrics.effective;
         if (metrics.effective === 'flow') {
             readerState.pages = [];
-            renderReaderFlow(locator);
+            renderReaderFlow(locator, { preserveRatio: options.preserveFlowRatio === true });
             updateReaderPageControls();
         } else {
             renderReaderPages(locator);
         }
+        if (window.renderReaderAnnotationMarks) window.renderReaderAnnotationMarks();
     }
 
     function scheduleReaderReflow() {
         const locator = captureReaderPositionLocator() || readerState.anchorLocator;
+        const preserveFlowRatio = readerState.effectiveLayoutMode === 'flow';
         if (readerReflowTimer) window.clearTimeout(readerReflowTimer);
         readerReflowTimer = window.setTimeout(() => {
             readerReflowTimer = null;
-            readerState.anchorLocator = locator;
-            renderReaderReading({ locator });
+            const activeLocator = locator && locator.chapterId === readerState.activeChapterId
+                ? locator
+                : (readerState.anchorLocator && readerState.anchorLocator.chapterId === readerState.activeChapterId
+                    ? readerState.anchorLocator : null);
+            readerState.anchorLocator = activeLocator;
+            renderReaderReading({ locator: activeLocator, preserveFlowRatio });
             updateReaderWorkspaceProgress();
         }, 120);
     }
@@ -284,7 +313,9 @@
         });
     }
 
-    function queueReaderPageTurn(delta) {
+    function queueReaderPageTurn(delta, options = {}) {
+        window.readerTtsPauseForNavigation?.();
+        if (options.source && typeof readerCanPageTurn === 'function' && !readerCanPageTurn(options.source)) return false;
         if (readerState.effectiveLayoutMode === 'flow') return false;
         readerState.pendingPageDelta += Number(delta) || 0;
         if (readerState.pageTurnFrame) return true;
@@ -311,12 +342,19 @@
     function animateReaderPageTurn(direction) {
         const content = document.querySelector('[data-reader-content]');
         const deck = content && content.querySelector('.desktop-reader-page-deck');
-        const transition = typeof readerEffectiveTransition === 'function' ? readerEffectiveTransition() : 'none';
+        const transitionApi = window.DraftHarborReaderTransition;
+        const adapter = transitionApi && typeof transitionApi.createReaderTransitionAdapter === 'function'
+            ? transitionApi.createReaderTransitionAdapter({
+                transition: readerState.pageTransition,
+                reducedMotion: typeof readerReducedMotionActive === 'function' && readerReducedMotionActive(),
+                direction
+            }) : { transition: typeof readerEffectiveTransition === 'function' ? readerEffectiveTransition() : 'none', durationMs: 0 };
+        const transition = adapter.transition;
         if (!deck || transition === 'none') return;
         deck.dataset.readerTransition = transition;
         deck.dataset.readerDirection = direction < 0 ? 'previous' : 'next';
         deck.classList.add('is-reader-transitioning');
         const finish = () => deck.classList.remove('is-reader-transitioning');
         deck.addEventListener('animationend', finish, { once: true });
-        window.setTimeout(finish, 280);
+        window.setTimeout(finish, Math.max(280, Number(adapter.durationMs) + 60));
     }

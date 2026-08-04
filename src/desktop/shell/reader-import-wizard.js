@@ -127,6 +127,7 @@
 
     async function closeDialog(discard = true) {
         if (discard && !state.confirmed) await discardDraft();
+        if (discard && !state.confirmed && typeof readerState !== 'undefined') readerState.reimportDocumentId = '';
         const dialog = elements().dialog;
         if (dialog?.open) dialog.close();
         state.file = null;
@@ -194,9 +195,11 @@
                 draftId: state.draft.draftId,
                 title: state.draft.title,
                 encodingConfirmed: true,
+                reimportDocumentId: readerState.reimportDocumentId || undefined,
                 expectedIndexVersion: Number((typeof readerState !== 'undefined' && readerState.libraryIndexVersion) || 0)
             });
             state.confirmed = true;
+            readerState.reimportDocumentId = '';
             setStatus('已加入书库，正在打开…');
             if (typeof loadReaderLibrary === 'function') await loadReaderLibrary();
             if (typeof openReaderLibraryDocument === 'function') await openReaderLibraryDocument(committed.documentId);

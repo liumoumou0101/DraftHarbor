@@ -8,14 +8,15 @@
     const DOCUMENT_SCHEMA_VERSION = 2;
     const REVISION_SCHEMA_VERSION = 1;
     const SOURCE_KINDS = Object.freeze(['project', 'local-text', 'pasted-text']);
-    const FORMATS = Object.freeze(['project', 'txt', 'md', 'plain']);
+    const FORMATS = Object.freeze(['project', 'txt', 'md', 'epub', 'plain']);
     const BLOCK_TYPES = Object.freeze(['heading', 'scene-title', 'paragraph', 'blank-break', 'code']);
     const LAYOUT_MODES = Object.freeze(['flow', 'single-page', 'double-page', 'auto']);
-    const PAGE_TRANSITIONS = Object.freeze(['fade', 'slide', 'curl', 'none']);
-    const THEME_IDS = Object.freeze(['dark', 'paper', 'sepia']);
+    const PAGE_TRANSITIONS = Object.freeze(['fade', 'slide', 'cover', 'curl', 'none']);
+    const THEME_IDS = Object.freeze(['white', 'paper', 'warm', 'eye', 'ink', 'oled', 'dark', 'sepia']);
     const FONT_FAMILY_IDS = Object.freeze(['system', 'serif', 'sans-serif', 'kai']);
     const TEXT_ALIGNMENTS = Object.freeze(['start', 'justify']);
     const APPEARANCE_PROFILE_IDS = Object.freeze(['default', 'paper', 'focus', 'custom']);
+    const BOOKMARK_COLORS = Object.freeze(['yellow', 'blue', 'green', 'pink', 'gray']);
 
     function cleanString(value, fallback = '') {
         const text = value === null || value === undefined ? fallback : String(value);
@@ -207,7 +208,7 @@
     function validateSourceFormat(sourceKind, format) {
         const allowed = {
             project: ['project'],
-            'local-text': ['txt', 'md'],
+            'local-text': ['txt', 'md', 'epub'],
             'pasted-text': ['plain', 'md']
         };
         if (!allowed[sourceKind].includes(format)) {
@@ -330,8 +331,12 @@
             bookmarkId: id,
             title: cleanString(input.title, '书签') || '书签',
             excerpt: cleanString(input.excerpt).slice(0, 500),
+            color: assertEnum(input.color || 'yellow', BOOKMARK_COLORS, `reader bookmark ${id} color`),
+            category: cleanString(input.category, '未分类').slice(0, 80) || '未分类',
+            note: cleanString(input.note).slice(0, 1000),
             locator: clonePlain(input.locator),
-            createdAt: normalizeTimestamp(input.createdAt, 'reader bookmark createdAt')
+            createdAt: normalizeTimestamp(input.createdAt, 'reader bookmark createdAt'),
+            lastVisitedAt: input.lastVisitedAt ? normalizeTimestamp(input.lastVisitedAt, 'reader bookmark lastVisitedAt') : null
         };
     }
 
@@ -364,6 +369,7 @@
         PAGE_TRANSITIONS,
         THEME_IDS,
         FONT_FAMILY_IDS,
+        BOOKMARK_COLORS,
         TEXT_ALIGNMENTS,
         APPEARANCE_PROFILE_IDS,
         normalizeText,

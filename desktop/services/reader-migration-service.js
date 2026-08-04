@@ -1,7 +1,7 @@
 const fs = require('fs/promises');
 
 const ReaderLocator = require('../../src/core/document/reader-locator');
-const ReaderSchema = require('../../src/core/document/reader-document-schema');
+const ReaderPreferences = require('../../src/core/document/reader-preferences');
 const { projectToReaderDocumentV2 } = require('../../src/core/document/reader-document');
 const projectServiceDefault = require('./project-service');
 const readerLibraryDefault = require('./reader-library-service');
@@ -35,7 +35,7 @@ function parseLegacyState(input) {
 function legacyPreferences(legacy = {}) {
   const fontMap = { serif: 'serif', yahei: 'sans-serif', system: 'system', sans: 'sans-serif', kai: 'kai' };
   const theme = ['dark', 'paper', 'sepia'].includes(cleanString(legacy.theme)) ? cleanString(legacy.theme) : 'dark';
-  return ReaderSchema.createReaderGlobalPreferences({
+  return ReaderPreferences.createReaderPreferencesV2({
     layoutMode: 'flow',
     pageTransition: 'fade',
     themeId: theme,

@@ -1,4 +1,4 @@
-    /* global initializeReaderImportWizard */
+    /* global initializeReaderImportWizard readerCanPageTurn */
 
     function bindReader() {
         loadReaderState();
@@ -56,7 +56,13 @@
 
         if (elements.fontFamily) {
             elements.fontFamily.addEventListener('change', () => {
-                readerState.fontFamily = elements.fontFamily.value || 'system';
+                readerState.fontId = window.readerFontIdForSelection?.(elements.fontFamily) || {
+                    system: 'builtin:default',
+                    serif: 'builtin:serif',
+                    'sans-serif': 'builtin:sans',
+                    kai: 'builtin:kai'
+                }[elements.fontFamily.value] || 'builtin:default';
+                readerState.fontFamily = window.readerFontFamilyForSelection?.(elements.fontFamily) || elements.fontFamily.value || 'system';
                 applyReaderSettings();
                 saveReaderState();
                 if (typeof scheduleReaderPreferenceSave === 'function') scheduleReaderPreferenceSave();
@@ -127,6 +133,7 @@
                 handleReaderWorkspaceEscape();
                 return;
             }
+            if (typeof readerCanPageTurn === 'function' && !readerCanPageTurn('keyboard')) return;
             if (event.key === '[' && elements.prev && !elements.prev.disabled) {
                 event.preventDefault();
                 elements.prev.click();

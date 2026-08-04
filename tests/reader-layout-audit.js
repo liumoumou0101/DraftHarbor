@@ -21,13 +21,10 @@ async function importFixture(page, appUrl, fixturePath) {
   await page.goto(`${appUrl}/desktop.html`, { waitUntil: 'domcontentloaded' });
   await page.click('[data-view-target="reader"]');
   await page.setInputFiles('[data-reader-file]', fixturePath);
-  await page.waitForFunction(() => document.querySelector('[data-reader-title]')?.textContent.includes('第一章'));
-  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => document.querySelector('[data-reader-import-dialog]')?.open === true);
   try {
-    await page.waitForFunction(() => !document.querySelector('[data-reader-migration]')?.hidden, null, { timeout: 15000 });
-    await page.click('[data-reader-library-toggle]');
-    await page.click('[data-reader-migration-confirm]');
-    await page.waitForFunction(() => document.querySelector('[data-reader-migration]')?.hidden);
+    await page.click('[data-reader-import-confirm]');
+    await page.waitForFunction(() => document.querySelector('[data-reader-title]')?.textContent.includes('第一章'));
     await page.waitForFunction(() => readerState.apiMode && readerState.contents.length >= 4, null, { timeout: 15000 });
   } catch (error) {
     const state = await page.evaluate(() => ({

@@ -5,6 +5,12 @@ const defaults = Preferences.createReaderPreferencesV2({});
 assert.strictEqual(defaults.schemaVersion, 2);
 assert.strictEqual(defaults.fontId, 'builtin:default');
 assert.strictEqual(defaults.appearanceProfileId, 'default');
+assert.strictEqual(defaults.statusBarMode, 'auto');
+assert.deepStrictEqual(defaults.statusBarFields, ['chapter', 'page', 'percent']);
+assert.strictEqual(defaults.statusBarAutoHide, true);
+assert.strictEqual(defaults.keyboardPageTurn, true);
+assert.strictEqual(Preferences.createReaderPreferencesV2({ pageTransition: 'cover' }).pageTransition, 'cover');
+assert.strictEqual(Preferences.createReaderPreferencesV2({ themeId: 'user:quiet-night' }).themeId, 'user:quiet-night');
 
 const migrated = Preferences.migrateReaderPreferences({
   schemaVersion: 1,
@@ -20,6 +26,16 @@ const paper = Preferences.createReaderAppearanceProfile({ profileId: 'paper' });
 assert.strictEqual(paper.preferences.themeId, 'paper');
 assert.strictEqual(paper.preferences.fontId, 'builtin:serif');
 assert.strictEqual(paper.builtIn, true);
+const userProfile = Preferences.createReaderAppearanceProfile({
+  profileId: 'user:night-reading',
+  name: '夜读',
+  preferences: { themeId: 'dark', fontSize: 21, statusBarMode: 'hidden', touchPageTurn: false }
+});
+assert.strictEqual(userProfile.builtIn, false);
+assert.strictEqual(userProfile.preferences.statusBarMode, 'hidden');
+assert.strictEqual(userProfile.preferences.touchPageTurn, false);
+const immutablePaper = Preferences.createReaderAppearanceProfile({ profileId: 'paper', preferences: { fontSize: 47 } });
+assert.strictEqual(immutablePaper.preferences.fontSize, Preferences.PROFILE_PRESETS.paper.fontSize);
 
 const merged = Preferences.mergeReaderPreferenceLayers(
   { themeId: 'paper', fontSize: 20 },

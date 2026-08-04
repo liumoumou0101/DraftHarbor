@@ -3,6 +3,7 @@ const fs = require('fs/promises');
 const path = require('path');
 
 const ReaderImport = require('../../src/core/document/reader-import');
+const ReaderEpubAdapter = require('../../src/core/document/reader-epub-adapter');
 const readerStore = require('../storage/reader-document-store');
 const libraryPaths = require('../storage/library-paths');
 const { writeFileAtomic } = require('../storage/atomic-write');
@@ -17,6 +18,7 @@ function formatFromFileName(fileName) {
   const extension = path.extname(cleanString(fileName)).toLowerCase();
   if (extension === '.md' || extension === '.markdown') return 'md';
   if (extension === '.txt') return 'txt';
+  if (extension === '.epub') return 'epub';
   throw new Error(`reader import file type is not supported: ${extension || '(none)'}`);
 }
 
@@ -50,6 +52,7 @@ function createReaderLibraryService(dependencies = {}) {
 
   function rebuildDraft(record, input = {}) {
     const format = cleanString(input.format, record.format);
+    if ((record.format === 'epub') !== (format === 'epub')) throw new Error('reader EPUB import format cannot be changed during retry');
     const title = input.title === undefined ? record.draft.title : input.title;
     const draft = ReaderImport.createReaderImportDraft({
       draftId: record.draft.draftId,
@@ -57,6 +60,7 @@ function createReaderLibraryService(dependencies = {}) {
       format,
       originalFileName: record.originalFileName,
       bytes: record.sourceKind === 'local-text' ? record.bytes : undefined,
+      parsed: format === 'epub' ? record.parsed : undefined,
       text: record.sourceKind === 'pasted-text' ? record.text : undefined,
       encoding: input.encoding || record.encoding || 'auto',
       title,
@@ -78,9 +82,12 @@ function createReaderLibraryService(dependencies = {}) {
     const originalFileName = path.basename(resolvedPath);
     const inferredFormat = formatFromFileName(originalFileName);
     const format = cleanString(input.format, inferredFormat);
-    if (!['txt', 'md'].includes(format)) throw new Error(`reader import format ${format} is not valid for local-text`);
+    if (!['txt', 'md', 'epub'].includes(format)) throw new Error(`reader import format ${format} is not valid for local-text`);
     const bytes = await fs.readFile(resolvedPath);
     if (bytes.length > maxImportBytes) throw new Error(`reader import file exceeds ${maxImportBytes} bytes`);
+    const parsed = format === 'epub'
+      ? await ReaderEpubAdapter.parseEpub(bytes, { maxArchiveBytes: maxImportBytes, fileName: originalFileName })
+      : undefined;
     const draftId = cleanString(input.draftId, idFactory('reader-import-draft'));
     const draft = ReaderImport.createReaderImportDraft({
       draftId,
@@ -88,6 +95,7 @@ function createReaderLibraryService(dependencies = {}) {
       format,
       originalFileName,
       bytes,
+      parsed,
       encoding: input.encoding || 'auto',
       title: input.title,
       createdAt: input.createdAt || clock()
@@ -99,7 +107,8 @@ function createReaderLibraryService(dependencies = {}) {
       encoding: input.encoding || 'auto',
       originalFileName,
       sourcePath: resolvedPath,
-      bytes
+      bytes,
+      parsed
     });
     return draft;
   }
@@ -109,7 +118,7 @@ function createReaderLibraryService(dependencies = {}) {
     if (!originalFileName || originalFileName.includes('\0')) throw new Error('reader import originalFileName is required');
     const inferredFormat = formatFromFileName(originalFileName);
     const format = cleanString(input.format, inferredFormat);
-    if (!['txt', 'md'].includes(format)) throw new Error(`reader import format ${format} is not valid for local-text`);
+    if (!['txt', 'md', 'epub'].includes(format)) throw new Error(`reader import format ${format} is not valid for local-text`);
     let bytes;
     if (typeof input.bytes === 'string') {
       const encoded = input.bytes.trim();
@@ -123,6 +132,9 @@ function createReaderLibraryService(dependencies = {}) {
       throw new Error('reader import bytes are required');
     }
     if (bytes.length > maxImportBytes) throw new Error(`reader import file exceeds ${maxImportBytes} bytes`);
+    const parsed = format === 'epub'
+      ? await ReaderEpubAdapter.parseEpub(bytes, { maxArchiveBytes: maxImportBytes, fileName: originalFileName })
+      : undefined;
     const draftId = cleanString(input.draftId, idFactory('reader-import-draft'));
     const draft = ReaderImport.createReaderImportDraft({
       draftId,
@@ -130,6 +142,7 @@ function createReaderLibraryService(dependencies = {}) {
       format,
       originalFileName,
       bytes,
+      parsed,
       encoding: input.encoding || 'auto',
       title: input.title,
       createdAt: input.createdAt || clock()
@@ -141,7 +154,8 @@ function createReaderLibraryService(dependencies = {}) {
       encoding: input.encoding || 'auto',
       originalFileName,
       sourcePath: '',
-      bytes
+      bytes,
+      parsed
     });
     return draft;
   }

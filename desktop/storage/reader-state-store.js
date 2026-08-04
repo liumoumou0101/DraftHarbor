@@ -1,6 +1,7 @@
 const fs = require('fs/promises');
 
 const ReaderSchema = require('../../src/core/document/reader-document-schema');
+const ReaderPreferences = require('../../src/core/document/reader-preferences');
 const { writeJsonAtomic } = require('./atomic-write');
 const paths = require('./library-paths');
 
@@ -87,7 +88,7 @@ function normalizeStoredPreferences(input = {}) {
   }
   return {
     updatedAt: normalizeTimestamp(input.updatedAt, 'reader preferences updatedAt'),
-    preferences: ReaderSchema.createReaderGlobalPreferences(input.preferences)
+    preferences: ReaderPreferences.migrateReaderPreferences(input.preferences)
   };
 }
 
@@ -107,7 +108,7 @@ async function writeReaderGlobalPreferences(dataRoot, preferencesInput, options 
       schemaVersion: READER_STATE_SCHEMA_VERSION,
       kind: 'reader-global-preferences',
       updatedAt: normalizeTimestamp(options.updatedAt, 'reader preferences updatedAt'),
-      preferences: ReaderSchema.createReaderGlobalPreferences(preferencesInput)
+      preferences: ReaderPreferences.createReaderPreferencesV2(preferencesInput)
     };
     await writeJsonAtomic(preferencesPath, record);
     return normalizeStoredPreferences(record);

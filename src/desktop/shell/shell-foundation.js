@@ -32,6 +32,10 @@
         fontFamily: 'system',
         fontId: 'builtin:default',
         fontCatalogVersion: 1,
+        fontWeight: 400,
+        bookSpine: 28,
+        orphanLines: 2,
+        widowLines: 2,
         appearanceProfileId: 'default',
         textWidth: 760,
         paragraphSpacing: 1.05,
@@ -39,6 +43,10 @@
         scrollPositions: {},
         libraryDocuments: [],
         libraryIndexVersion: 0,
+        libraryViewRecord: null,
+        libraryView: null,
+        libraryDetailDocumentId: '',
+        reimportDocumentId: '',
         activeDocumentId: '',
         activeRevisionId: '',
         activeChapterId: '',
@@ -49,6 +57,10 @@
         drawer: '',
         leftTab: 'library',
         controlsVisible: true,
+        hudState: 'visible',
+        hudPreviousState: 'visible',
+        hudTimer: null,
+        focusMode: false,
         drawerReturnFocus: null,
         layoutMode: 'flow',
         effectiveLayoutMode: 'flow',
@@ -65,6 +77,9 @@
         fontFallback: false,
         letterSpacing: 0,
         pageMargin: 48,
+        paperMaterial: 'flat',
+        paperShadow: true,
+        paperVignette: true,
         textAlign: 'start',
         pageTransition: 'fade',
         reducedMotionOverride: undefined,
@@ -72,21 +87,62 @@
         preferenceRecord: null,
         globalPreferences: null,
         preferenceOverrides: {},
+        appearanceProfiles: [],
+        appearanceRecordUpdatedAt: '',
+        appearanceStudioBaseline: null,
         searchQuery: '',
         searchResults: [],
         searchStatus: 'idle',
         searchRequestId: 0,
         searchAbortController: null,
         bookmarkResolutions: new Map(),
+        annotations: [],
+        annotationResolutions: new Map(),
+        annotationRecordUpdatedAt: '',
+        annotationSelection: null,
+        historyItems: [],
+        historyCursor: -1,
+        historyRecordUpdatedAt: '',
+        historyNavigating: false,
         revisionSnapshotPromise: null,
         revisionSnapshotKey: '',
         progressDragging: false,
         progressNavigationToken: 0,
+        wheelTurnAccumulator: 0,
+        pointerGesture: null,
         transferSelection: null,
         transferScope: 'chapter',
         transferChapterIds: [],
         transferBusy: false,
-        transferLastEnvelopeId: ''
+        transferLastEnvelopeId: '',
+        statusBarMode: 'auto',
+        statusBarFields: ['chapter', 'page', 'percent'],
+        statusBarAutoHide: true,
+        tts: {
+            status: 'idle',
+            settings: {
+                schemaVersion: 1,
+                voiceName: '',
+                rate: 1,
+                volume: 1,
+                paragraphPauseMs: 350,
+                autoAdvance: true,
+                timerMinutes: 0,
+                maxChunkChars: 240
+            },
+            chapterId: '',
+            blockId: '',
+            offset: 0,
+            queueIndex: -1,
+            queue: [],
+            internalNavigation: false,
+            errorCode: '',
+            remainingSeconds: 0
+        },
+        hudMode: 'auto',
+        keyboardPageTurn: true,
+        pointerPageTurn: true,
+        touchPageTurn: true
     };
     const nativeEditorState = {
         snapshot: null,
@@ -342,8 +398,12 @@
         const root = document.getElementById('desktop-root');
         if (!root) return;
 
+        if (nextView !== 'reader' && typeof window.readerHudLeaveReader === 'function') window.readerHudLeaveReader();
+
         root.dataset.view = nextView;
         root.classList.toggle('is-rail-collapsed', shellUiState.railCollapsed);
+
+        if (nextView === 'reader' && typeof window.readerHudShow === 'function') window.readerHudShow();
 
         document.querySelectorAll('[data-view-target]').forEach((button) => {
             button.classList.toggle('is-active', button.dataset.viewTarget === nextView);

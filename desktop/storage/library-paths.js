@@ -41,6 +41,42 @@ function readerMigrationPath(dataRoot) {
   return path.join(readerDocumentsDir(dataRoot), 'migration-v1.json');
 }
 
+function readerLibraryViewPath(dataRoot) {
+  return path.join(readerDocumentsDir(dataRoot), 'library-view.json');
+}
+
+function readerAppearancesPath(dataRoot) {
+  return path.join(readerDocumentsDir(dataRoot), 'appearances.json');
+}
+
+function readerFontsDir(dataRoot) {
+  return path.join(libraryRoot(dataRoot), 'reader-fonts');
+}
+
+function readerFontsCatalogPath(dataRoot) {
+  return path.join(readerFontsDir(dataRoot), 'catalog.json');
+}
+
+function readerFontsFilesDir(dataRoot) {
+  return path.join(readerFontsDir(dataRoot), 'files');
+}
+
+function readerFontFilePath(dataRoot, fontId, format = 'woff2') {
+  return path.join(readerFontsFilesDir(dataRoot), `${stableReaderPathSegment(fontId, 'reader-font')}.${String(format || 'woff2').toLowerCase()}`);
+}
+
+function readerAnnotationsDir(dataRoot) {
+  return path.join(readerDocumentsDir(dataRoot), 'annotations');
+}
+
+function readerDocumentAnnotationsPath(dataRoot, documentId) {
+  return path.join(readerAnnotationsDir(dataRoot), `${stableReaderPathSegment(documentId, 'reader-annotations')}.json`);
+}
+
+function readerPositionHistoryPath(dataRoot) {
+  return path.join(readerDocumentsDir(dataRoot), 'position-history.json');
+}
+
 function readerDocumentDir(dataRoot, documentId) {
   return path.join(readerDocumentsDir(dataRoot), stableReaderPathSegment(documentId, 'reader-document'));
 }
@@ -54,7 +90,8 @@ function readerDocumentSourceDir(dataRoot, documentId) {
 }
 
 function readerDocumentSourceRevisionPath(dataRoot, documentId, revisionId, format = 'txt') {
-  const extension = String(format || '').toLowerCase() === 'md' ? 'md' : 'txt';
+  const normalizedFormat = String(format || '').toLowerCase();
+  const extension = ['md', 'epub'].includes(normalizedFormat) ? normalizedFormat : 'txt';
   return path.join(
     readerDocumentSourceDir(dataRoot, documentId),
     `${stableReaderPathSegment(revisionId, 'reader-source')}.${extension}`
@@ -300,6 +337,15 @@ module.exports = {
   readerDocumentsIndexPath,
   readerPreferencesPath,
   readerMigrationPath,
+  readerLibraryViewPath,
+  readerAppearancesPath,
+  readerFontsDir,
+  readerFontsCatalogPath,
+  readerFontsFilesDir,
+  readerFontFilePath,
+  readerAnnotationsDir,
+  readerDocumentAnnotationsPath,
+  readerPositionHistoryPath,
   readerDocumentDir,
   readerDocumentMetadataPath,
   readerDocumentSourceDir,

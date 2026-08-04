@@ -5,6 +5,7 @@
             toolbar: document.querySelector('[data-reader-selection-toolbar]'),
             toolbarLabel: document.querySelector('[data-reader-selection-toolbar-label]'),
             confirm: document.querySelector('[data-reader-selection-confirm]'),
+            copy: document.querySelector('[data-reader-selection-copy]'),
             dialog: document.querySelector('[data-reader-transfer-dialog]'),
             close: document.querySelector('[data-reader-transfer-close]'),
             scope: document.querySelector('[data-reader-transfer-scope]'),
@@ -47,13 +48,43 @@
         if (!start || !end) return null;
         const text = String(selection.toString() || '').replace(/\r\n?/g, '\n');
         if (!text.trim()) return null;
-        return { start, end, characterCount: text.length };
+        return { start, end, text, characterCount: text.length };
+    }
+
+    async function copyReaderSelection() {
+        const elements = readerSelectionElements();
+        const selection = readerState.transferSelection;
+        const text = String(selection && selection.text || window.getSelection && window.getSelection() || '').replace(/\r\n?/g, '\n');
+        if (!selection || !text) {
+            if (elements.toolbarLabel) elements.toolbarLabel.textContent = '请先选择正文范围';
+            return;
+        }
+        try {
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const input = document.createElement('textarea');
+                input.value = text;
+                input.setAttribute('readonly', '');
+                input.style.position = 'fixed';
+                input.style.opacity = '0';
+                document.body.appendChild(input);
+                input.select();
+                const copied = document.execCommand('copy');
+                input.remove();
+                if (!copied) throw new Error('剪贴板不可用');
+            }
+            if (elements.toolbarLabel) elements.toolbarLabel.textContent = `已复制 ${selection.characterCount.toLocaleString()} 个字符`;
+        } catch (error) {
+            if (elements.toolbarLabel) elements.toolbarLabel.textContent = `复制失败：${error.message || error}`;
+        }
     }
 
     function clearReaderTransferSelection() {
         readerState.transferSelection = null;
         const elements = readerSelectionElements();
         if (elements.toolbar) elements.toolbar.hidden = true;
+        if (typeof window.readerHudNotifySelection === 'function') window.readerHudNotifySelection(false);
     }
 
     function updateReaderSelectionToolbar() {
@@ -62,6 +93,7 @@
         readerState.transferSelection = range;
         if (elements.toolbar) elements.toolbar.hidden = !range;
         if (elements.toolbarLabel && range) elements.toolbarLabel.textContent = `已选择 ${range.characterCount.toLocaleString()} 个字符`;
+        if (typeof window.readerHudNotifySelection === 'function') window.readerHudNotifySelection(!!range);
     }
 
     function readerTransferCurrentSceneId() {
@@ -218,6 +250,7 @@
         elements.toggle.dataset.readerSelectionBound = 'true';
         elements.toggle.addEventListener('click', () => openReaderTransferDialog());
         elements.confirm?.addEventListener('click', () => openReaderTransferDialog('selection'));
+        elements.copy?.addEventListener('click', copyReaderSelection);
         elements.close?.addEventListener('click', closeReaderTransferDialog);
         elements.dialog?.addEventListener('cancel', (event) => { event.preventDefault(); closeReaderTransferDialog(); });
         elements.scope?.addEventListener('change', () => {
@@ -228,7 +261,10 @@
         document.addEventListener('selectionchange', () => {
             const selection = window.getSelection();
             const content = elements.content;
-            if (!selection || !selection.rangeCount || !content) return;
+            if (!selection || !selection.rangeCount || !content) {
+                updateReaderSelectionToolbar();
+                return;
+            }
             const range = selection.getRangeAt(0);
             if (!content.contains(range.startContainer) && !content.contains(range.endContainer)) return;
             updateReaderSelectionToolbar();

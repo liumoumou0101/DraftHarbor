@@ -25,6 +25,7 @@
         if (elements.settingsDrawer) elements.settingsDrawer.inert = drawer !== 'right';
         if (elements.leftToggle) elements.leftToggle.setAttribute('aria-expanded', drawer === 'left' ? 'true' : 'false');
         if (elements.settingsToggle) elements.settingsToggle.setAttribute('aria-expanded', drawer === 'right' ? 'true' : 'false');
+        if (typeof window.readerHudNotifyPanel === 'function') window.readerHudNotifyPanel(!!drawer);
         if (drawer) {
             const panel = drawer === 'left' ? elements.leftDrawer : elements.settingsDrawer;
             const firstControl = panel && panel.querySelector('button:not([disabled]), input, select');
@@ -85,6 +86,10 @@
     }
 
     function handleReaderWorkspaceEscape() {
+        if (typeof window.readerHudHandleEscape === 'function') {
+            window.readerHudHandleEscape();
+            return;
+        }
         if (readerState.drawer) {
             setReaderDrawer('');
             return;
@@ -115,6 +120,8 @@
             button.textContent = item.title || `第 ${index + 1} 章`;
             button.addEventListener('click', async () => {
                 await loadReaderWorkspaceChapter(item.chapterId);
+                await saveReaderWorkspacePosition();
+                if (window.recordReaderPositionHistory) await window.recordReaderPositionHistory(captureReaderPositionLocator(), { source: 'contents', label: item.title || `第 ${index + 1} 章` });
                 setReaderDrawer('');
             });
             container.appendChild(button);
@@ -137,6 +144,23 @@
         renderReaderWorkspaceContents();
         renderReaderLibrary();
         updateReaderWorkspaceProgress();
+        if (window.renderReaderAnnotationUi) window.renderReaderAnnotationUi();
+    }
+
+    function renderReaderStatusBar(index, weighted, layoutRatio) {
+        const status = document.querySelector('span[data-reader-status-bar]');
+        if (!status) return;
+        const totalCharacters = readerState.contents.reduce((sum, chapter) => sum + Math.max(0, Number(chapter.characterCount) || 0), 0);
+        const percent = Math.max(0, Math.min(100, Math.round(weighted * 100)));
+        const fields = readerState.statusBarFields || ['chapter', 'page', 'percent'];
+        const values = {
+            chapter: `${index + 1} / ${readerState.contents.length} 章`,
+            page: readerState.effectiveLayoutMode === 'flow' ? `连续阅读 ${Math.round(layoutRatio * 100)}%` : `第 ${readerState.pageIndex + 1} / ${Math.max(1, readerState.pages.length)} 页`,
+            percent: `${percent}%`,
+            characters: `已读 ${Math.round(totalCharacters * weighted).toLocaleString()} 字`,
+            eta: `预计剩余 ${Math.max(0, Math.ceil((totalCharacters * (1 - weighted)) / 300))} 分钟`
+        };
+        status.textContent = fields.filter((field) => values[field]).map((field) => values[field]).join(' · ');
     }
 
     function updateReaderWorkspaceProgress() {
@@ -159,6 +183,7 @@
         if (elements.progress) elements.progress.value = percent;
         if (elements.progressPercent) elements.progressPercent.textContent = `${percent}%`;
         if (elements.positionLabel) elements.positionLabel.textContent = `本章 ${Math.round(layoutRatio * 100)}% · 全书 ${percent}%`;
+        renderReaderStatusBar(index, weighted, layoutRatio);
         if (typeof updateReaderNavigationProgress === 'function') updateReaderNavigationProgress(weighted);
         if (typeof maybeShiftReaderFlowWindow === 'function') maybeShiftReaderFlowWindow();
         if (readerPositionSaveTimer) window.clearTimeout(readerPositionSaveTimer);
@@ -223,6 +248,7 @@
     }
 
     async function loadReaderWorkspaceChapter(chapterId, locator) {
+        window.readerTtsPauseForNavigation?.();
         if (chapterId !== readerState.activeChapterId && typeof clearReaderTransferSelection === 'function') clearReaderTransferSelection();
         const payload = await readerApi(`/api/reader/chapter?documentId=${encodeURIComponent(readerState.activeDocumentId)}&revisionId=${encodeURIComponent(readerState.activeRevisionId)}&chapterId=${encodeURIComponent(chapterId)}`);
         readerState.activeChapterId = chapterId;
@@ -253,6 +279,8 @@
             if (!chapterId) throw new Error('文档没有可阅读章节');
             await loadReaderWorkspaceChapter(chapterId, locator);
             if (typeof initializeReaderNavigationDocument === 'function') initializeReaderNavigationDocument();
+            if (window.loadReaderAnnotationDocument) await window.loadReaderAnnotationDocument();
+            if (window.loadReaderPositionHistory) await window.loadReaderPositionHistory();
             if (!statePayload.state && typeof queueReaderDocumentStateWrite === 'function' && typeof captureReaderPositionLocator === 'function') {
                 const initialLocator = captureReaderPositionLocator();
                 if (initialLocator) queueReaderDocumentStateWrite({ positionLocator: initialLocator });
@@ -266,33 +294,45 @@
 
     async function navigateReaderWorkspaceChapter(offset) {
         const next = readerState.contents[readerWorkspaceChapterIndex() + offset];
-        if (next) await loadReaderWorkspaceChapter(next.chapterId);
+        if (next) {
+            await loadReaderWorkspaceChapter(next.chapterId);
+            await saveReaderWorkspacePosition();
+            if (window.recordReaderPositionHistory) await window.recordReaderPositionHistory(captureReaderPositionLocator(), { source: 'chapter', label: next.title || '章节跳转' });
+        }
     }
 
     function initializeReaderWorkspace() {
         const elements = readerWorkspaceElements();
         if (!elements.shell) return;
+        if (typeof window.initializeReaderHud === 'function') window.initializeReaderHud();
         loadReaderLibrary().then((documents) => {
             if (!readerState.document && !readerState.apiMode) {
-                // Reader 2.0 opens on the library surface. Never silently select the
-                // first book: the user may want to import, inspect metadata, or
-                // continue a different title.
                 setReaderDrawer('left');
                 if (!documents.length) selectReaderLeftTab('library');
             }
         });
         if (typeof initializeReaderSettings === 'function') initializeReaderSettings();
+        if (typeof window.initializeReaderAppearanceStudio === 'function') window.initializeReaderAppearanceStudio();
         if (typeof initializeReaderNavigation === 'function') initializeReaderNavigation();
         if (typeof initializeReaderSelection === 'function') initializeReaderSelection();
+        if (window.initializeReaderAnnotationUi) window.initializeReaderAnnotationUi();
+        if (window.initializeReaderLibraryDetail) window.initializeReaderLibraryDetail();
         document.querySelector('[data-reader-exit]')?.addEventListener('click', () => setView('bookshelf'));
         elements.leftToggle?.addEventListener('click', (event) => setReaderDrawer(readerState.drawer === 'left' ? '' : 'left', event.currentTarget));
-        elements.settingsToggle?.addEventListener('click', (event) => setReaderDrawer(readerState.drawer === 'right' ? '' : 'right', event.currentTarget));
+        elements.settingsToggle?.addEventListener('click', (event) => {
+            const nextDrawer = readerState.drawer === 'right' ? '' : 'right';
+            if (nextDrawer && typeof window.readerAppearanceStudioBeginSession === 'function') window.readerAppearanceStudioBeginSession();
+            setReaderDrawer(nextDrawer, event.currentTarget);
+        });
         document.querySelector('[data-reader-left-close]')?.addEventListener('click', () => setReaderDrawer(''));
         document.querySelector('[data-reader-settings-close]')?.addEventListener('click', () => setReaderDrawer(''));
         document.querySelector('[data-reader-scrim]')?.addEventListener('click', () => setReaderDrawer(''));
         document.querySelector('[data-reader-focus-toggle]')?.addEventListener('click', () => {
-            handleReaderWorkspaceEscape();
-            if (!readerState.controlsVisible) elements.content?.focus({ preventScroll: true });
+            if (typeof window.readerHudToggleFocusMode === 'function') window.readerHudToggleFocusMode();
+            else {
+                handleReaderWorkspaceEscape();
+                if (!readerState.controlsVisible) elements.content?.focus({ preventScroll: true });
+            }
         });
         const fontDialog = document.querySelector('[data-reader-font-dialog]');
         document.querySelector('[data-reader-font-help]')?.addEventListener('click', () => {
@@ -308,8 +348,8 @@
         });
         document.addEventListener('keydown', handleReaderDrawerTab);
         elements.content?.addEventListener('dblclick', () => handleReaderWorkspaceEscape());
-        document.querySelector('[data-reader-page-prev]')?.addEventListener('click', () => queueReaderPageTurn(-1));
-        document.querySelector('[data-reader-page-next]')?.addEventListener('click', () => queueReaderPageTurn(1));
+        document.querySelector('[data-reader-page-prev]')?.addEventListener('click', () => queueReaderPageTurn(-1, { source: 'pointer' }));
+        document.querySelector('[data-reader-page-next]')?.addEventListener('click', () => queueReaderPageTurn(1, { source: 'pointer' }));
         let resizeTimer = null;
         window.addEventListener('resize', () => {
             if (resizeTimer) window.clearTimeout(resizeTimer);

@@ -7,7 +7,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (ReaderSchema) {
     const IMPORT_DRAFT_SCHEMA_VERSION = 1;
     const SUPPORTED_ENCODINGS = Object.freeze(['utf-8', 'utf-16le', 'utf-16be', 'gb18030']);
-    const IMPORT_FORMATS = Object.freeze(['txt', 'md', 'plain']);
+    const IMPORT_FORMATS = Object.freeze(['txt', 'md', 'epub', 'plain']);
 
     function cleanString(value, fallback = '') {
         const text = value === null || value === undefined ? fallback : String(value);
@@ -226,7 +226,7 @@
         const sourceKind = cleanString(input.sourceKind, input.bytes === undefined ? 'pasted-text' : 'local-text');
         if (!['local-text', 'pasted-text'].includes(sourceKind)) throw new Error(`reader import sourceKind is not supported: ${sourceKind}`);
         const format = cleanString(input.format, sourceKind === 'pasted-text' ? 'plain' : 'txt');
-        const validFormats = sourceKind === 'local-text' ? ['txt', 'md'] : ['plain', 'md'];
+        const validFormats = sourceKind === 'local-text' ? ['txt', 'md', 'epub'] : ['plain', 'md'];
         if (!IMPORT_FORMATS.includes(format) || !validFormats.includes(format)) {
             throw new Error(`reader import format ${format} is not valid for ${sourceKind}`);
         }
@@ -234,7 +234,20 @@
         if (!draftId) throw new Error('reader import draftId is required');
         const createdAt = cleanString(input.createdAt);
         if (!createdAt || Number.isNaN(new Date(createdAt).getTime())) throw new Error('reader import draft createdAt is required');
-        const decoded = input.bytes === undefined
+        const isEpub = format === 'epub';
+        if (isEpub && (!input.parsed || !Array.isArray(input.parsed.chapters))) {
+            throw new Error('reader EPUB import parsed result is required');
+        }
+        const decoded = isEpub ? {
+            text: '',
+            encoding: 'epub',
+            detectedEncoding: 'epub',
+            confidence: 1,
+            detectionReason: 'epub-container',
+            replacementCharacterCount: 0,
+            requiresEncodingConfirmation: false,
+            supportedEncodings: []
+        } : input.bytes === undefined
             ? {
                 text: ReaderSchema.normalizeText(input.text),
                 encoding: 'unicode-text',
@@ -246,8 +259,12 @@
                 supportedEncodings: []
             }
             : decodeReaderBytes(input.bytes, input.encoding || 'auto');
-        const parsed = parseReaderText(decoded.text, { format, fileName: input.originalFileName || input.fileName });
-        const warnings = [];
+        const parsed = isEpub ? {
+            title: cleanString(input.parsed.title, documentTitle(input.originalFileName || input.fileName, '未命名 EPUB')) || '未命名 EPUB',
+            chapters: input.parsed.chapters,
+            characterCount: Number(input.parsed.characterCount) || 0
+        } : parseReaderText(decoded.text, { format, fileName: input.originalFileName || input.fileName });
+        const warnings = isEpub && Array.isArray(input.parsed.warnings) ? [...new Set(input.parsed.warnings.map((warning) => cleanString(warning)).filter(Boolean))] : [];
         if (decoded.requiresEncodingConfirmation) warnings.push('encoding-confirmation-required');
         if (!parsed.characterCount) warnings.push('empty-content');
         return {
@@ -258,7 +275,7 @@
             format,
             title: cleanString(input.title, parsed.title) || parsed.title,
             originalFileName: cleanString(input.originalFileName || input.fileName),
-            parserVersion: cleanString(input.parserVersion, 'reader-import@1') || 'reader-import@1',
+            parserVersion: cleanString(input.parserVersion, isEpub ? (input.parsed.parserVersion || 'reader-epub@1') : 'reader-import@1') || 'reader-import@1',
             createdAt: new Date(createdAt).toISOString(),
             encodingPreview: {
                 encoding: decoded.encoding,
@@ -283,7 +300,7 @@
         if (!['local-text', 'pasted-text'].includes(draftInput.sourceKind)) {
             throw new Error(`reader import sourceKind is not supported: ${cleanString(draftInput.sourceKind)}`);
         }
-        const validFormats = draftInput.sourceKind === 'local-text' ? ['txt', 'md'] : ['plain', 'md'];
+        const validFormats = draftInput.sourceKind === 'local-text' ? ['txt', 'md', 'epub'] : ['plain', 'md'];
         if (!IMPORT_FORMATS.includes(draftInput.format) || !validFormats.includes(draftInput.format)) {
             throw new Error(`reader import format ${cleanString(draftInput.format)} is not valid for ${draftInput.sourceKind}`);
         }
@@ -413,7 +430,7 @@
             parserVersion: draft.parserVersion,
             chapters: draft.chapters
         }, options);
-        const format = draft.format === 'plain' ? 'plain' : draft.format;
+        const format = draft.format;
         const document = ReaderSchema.createReaderDocument({
             schemaVersion: 2,
             documentId: input.documentId,

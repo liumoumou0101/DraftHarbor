@@ -208,6 +208,25 @@ const state = ReaderSchema.createReaderDocumentState({
 });
 assert.strictEqual(state.bookmarks.length, 1);
 assert.strictEqual(state.positionLocator.offset, 2);
+assert.strictEqual(state.bookmarks[0].color, 'yellow');
+assert.strictEqual(state.bookmarks[0].category, '未分类');
+assert.strictEqual(state.bookmarks[0].note, '');
+assert.strictEqual(state.bookmarks[0].lastVisitedAt, null);
+const enrichedBookmark = ReaderSchema.createReaderBookmark({
+    bookmarkId: 'bookmark-enriched',
+    title: '检查点',
+    locator: { chapterId: 'chapter-1', blockId: 'block-1', offset: 3 },
+    createdAt,
+    color: 'blue',
+    category: '重要',
+    note: '回看这一段',
+    lastVisitedAt: '2026-07-15T11:00:00.000Z'
+});
+assert.deepStrictEqual(
+    { color: enrichedBookmark.color, category: enrichedBookmark.category, note: enrichedBookmark.note, lastVisitedAt: enrichedBookmark.lastVisitedAt },
+    { color: 'blue', category: '重要', note: '回看这一段', lastVisitedAt: '2026-07-15T11:00:00.000Z' }
+);
+assert.throws(() => ReaderSchema.createReaderBookmark({ bookmarkId: 'bad-color', locator: {}, createdAt, color: 'purple' }), /color is not supported/);
 assert.throws(() => ReaderSchema.createReaderDocumentState({
     documentId: 'external-book-1',
     updatedAt: createdAt,

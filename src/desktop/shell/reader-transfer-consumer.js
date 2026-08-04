@@ -106,7 +106,7 @@
         const envelope = transfer.envelope;
         const locator = envelope.sourceLocators && envelope.sourceLocators[0];
         try {
-            if (!envelope.documentId.startsWith('project:') && readerState.activeDocumentId !== envelope.documentId) {
+            if (readerState.activeDocumentId !== envelope.documentId) {
                 await openReaderLibraryDocument(envelope.documentId);
             }
             if (readerState.activeDocumentId === envelope.documentId && locator && typeof navigateReaderToLocator === 'function') {

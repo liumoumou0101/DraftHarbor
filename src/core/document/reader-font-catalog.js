@@ -37,7 +37,13 @@
             catalogVersion: Math.max(1, Math.floor(Number(input.catalogVersion) || 1)),
             fileName: sourceKind === 'user' ? cleanString(input.fileName) : '',
             format: sourceKind === 'user' ? cleanString(input.format).toLowerCase() : '',
-            errorCode: status === 'failed' ? cleanString(input.errorCode) : ''
+            errorCode: status === 'failed' ? cleanString(input.errorCode) : '',
+            fileHash: sourceKind === 'user' ? cleanString(input.fileHash) : '',
+            sizeBytes: sourceKind === 'user' ? Math.max(0, Math.floor(Number(input.sizeBytes) || 0)) : 0,
+            weight: sourceKind === 'user' ? Math.max(100, Math.min(900, Math.round(Number(input.weight) || 400))) : 400,
+            style: sourceKind === 'user' && ['normal', 'italic', 'oblique'].includes(cleanString(input.style)) ? cleanString(input.style) : 'normal',
+            createdAt: sourceKind === 'user' ? cleanString(input.createdAt) : '',
+            licenseNotice: sourceKind === 'user' ? cleanString(input.licenseNotice) : ''
         };
     }
 
