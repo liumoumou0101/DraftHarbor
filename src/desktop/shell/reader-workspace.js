@@ -247,10 +247,11 @@
         }
     }
 
-    async function loadReaderWorkspaceChapter(chapterId, locator) {
+    async function loadReaderWorkspaceChapter(chapterId, locator, t) {
         window.readerTtsPauseForNavigation?.();
         if (chapterId !== readerState.activeChapterId && typeof clearReaderTransferSelection === 'function') clearReaderTransferSelection();
         const payload = await readerApi(`/api/reader/chapter?documentId=${encodeURIComponent(readerState.activeDocumentId)}&revisionId=${encodeURIComponent(readerState.activeRevisionId)}&chapterId=${encodeURIComponent(chapterId)}`);
+        if (t != null && readerState.r !== t) return false;
         readerState.activeChapterId = chapterId;
         readerState.currentChapter = payload.chapter;
         readerState.anchorLocator = locator && locator.chapterId === chapterId ? locator : null;
@@ -258,12 +259,13 @@
         renderReaderWorkspace();
     }
 
-    async function openReaderLibraryDocument(documentId) {
+    async function openReaderLibraryDocument(documentId, t) {
         try {
             const metadataPayload = await readerApi(`/api/reader/document?documentId=${encodeURIComponent(documentId)}`);
             const metadata = metadataPayload.metadata;
             const contentsPayload = await readerApi(`/api/reader/contents?documentId=${encodeURIComponent(documentId)}&revisionId=${encodeURIComponent(metadata.activeRevisionId)}`);
             const statePayload = await readerApi(`/api/reader/state?documentId=${encodeURIComponent(documentId)}`);
+            if (t != null && readerState.r !== t) return;
             readerState.apiMode = true;
             readerState.activeDocumentId = documentId;
             readerState.activeRevisionId = metadata.activeRevisionId;
@@ -277,7 +279,7 @@
             const chapterId = locator && readerState.contents.some((item) => item.chapterId === locator.chapterId)
                 ? locator.chapterId : readerState.contents[0] && readerState.contents[0].chapterId;
             if (!chapterId) throw new Error('文档没有可阅读章节');
-            await loadReaderWorkspaceChapter(chapterId, locator);
+            if (await loadReaderWorkspaceChapter(chapterId, locator, t) === false) return;
             if (typeof initializeReaderNavigationDocument === 'function') initializeReaderNavigationDocument();
             if (window.loadReaderAnnotationDocument) await window.loadReaderAnnotationDocument();
             if (window.loadReaderPositionHistory) await window.loadReaderPositionHistory();
@@ -289,6 +291,7 @@
         } catch (error) {
             const content = document.querySelector('[data-reader-content]');
             if (content) content.textContent = `无法打开文档：${error.message || error}`;
+            return false;
         }
     }
 
@@ -321,7 +324,7 @@
         elements.leftToggle?.addEventListener('click', (event) => setReaderDrawer(readerState.drawer === 'left' ? '' : 'left', event.currentTarget));
         elements.settingsToggle?.addEventListener('click', (event) => {
             const nextDrawer = readerState.drawer === 'right' ? '' : 'right';
-            if (nextDrawer && typeof window.readerAppearanceStudioBeginSession === 'function') window.readerAppearanceStudioBeginSession();
+            if(nextDrawer)window.readerAppearanceStudioBeginSession?.(),window.setReaderAppearanceStudioSection?.('scheme');
             setReaderDrawer(nextDrawer, event.currentTarget);
         });
         document.querySelector('[data-reader-left-close]')?.addEventListener('click', () => setReaderDrawer(''));

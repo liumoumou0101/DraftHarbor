@@ -79,10 +79,13 @@
         };
     }
 
-    function loadReaderFromProjectSnapshot(snapshot, options = {}) {
-        const documentData = snapshotToReaderDocument(snapshot);
-        if (!documentData) return false;
-
+    function loadLegacyReaderProjectProjection(documentData, options = {}) {
+        readerState.apiMode = false;
+        readerState.activeDocumentId = '';
+        readerState.activeRevisionId = '';
+        readerState.documentMetadata = null;
+        readerState.contents = [];
+        readerState.currentChapter = null;
         const previous = readerState.document;
         const sameProject = previous && previous.source === 'project' && previous.projectId === documentData.projectId;
         readerState.document = documentData;
@@ -92,4 +95,22 @@
 
         if (options.showReader) setView('reader');
         return true;
+    }
+
+    function loadReaderFromProjectSnapshot(snapshot, options = {}) {
+        const documentData = snapshotToReaderDocument(snapshot);
+        if (!documentData) return false;
+
+        if (options.showReader) setView('reader');
+        if (typeof openReaderLibraryDocument === 'function' && readerState.apiMode !== undefined) {
+            const projectLoadToken = (Number(readerState.r) || 0) + 1;
+            readerState.r = projectLoadToken;
+            const projectDocumentId = `project:${documentData.projectId}`;
+            return Promise.resolve(openReaderLibraryDocument(projectDocumentId, projectLoadToken)).then((opened) => {
+                if (readerState.r !== projectLoadToken) return true;
+                if (opened !== false) return true;
+                return loadLegacyReaderProjectProjection(documentData, options);
+            });
+        }
+        return loadLegacyReaderProjectProjection(documentData, options);
     }

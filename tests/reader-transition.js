@@ -7,7 +7,8 @@ assert.deepStrictEqual(Transition.createReaderTransitionAdapter({ transition: 'f
 });
 assert.strictEqual(Transition.createReaderTransitionAdapter({ transition: 'cover' }).cssToken, 'cover');
 assert.strictEqual(Transition.createReaderTransitionAdapter({ transition: 'slide', reducedMotion: true }).transition, 'none');
-assert.strictEqual(Transition.createReaderTransitionAdapter({ transition: 'curl' }).experimental, true);
-assert.strictEqual(Transition.createReaderTransitionAdapter({ transition: 'curl' }).transition, 'none');
+assert.strictEqual(Transition.createReaderTransitionAdapter({ transition: 'curl' }).experimental, false);
+assert.strictEqual(Transition.createReaderTransitionAdapter({ transition: 'curl' }).transition, 'curl');
+assert.strictEqual(Transition.createReaderTransitionAdapter({ transition: 'curl' }).durationMs, 620);
 assert.strictEqual(Transition.normalizeTransition('unknown'), 'none');
 console.log('Reader transition tests passed.');

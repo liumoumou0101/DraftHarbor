@@ -138,7 +138,10 @@ assert.ok(html.includes('data-reader-focus-mode="false"'), 'reader shell must ex
 assert.ok(settings.includes("readerState.preferenceScope === 'document'"), 'reader settings must support per-document overrides');
 assert.ok(settings.includes("matchMedia('(prefers-reduced-motion: reduce)')"), 'reader settings must honor the system reduced-motion preference');
 assert.ok(!/url\(\s*['"]?https?:/i.test(css), 'reader themes must not load remote assets');
-assert.ok(!settings.includes('canvas') && !settings.includes('Canvas'), 'curl must remain deferred without a canvas authority path');
+assert.ok(html.includes('<option value="curl">仿真翻页</option>'), 'curl transition must be available in the Reader settings');
+assert.ok(appearanceCss.includes('data-reader-transition="curl"')
+  && appearanceCss.includes('reader-page-curl-in-next')
+  && appearanceCss.includes('reader-page-curl-out-next'), 'curl transition must have an implemented CSS animation path');
 targetFragments.forEach((fragment, index) => {
   const destination = ['writer', 'compendium', 'workflow'][index];
   assert.ok(fragment.includes(`data-reader-source-bar="${destination}"`), `${destination} must expose the shared reader source bar`);

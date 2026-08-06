@@ -78,7 +78,7 @@
 
     function assignReaderPreferences(preferences) {
         readerState.layoutMode = preferences.layoutMode;
-        readerState.pageTransition = preferences.pageTransition === 'curl' ? 'none' : preferences.pageTransition;
+        readerState.pageTransition = preferences.pageTransition;
         readerState.theme = preferences.themeId;
         readerState.fontFamily = preferences.fontFamilyId;
         readerState.fontId = preferences.fontId || readerState.fontId || 'builtin:default';
@@ -118,7 +118,6 @@
     }
 
     function readerEffectiveTransition() {
-        if (readerState.effectiveLayoutMode === 'flow') return 'none';
         const transitionApi = window.DraftHarborReaderTransition;
         if (transitionApi && typeof transitionApi.createReaderTransitionAdapter === 'function') {
             return transitionApi.createReaderTransitionAdapter({
@@ -126,7 +125,7 @@
                 reducedMotion: readerReducedMotionActive()
             }).transition;
         }
-        return ['fade', 'slide', 'cover', 'none'].includes(readerState.pageTransition) ? readerState.pageTransition : 'none';
+        return ['fade', 'slide', 'cover', 'curl', 'none'].includes(readerState.pageTransition) ? readerState.pageTransition : 'none';
     }
 
     function updateReaderPreferenceStatus(message) {

@@ -29,6 +29,11 @@ function contrast(foreground, background) {
   return (Math.max(left, right) + 0.05) / (Math.min(left, right) + 0.05);
 }
 
+async function selectReaderStudioSection(page, section) {
+  await page.click(`[data-reader-studio-tab="${section}"]`);
+  await page.waitForFunction((expected) => document.querySelector(`[data-reader-studio-section="${expected}"]`)?.hidden === false, section);
+}
+
 (async () => {
   const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-reader-visual-audit-'));
   const fixturePath = path.join(dataRoot, 'reader-realistic-visual.md');
@@ -63,7 +68,9 @@ function contrast(foreground, background) {
         await loadReaderWorkspaceChapter(target.chapterId);
       }, scenario.chapter);
       await page.click('[data-reader-settings-toggle]');
+      await selectReaderStudioSection(page, 'paper');
       await page.selectOption('select[data-reader-theme]', scenario.theme);
+      await selectReaderStudioSection(page, 'page');
       await page.selectOption('[data-reader-layout-mode]', scenario.layout);
       await page.click('[data-reader-settings-close]');
       await page.waitForFunction((requested) => {

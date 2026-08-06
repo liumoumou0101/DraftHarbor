@@ -950,7 +950,7 @@
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
             nativeEditorState.projectSource = result.source || nativeEditorState.projectSource;
-            loadReaderFromProjectSnapshot(snapshot);
+            await loadReaderFromProjectSnapshot(snapshot);
             await loadProjectLibrary();
             nativeEditorState.dirty = false;
             setNativeSaveStatus(options.reason === 'autosave' ? '已自动保存' : '已保存', 'ok');

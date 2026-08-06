@@ -1,4 +1,4 @@
-    /* global initializeReaderImportWizard readerCanPageTurn */
+    /* global animateReaderPageTurn initializeReaderImportWizard readerCanPageTurn */
 
     function bindReader() {
         loadReaderState();
@@ -16,6 +16,12 @@
         }
 
         let scrollSaveTimer = null;
+        const scrollReaderFlowPage = (direction) => {
+            if (!elements.content) return false;
+            elements.content.scrollBy({ top: direction * Math.max(220, elements.content.clientHeight * 0.82), behavior: 'smooth' });
+            if (typeof animateReaderPageTurn === 'function') animateReaderPageTurn(direction);
+            return true;
+        };
         if (elements.content) {
             elements.content.addEventListener('scroll', () => {
                 updateReaderProgress();
@@ -158,6 +164,13 @@
                 }
             }
 
+            if (readerState.apiMode && readerState.effectiveLayoutMode === 'flow'
+                && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+                event.preventDefault();
+                scrollReaderFlowPage(event.key === 'ArrowRight' ? 1 : -1);
+                return;
+            }
+
             if (event.key === 'ArrowLeft' && elements.prev && !elements.prev.disabled) {
                 event.preventDefault();
                 elements.prev.click();
@@ -170,12 +183,12 @@
             }
             if ((event.key === ' ' || event.key === 'PageDown') && elements.content) {
                 event.preventDefault();
-                elements.content.scrollBy({ top: Math.max(220, elements.content.clientHeight * 0.82), behavior: 'smooth' });
+                scrollReaderFlowPage(1);
                 return;
             }
             if (event.key === 'PageUp' && elements.content) {
                 event.preventDefault();
-                elements.content.scrollBy({ top: -Math.max(220, elements.content.clientHeight * 0.82), behavior: 'smooth' });
+                scrollReaderFlowPage(-1);
             }
         });
     }

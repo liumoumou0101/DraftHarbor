@@ -38,7 +38,9 @@
             tab.tabIndex = selected ? 0 : -1;
         });
         document.querySelectorAll('[data-reader-studio-section]').forEach((panel) => {
-            panel.hidden = panel.dataset.readerStudioSection !== section;
+            const selected = panel.dataset.readerStudioSection === section;
+            panel.hidden = !selected;
+            panel.setAttribute('aria-hidden', selected ? 'false' : 'true');
         });
     }
 

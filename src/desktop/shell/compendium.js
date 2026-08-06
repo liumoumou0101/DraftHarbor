@@ -40,15 +40,19 @@
     }
 
     function currentProjectId() {
-        return nativeEditorState.snapshot && nativeEditorState.snapshot.project
-            ? nativeEditorState.snapshot.project.id
-            : '';
+        if (nativeEditorState.snapshot && nativeEditorState.snapshot.project) {
+            return nativeEditorState.snapshot.project.id;
+        }
+        const readerMetadata = typeof readerState !== 'undefined' ? readerState.documentMetadata : null;
+        return readerMetadata && readerMetadata.sourceKind === 'project' ? readerMetadata.projectId || '' : '';
     }
 
     function currentProjectName() {
-        return nativeEditorState.snapshot && nativeEditorState.snapshot.project
-            ? nativeEditorState.snapshot.project.name || nativeEditorState.snapshot.project.title || '未命名项目'
-            : '';
+        if (nativeEditorState.snapshot && nativeEditorState.snapshot.project) {
+            return nativeEditorState.snapshot.project.name || nativeEditorState.snapshot.project.title || '未命名项目';
+        }
+        const readerMetadata = typeof readerState !== 'undefined' ? readerState.documentMetadata : null;
+        return readerMetadata && readerMetadata.sourceKind === 'project' ? readerMetadata.title || '未命名项目' : '';
     }
 
     function selectedCompendiumEntry() {

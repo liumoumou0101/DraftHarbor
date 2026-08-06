@@ -1338,7 +1338,7 @@
 
         const snapshot = await fetchProjectSnapshot(project);
         loadNativeProjectEditor(snapshot, project || {});
-        loadReaderFromProjectSnapshot(snapshot);
+        await loadReaderFromProjectSnapshot(snapshot);
         await loadCompendium();
         await loadPrompts();
         await loadRewritePrompts();

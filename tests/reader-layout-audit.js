@@ -85,6 +85,11 @@ async function auditViewport(page, label) {
   }, label);
 }
 
+async function selectReaderStudioSection(page, section) {
+  await page.click(`[data-reader-studio-tab="${section}"]`);
+  await page.waitForFunction((expected) => document.querySelector(`[data-reader-studio-section="${expected}"]`)?.hidden === false, section);
+}
+
 (async () => {
   const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-reader-layout-audit-'));
   const fixturePath = path.join(dataRoot, 'reader-realistic-layout.md');
@@ -98,6 +103,7 @@ async function auditViewport(page, label) {
     const page = await browser.newPage({ viewport: scenarios[0] });
     await importFixture(page, servers.appUrl, fixturePath);
     await page.click('[data-reader-settings-toggle]');
+    await selectReaderStudioSection(page, 'page');
     await page.selectOption('[data-reader-layout-mode]', 'auto');
     await page.click('[data-reader-settings-close]');
     const issues = [];

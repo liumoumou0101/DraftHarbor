@@ -84,6 +84,7 @@
         pageTransition: 'fade',
         reducedMotionOverride: undefined,
         preferenceScope: 'global',
+        r: 0,
         preferenceRecord: null,
         globalPreferences: null,
         preferenceOverrides: {},

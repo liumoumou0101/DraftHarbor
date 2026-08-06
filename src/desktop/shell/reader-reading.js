@@ -261,6 +261,7 @@
         readerState.prefetchedPages = [pages[pageIndex - spreadSize], pages[pageIndex + spreadSize]].filter(Boolean);
         content.scrollTop = 0;
         updateReaderPageControls();
+        return deck;
     }
 
     function renderReaderReading(options = {}) {
@@ -329,19 +330,22 @@
             const target = Math.max(0, Math.min(maxStart, readerState.pageIndex + pendingDelta * spreadSize));
             readerState.pendingPageDelta = 0;
             if (target === readerState.pageIndex) return;
+            const content = document.querySelector('[data-reader-content]');
+            const currentDeck = content && (content.querySelector('.desktop-reader-page-transition-layer .desktop-reader-page-deck.is-reader-transitioning-in')
+                || content.querySelector('.desktop-reader-page-deck'));
+            const outgoingDeck = currentDeck ? currentDeck.cloneNode(true) : null;
             const position = window.DraftHarborReaderLayout.locatorPositionForPage(readerState.pages, target);
             readerState.anchorLocator = position ? createReaderLocatorAt(position.blockId, position.offset) : readerState.anchorLocator;
             readerState.pageIndex = target;
-            renderReaderPages(readerState.anchorLocator);
-            animateReaderPageTurn(pendingDelta < 0 ? -1 : 1);
+            const incomingDeck = renderReaderPages(readerState.anchorLocator);
+            animateReaderPageTurn(pendingDelta < 0 ? -1 : 1, { outgoingDeck, incomingDeck });
             updateReaderWorkspaceProgress();
         });
         return true;
     }
 
-    function animateReaderPageTurn(direction) {
+    function animateReaderPageTurn(direction, context = {}) {
         const content = document.querySelector('[data-reader-content]');
-        const deck = content && content.querySelector('.desktop-reader-page-deck');
         const transitionApi = window.DraftHarborReaderTransition;
         const adapter = transitionApi && typeof transitionApi.createReaderTransitionAdapter === 'function'
             ? transitionApi.createReaderTransitionAdapter({
@@ -350,11 +354,51 @@
                 direction
             }) : { transition: typeof readerEffectiveTransition === 'function' ? readerEffectiveTransition() : 'none', durationMs: 0 };
         const transition = adapter.transition;
-        if (!deck || transition === 'none') return;
-        deck.dataset.readerTransition = transition;
-        deck.dataset.readerDirection = direction < 0 ? 'previous' : 'next';
-        deck.classList.add('is-reader-transitioning');
-        const finish = () => deck.classList.remove('is-reader-transitioning');
-        deck.addEventListener('animationend', finish, { once: true });
+        const outgoingDeck = context.outgoingDeck;
+        const incomingDeck = context.incomingDeck;
+        if (!content || transition === 'none') return;
+
+        if (outgoingDeck && incomingDeck && content.contains(incomingDeck)) {
+            const layer = document.createElement('div');
+            layer.className = 'desktop-reader-page-transition-layer';
+            layer.dataset.readerTransition = transition;
+            layer.dataset.readerDirection = direction < 0 ? 'previous' : 'next';
+
+            outgoingDeck.classList.remove('is-reader-transitioning', 'is-reader-transitioning-in', 'is-reader-transitioning-out');
+            outgoingDeck.classList.add('is-reader-transitioning-out');
+            outgoingDeck.dataset.readerTransition = transition;
+            outgoingDeck.dataset.readerDirection = layer.dataset.readerDirection;
+            outgoingDeck.setAttribute('aria-hidden', 'true');
+            outgoingDeck.inert = true;
+
+            incomingDeck.classList.add('is-reader-transitioning-in');
+            incomingDeck.dataset.readerTransition = transition;
+            incomingDeck.dataset.readerDirection = layer.dataset.readerDirection;
+            layer.append(outgoingDeck, incomingDeck);
+            content.replaceChildren(layer);
+
+            let finished = false;
+            const finish = () => {
+                if (finished) return;
+                finished = true;
+                incomingDeck.classList.remove('is-reader-transitioning-in', 'is-reader-transitioning');
+                if (layer.isConnected) layer.replaceWith(incomingDeck);
+            };
+            incomingDeck.addEventListener('animationend', finish, { once: true });
+            window.requestAnimationFrame(() => {
+                if (!layer.isConnected) return;
+                layer.classList.add('is-reader-transitioning');
+                window.setTimeout(finish, Math.max(320, Number(adapter.durationMs) + 100));
+            });
+            return;
+        }
+
+        const target = content.querySelector('.desktop-reader-page-deck') || content;
+        if (target === content && !target.dataset.readerLayout) return;
+        target.dataset.readerTransition = transition;
+        target.dataset.readerDirection = direction < 0 ? 'previous' : 'next';
+        target.classList.add('is-reader-transitioning');
+        const finish = () => target.classList.remove('is-reader-transitioning');
+        target.addEventListener('animationend', finish, { once: true });
         window.setTimeout(finish, Math.max(280, Number(adapter.durationMs) + 60));
     }

@@ -278,6 +278,7 @@ async function selectReaderStudioSection(page, section) {
         await page.selectOption('[data-reader-paper-material]', 'grain');
         await page.locator('input[data-reader-paper-shadow]').setChecked(false);
         await page.locator('input[data-reader-paper-vignette]').setChecked(false);
+        await selectReaderStudioSection(page, 'typography');
         await page.locator('[data-reader-indent]').setChecked(false);
         await selectReaderStudioSection(page, 'page');
         await page.selectOption('[data-reader-status-bar-mode]', 'visible');
@@ -344,6 +345,7 @@ async function selectReaderStudioSection(page, section) {
         assert.ok(settings.state && typeof settings.state === 'object', 'Reader Store state endpoint should remain available');
         assert.strictEqual(settings.saved, null, 'authoritative Reader Store flow must not mirror prose into localStorage');
 
+        await selectReaderStudioSection(page, 'font');
         await page.click('[data-reader-font-help]');
         await page.waitForFunction(() => document.querySelector('[data-reader-font-dialog]').open);
         await page.click('[data-reader-font-close]');
@@ -791,6 +793,16 @@ async function selectReaderStudioSection(page, section) {
         await page.waitForFunction(() => getComputedStyle(document.querySelector('.desktop-reader-page-deck')).animationName.includes('slide'));
         await page.waitForTimeout(300);
 
+        await page.click('[data-reader-settings-toggle]');
+        await selectReaderStudioSection(page, 'motion');
+        await page.selectOption('[data-reader-page-transition]', 'curl');
+        await page.click('[data-reader-settings-close]');
+        await page.waitForFunction(() => readerState.pageTransition === 'curl' && readerEffectiveTransition() === 'curl');
+        const curlKey = await page.evaluate(() => readerState.pageIndex < readerState.pages.length - 1 ? 'ArrowRight' : 'ArrowLeft');
+        await page.keyboard.press(curlKey);
+        await page.waitForFunction(() => getComputedStyle(document.querySelector('.desktop-reader-page-deck')).animationName.includes('reader-page-curl'));
+        await page.waitForFunction(() => !document.querySelector('.desktop-reader-page-deck')?.classList.contains('is-reader-transitioning'));
+
         const touchSelectionIndex = await page.evaluate(() => {
             const node = document.querySelector('[data-reader-page] [data-reader-block]');
             const range = document.createRange();
@@ -864,6 +876,22 @@ async function selectReaderStudioSection(page, section) {
         await page.selectOption('[data-reader-layout-mode]', 'flow');
         await page.waitForFunction(() => document.querySelector('[data-reader-content]').dataset.readerLayout === 'flow');
         await page.click('[data-reader-settings-close]');
+        const flowKeyboardState = await page.evaluate(() => {
+            const content = document.querySelector('[data-reader-content]');
+            content.scrollTop = 0;
+            content.focus();
+            content.dispatchEvent(new Event('scroll'));
+            return { chapterId: readerState.activeChapterId, scrollTop: content.scrollTop };
+        });
+        await page.keyboard.press('ArrowRight');
+        await page.waitForFunction(({ chapterId, scrollTop }) => {
+            const content = document.querySelector('[data-reader-content]');
+            return readerState.activeChapterId === chapterId && content.scrollTop > scrollTop + 10;
+        }, flowKeyboardState);
+        assert.strictEqual(await page.locator('[data-reader-content]').getAttribute('data-reader-transition'), 'curl', 'flow navigation should honor the selected curl transition');
+        const flowScrolledTop = await page.locator('[data-reader-content]').evaluate((content) => content.scrollTop);
+        await page.keyboard.press('ArrowLeft');
+        await page.waitForFunction((scrollTop) => document.querySelector('[data-reader-content]').scrollTop < scrollTop - 10, flowScrolledTop);
         assert.ok(await page.locator('[data-reader-block]').count() <= 73, 'flow mode must keep a bounded DOM window');
         await page.evaluate(() => {
             const content = document.querySelector('[data-reader-content]');
