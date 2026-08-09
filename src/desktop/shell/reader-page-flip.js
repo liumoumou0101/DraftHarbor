@@ -49,7 +49,16 @@
         const direction = Number(options.direction) < 0 ? 'previous' : 'next';
         const outgoing = cloneSpread(outgoingDeck, spreadSize);
         const incoming = cloneSpread(incomingDeck, spreadSize);
-        const sheets = direction === 'next' ? outgoing.concat(incoming) : incoming.concat(outgoing);
+        let sheets;
+        if (direction === 'next') {
+            // Keep the live spread away from StPageFlip's leading boundary so its forward sheet remains drawable.
+            const turningSpread = incoming.map((page) => page.cloneNode(true));
+            if (spreadSize === 2) turningSpread[0] = outgoing[spreadSize - 1].cloneNode(true);
+            turningSpread.forEach((page) => page.classList.add('desktop-reader-page-flip-sheet'));
+            sheets = cloneSpread(outgoingDeck, spreadSize).concat(outgoing, turningSpread);
+        } else {
+            sheets = incoming.concat(outgoing);
+        }
         const root = document.createElement('div');
         root.className = 'desktop-reader-page-flip-root';
         root.append(...sheets);
@@ -63,6 +72,7 @@
         host.replaceChildren(root);
         host.hidden = false;
         host.dataset.readerPageFlipState = 'active';
+        host.dataset.readerPageFlipDirection = direction;
         host.dataset.readerPageFlipRuns = String((Number(host.dataset.readerPageFlipRuns) || 0) + 1);
         host.style.left = `${Math.round(bounds.left - stageBounds.left)}px`;
         host.style.top = `${Math.round(bounds.top - stageBounds.top)}px`;
@@ -71,11 +81,13 @@
 
         let pageFlip;
         let timer;
+        let watchdog;
         let finished = false;
         const finish = () => {
             if (finished) return;
             finished = true;
             global.clearTimeout(timer);
+            global.clearTimeout(watchdog);
             content.classList.remove('is-reader-page-flip-active');
             host.dataset.readerPageFlipState = 'idle';
             host.hidden = true;
@@ -91,7 +103,7 @@
                 width: Math.max(80, Math.round(bounds.pageWidth)),
                 height: Math.max(80, Math.round(bounds.bottom - bounds.top)),
                 size: 'fixed',
-                startPage: direction === 'next' ? 0 : spreadSize,
+                startPage: spreadSize,
                 flippingTime: durationMs,
                 drawShadow: true,
                 maxShadowOpacity: 0.32,
@@ -101,26 +113,44 @@
                 mobileScrollSupport: false,
                 useMouseEvents: false,
                 showPageCorners: false,
-                disableFlipByClick: true
+                disableFlipByClick: false
             });
             pageFlip.loadFromHTML(sheets);
             let started = false;
+            let startedAt = 0;
             pageFlip.on('changeState', (event) => {
-                if (event.data === 'flipping') started = true;
-                if (started && event.data === 'read') finish();
+                if (event.data === 'flipping') {
+                    started = true;
+                    startedAt = global.performance.now();
+                    host.dataset.readerPageFlipState = 'flipping';
+                    host.dataset.readerPageFlipStarts = String((Number(host.dataset.readerPageFlipStarts) || 0) + 1);
+                }
+                if (started && event.data === 'read') {
+                    host.dataset.readerPageFlipDuration = String(Math.round(global.performance.now() - startedAt));
+                    host.dataset.readerPageFlipCompletions = String((Number(host.dataset.readerPageFlipCompletions) || 0) + 1);
+                    finish();
+                }
             });
-            timer = global.setTimeout(finish, durationMs + 500);
-            global.requestAnimationFrame(() => {
+            const begin = () => {
                 if (finished) return;
                 try {
                     content.classList.add('is-reader-page-flip-active');
                     if (direction === 'next') pageFlip.flipNext('bottom');
                     else pageFlip.flipPrev('bottom');
+                    if (!started) finish();
+                    else timer = global.setTimeout(finish, durationMs + 500);
                 } catch (error) {
                     console.warn('Reader page-flip animation failed.', error);
                     finish();
                 }
-            });
+            };
+            if (typeof global.__readerPageFlipTestHook === 'function') {
+                global.__readerPageFlipTestHook({ pageFlip, direction });
+                begin();
+            } else {
+                global.requestAnimationFrame(begin);
+            }
+            watchdog = global.setTimeout(finish, durationMs + 5000);
             return true;
         } catch (error) {
             console.warn('Reader page-flip adapter fell back to the built-in transition.', error);

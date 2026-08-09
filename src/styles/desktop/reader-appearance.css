@@ -95,6 +95,10 @@
     border-color: transparent;
 }
 
+.desktop-reader-page-flip-host[data-reader-page-flip-direction="next"] .desktop-reader-page-flip-sheet.--left:not(.--simple) {
+    filter: drop-shadow(-18px 0 18px rgba(0, 0, 0, 0.42));
+}
+
 .desktop-reader-page-transition-layer {
     position: relative;
     width: 100%;
