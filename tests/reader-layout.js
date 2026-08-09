@@ -4,7 +4,8 @@ const Layout = require('../src/core/document/reader-layout');
 assert.strictEqual(Layout.effectiveLayoutMode('flow', 1200), 'flow');
 assert.strictEqual(Layout.effectiveLayoutMode('single-page', 1200), 'single-page');
 assert.strictEqual(Layout.effectiveLayoutMode('double-page', 920), 'double-page');
-assert.strictEqual(Layout.effectiveLayoutMode('double-page', 700), 'single-page');
+assert.strictEqual(Layout.effectiveLayoutMode('double-page', 700), 'double-page');
+assert.strictEqual(Layout.effectiveLayoutMode('double-page', 420), 'single-page');
 assert.strictEqual(Layout.effectiveLayoutMode('auto', 920), 'double-page');
 assert.strictEqual(Layout.effectiveLayoutMode('auto', 700), 'single-page');
 

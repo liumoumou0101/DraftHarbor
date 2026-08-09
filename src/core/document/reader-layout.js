@@ -23,7 +23,13 @@
         const requested = cleanMode(requestedMode);
         if (requested === 'flow' || requested === 'single-page') return requested;
         const minimumPageWidth = finiteNumber(options.minimumPageWidth, 360, 240, 720);
+        const minimumForcedPageWidth = finiteNumber(options.minimumForcedPageWidth, 220, 160, 480);
         const gap = finiteNumber(options.gap, 28, 0, 96);
+        if (requested === 'double-page') {
+            return finiteNumber(viewportWidth, 0, 0, 100000) >= minimumForcedPageWidth * 2 + gap
+                ? 'double-page'
+                : 'single-page';
+        }
         const canShowSpread = finiteNumber(viewportWidth, 0, 0, 100000) >= minimumPageWidth * 2 + gap;
         return canShowSpread ? 'double-page' : 'single-page';
     }

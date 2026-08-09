@@ -892,6 +892,15 @@ async function selectReaderStudioSection(page, section) {
         await page.setViewportSize({ width: 720, height: 820 });
         await page.waitForFunction(() => document.querySelector('[data-reader-content]').dataset.readerLayout === 'single-page');
         assert.strictEqual(await page.locator('[data-reader-layout-mode]').inputValue(), 'auto', 'automatic fallback must not overwrite the saved auto choice');
+        await page.selectOption('[data-reader-layout-mode]', 'double-page');
+        await page.waitForFunction(() => document.querySelector('[data-reader-content]').dataset.readerLayout === 'double-page'
+            && document.querySelectorAll('.desktop-reader-page-deck > [data-reader-page]').length === 2);
+        const narrowDoublePage = await page.evaluate(() => {
+            const pages = Array.from(document.querySelectorAll('.desktop-reader-page-deck > [data-reader-page]'));
+            const [left, right] = pages.map((pageNode) => pageNode.getBoundingClientRect());
+            return { aligned: Math.abs(left.top - right.top) < 2, ordered: left.right <= right.left, pageWidth: left.width };
+        });
+        assert.ok(narrowDoublePage.aligned && narrowDoublePage.ordered && narrowDoublePage.pageWidth >= 220, 'explicit double-page mode must render two side-by-side pages at a 720px viewport');
         await page.selectOption('[data-reader-layout-mode]', 'flow');
         await page.waitForFunction(() => document.querySelector('[data-reader-content]').dataset.readerLayout === 'flow');
         await page.click('[data-reader-settings-close]');

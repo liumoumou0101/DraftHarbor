@@ -72,11 +72,12 @@
         const height = content ? content.clientHeight : 700;
         let effective = window.DraftHarborReaderLayout.effectiveLayoutMode(readerState.layoutMode, width, {
             minimumPageWidth: 360,
+            minimumForcedPageWidth: 220,
             gap: readerState.bookSpine || 28
         });
         if (effective !== 'flow' && height < 420) effective = 'flow';
         const gap = Math.max(0, Math.min(96, Number(readerState.bookSpine) || 28));
-        const pageWidth = effective === 'double-page' ? Math.max(320, (width - gap - 48) / 2) : Math.min(980, Math.max(320, width - 48));
+        const pageWidth = effective === 'double-page' ? Math.max(220, (width - gap - 48) / 2) : Math.min(980, Math.max(320, width - 48));
         const pageHeight = Math.max(120, height - 36);
         const actualFontFamily = readerActualFontFamily(content);
         return { content, width, height, effective, gap, pageWidth, pageHeight, actualFontFamily };
