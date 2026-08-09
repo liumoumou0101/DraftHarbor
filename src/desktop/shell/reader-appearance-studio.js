@@ -19,16 +19,18 @@
         if (snapshot) readerState.appearanceStudioBaseline = structuredClone(snapshot);
     }
 
-    function appearanceMutate(mutator) {
+    function appearanceMutate(mutator, options = {}) {
         if (!readerState.appearanceStudioBaseline) appearanceBeginSession();
         const locator = typeof window.captureReaderPositionLocator === 'function' ? window.captureReaderPositionLocator() : null;
+        window.stopReaderPageFlip?.();
         mutator();
         readerState.appearanceProfileId = 'custom';
         readerState.anchorLocator = locator || readerState.anchorLocator;
-        if (typeof window.applyReaderSettings === 'function') window.applyReaderSettings();
+        if (typeof window.applyReaderSettings === 'function') window.applyReaderSettings({ reflow: options.reflow !== false });
         if (typeof window.syncReaderSettingsControls === 'function') window.syncReaderSettingsControls();
         if (typeof window.saveReaderState === 'function') window.saveReaderState();
         if (typeof window.scheduleReaderPreferenceSave === 'function') window.scheduleReaderPreferenceSave();
+        if (options.releaseFocus && options.control === document.activeElement) options.control.blur();
     }
 
     function setReaderAppearanceStudioSection(section) {
@@ -103,8 +105,11 @@
         appearanceSetStatus('本次外观修改已撤销。');
     }
 
-    function bindQuickSelect(selector, mutator) {
-        document.querySelector(selector)?.addEventListener('change', (event) => appearanceMutate(() => mutator(event.currentTarget.value)));
+    function bindQuickSelect(selector, mutator, options) {
+        document.querySelector(selector)?.addEventListener('change', (event) => appearanceMutate(
+            () => mutator(event.currentTarget.value),
+            { ...(options || {}), control: event.currentTarget }
+        ));
     }
 
     function initializeReaderAppearanceStudio() {
@@ -123,13 +128,13 @@
                 tabs[next].click();
             });
         });
-        bindQuickSelect('[data-reader-quick-theme]', (value) => { readerState.theme = value; });
+        bindQuickSelect('[data-reader-quick-theme]', (value) => { readerState.theme = value; }, { reflow: false });
         bindQuickSelect('[data-reader-quick-font-family]', (value) => {
             const control = document.querySelector('[data-reader-quick-font-family]');
             readerState.fontId = window.readerFontIdForSelection?.(control) || value;
             readerState.fontFamily = window.readerFontFamilyForSelection?.(control) || value;
         });
-        bindQuickSelect('[data-reader-quick-layout]', (value) => { readerState.layoutMode = value; });
+        bindQuickSelect('[data-reader-quick-layout]', (value) => { readerState.layoutMode = value; }, { releaseFocus: true });
         document.querySelector('[data-reader-font-decrease]')?.addEventListener('click', () => appearanceMutate(() => { readerState.fontSize = Math.max(15, readerState.fontSize - 1); }));
         document.querySelector('[data-reader-font-increase]')?.addEventListener('click', () => appearanceMutate(() => { readerState.fontSize = Math.min(26, readerState.fontSize + 1); }));
         document.querySelector('[data-reader-quick-more]')?.addEventListener('click', () => {

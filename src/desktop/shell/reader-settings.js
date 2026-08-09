@@ -290,22 +290,25 @@
         }, 350);
     }
 
-    function updateReaderSetting(mutator, { markCustom = true } = {}) {
+    function updateReaderSetting(mutator, { markCustom = true, reflow = true, refreshProgress = false, releaseFocus = false, control = null } = {}) {
         const locator = typeof captureReaderPositionLocator === 'function' ? captureReaderPositionLocator() : null;
+        window.stopReaderPageFlip?.();
         const mutationResult = mutator();
         if (markCustom && mutationResult !== 'appearance-profile') {
             readerState.appearanceProfileId = 'custom';
         }
         readerState.anchorLocator = locator || readerState.anchorLocator;
-        applyReaderSettings();
+        applyReaderSettings({ reflow });
         syncReaderSettingsControls();
+        if (refreshProgress && typeof updateReaderWorkspaceProgress === 'function') updateReaderWorkspaceProgress();
         saveReaderState();
         scheduleReaderPreferenceSave();
+        if (releaseFocus && control === document.activeElement) control.blur();
     }
 
     function bindReaderSetting(selector, eventName, mutator, options) {
         const control = document.querySelector(selector);
-        control?.addEventListener(eventName, () => updateReaderSetting(() => mutator(control), options));
+        control?.addEventListener(eventName, () => updateReaderSetting(() => mutator(control), { ...(options || {}), control }));
     }
 
     function initializeReaderSettings() {
@@ -315,27 +318,27 @@
         window.loadReaderAppearanceProfiles?.();
         bindReaderSetting('[data-reader-letter-spacing]', 'input', (control) => { readerState.letterSpacing = Number(control.value) || 0; });
         bindReaderSetting('[data-reader-page-margin]', 'input', (control) => { readerState.pageMargin = Number(control.value) || 48; });
-        bindReaderSetting('[data-reader-text-align]', 'change', (control) => { readerState.textAlign = control.value || 'start'; });
-        bindReaderSetting('[data-reader-layout-mode]', 'change', (control) => { readerState.layoutMode = control.value || 'flow'; });
-        bindReaderSetting('[data-reader-page-transition]', 'change', (control) => { readerState.pageTransition = control.value || 'none'; });
+        bindReaderSetting('[data-reader-text-align]', 'change', (control) => { readerState.textAlign = control.value || 'start'; }, { reflow: false });
+        bindReaderSetting('[data-reader-layout-mode]', 'change', (control) => { readerState.layoutMode = control.value || 'flow'; }, { releaseFocus: true });
+        bindReaderSetting('[data-reader-page-transition]', 'change', (control) => { readerState.pageTransition = control.value || 'none'; }, { reflow: false, releaseFocus: true });
         bindReaderSetting('[data-reader-reduced-motion]', 'change', (control) => {
             readerState.reducedMotionOverride = control.value === 'reduce' ? true : control.value === 'allow' ? false : undefined;
-        });
-        bindReaderSetting('[data-reader-status-bar-mode]', 'change', (control) => { readerState.statusBarMode = control.value || 'auto'; });
+        }, { reflow: false });
+        bindReaderSetting('[data-reader-status-bar-mode]', 'change', (control) => { readerState.statusBarMode = control.value || 'auto'; }, { reflow: false });
         document.querySelectorAll('[data-reader-status-field]').forEach((control) => {
             control.addEventListener('change', () => {
                 const fields = Array.from(document.querySelectorAll('[data-reader-status-field]:checked')).map((item) => item.value);
                 readerState.statusBarFields = fields.length ? fields : ['chapter'];
-                updateReaderSetting(() => undefined);
+                updateReaderSetting(() => undefined, { reflow: false, refreshProgress: true });
             });
         });
-        bindReaderSetting('[data-reader-status-bar-auto-hide]', 'change', (control) => { readerState.statusBarAutoHide = control.checked; });
-        bindReaderSetting('[data-reader-paper-material]', 'change', (control) => { readerState.paperMaterial = control.value || 'flat'; });
-        bindReaderSetting('input[data-reader-paper-shadow]', 'change', (control) => { readerState.paperShadow = control.checked; });
-        bindReaderSetting('input[data-reader-paper-vignette]', 'change', (control) => { readerState.paperVignette = control.checked; });
-        bindReaderSetting('[data-reader-keyboard-page-turn]', 'change', (control) => { readerState.keyboardPageTurn = control.checked; });
-        bindReaderSetting('[data-reader-pointer-page-turn]', 'change', (control) => { readerState.pointerPageTurn = control.checked; });
-        bindReaderSetting('[data-reader-touch-page-turn]', 'change', (control) => { readerState.touchPageTurn = control.checked; });
+        bindReaderSetting('[data-reader-status-bar-auto-hide]', 'change', (control) => { readerState.statusBarAutoHide = control.checked; }, { reflow: false });
+        bindReaderSetting('[data-reader-paper-material]', 'change', (control) => { readerState.paperMaterial = control.value || 'flat'; }, { reflow: false });
+        bindReaderSetting('input[data-reader-paper-shadow]', 'change', (control) => { readerState.paperShadow = control.checked; }, { reflow: false });
+        bindReaderSetting('input[data-reader-paper-vignette]', 'change', (control) => { readerState.paperVignette = control.checked; }, { reflow: false });
+        bindReaderSetting('[data-reader-keyboard-page-turn]', 'change', (control) => { readerState.keyboardPageTurn = control.checked; }, { reflow: false });
+        bindReaderSetting('[data-reader-pointer-page-turn]', 'change', (control) => { readerState.pointerPageTurn = control.checked; }, { reflow: false });
+        bindReaderSetting('[data-reader-touch-page-turn]', 'change', (control) => { readerState.touchPageTurn = control.checked; }, { reflow: false });
         bindReaderSetting('[data-reader-font-family]', 'change', (control) => {
             readerState.fontId = window.readerFontIdForSelection?.(control) || control.value || 'builtin:default';
             readerState.fontFamily = window.readerFontFamilyForSelection?.(control) || control.value || 'system';

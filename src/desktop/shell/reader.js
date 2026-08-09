@@ -221,7 +221,7 @@
         readerState.chapterIndex = Math.max(0, Math.min(total - 1, readerState.chapterIndex));
     }
 
-    function applyReaderSettings() {
+    function applyReaderSettings(options = {}) {
         const elements = readerElements();
         if (elements.fontSize) elements.fontSize.value = String(readerState.fontSize);
         if (elements.lineHeight) elements.lineHeight.value = String(readerState.lineHeight);
@@ -261,7 +261,7 @@
             elements.themePanel.style.setProperty('--reader-page-margin', `${readerState.pageMargin || 48}px`);
             elements.themePanel.style.setProperty('--reader-text-align', readerState.textAlign || 'start');
         }
-        if (readerState.apiMode && typeof scheduleReaderReflow === 'function') scheduleReaderReflow();
+        if (options.reflow !== false && readerState.apiMode && typeof scheduleReaderReflow === 'function') scheduleReaderReflow();
     }
 
     function renderReader() {

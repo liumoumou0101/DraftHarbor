@@ -795,7 +795,12 @@ async function selectReaderStudioSection(page, section) {
 
         await page.click('[data-reader-settings-toggle]');
         await selectReaderStudioSection(page, 'motion');
+        await page.evaluate(() => { window.__readerDeckBeforeTransitionSetting = document.querySelector('.desktop-reader-page-deck'); });
+        await page.focus('[data-reader-page-transition]');
         await page.selectOption('[data-reader-page-transition]', 'curl');
+        assert.notStrictEqual(await page.evaluate(() => document.activeElement?.matches('[data-reader-page-transition]')), true, 'transition select must release focus after a choice');
+        await page.waitForTimeout(180);
+        assert.strictEqual(await page.evaluate(() => window.__readerDeckBeforeTransitionSetting === document.querySelector('.desktop-reader-page-deck')), true, 'changing only the transition must not rebuild pagination');
         await page.click('[data-reader-settings-close]');
         await page.waitForFunction(() => readerState.pageTransition === 'curl' && readerEffectiveTransition() === 'curl');
         const pageFlipRuns = await page.locator('[data-reader-page-flip-host]').getAttribute('data-reader-page-flip-runs');
@@ -818,10 +823,23 @@ async function selectReaderStudioSection(page, section) {
         });
         assert.deepStrictEqual(animatedPageStyle.animated, animatedPageStyle.source, 'animated page text must preserve the source font metrics and color');
         assert.ok(!/rgba\([^)]*,\s*(?:0|0?\.\d+)\s*\)$/i.test(animatedPageStyle.background), 'animated page sheet must use an opaque background');
+        const transitionCancelStartedAt = Date.now();
+        await page.evaluate(() => {
+            const control = document.querySelector('[data-reader-page-transition]');
+            control.value = 'fade';
+            control.dispatchEvent(new Event('change', { bubbles: true }));
+        });
         await page.waitForFunction(() => document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipState === 'idle'
             && document.querySelector('[data-reader-page-flip-host]')?.hidden === true
             && !document.querySelector('[data-reader-content]')?.classList.contains('is-reader-page-flip-active')
             && !document.querySelector('.desktop-reader-page-flip-root'));
+        assert.ok(Date.now() - transitionCancelStartedAt < 800, 'changing Reader settings must cancel an active page flip immediately');
+        await page.evaluate(() => {
+            const control = document.querySelector('[data-reader-page-transition]');
+            control.value = 'curl';
+            control.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        await page.waitForFunction(() => readerState.pageTransition === 'curl');
 
         const touchSelectionIndex = await page.evaluate(() => {
             const node = document.querySelector('[data-reader-page] [data-reader-block]');
@@ -917,6 +935,56 @@ async function selectReaderStudioSection(page, section) {
             return { aligned: Math.abs(left.top - right.top) < 2, ordered: left.right <= right.left, pageWidth: left.width };
         });
         assert.ok(narrowDoublePage.aligned && narrowDoublePage.ordered && narrowDoublePage.pageWidth >= 220, 'explicit double-page mode must render two side-by-side pages at a 720px viewport');
+        const layoutSwitchDurations = [];
+        for (const mode of ['single-page', 'double-page', 'single-page', 'double-page']) {
+            await page.focus('[data-reader-layout-mode]');
+            const startedAt = Date.now();
+            await page.selectOption('[data-reader-layout-mode]', mode);
+            await page.waitForFunction((expected) => document.querySelector('[data-reader-content]').dataset.readerLayout === expected, mode);
+            layoutSwitchDurations.push(Date.now() - startedAt);
+            assert.notStrictEqual(await page.evaluate(() => document.activeElement?.matches('[data-reader-layout-mode]')), true, 'layout select must release focus after a choice');
+        }
+        assert.ok(Math.max(...layoutSwitchDurations) < 1200, `repeated layout switches must settle without a multi-second lock: ${layoutSwitchDurations.join(', ')}ms`);
+        await page.evaluate(() => {
+            const control = document.querySelector('[data-reader-layout-mode]');
+            for (const mode of ['single-page', 'double-page', 'single-page', 'double-page']) {
+                control.focus();
+                control.value = mode;
+                control.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+        await page.waitForTimeout(300);
+        const rapidLayoutResult = await page.evaluate(() => {
+            const pages = Array.from(document.querySelectorAll('.desktop-reader-page-deck > [data-reader-page]'));
+            const rects = pages.map((pageNode) => pageNode.getBoundingClientRect());
+            return {
+                requested: readerState.layoutMode,
+                effective: readerState.effectiveLayoutMode,
+                pageCount: pages.length,
+                aligned: rects.length === 2 && Math.abs(rects[0].top - rects[1].top) < 2,
+                releasedFocus: !document.activeElement?.matches('[data-reader-layout-mode]')
+            };
+        });
+        assert.deepStrictEqual(rapidLayoutResult, { requested: 'double-page', effective: 'double-page', pageCount: 2, aligned: true, releasedFocus: true }, 'rapid setting changes must settle on the final explicit double-page choice');
+        const transitionStress = await page.evaluate(async () => {
+            const deck = document.querySelector('.desktop-reader-page-deck');
+            const control = document.querySelector('[data-reader-page-transition]');
+            const startedAt = performance.now();
+            for (const value of ['fade', 'slide', 'cover', 'curl', 'none', 'curl']) {
+                control.focus();
+                control.value = value;
+                control.dispatchEvent(new Event('change', { bubbles: true }));
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+            await new Promise((resolve) => setTimeout(resolve, 180));
+            return {
+                elapsedMs: performance.now() - startedAt,
+                sameDeck: deck === document.querySelector('.desktop-reader-page-deck'),
+                releasedFocus: document.activeElement !== control
+            };
+        });
+        assert.ok(transitionStress.sameDeck && transitionStress.releasedFocus, 'repeated transition changes must neither repaginate nor retain select focus');
+        assert.ok(transitionStress.elapsedMs < 800, `transition changes must not lock the Reader: ${transitionStress.elapsedMs}ms`);
         await page.selectOption('[data-reader-layout-mode]', 'flow');
         await page.waitForFunction(() => document.querySelector('[data-reader-content]').dataset.readerLayout === 'flow');
         await page.click('[data-reader-settings-close]');

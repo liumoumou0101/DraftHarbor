@@ -130,4 +130,7 @@
     }
 
     global.startReaderPageFlip = startReaderPageFlip;
+    global.stopReaderPageFlip = function stopReaderPageFlip() {
+        if (activeSession) activeSession.finish();
+    };
 })(window);

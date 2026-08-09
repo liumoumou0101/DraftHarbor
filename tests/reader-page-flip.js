@@ -15,6 +15,7 @@ assert.ok(adapter.includes('global.St && global.St.PageFlip'), 'adapter must fai
 assert.ok(adapter.includes("content.classList.add('is-reader-page-flip-active')"), 'adapter must keep the authoritative Reader DOM mounted during animation');
 assert.ok(adapter.indexOf("content.classList.add('is-reader-page-flip-active')") > adapter.indexOf('pageFlip.loadFromHTML(sheets)'), 'authoritative content must remain visible until PageFlip has rendered its first frame');
 assert.ok(adapter.includes('pageFlip?.destroy()'), 'adapter must destroy each temporary PageFlip instance');
+assert.ok(adapter.includes('global.stopReaderPageFlip'), 'Reader settings and reflows must be able to cancel an active PageFlip session');
 assert.ok(reading.includes("transition === 'curl'") && reading.includes('window.startReaderPageFlip'), 'Reader must limit the adapter to curl transitions');
 assert.ok(!Object.prototype.hasOwnProperty.call(packageJson.dependencies, 'page-flip'), 'vendored browser code must not pull the oversized npm package into production');
 assert.ok(Buffer.byteLength(adapter, 'utf8') < 12 * 1024, 'page-flip adapter must remain independently bounded');

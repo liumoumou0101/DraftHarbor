@@ -267,6 +267,7 @@
 
     function renderReaderReading(options = {}) {
         if (!readerState.currentChapter || !window.DraftHarborReaderLayout) return;
+        window.stopReaderPageFlip?.();
         const metrics = readerLayoutMetrics();
         if (!metrics.content) return;
         const locator = options.locator || readerState.anchorLocator || readerState.documentRecordState && readerState.documentRecordState.positionLocator;
