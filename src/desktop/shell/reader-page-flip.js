@@ -159,7 +159,61 @@
         }
     }
 
+    function captureReaderChapterPageTurn() {
+        const deck = document.querySelector('[data-reader-content] .desktop-reader-page-deck');
+        return deck ? deck.cloneNode(true) : null;
+    }
+
+    function completeReaderChapterPageTurn(outgoingDeck, direction) {
+        const content = document.querySelector('[data-reader-content]');
+        let incomingDeck = content && content.querySelector('.desktop-reader-page-deck');
+        if (!outgoingDeck || !incomingDeck || readerState.effectiveLayoutMode === 'flow') return;
+        if (direction < 0 && readerState.pages.length) {
+            const spreadSize = readerState.effectiveLayoutMode === 'double-page' ? 2 : 1;
+            const target = readerState.effectiveLayoutMode === 'double-page'
+                ? Math.max(0, readerState.pages.length - (readerState.pages.length % 2 || 2))
+                : Math.max(0, readerState.pages.length - 1);
+            const position = global.DraftHarborReaderLayout.locatorPositionForPage(readerState.pages, target);
+            readerState.anchorLocator = position ? createReaderLocatorAt(position.blockId, position.offset) : null;
+            readerState.pageIndex = target - target % spreadSize;
+            incomingDeck = global.renderReaderPages(readerState.anchorLocator);
+            updateReaderWorkspaceProgress();
+        }
+        global.animateReaderPageTurn(direction, { outgoingDeck, incomingDeck });
+    }
+
+    async function navigateReaderChapterPageTurn(direction) {
+        const chapterId = readerState.activeChapterId;
+        const outgoingDeck = captureReaderChapterPageTurn();
+        if (readerState.apiMode) {
+            await global.navigateReaderWorkspaceChapter(direction);
+            if (readerState.activeChapterId === chapterId) return false;
+        } else {
+            const chapters = readerState.document && readerState.document.chapters || [];
+            const target = readerState.chapterIndex + direction;
+            if (target < 0 || target >= chapters.length) return false;
+            readerState.chapterIndex = target;
+            readerState.anchorLocator = null;
+            readerState.pageIndex = 0;
+            global.saveReaderState();
+            global.renderReader();
+        }
+        completeReaderChapterPageTurn(outgoingDeck, direction);
+        return true;
+    }
+
+    function readerHasAdjacentChapter(direction) {
+        if (readerState.apiMode) {
+            const index = readerState.contents.findIndex((chapter) => chapter.chapterId === readerState.activeChapterId);
+            return index + direction >= 0 && index + direction < readerState.contents.length;
+        }
+        const chapters = readerState.document && readerState.document.chapters || [];
+        return readerState.chapterIndex + direction >= 0 && readerState.chapterIndex + direction < chapters.length;
+    }
+
     global.startReaderPageFlip = startReaderPageFlip;
+    global.navigateReaderChapterPageTurn = navigateReaderChapterPageTurn;
+    global.readerHasAdjacentChapter = readerHasAdjacentChapter;
     global.stopReaderPageFlip = function stopReaderPageFlip() {
         if (activeSession) activeSession.finish();
     };

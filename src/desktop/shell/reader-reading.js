@@ -216,10 +216,10 @@
         if (label) label.textContent = spreadSize === 2
             ? `第 ${readerState.pageIndex + 1}–${lastVisible} / ${readerState.pages.length} 页`
             : `第 ${readerState.pageIndex + 1} / ${readerState.pages.length} 页`;
-        if (previous) previous.disabled = readerState.pageIndex <= 0;
-        if (next) next.disabled = readerState.pageIndex + spreadSize >= readerState.pages.length;
-        if (touchPrevious) touchPrevious.disabled = readerState.pageIndex <= 0;
-        if (touchNext) touchNext.disabled = readerState.pageIndex + spreadSize >= readerState.pages.length;
+        if (previous) previous.disabled = readerState.pageIndex <= 0 && !window.readerHasAdjacentChapter?.(-1);
+        if (next) next.disabled = readerState.pageIndex + spreadSize >= readerState.pages.length && !window.readerHasAdjacentChapter?.(1);
+        if (touchPrevious) touchPrevious.disabled = readerState.pageIndex <= 0 && !window.readerHasAdjacentChapter?.(-1);
+        if (touchNext) touchNext.disabled = readerState.pageIndex + spreadSize >= readerState.pages.length && !window.readerHasAdjacentChapter?.(1);
     }
 
     function renderReaderPages(locator) {
@@ -326,7 +326,7 @@
         if (options.source && typeof readerCanPageTurn === 'function' && !readerCanPageTurn(options.source)) return false;
         if (readerState.effectiveLayoutMode === 'flow') return false;
         readerState.pendingPageDelta += Number(delta) || 0;
-        if (readerState.pageTurnFrame) return true;
+        if (readerState.pageTurnFrame || readerState.chapterPageTurnPromise) return true;
         readerState.pageTurnFrame = window.requestAnimationFrame(() => {
             readerState.pageTurnFrame = null;
             const spreadSize = readerState.effectiveLayoutMode === 'double-page' ? 2 : 1;
@@ -336,7 +336,17 @@
             const pendingDelta = readerState.pendingPageDelta;
             const target = Math.max(0, Math.min(maxStart, readerState.pageIndex + pendingDelta * spreadSize));
             readerState.pendingPageDelta = 0;
-            if (target === readerState.pageIndex) return;
+            if (target === readerState.pageIndex) {
+                const direction = pendingDelta < 0 ? -1 : pendingDelta > 0 ? 1 : 0;
+                if (!direction || typeof window.navigateReaderChapterPageTurn !== 'function') return;
+                readerState.chapterPageTurnPromise = window.navigateReaderChapterPageTurn(direction)
+                    .catch((error) => console.warn('Reader chapter page turn failed.', error))
+                    .finally(() => {
+                        readerState.chapterPageTurnPromise = null;
+                        if (readerState.pendingPageDelta) queueReaderPageTurn(0);
+                    });
+                return;
+            }
             const content = document.querySelector('[data-reader-content]');
             const currentDeck = content && (content.querySelector('.desktop-reader-page-transition-layer .desktop-reader-page-deck.is-reader-transitioning-in')
                 || content.querySelector('.desktop-reader-page-deck'));

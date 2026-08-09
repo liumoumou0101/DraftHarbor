@@ -72,6 +72,7 @@
         layoutRenderToken: 0,
         pendingPageDelta: 0,
         pageTurnFrame: null,
+        chapterPageTurnPromise: null,
         anchorLocator: null,
         actualFontFamily: '',
         fontFallback: false,
