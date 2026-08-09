@@ -76,6 +76,8 @@
 
 .desktop-reader-page-flip-host[hidden] { display: none; }
 .desktop-reader-content.is-reader-page-flip-active > .desktop-reader-page-deck { visibility: hidden; }
+.desktop-reader-content.is-reader-page-flip-active[data-reader-layout="illustrated"] > .desktop-reader-page-deck { visibility: visible; }
+.desktop-reader-content.is-reader-page-flip-active[data-reader-layout="illustrated"] > .desktop-reader-page-deck > .desktop-reader-page { visibility: hidden; }
 
 .desktop-reader-stage[data-reader-indent-enabled="true"] .desktop-reader-page-flip-host p {
     text-indent: 2em;

@@ -32,9 +32,11 @@
                                     <select data-reader-quick-font-family aria-label="快捷字体">
                                         <option value="system">系统字</option><option value="serif">衬线</option><option value="sans-serif">黑体</option><option value="kai">楷体</option>
                                     </select>
-                                <select data-reader-quick-layout aria-label="快捷布局">
-                                        <option value="flow">连续</option><option value="single-page">单页</option><option value="double-page" selected>双页</option><option value="auto">自动</option>
+                                    <select data-reader-quick-layout aria-label="快捷布局">
+                                        <option value="flow">连续</option><option value="single-page">单页</option><option value="double-page" selected>双页</option><option value="illustrated">带图</option><option value="auto">自动</option>
                                     </select>
+                                    <button class="desktop-reader-tool" type="button" data-reader-illustration-add disabled>添加配图</button>
+                                    <input type="file" data-reader-illustration-file accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
                                     <button class="desktop-reader-tool" type="button" data-reader-tts-toggle aria-pressed="false" disabled>朗读当前位置</button>
                                     <button class="desktop-reader-tool" type="button" data-reader-tts-stop hidden disabled>停止朗读</button>
                                     <button class="desktop-reader-tool" type="button" data-reader-quick-more>更多设置</button>
@@ -211,8 +213,8 @@
                             </section>
                             <section class="desktop-reader-settings-section" data-reader-studio-section="page" aria-labelledby="reader-page-title" hidden>
                             <h3 id="reader-page-title">页面</h3>
-                            <label><span>布局</span><select data-reader-layout-mode aria-describedby="reader-layout-hint"><option value="flow">连续阅读</option><option value="single-page">单页</option><option value="double-page" selected>双页</option><option value="auto">自动</option></select></label>
-                            <p class="desktop-reader-hint" id="reader-layout-hint">自动布局会在空间不足时安全降为单页，阅读位置保持不变。</p>
+                            <label><span>布局</span><select data-reader-layout-mode aria-describedby="reader-layout-hint"><option value="flow">连续阅读</option><option value="single-page">单页</option><option value="double-page" selected>双页</option><option value="illustrated">带图阅读</option><option value="auto">自动</option></select></label>
+                            <p class="desktop-reader-hint" id="reader-layout-hint">带图模式左侧显示单页正文，右侧根据段落触发配图；空间不足时安全降为单页。</p>
                             <h3 id="reader-status-title">状态栏</h3>
                             <label><span>显示方式</span><select data-reader-status-bar-mode><option value="auto">自动</option><option value="visible">始终显示</option><option value="hidden">隐藏</option></select></label>
                             <div class="desktop-reader-status-fields" role="group" aria-labelledby="reader-status-fields-label">

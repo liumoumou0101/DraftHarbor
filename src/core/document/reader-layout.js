@@ -5,7 +5,7 @@
         root.DraftHarborReaderLayout = factory();
     }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
-    const LAYOUT_MODES = Object.freeze(['flow', 'single-page', 'double-page', 'auto']);
+    const LAYOUT_MODES = Object.freeze(['flow', 'single-page', 'double-page', 'illustrated', 'auto']);
     const BREAK_AFTER = Object.freeze(' \t\r\n.,!?;:，。！？；：、，。！？；：、)）】》」』”’〕〉》〉》.!?'.split(''));
     const BREAK_BEFORE = Object.freeze('([{（【《「『“‘'.split(''));
 
@@ -25,6 +25,11 @@
         const minimumPageWidth = finiteNumber(options.minimumPageWidth, 360, 240, 720);
         const minimumForcedPageWidth = finiteNumber(options.minimumForcedPageWidth, 220, 160, 480);
         const gap = finiteNumber(options.gap, 28, 0, 96);
+        if (requested === 'illustrated') {
+            return finiteNumber(viewportWidth, 0, 0, 100000) >= minimumForcedPageWidth * 2 + gap
+                ? 'illustrated'
+                : 'single-page';
+        }
         if (requested === 'double-page') {
             return finiteNumber(viewportWidth, 0, 0, 100000) >= minimumForcedPageWidth * 2 + gap
                 ? 'double-page'

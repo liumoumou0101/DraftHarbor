@@ -6,6 +6,8 @@ assert.strictEqual(Layout.effectiveLayoutMode('single-page', 1200), 'single-page
 assert.strictEqual(Layout.effectiveLayoutMode('double-page', 920), 'double-page');
 assert.strictEqual(Layout.effectiveLayoutMode('double-page', 700), 'double-page');
 assert.strictEqual(Layout.effectiveLayoutMode('double-page', 420), 'single-page');
+assert.strictEqual(Layout.effectiveLayoutMode('illustrated', 920), 'illustrated');
+assert.strictEqual(Layout.effectiveLayoutMode('illustrated', 420), 'single-page');
 assert.strictEqual(Layout.effectiveLayoutMode('auto', 920), 'double-page');
 assert.strictEqual(Layout.effectiveLayoutMode('auto', 700), 'single-page');
 

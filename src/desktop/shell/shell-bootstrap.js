@@ -17,6 +17,7 @@
         bindNativeCompendiumExtraction();
         bindRecovery();
         bindReader();
+        if (window.initializeReaderIllustrations) window.initializeReaderIllustrations();
         bindSettings();
          bindCompendium();
          if (typeof bindCompendiumAgent === 'function') bindCompendiumAgent();

@@ -84,6 +84,18 @@ async function jsonRequest(handler, pathname, method = 'GET', body) {
     assert.ok(JSON.stringify(chapter.body.chapter).includes('PROTOCOL_SECRET_BODY'));
     assert.strictEqual(chapter.body.revision.revisionId, 'protocol-reader-r1');
 
+    const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(32, 5)]);
+    const illustration = await jsonRequest(handler, '/api/reader/illustrations', 'POST', {
+      documentId: 'protocol-reader-book', chapterId, blockId: chapter.body.chapter.blocks[0].blockId,
+      offset: 0, excerpt: 'PROTOCOL_SECRET_BODY', fileName: 'protocol.png', bytes: png.toString('base64')
+    });
+    assert.strictEqual(illustration.response.status, 200);
+    assert.strictEqual(illustration.body.record.illustrations.length, 1);
+    const imageResponse = await handler(new Request(`draftharbor://app/api/reader/illustrations/file?documentId=protocol-reader-book&assetId=${encodeURIComponent(illustration.body.illustration.assetId)}`));
+    assert.strictEqual(imageResponse.status, 200);
+    assert.strictEqual(imageResponse.headers.get('content-type'), 'image/png');
+    assert.deepStrictEqual(Buffer.from(await imageResponse.arrayBuffer()), png);
+
     const rangeTransferCreated = await jsonRequest(handler, '/api/reader/transfer/range', 'POST', {
       envelopeId: 'protocol-range-envelope',
       createdAt: '2026-07-15T09:20:00.000Z',

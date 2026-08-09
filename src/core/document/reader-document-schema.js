@@ -10,7 +10,7 @@
     const SOURCE_KINDS = Object.freeze(['project', 'local-text', 'pasted-text']);
     const FORMATS = Object.freeze(['project', 'txt', 'md', 'epub', 'plain']);
     const BLOCK_TYPES = Object.freeze(['heading', 'scene-title', 'paragraph', 'blank-break', 'code']);
-    const LAYOUT_MODES = Object.freeze(['flow', 'single-page', 'double-page', 'auto']);
+    const LAYOUT_MODES = Object.freeze(['flow', 'single-page', 'double-page', 'illustrated', 'auto']);
     const PAGE_TRANSITIONS = Object.freeze(['fade', 'slide', 'cover', 'curl', 'none']);
     const THEME_IDS = Object.freeze(['white', 'paper', 'warm', 'eye', 'ink', 'oled', 'dark', 'sepia']);
     const FONT_FAMILY_IDS = Object.freeze(['system', 'serif', 'sans-serif', 'kai']);

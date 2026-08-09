@@ -8,7 +8,7 @@
     const PREFERENCES_SCHEMA_VERSION = 2;
     const PROFILE_SCHEMA_VERSION = 1;
     const PROFILE_IDS = Object.freeze(['default', 'paper', 'focus', 'custom']);
-    const LAYOUT_MODES = Object.freeze(['flow', 'single-page', 'double-page', 'auto']);
+    const LAYOUT_MODES = Object.freeze(['flow', 'single-page', 'double-page', 'illustrated', 'auto']);
     const PAGE_TRANSITIONS = Object.freeze(['fade', 'slide', 'cover', 'curl', 'none']);
     const THEME_IDS = Object.freeze(['white', 'paper', 'warm', 'eye', 'ink', 'oled', 'dark', 'sepia']);
     const FONT_IDS = Object.freeze(['builtin:default', 'builtin:serif', 'builtin:sans', 'builtin:kai']);

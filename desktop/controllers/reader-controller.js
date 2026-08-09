@@ -52,6 +52,7 @@ function createController(dependencies) {
     readerLibraryViewStore,
     readerAppearanceStore,
     readerFontStore,
+    readerIllustrationStore,
     readerLibraryService,
     readerProjectLibraryService,
     readerMigrationService,
@@ -268,6 +269,49 @@ function createController(dependencies) {
           : result.entry.format === 'otf' ? 'font/otf' : 'font/woff2';
         response.writeHead(200, {
           'Content-Type': mimeType,
+          'Content-Length': result.bytes.length,
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff'
+        });
+        response.end(result.bytes);
+      } catch (error) {
+        jsonResponse(response, errorStatus(error), { ok: false, error: error.message || String(error) });
+      }
+      return true;
+    }
+
+    if (request.method === 'GET' && pathname === '/api/reader/illustrations') {
+      return respond(response, async () => {
+        const documentId = cleanString(parsedUrl.searchParams.get('documentId'));
+        if (!documentId) throw new Error('reader illustration documentId is required');
+        return { ok: true, record: await readerIllustrationStore.readReaderIllustrations(dataRoot, documentId) };
+      });
+    }
+
+    if (request.method === 'POST' && pathname === '/api/reader/illustrations') {
+      return respond(response, async () => {
+        const payload = await readJsonPayload(request);
+        const result = await readerIllustrationStore.importReaderIllustration(dataRoot, payload.illustration || payload);
+        return { ok: true, record: result.record, illustration: result.illustration };
+      });
+    }
+
+    if (request.method === 'POST' && pathname === '/api/reader/illustrations/delete') {
+      return respond(response, async () => {
+        const payload = await readJsonPayload(request);
+        return { ok: true, ...(await readerIllustrationStore.deleteReaderIllustration(dataRoot, payload.documentId, payload.illustrationId)) };
+      });
+    }
+
+    if (request.method === 'GET' && pathname === '/api/reader/illustrations/file') {
+      try {
+        const result = await readerIllustrationStore.readReaderIllustrationFile(
+          dataRoot,
+          parsedUrl.searchParams.get('documentId'),
+          parsedUrl.searchParams.get('assetId')
+        );
+        response.writeHead(200, {
+          'Content-Type': result.entry.mediaType,
           'Content-Length': result.bytes.length,
           'Cache-Control': 'no-store',
           'X-Content-Type-Options': 'nosniff'

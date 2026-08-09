@@ -73,6 +73,26 @@ function readerDocumentAnnotationsPath(dataRoot, documentId) {
   return path.join(readerAnnotationsDir(dataRoot), `${stableReaderPathSegment(documentId, 'reader-annotations')}.json`);
 }
 
+function readerIllustrationsDir(dataRoot) {
+  return path.join(readerDocumentsDir(dataRoot), 'illustrations');
+}
+
+function readerDocumentIllustrationDir(dataRoot, documentId) {
+  return path.join(readerIllustrationsDir(dataRoot), stableReaderPathSegment(documentId, 'reader-illustrations'));
+}
+
+function readerDocumentIllustrationsPath(dataRoot, documentId) {
+  return path.join(readerDocumentIllustrationDir(dataRoot, documentId), 'illustrations.json');
+}
+
+function readerDocumentIllustrationMediaDir(dataRoot, documentId) {
+  return path.join(readerDocumentIllustrationDir(dataRoot, documentId), 'media');
+}
+
+function readerDocumentIllustrationAssetPath(dataRoot, documentId, assetFileName) {
+  return path.join(readerDocumentIllustrationMediaDir(dataRoot, documentId), sanitizePathSegment(assetFileName, 'illustration'));
+}
+
 function readerPositionHistoryPath(dataRoot) {
   return path.join(readerDocumentsDir(dataRoot), 'position-history.json');
 }
@@ -345,6 +365,11 @@ module.exports = {
   readerFontFilePath,
   readerAnnotationsDir,
   readerDocumentAnnotationsPath,
+  readerIllustrationsDir,
+  readerDocumentIllustrationDir,
+  readerDocumentIllustrationsPath,
+  readerDocumentIllustrationMediaDir,
+  readerDocumentIllustrationAssetPath,
   readerPositionHistoryPath,
   readerDocumentDir,
   readerDocumentMetadataPath,
