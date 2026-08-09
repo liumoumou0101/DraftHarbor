@@ -234,6 +234,7 @@ function renderReaderAnnotationMarks() {
 }
 
 async function upsertReaderAnnotation(annotationInput) {
+    if (readerState.focusMode) return null;
     const response = await readerApi('/api/reader/annotations', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ annotation: annotationInput, expectedUpdatedAt: readerState.annotationRecordUpdatedAt || undefined })
@@ -251,6 +252,7 @@ function closeReaderAnnotationDialog() {
 }
 
 function openReaderAnnotationDialog(type = 'note', existing = null) {
+    if (readerState.focusMode) return;
     const elements = readerAnnotationElements();
     const selection = existing ? { range: structuredClone(existing.range), excerpt: existing.excerpt || '' } : readerAnnotationSelection();
     if (!selection) {
@@ -269,6 +271,7 @@ function openReaderAnnotationDialog(type = 'note', existing = null) {
 }
 
 async function saveReaderAnnotationFromDialog() {
+    if (readerState.focusMode) return;
     const elements = readerAnnotationElements();
     const selection = readerState.annotationSelection;
     if (!selection) return;
@@ -305,6 +308,7 @@ async function saveReaderAnnotationFromDialog() {
 }
 
 async function createReaderAnnotationFromSelection(type) {
+    if (readerState.focusMode) return;
     const selection = readerAnnotationSelection();
     if (!selection) {
         readerAnnotationStatus('请先选择正文范围。');
@@ -330,6 +334,7 @@ async function createReaderAnnotationFromSelection(type) {
 }
 
 async function deleteReaderAnnotation(annotationId) {
+    if (readerState.focusMode) return;
     const annotation = (readerState.annotations || []).find((item) => item.annotationId === annotationId);
     if (!annotation) return;
     try {

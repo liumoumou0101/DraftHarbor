@@ -10,9 +10,22 @@
         };
     }
 
+    function readerIllustrationMutationAllowed() {
+        return !readerState.focusMode;
+    }
+
+    function syncReaderIllustrationReadonlyState() {
+        const readOnly = !readerIllustrationMutationAllowed();
+        document.querySelectorAll('[data-reader-illustration-dropzone], .desktop-reader-illustration-remove').forEach((control) => {
+            control.disabled = readOnly || !!readerState.illustrationBusy;
+            control.setAttribute('aria-hidden', readOnly ? 'true' : 'false');
+        });
+    }
+
     function syncReaderIllustrationControls() {
         const elements = illustrationElements();
-        const available = !!readerState.apiMode && !!readerState.activeDocumentId && readerState.layoutMode === 'illustrated';
+        const available = !!readerState.apiMode && !!readerState.activeDocumentId
+            && readerState.layoutMode === 'illustrated' && readerIllustrationMutationAllowed();
         const selected = selectedReaderIllustrationAnchor();
         if (elements.add) {
             elements.add.disabled = !available || readerState.illustrationBusy;
@@ -22,6 +35,7 @@
                     ? '为所选段落配图'
                     : '为本页配图';
         }
+        syncReaderIllustrationReadonlyState();
     }
 
     function selectedReaderIllustrationAnchor() {
@@ -77,6 +91,7 @@
         remove.className = 'desktop-reader-illustration-remove';
         remove.textContent = '移除';
         remove.setAttribute('aria-label', `移除配图 ${label.textContent}`);
+        remove.disabled = !readerIllustrationMutationAllowed();
         remove.addEventListener('click', () => removeReaderIllustration(item));
         footer.append(label, remove);
         figure.append(image, footer);
@@ -89,6 +104,7 @@
         zone.className = 'desktop-reader-illustration-dropzone';
         zone.dataset.readerIllustrationDropzone = '';
         zone.innerHTML = '<strong>＋ 当前页放置新图片</strong><span>点击选择，或把图片拖到这里</span>';
+        zone.disabled = !readerIllustrationMutationAllowed();
         const usePageAnchor = () => {
             const anchor = readerPageIllustrationAnchor(page);
             if (!anchor) return null;
@@ -97,10 +113,12 @@
             return anchor;
         };
         zone.addEventListener('click', () => {
+            if (!readerIllustrationMutationAllowed()) return;
             if (!usePageAnchor()) return;
             illustrationElements().file?.click();
         });
         zone.addEventListener('dragover', (event) => {
+            if (!readerIllustrationMutationAllowed()) return;
             event.preventDefault();
             if (!readerState.illustrationBusy) zone.classList.add('is-reader-dragover');
         });
@@ -108,6 +126,7 @@
         zone.addEventListener('drop', async (event) => {
             event.preventDefault();
             zone.classList.remove('is-reader-dragover');
+            if (!readerIllustrationMutationAllowed()) return;
             if (!usePageAnchor()) return;
             await importReaderIllustrationFiles(event.dataTransfer && event.dataTransfer.files);
         });
@@ -172,6 +191,7 @@
     }
 
     async function importReaderIllustrationFiles(files) {
+        if (!readerIllustrationMutationAllowed()) return;
         const anchor = currentReaderIllustrationAnchor();
         const existing = anchor ? readerState.illustrations.filter((item) => item.chapterId === anchor.chapterId
             && item.blockId === anchor.blockId && item.offset === anchor.offset).length : 0;
@@ -205,6 +225,7 @@
     }
 
     async function removeReaderIllustration(item) {
+        if (!readerIllustrationMutationAllowed()) return;
         if (!global.confirm(`移除配图“${item.caption || item.fileName || '未命名'}”？`)) return;
         try {
             const payload = await global.readerApi('/api/reader/illustrations/delete', {
@@ -220,6 +241,7 @@
     }
 
     function selectReaderIllustrationAnchor(blockNode) {
+        if (!readerIllustrationMutationAllowed()) return;
         const start = Math.max(0, Number(blockNode.dataset.readerStartOffset) || 0);
         readerState.illustrationAnchor = {
             chapterId: readerState.activeChapterId,
@@ -276,6 +298,7 @@
     global.createReaderIllustrationPane = createReaderIllustrationPane;
     global.loadReaderIllustrationDocument = loadReaderIllustrationDocument;
     global.syncReaderIllustrationControls = syncReaderIllustrationControls;
+    global.syncReaderIllustrationReadonlyState = syncReaderIllustrationReadonlyState;
     global.decorateReaderIllustrationBlockNode = decorateReaderIllustrationBlockNode;
     global.appendReaderIllustrationPane = appendReaderIllustrationPane;
     global.initializeReaderIllustrations = initializeReaderIllustrations;

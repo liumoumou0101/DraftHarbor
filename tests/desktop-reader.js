@@ -354,6 +354,12 @@ async function selectReaderStudioSection(page, section) {
         await page.click('[data-reader-font-close]');
         await page.waitForFunction(() => !document.querySelector('[data-reader-font-dialog]').open);
         await page.click('[data-reader-settings-close]');
+        await page.evaluate(() => {
+            const probe = document.createElement('div');
+            probe.dataset.readerFocusReadonlyProbe = '';
+            probe.innerHTML = '<button class="desktop-reader-illustration-dropzone" data-reader-illustration-dropzone>添加图片</button><button class="desktop-reader-illustration-remove">移除图片</button>';
+            document.querySelector('[data-reader-content]').appendChild(probe);
+        });
         await page.click('[data-reader-focus-toggle]');
         await page.waitForFunction(() => {
             const shell = document.querySelector('[data-reader-shell]');
@@ -364,11 +370,19 @@ async function selectReaderStudioSection(page, section) {
         const focusedShell = await page.evaluate(() => ({
             railVisibility: getComputedStyle(document.querySelector('.desktop-rail')).visibility,
             chromeDisplay: getComputedStyle(document.querySelector('.desktop-main > .desktop-topbar')).display,
-            activeIsContent: document.activeElement === document.querySelector('[data-reader-content]')
+            activeIsContent: document.activeElement === document.querySelector('[data-reader-content]'),
+            illustrationAddDisabled: document.querySelector('[data-reader-illustration-add]').disabled,
+            dropzoneDisabled: document.querySelector('[data-reader-illustration-dropzone]').disabled,
+            dropzoneDisplay: getComputedStyle(document.querySelector('[data-reader-illustration-dropzone]')).display,
+            removeDisabled: document.querySelector('.desktop-reader-illustration-remove').disabled,
+            removeDisplay: getComputedStyle(document.querySelector('.desktop-reader-illustration-remove')).display
         }));
         assert.strictEqual(focusedShell.railVisibility, 'hidden', 'Reader focus mode should collapse the global navigation rail');
         assert.strictEqual(focusedShell.chromeDisplay, 'none', 'Reader focus mode should collapse the global title bar');
         assert.strictEqual(focusedShell.activeIsContent, true, 'hiding Reader HUD must restore focus to the reading content');
+        assert.ok(focusedShell.illustrationAddDisabled && focusedShell.dropzoneDisabled && focusedShell.removeDisabled, 'Reader focus mode must disable every illustration mutation control');
+        assert.strictEqual(focusedShell.dropzoneDisplay, 'none', 'Reader focus mode must hide the illustration dropzone');
+        assert.strictEqual(focusedShell.removeDisplay, 'none', 'Reader focus mode must hide illustration removal controls');
         await page.keyboard.press('Escape');
         await page.waitForFunction(() => document.querySelector('[data-reader-shell]').dataset.readerControlsVisible === 'true');
         await page.click('[data-reader-focus-toggle]');
@@ -378,6 +392,16 @@ async function selectReaderStudioSection(page, section) {
                 && getComputedStyle(document.querySelector('.desktop-rail')).visibility !== 'hidden'
                 && getComputedStyle(document.querySelector('.desktop-main > .desktop-topbar')).display !== 'none';
         });
+        const restoredIllustrationControls = await page.evaluate(() => {
+            const probe = document.querySelector('[data-reader-focus-readonly-probe]');
+            const state = {
+                dropzoneDisabled: probe.querySelector('[data-reader-illustration-dropzone]').disabled,
+                removeDisabled: probe.querySelector('.desktop-reader-illustration-remove').disabled
+            };
+            probe.remove();
+            return state;
+        });
+        assert.deepStrictEqual(restoredIllustrationControls, { dropzoneDisabled: false, removeDisabled: false }, 'exiting Reader focus mode should restore illustration controls');
 
         await page.evaluate(() => {
             document.querySelector('[data-reader-content]').focus();

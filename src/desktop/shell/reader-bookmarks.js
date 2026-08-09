@@ -43,6 +43,7 @@
     }
 
     async function createReaderBookmarkAtCurrentPosition() {
+        if (readerState.focusMode) return;
         const locator = typeof captureReaderPositionLocator === 'function' ? captureReaderPositionLocator() : null;
         if (!locator) {
             readerSetNavigationStatus('bookmark', '当前位置暂时无法创建书签。');
@@ -67,6 +68,7 @@
     }
 
     async function updateReaderBookmark(bookmarkId, changes) {
+        if (readerState.focusMode) return;
         const patch = typeof changes === 'string' ? { title: changes } : changes || {};
         const bookmarks = readerBookmarkList().map((bookmark) => bookmark.bookmarkId === bookmarkId
             ? {
@@ -82,6 +84,7 @@
     }
 
     async function deleteReaderBookmark(bookmarkId) {
+        if (readerState.focusMode) return;
         const persistence = persistReaderNavigationState(readerBookmarkList().filter((bookmark) => bookmark.bookmarkId !== bookmarkId));
         readerState.bookmarkResolutions.delete(bookmarkId);
         renderReaderBookmarks();

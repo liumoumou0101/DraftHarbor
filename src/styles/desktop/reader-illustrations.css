@@ -58,6 +58,10 @@
     border-color: var(--desktop-accent);
     background: color-mix(in srgb, var(--desktop-accent) 15%, transparent);
 }
+.desktop-app[data-reader-focus-mode="true"] .desktop-reader-illustration-dropzone,
+.desktop-app[data-reader-focus-mode="true"] .desktop-reader-illustration-remove {
+    display: none;
+}
 
 .desktop-reader-illustration-empty {
     display: grid;

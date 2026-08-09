@@ -207,8 +207,12 @@
     function readerHudEnterFocusMode() {
         if (readerState.drawer && typeof setReaderDrawer === 'function') setReaderDrawer('');
         readerState.focusMode = true;
+        if (typeof closeReaderAnnotationDialog === 'function') closeReaderAnnotationDialog();
+        if (typeof clearReaderTransferSelection === 'function') clearReaderTransferSelection();
+        window.getSelection()?.removeAllRanges();
         const root = readerHudRoot();
         if (root) root.dataset.readerFocusMode = 'true';
+        window.syncReaderIllustrationControls?.();
         readerHudCancelTimer();
         readerHudTransition('hide', { panelOpen: false, dialogOpen: false, selectionActive: false, focusWithinInteractive: false });
         readerHudShell()?.querySelector('[data-reader-content]')?.focus({ preventScroll: true });
@@ -218,6 +222,7 @@
         readerState.focusMode = false;
         const root = readerHudRoot();
         if (root) root.dataset.readerFocusMode = 'false';
+        window.syncReaderIllustrationControls?.();
         readerHudShow();
     }
 
