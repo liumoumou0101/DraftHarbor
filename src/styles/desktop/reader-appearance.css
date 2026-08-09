@@ -67,6 +67,11 @@
     overflow: hidden;
     pointer-events: none;
     isolation: isolate;
+    color: var(--reader-text, #dce0e6);
+    font-family: var(--reader-font-family);
+    font-size: var(--reader-font-size, 18px);
+    font-weight: var(--reader-font-weight, 400);
+    line-height: var(--reader-line-height, 1.8);
 }
 
 .desktop-reader-page-flip-host[hidden] { display: none; }
@@ -79,7 +84,7 @@
     margin: 0;
 }
 
-.desktop-reader-page-flip-host .desktop-reader-page-flip-sheet {
+.desktop-reader-stage .desktop-reader-page-flip-host .desktop-reader-page-flip-sheet {
     box-sizing: border-box;
     width: 100%;
     height: 100%;

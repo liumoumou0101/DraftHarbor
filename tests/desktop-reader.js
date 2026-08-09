@@ -802,6 +802,22 @@ async function selectReaderStudioSection(page, section) {
         const curlKey = await page.evaluate(() => readerState.pageIndex < readerState.pages.length - 1 ? 'ArrowRight' : 'ArrowLeft');
         await page.keyboard.press(curlKey);
         await page.waitForFunction((previousRuns) => Number(document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipRuns || 0) > Number(previousRuns || 0), pageFlipRuns);
+        await page.waitForFunction(() => document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipState === 'active'
+            && Array.from(document.querySelectorAll('.desktop-reader-page-flip-sheet')).some((sheet) => getComputedStyle(sheet).display !== 'none'));
+        const animatedPageStyle = await page.evaluate(() => {
+            const source = document.querySelector('[data-reader-content] .desktop-reader-page [data-reader-block]');
+            const sheet = Array.from(document.querySelectorAll('.desktop-reader-page-flip-sheet')).find((item) => getComputedStyle(item).display !== 'none');
+            const animated = sheet?.querySelector('[data-reader-block]');
+            const sourceStyle = getComputedStyle(source);
+            const animatedStyle = getComputedStyle(animated);
+            return {
+                source: [sourceStyle.fontFamily, sourceStyle.fontSize, sourceStyle.fontWeight, sourceStyle.lineHeight, sourceStyle.color],
+                animated: [animatedStyle.fontFamily, animatedStyle.fontSize, animatedStyle.fontWeight, animatedStyle.lineHeight, animatedStyle.color],
+                background: getComputedStyle(sheet).backgroundColor
+            };
+        });
+        assert.deepStrictEqual(animatedPageStyle.animated, animatedPageStyle.source, 'animated page text must preserve the source font metrics and color');
+        assert.ok(!/rgba\([^)]*,\s*(?:0|0?\.\d+)\s*\)$/i.test(animatedPageStyle.background), 'animated page sheet must use an opaque background');
         await page.waitForFunction(() => document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipState === 'idle'
             && document.querySelector('[data-reader-page-flip-host]')?.hidden === true
             && !document.querySelector('[data-reader-content]')?.classList.contains('is-reader-page-flip-active')

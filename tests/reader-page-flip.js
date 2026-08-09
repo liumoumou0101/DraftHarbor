@@ -13,6 +13,7 @@ assert.ok(bundle.includes('this.render.stop()'), 'vendored StPageFlip destroy mu
 assert.ok(bundle.includes('cancelAnimationFrame(this.animationFrameId)'), 'vendored StPageFlip must cancel its pending animation frame');
 assert.ok(adapter.includes('global.St && global.St.PageFlip'), 'adapter must fail closed when StPageFlip is unavailable');
 assert.ok(adapter.includes("content.classList.add('is-reader-page-flip-active')"), 'adapter must keep the authoritative Reader DOM mounted during animation');
+assert.ok(adapter.indexOf("content.classList.add('is-reader-page-flip-active')") > adapter.indexOf('pageFlip.loadFromHTML(sheets)'), 'authoritative content must remain visible until PageFlip has rendered its first frame');
 assert.ok(adapter.includes('pageFlip?.destroy()'), 'adapter must destroy each temporary PageFlip instance');
 assert.ok(reading.includes("transition === 'curl'") && reading.includes('window.startReaderPageFlip'), 'Reader must limit the adapter to curl transitions');
 assert.ok(!Object.prototype.hasOwnProperty.call(packageJson.dependencies, 'page-flip'), 'vendored browser code must not pull the oversized npm package into production');

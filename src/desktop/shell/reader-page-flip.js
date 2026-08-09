@@ -54,6 +54,12 @@
         root.className = 'desktop-reader-page-flip-root';
         root.append(...sheets);
 
+        const contentStyle = global.getComputedStyle(content);
+        host.style.color = contentStyle.color;
+        host.style.fontFamily = contentStyle.fontFamily;
+        host.style.fontSize = contentStyle.fontSize;
+        host.style.fontWeight = contentStyle.fontWeight;
+        host.style.lineHeight = contentStyle.lineHeight;
         host.replaceChildren(root);
         host.hidden = false;
         host.dataset.readerPageFlipState = 'active';
@@ -62,7 +68,6 @@
         host.style.top = `${Math.round(bounds.top - stageBounds.top)}px`;
         host.style.width = `${Math.round(bounds.right - bounds.left)}px`;
         host.style.height = `${Math.round(bounds.bottom - bounds.top)}px`;
-        content.classList.add('is-reader-page-flip-active');
 
         let pageFlip;
         let timer;
@@ -108,6 +113,7 @@
             global.requestAnimationFrame(() => {
                 if (finished) return;
                 try {
+                    content.classList.add('is-reader-page-flip-active');
                     if (direction === 'next') pageFlip.flipNext('bottom');
                     else pageFlip.flipPrev('bottom');
                 } catch (error) {
