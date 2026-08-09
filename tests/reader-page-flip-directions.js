@@ -1,4 +1,4 @@
-/* global DraftHarborReaderLayout, createReaderLocatorAt, loadLegacyReaderProjectProjection, loadReaderWorkspaceChapter, readerState, renderReader, renderReaderPages, renderReaderReading */
+/* global DraftHarborReaderLayout, createReaderLocatorAt, loadLegacyReaderProjectProjection, loadReaderWorkspaceChapter, readerState, renderReader, renderReaderPages, renderReaderReading, setReaderDrawer */
 
 const assert = require('assert');
 const fs = require('fs/promises');
@@ -9,12 +9,15 @@ const { startDesktopServers } = require('../desktop/local-server');
 
 async function recordPageFlip(page, key, direction, screenshotPath) {
     const previousIndex = await page.evaluate(() => readerState.pageIndex);
-    const normalGap = await page.evaluate(() => {
+    const liveLayout = await page.evaluate(() => {
         const pages = Array.from(document.querySelectorAll('.desktop-reader-page-deck > .desktop-reader-page'));
-        if (pages.length < 2) return 0;
+        if (pages.length < 2) return { gap: 0, pageWidth: pages[0]?.getBoundingClientRect().width || 0 };
         const first = pages[0].getBoundingClientRect();
         const second = pages[1].getBoundingClientRect();
-        return second.left - first.right;
+        return {
+            gap: second.left - first.right,
+            pageWidth: first.width
+        };
     });
     const previousStarts = await page.evaluate(() => Number(document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipStarts || 0));
     const previousCompletions = await page.evaluate(() => Number(document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipCompletions || 0));
@@ -39,10 +42,13 @@ async function recordPageFlip(page, key, direction, screenshotPath) {
         renderer.render(animation.startedAt + animation.duration * 0.25);
         session.frozenAnimation = renderer.animation;
         renderer.animation = null;
+        const turningSheet = Array.from(document.querySelectorAll('.desktop-reader-page-flip-sheet'))
+            .find((sheet) => getComputedStyle(sheet).zIndex === '5');
         return {
             fallback: Boolean(document.querySelector('.desktop-reader-page-transition-layer')),
             active: Boolean(document.querySelector('[data-reader-content].is-reader-page-flip-active')),
-            spineGap: Number.parseFloat(getComputedStyle(document.querySelector('[data-reader-page-flip-host]'), '::after').width) || 0,
+            animatedPageWidth: turningSheet?.offsetWidth || 0,
+            centerMask: getComputedStyle(document.querySelector('[data-reader-page-flip-host]'), '::after').content !== 'none',
             sheets: Array.from(document.querySelectorAll('.desktop-reader-page-flip-sheet')).map((sheet) => {
                 const style = getComputedStyle(sheet);
                 return {
@@ -63,7 +69,7 @@ async function recordPageFlip(page, key, direction, screenshotPath) {
         if (animation) renderer.render(animation.startedAt + animation.duration + 1);
     });
     await page.waitForFunction((previous) => Number(document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipCompletions || 0) > previous, previousCompletions);
-    return { ...midFrame, normalGap };
+    return { ...midFrame, liveLayout };
 }
 
 function assertRealCurl(frame, direction) {
@@ -73,8 +79,9 @@ function assertRealCurl(frame, direction) {
         turningSheet.clipPath !== 'none' || turningSheet.transform !== 'none'
     ), `${direction} must visibly deform a StPageFlip sheet`);
     assert.ok(turningSheet.classes.includes(direction === 'next' ? '--left' : '--right'), `${direction} must turn from the matching book edge`);
-    assert.ok(Math.abs(frame.spineGap - frame.normalGap) <= 1,
-        `${direction} must preserve the normal double-page spine gap during the animation`);
+    assert.strictEqual(frame.centerMask, false, `${direction} must not cover the turning sheet with a center mask`);
+    assert.ok(Math.abs(frame.animatedPageWidth - frame.liveLayout.pageWidth) <= 1,
+        `${direction} animation sheet must keep the live page width (${frame.animatedPageWidth} vs ${frame.liveLayout.pageWidth})`);
 }
 
 async function stressPreviousPageFlips(page, turns = 8) {
@@ -215,6 +222,7 @@ async function crossLegacyChapterPrevious(page) {
 (async () => {
     const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-flip-directions-'));
     const fixturePath = path.join(dataRoot, 'flip-fixture.md');
+    const normalScreenshot = path.join(dataRoot, 'normal.png');
     const nextScreenshot = path.join(dataRoot, 'next.png');
     const previousScreenshot = path.join(dataRoot, 'previous.png');
     let servers = null;
@@ -252,6 +260,9 @@ async function crossLegacyChapterPrevious(page) {
         await page.waitForFunction(() => readerState.pages.length > 4
             && readerState.effectiveLayoutMode === 'double-page'
             && document.querySelectorAll('.desktop-reader-page-deck > .desktop-reader-page').length === 2);
+        await page.evaluate(() => setReaderDrawer(''));
+        await page.waitForTimeout(350);
+        await page.screenshot({ path: normalScreenshot });
 
         const nextFrame = await recordPageFlip(page, 'ArrowRight', 'next', nextScreenshot);
         const previousFrame = await recordPageFlip(page, 'ArrowLeft', 'previous', previousScreenshot);
@@ -270,6 +281,7 @@ async function crossLegacyChapterPrevious(page) {
         await crossLegacyChapterPrevious(page);
 
         console.log(JSON.stringify({
+            normalScreenshot,
             nextScreenshot,
             previousScreenshot,
             previousStress,

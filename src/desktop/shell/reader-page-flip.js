@@ -72,7 +72,6 @@
         host.style.lineHeight = contentStyle.lineHeight;
         host.dataset.readerPageFlipSpread = spreadSize === 2 ? 'double' : 'single';
         host.style.setProperty('--reader-page-flip-spine-gap', `${bounds.spineGap}px`);
-        host.style.setProperty('--reader-page-flip-spine-color', contentStyle.backgroundColor);
         host.replaceChildren(root);
         host.hidden = false;
         host.dataset.readerPageFlipState = 'active';
@@ -103,9 +102,9 @@
 
         try {
             const durationMs = Math.max(360, Number(options.durationMs) || 620);
-            const enginePageWidth = bounds.pageWidth + (spreadSize === 2 ? bounds.spineGap / 2 : 0);
             pageFlip = new PageFlip(root, {
-                width: Math.max(80, Math.round(enginePageWidth)),
+                // Keep the animation sheet identical to the live page so cloned text never reflows.
+                width: Math.max(80, Math.round(bounds.pageWidth)),
                 height: Math.max(80, Math.round(bounds.bottom - bounds.top)),
                 size: 'fixed',
                 startPage: spreadSize,
