@@ -8,7 +8,7 @@ const bytes = (relativePath) => Buffer.byteLength(read(relativePath), 'utf8');
 const lines = (relativePath) => read(relativePath).split(/\r?\n/).length;
 
 const readerShellModules = [
-  'reader-library.js', 'reader-reading.js', 'reader-settings.js', 'reader-navigation.js',
+  'reader-library.js', 'reader-reading.js', 'reader-page-flip.js', 'reader-settings.js', 'reader-navigation.js',
   'reader-selection.js', 'reader-input-coordinator.js', 'reader-profile-settings.js', 'reader-bookmarks.js', 'reader-annotation-ui.js', 'reader-hud.js', 'reader-appearance-studio.js', 'reader-tts.js', 'reader-workspace.js', 'reader-import-wizard.js', 'reader-project-bridge.js'
 ];
 readerShellModules.forEach((name) => {
@@ -33,6 +33,9 @@ assert.ok(service.includes('ReaderEpubAdapter.parseEpub'), 'Reader import servic
 assert.ok(desktop.includes('reader-import.css') && desktop.includes('reader-import-wizard.js') && desktop.includes('reader-project-bridge.js') && desktop.includes('reader-appearance.css') && desktop.includes('reader-appearance-studio.js'), 'F-12 reader assets must be loaded independently');
 assert.ok(desktop.includes('src/core/document/reader-preferences.js') && desktop.includes('src/core/document/reader-font-catalog.js') && desktop.includes('src/core/document/reader-annotation.js'), 'F-12.2 contracts must load independently');
 assert.ok(desktop.includes('src/core/document/reader-transition.js'), 'F-12.6 transition adapter must load independently');
+assert.ok(desktop.indexOf('page-flip.browser.js') < desktop.indexOf('reader-page-flip.js')
+  && desktop.indexOf('reader-page-flip.js') < desktop.indexOf('reader-reading.js'), 'vendored StPageFlip and its adapter must load before Reader navigation');
+assert.ok(fragment.includes('data-reader-page-flip-host'), 'Reader must expose an isolated page-flip presentation host');
 assert.ok(desktop.includes('src/core/document/reader-tts.js'), 'F-12.11 TTS contract must load independently');
 assert.ok(desktop.includes('reader-input-coordinator.js') && desktop.includes('reader-profile-settings.js'), 'F-12.6 shell modules must load independently');
 assert.ok(desktop.includes('reader-annotation-ui.js'), 'F-12.7 annotation UI must load independently');

@@ -9,8 +9,9 @@
 | Playwright | Automated tests | Apache-2.0 |
 | ESLint | Development linting | MIT |
 | JSZip | Project package and EPUB ZIP processing | MIT OR GPL-3.0-or-later; DraftHarbor uses it under MIT |
+| StPageFlip 2.0.7 | Reader page-curl presentation | MIT; vendored browser build with a local animation-loop cleanup patch |
 
-完整版本号由 `package-lock.json` 固定。安装依赖后，各依赖的许可证正文位于相应的 `node_modules/<package>/LICENSE*`、`NOTICE` 或 `ThirdPartyNotices.txt` 文件中。
+依赖版本由 `package-lock.json` 或对应的 `src/vendor/` 目录固定。许可证正文位于相应的 `node_modules/<package>/LICENSE*`、`NOTICE`、`ThirdPartyNotices.txt` 或 vendored 组件目录中。
 
 发布安装包时需要保留 Electron/Chromium 随附的第三方许可文件，并将本项目的 `LICENSE`、`NOTICE` 和本文件一起打包。Apache-2.0 组件的 `NOTICE` 不能省略。
 

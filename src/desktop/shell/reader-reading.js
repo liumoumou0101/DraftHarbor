@@ -358,6 +358,14 @@
         const incomingDeck = context.incomingDeck;
         if (!content || transition === 'none') return;
 
+        if (transition === 'curl' && typeof window.startReaderPageFlip === 'function' && window.startReaderPageFlip({
+            content,
+            outgoingDeck,
+            incomingDeck,
+            direction,
+            durationMs: adapter.durationMs
+        })) return;
+
         if (outgoingDeck && incomingDeck && content.contains(incomingDeck)) {
             const layer = document.createElement('div');
             layer.className = 'desktop-reader-page-transition-layer';

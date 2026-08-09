@@ -798,10 +798,14 @@ async function selectReaderStudioSection(page, section) {
         await page.selectOption('[data-reader-page-transition]', 'curl');
         await page.click('[data-reader-settings-close]');
         await page.waitForFunction(() => readerState.pageTransition === 'curl' && readerEffectiveTransition() === 'curl');
+        const pageFlipRuns = await page.locator('[data-reader-page-flip-host]').getAttribute('data-reader-page-flip-runs');
         const curlKey = await page.evaluate(() => readerState.pageIndex < readerState.pages.length - 1 ? 'ArrowRight' : 'ArrowLeft');
         await page.keyboard.press(curlKey);
-        await page.waitForFunction(() => getComputedStyle(document.querySelector('.desktop-reader-page-deck')).animationName.includes('reader-page-curl'));
-        await page.waitForFunction(() => !document.querySelector('.desktop-reader-page-deck')?.classList.contains('is-reader-transitioning'));
+        await page.waitForFunction((previousRuns) => Number(document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipRuns || 0) > Number(previousRuns || 0), pageFlipRuns);
+        await page.waitForFunction(() => document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipState === 'idle'
+            && document.querySelector('[data-reader-page-flip-host]')?.hidden === true
+            && !document.querySelector('[data-reader-content]')?.classList.contains('is-reader-page-flip-active')
+            && !document.querySelector('.desktop-reader-page-flip-root'));
 
         const touchSelectionIndex = await page.evaluate(() => {
             const node = document.querySelector('[data-reader-page] [data-reader-block]');
@@ -868,6 +872,21 @@ async function selectReaderStudioSection(page, section) {
         });
         assert.deepStrictEqual({ blockId: doubleAnchor.blockId, offset: doubleAnchor.offset }, pagedAnchor, 'single-page to double-page must preserve the shared locator');
         assert.strictEqual(doubleAnchor.visiblePages, 2, 'double-page mode should render a left-to-right spread');
+        await page.click('[data-reader-settings-close]');
+        const doubleFlipRuns = Number(await page.locator('[data-reader-page-flip-host]').getAttribute('data-reader-page-flip-runs') || 0);
+        const doublePageIndex = await page.evaluate(() => readerState.pageIndex);
+        await page.keyboard.press('ArrowLeft');
+        await page.waitForFunction((previous) => readerState.pageIndex < previous, doublePageIndex);
+        await page.waitForFunction((previousRuns) => Number(document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipRuns || 0) > previousRuns, doubleFlipRuns);
+        await page.waitForFunction(() => document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipState === 'idle');
+        const previousFlipRuns = Number(await page.locator('[data-reader-page-flip-host]').getAttribute('data-reader-page-flip-runs') || 0);
+        await page.keyboard.press('ArrowRight');
+        await page.waitForFunction((previous) => readerState.pageIndex === previous, doublePageIndex);
+        await page.waitForFunction((previousRuns) => Number(document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipRuns || 0) > previousRuns, previousFlipRuns);
+        await page.waitForFunction(() => document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipState === 'idle'
+            && !document.querySelector('.desktop-reader-page-flip-root'));
+        await page.click('[data-reader-settings-toggle]');
+        await selectReaderStudioSection(page, 'page');
         await page.selectOption('[data-reader-layout-mode]', 'auto');
         await page.waitForFunction(() => document.querySelector('[data-reader-content]').dataset.readerLayout === 'double-page');
         await page.setViewportSize({ width: 720, height: 820 });

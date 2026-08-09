@@ -142,6 +142,9 @@ assert.ok(html.includes('<option value="curl">仿真翻页</option>'), 'curl tra
 assert.ok(appearanceCss.includes('data-reader-transition="curl"')
   && appearanceCss.includes('reader-page-curl-in-next')
   && appearanceCss.includes('reader-page-curl-out-next'), 'curl transition must have an implemented CSS animation path');
+assert.ok(desktop.includes('src/vendor/page-flip-2.0.7/page-flip.browser.js')
+  && desktop.includes('src/desktop/shell/reader-page-flip.js'), 'paged curl must load the vendored StPageFlip presentation adapter');
+assert.ok(html.includes('data-reader-page-flip-engine="st-page-flip"'), 'Reader must identify the active page-flip engine for acceptance checks');
 targetFragments.forEach((fragment, index) => {
   const destination = ['writer', 'compendium', 'workflow'][index];
   assert.ok(fragment.includes(`data-reader-source-bar="${destination}"`), `${destination} must expose the shared reader source bar`);
