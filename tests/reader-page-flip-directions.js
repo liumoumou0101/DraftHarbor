@@ -7,6 +7,35 @@ const path = require('path');
 const { chromium } = require('playwright');
 const { startDesktopServers } = require('../desktop/local-server');
 
+async function verifyProductionStartup(page) {
+    const before = await page.evaluate(() => ({
+        completions: Number(document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipCompletions || 0)
+    }));
+    await page.evaluate(() => {
+        window.__readerPageFlipTestHook = null;
+        window.__readerPageFlipStartupObservation = new Promise((resolve) => {
+            const content = document.querySelector('[data-reader-content]');
+            const observer = new MutationObserver((mutations) => {
+                if (!mutations.some((mutation) => mutation.type === 'childList')) return;
+                observer.disconnect();
+                resolve({
+                    active: content.classList.contains('is-reader-page-flip-active'),
+                    visibleSheets: Array.from(document.querySelectorAll('.desktop-reader-page-flip-sheet'))
+                        .filter((sheet) => getComputedStyle(sheet).display !== 'none').length
+                });
+            });
+            observer.observe(content, { childList: true });
+        });
+    });
+    await page.focus('[data-reader-content]');
+    await page.keyboard.press('ArrowRight');
+    const startup = await page.evaluate(() => window.__readerPageFlipStartupObservation);
+    assert.strictEqual(startup.active, true, 'destination deck must be hidden in the same task that renders it');
+    assert.ok(startup.visibleSheets >= 2, 'a complete static PageFlip spread must be drawable before the destination deck is hidden');
+    await page.waitForFunction((snapshot) => Number(document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipCompletions || 0) > snapshot.completions,
+    before);
+}
+
 async function recordPageFlip(page, key, direction, screenshotPath) {
     const previousIndex = await page.evaluate(() => readerState.pageIndex);
     const liveLayout = await page.evaluate(() => {
@@ -269,6 +298,7 @@ async function crossLegacyChapterPrevious(page) {
         await page.evaluate(() => setReaderDrawer(''));
         await page.waitForTimeout(350);
         await page.screenshot({ path: normalScreenshot });
+        await verifyProductionStartup(page);
 
         const nextFrame = await recordPageFlip(page, 'ArrowRight', 'next', nextScreenshot);
         const previousFrame = await recordPageFlip(page, 'ArrowLeft', 'previous', previousScreenshot);

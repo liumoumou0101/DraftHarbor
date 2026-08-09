@@ -120,6 +120,11 @@
                 disableFlipByClick: false
             });
             pageFlip.loadFromHTML(sheets);
+            // Prime a complete static spread before hiding the authoritative deck.
+            // startReaderPageFlip runs inside the navigation frame, so doing both
+            // synchronously prevents the destination page from painting for one frame.
+            pageFlip.getRender().drawFrame();
+            content.classList.add('is-reader-page-flip-active');
             let started = false;
             let startedAt = 0;
             pageFlip.on('changeState', (event) => {
@@ -138,7 +143,6 @@
             const begin = () => {
                 if (finished) return;
                 try {
-                    content.classList.add('is-reader-page-flip-active');
                     if (direction === 'next') pageFlip.flipNext('bottom');
                     else pageFlip.flipPrev('bottom');
                     if (!started) finish();

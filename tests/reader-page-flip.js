@@ -14,6 +14,9 @@ assert.ok(bundle.includes('cancelAnimationFrame(this.animationFrameId)'), 'vendo
 assert.ok(adapter.includes('global.St && global.St.PageFlip'), 'adapter must fail closed when StPageFlip is unavailable');
 assert.ok(adapter.includes("content.classList.add('is-reader-page-flip-active')"), 'adapter must keep the authoritative Reader DOM mounted during animation');
 assert.ok(adapter.indexOf("content.classList.add('is-reader-page-flip-active')") > adapter.indexOf('pageFlip.loadFromHTML(sheets)'), 'authoritative content must remain visible until PageFlip has rendered its first frame');
+assert.ok(adapter.indexOf('pageFlip.getRender().drawFrame()') > adapter.indexOf('pageFlip.loadFromHTML(sheets)'), 'adapter must synchronously prime the static PageFlip spread');
+assert.ok(adapter.indexOf("content.classList.add('is-reader-page-flip-active')") > adapter.indexOf('pageFlip.getRender().drawFrame()'), 'adapter must not hide the destination deck before the PageFlip spread is drawable');
+assert.ok(adapter.indexOf("content.classList.add('is-reader-page-flip-active')") < adapter.indexOf('global.requestAnimationFrame(begin)'), 'adapter must hide the destination deck in the setup frame before animation starts');
 assert.ok(adapter.includes('pageFlip?.destroy()'), 'adapter must destroy each temporary PageFlip instance');
 assert.ok(adapter.includes('global.stopReaderPageFlip'), 'Reader settings and reflows must be able to cancel an active PageFlip session');
 assert.ok(reading.includes("transition === 'curl'") && reading.includes('window.startReaderPageFlip'), 'Reader must limit the adapter to curl transitions');
