@@ -77,6 +77,19 @@
 .desktop-reader-page-flip-host[hidden] { display: none; }
 .desktop-reader-content.is-reader-page-flip-active > .desktop-reader-page-deck { visibility: hidden; }
 
+.desktop-reader-page-flip-host[data-reader-page-flip-spread="double"]::after {
+    content: "";
+    position: absolute;
+    z-index: 20;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: var(--reader-page-flip-spine-gap, 28px);
+    transform: translateX(-50%);
+    background: var(--reader-page-flip-spine-color, transparent);
+    pointer-events: none;
+}
+
 .desktop-reader-page-flip-root,
 .desktop-reader-page-flip-root.stf__parent {
     width: 100%;

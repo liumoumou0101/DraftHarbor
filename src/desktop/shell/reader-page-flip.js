@@ -27,7 +27,8 @@
             top: Math.min(first.top, last.top),
             right: last.right,
             bottom: Math.max(first.bottom, last.bottom),
-            pageWidth: first.width
+            pageWidth: first.width,
+            spineGap: pages.length > 1 ? Math.max(0, last.left - first.right) : 0
         };
     }
 
@@ -69,6 +70,9 @@
         host.style.fontSize = contentStyle.fontSize;
         host.style.fontWeight = contentStyle.fontWeight;
         host.style.lineHeight = contentStyle.lineHeight;
+        host.dataset.readerPageFlipSpread = spreadSize === 2 ? 'double' : 'single';
+        host.style.setProperty('--reader-page-flip-spine-gap', `${bounds.spineGap}px`);
+        host.style.setProperty('--reader-page-flip-spine-color', contentStyle.backgroundColor);
         host.replaceChildren(root);
         host.hidden = false;
         host.dataset.readerPageFlipState = 'active';
@@ -99,8 +103,9 @@
 
         try {
             const durationMs = Math.max(360, Number(options.durationMs) || 620);
+            const enginePageWidth = bounds.pageWidth + (spreadSize === 2 ? bounds.spineGap / 2 : 0);
             pageFlip = new PageFlip(root, {
-                width: Math.max(80, Math.round(bounds.pageWidth)),
+                width: Math.max(80, Math.round(enginePageWidth)),
                 height: Math.max(80, Math.round(bounds.bottom - bounds.top)),
                 size: 'fixed',
                 startPage: spreadSize,

@@ -9,6 +9,13 @@ const { startDesktopServers } = require('../desktop/local-server');
 
 async function recordPageFlip(page, key, direction, screenshotPath) {
     const previousIndex = await page.evaluate(() => readerState.pageIndex);
+    const normalGap = await page.evaluate(() => {
+        const pages = Array.from(document.querySelectorAll('.desktop-reader-page-deck > .desktop-reader-page'));
+        if (pages.length < 2) return 0;
+        const first = pages[0].getBoundingClientRect();
+        const second = pages[1].getBoundingClientRect();
+        return second.left - first.right;
+    });
     const previousStarts = await page.evaluate(() => Number(document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipStarts || 0));
     const previousCompletions = await page.evaluate(() => Number(document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipCompletions || 0));
     await page.evaluate(() => {
@@ -35,6 +42,7 @@ async function recordPageFlip(page, key, direction, screenshotPath) {
         return {
             fallback: Boolean(document.querySelector('.desktop-reader-page-transition-layer')),
             active: Boolean(document.querySelector('[data-reader-content].is-reader-page-flip-active')),
+            spineGap: Number.parseFloat(getComputedStyle(document.querySelector('[data-reader-page-flip-host]'), '::after').width) || 0,
             sheets: Array.from(document.querySelectorAll('.desktop-reader-page-flip-sheet')).map((sheet) => {
                 const style = getComputedStyle(sheet);
                 return {
@@ -55,7 +63,7 @@ async function recordPageFlip(page, key, direction, screenshotPath) {
         if (animation) renderer.render(animation.startedAt + animation.duration + 1);
     });
     await page.waitForFunction((previous) => Number(document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipCompletions || 0) > previous, previousCompletions);
-    return midFrame;
+    return { ...midFrame, normalGap };
 }
 
 function assertRealCurl(frame, direction) {
@@ -65,6 +73,8 @@ function assertRealCurl(frame, direction) {
         turningSheet.clipPath !== 'none' || turningSheet.transform !== 'none'
     ), `${direction} must visibly deform a StPageFlip sheet`);
     assert.ok(turningSheet.classes.includes(direction === 'next' ? '--left' : '--right'), `${direction} must turn from the matching book edge`);
+    assert.ok(Math.abs(frame.spineGap - frame.normalGap) <= 1,
+        `${direction} must preserve the normal double-page spine gap during the animation`);
 }
 
 async function stressPreviousPageFlips(page, turns = 8) {
