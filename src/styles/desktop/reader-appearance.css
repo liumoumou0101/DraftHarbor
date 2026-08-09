@@ -77,6 +77,14 @@
 .desktop-reader-page-flip-host[hidden] { display: none; }
 .desktop-reader-content.is-reader-page-flip-active > .desktop-reader-page-deck { visibility: hidden; }
 
+.desktop-reader-stage[data-reader-indent-enabled="true"] .desktop-reader-page-flip-host p {
+    text-indent: 2em;
+}
+
+.desktop-reader-stage[data-reader-indent-enabled="true"] .desktop-reader-page-flip-host p:first-child {
+    text-indent: 0;
+}
+
 .desktop-reader-page-flip-root,
 .desktop-reader-page-flip-root.stf__parent {
     width: 100%;

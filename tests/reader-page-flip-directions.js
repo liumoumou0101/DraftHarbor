@@ -44,10 +44,14 @@ async function recordPageFlip(page, key, direction, screenshotPath) {
         renderer.animation = null;
         const turningSheet = Array.from(document.querySelectorAll('.desktop-reader-page-flip-sheet'))
             .find((sheet) => getComputedStyle(sheet).zIndex === '5');
+        const animatedIndentedParagraph = turningSheet?.querySelector('p:not(:first-child)');
+        const liveIndentedParagraph = document.querySelector('.desktop-reader-page-deck > .desktop-reader-page p:not(:first-child)');
         return {
             fallback: Boolean(document.querySelector('.desktop-reader-page-transition-layer')),
             active: Boolean(document.querySelector('[data-reader-content].is-reader-page-flip-active')),
             animatedPageWidth: turningSheet?.offsetWidth || 0,
+            animatedTextIndent: Number.parseFloat(getComputedStyle(animatedIndentedParagraph).textIndent) || 0,
+            liveTextIndent: Number.parseFloat(getComputedStyle(liveIndentedParagraph).textIndent) || 0,
             centerMask: getComputedStyle(document.querySelector('[data-reader-page-flip-host]'), '::after').content !== 'none',
             sheets: Array.from(document.querySelectorAll('.desktop-reader-page-flip-sheet')).map((sheet) => {
                 const style = getComputedStyle(sheet);
@@ -82,6 +86,8 @@ function assertRealCurl(frame, direction) {
     assert.strictEqual(frame.centerMask, false, `${direction} must not cover the turning sheet with a center mask`);
     assert.ok(Math.abs(frame.animatedPageWidth - frame.liveLayout.pageWidth) <= 1,
         `${direction} animation sheet must keep the live page width (${frame.animatedPageWidth} vs ${frame.liveLayout.pageWidth})`);
+    assert.ok(frame.liveTextIndent > 0 && Math.abs(frame.animatedTextIndent - frame.liveTextIndent) <= 1,
+        `${direction} animation paragraphs must keep the live first-line indent (${frame.animatedTextIndent} vs ${frame.liveTextIndent})`);
 }
 
 async function stressPreviousPageFlips(page, turns = 8) {
