@@ -82,6 +82,7 @@ function legacyExternal() {
     assert.ok(projectResult.state.positionLocator);
     assert.strictEqual(projectResult.state.preferenceOverrides.migrationResolution, 'approximate');
     const preferences = await stateStore.readReaderGlobalPreferences(projectRoot);
+    assert.strictEqual(preferences.preferences.layoutMode, 'double-page');
     assert.strictEqual(preferences.preferences.themeId, 'paper');
     assert.strictEqual(preferences.preferences.fontFamilyId, 'sans-serif');
     assert.strictEqual(preferences.preferences.indent, false);

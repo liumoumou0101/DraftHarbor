@@ -124,6 +124,9 @@ async function selectReaderStudioSection(page, section) {
         await page.waitForFunction(() => document.querySelector('[data-reader-import-dialog]').open);
         await page.click('[data-reader-import-confirm]');
         await page.waitForFunction(() => document.querySelector('[data-reader-title]').textContent.includes('Chapter One'));
+        await page.waitForFunction(() => readerState.layoutMode === 'double-page'
+            && readerState.effectiveLayoutMode === 'double-page'
+            && document.querySelector('[data-reader-content]').dataset.readerLayout === 'double-page');
         await page.evaluate(() => {
             let current = null;
             let timer = null;

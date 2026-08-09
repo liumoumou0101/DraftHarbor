@@ -282,7 +282,7 @@
     }
 
     function createReaderGlobalPreferences(input = {}) {
-        const layoutMode = input.layoutMode === undefined ? 'flow' : assertEnum(input.layoutMode, LAYOUT_MODES, 'reader layoutMode');
+        const layoutMode = input.layoutMode === undefined ? 'double-page' : assertEnum(input.layoutMode, LAYOUT_MODES, 'reader layoutMode');
         const pageTransition = input.pageTransition === undefined ? 'fade' : assertEnum(input.pageTransition, PAGE_TRANSITIONS, 'reader pageTransition');
         const themeId = input.themeId === undefined ? 'dark' : assertEnum(input.themeId, THEME_IDS, 'reader themeId');
         const fontFamilyId = input.fontFamilyId === undefined ? 'system' : assertEnum(input.fontFamilyId, FONT_FAMILY_IDS, 'reader fontFamilyId');

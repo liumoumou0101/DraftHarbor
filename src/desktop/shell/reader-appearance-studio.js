@@ -53,7 +53,7 @@
         const family = document.querySelector('[data-reader-quick-font-family]');
         if (family) family.value = readerState.fontFamily || 'system';
         const layout = document.querySelector('[data-reader-quick-layout]');
-        if (layout) layout.value = readerState.layoutMode || 'flow';
+        if (layout) layout.value = readerState.layoutMode || 'double-page';
         const size = document.querySelector('[data-reader-quick-font-size]');
         if (size) size.textContent = `${readerState.fontSize} px`;
     }

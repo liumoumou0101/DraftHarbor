@@ -3,6 +3,7 @@ const Preferences = require('../src/core/document/reader-preferences');
 
 const defaults = Preferences.createReaderPreferencesV2({});
 assert.strictEqual(defaults.schemaVersion, 2);
+assert.strictEqual(defaults.layoutMode, 'double-page');
 assert.strictEqual(defaults.fontId, 'builtin:default');
 assert.strictEqual(defaults.appearanceProfileId, 'default');
 assert.strictEqual(defaults.statusBarMode, 'auto');

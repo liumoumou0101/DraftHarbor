@@ -187,6 +187,7 @@ const preferences = ReaderSchema.createReaderGlobalPreferences({
     fontSize: 22,
     reducedMotionOverride: true
 });
+assert.strictEqual(ReaderSchema.createReaderGlobalPreferences({}).layoutMode, 'double-page');
 assert.strictEqual(preferences.layoutMode, 'double-page');
 assert.strictEqual(preferences.fontFamilyId, 'serif');
 assert.strictEqual(preferences.reducedMotionOverride, true);

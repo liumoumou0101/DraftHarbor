@@ -18,7 +18,7 @@
     const STATUS_BAR_FIELDS = Object.freeze(['chapter', 'page', 'percent', 'characters', 'eta']);
 
     const DEFAULT_PREFERENCES = Object.freeze({
-        layoutMode: 'flow',
+        layoutMode: 'double-page',
         pageTransition: 'fade',
         themeId: 'dark',
         fontId: 'builtin:default',

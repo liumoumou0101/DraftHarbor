@@ -271,7 +271,11 @@
         window.stopReaderPageFlip?.();
         const metrics = readerLayoutMetrics();
         if (!metrics.content) return;
-        const locator = options.locator || readerState.anchorLocator || readerState.documentRecordState && readerState.documentRecordState.positionLocator;
+        const requestedLocator = options.locator || readerState.anchorLocator
+            || readerState.documentRecordState && readerState.documentRecordState.positionLocator;
+        const locator = requestedLocator && requestedLocator.chapterId === readerState.activeChapterId
+            ? requestedLocator
+            : null;
         readerState.effectiveLayoutMode = metrics.effective;
         readerState.anchorLocator = locator || null;
         metrics.content.dataset.readerLayout = metrics.effective;

@@ -13,7 +13,7 @@
             : schema && typeof schema.createReaderGlobalPreferences === 'function'
                 ? schema.createReaderGlobalPreferences({})
             : {
-            schemaVersion: 2, layoutMode: 'flow', pageTransition: 'fade', themeId: 'dark',
+            schemaVersion: 2, layoutMode: 'double-page', pageTransition: 'fade', themeId: 'dark',
                 fontFamilyId: 'system', fontId: 'builtin:default', fontCatalogVersion: 1, fontSize: 18, lineHeight: 1.8, letterSpacing: 0,
                 paragraphSpacing: 1.05, pageMargin: 48, textWidth: 760, textAlign: 'start', indent: true,
                 paperMaterial: 'flat', paperShadow: true, paperVignette: true,
@@ -108,6 +108,9 @@
     function applyReaderPreferenceModel() {
         assignReaderPreferences(readerEffectivePreferences());
         applyReaderSettings();
+        if (!readerState.apiMode && readerState.currentChapter && typeof renderReaderReading === 'function') {
+            renderReaderReading({ locator: readerState.anchorLocator });
+        }
         syncReaderSettingsControls();
     }
 
@@ -320,7 +323,7 @@
         bindReaderSetting('[data-reader-letter-spacing]', 'input', (control) => { readerState.letterSpacing = Number(control.value) || 0; });
         bindReaderSetting('[data-reader-page-margin]', 'input', (control) => { readerState.pageMargin = Number(control.value) || 48; });
         bindReaderSetting('[data-reader-text-align]', 'change', (control) => { readerState.textAlign = control.value || 'start'; }, { reflow: false });
-        bindReaderSetting('[data-reader-layout-mode]', 'change', (control) => { readerState.layoutMode = control.value || 'flow'; }, { releaseFocus: true });
+        bindReaderSetting('[data-reader-layout-mode]', 'change', (control) => { readerState.layoutMode = control.value || 'double-page'; }, { releaseFocus: true });
         bindReaderSetting('[data-reader-page-transition]', 'change', (control) => { readerState.pageTransition = control.value || 'none'; }, { reflow: false, releaseFocus: true });
         bindReaderSetting('[data-reader-reduced-motion]', 'change', (control) => {
             readerState.reducedMotionOverride = control.value === 'reduce' ? true : control.value === 'allow' ? false : undefined;

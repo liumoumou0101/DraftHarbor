@@ -36,7 +36,7 @@ function legacyPreferences(legacy = {}) {
   const fontMap = { serif: 'serif', yahei: 'sans-serif', system: 'system', sans: 'sans-serif', kai: 'kai' };
   const theme = ['dark', 'paper', 'sepia'].includes(cleanString(legacy.theme)) ? cleanString(legacy.theme) : 'dark';
   return ReaderPreferences.createReaderPreferencesV2({
-    layoutMode: 'flow',
+    layoutMode: 'double-page',
     pageTransition: 'fade',
     themeId: theme,
     fontFamilyId: fontMap[cleanString(legacy.fontFamily)] || 'system',
