@@ -27,6 +27,7 @@
         readerState.appearanceProfileId = 'custom';
         readerState.anchorLocator = locator || readerState.anchorLocator;
         if (typeof window.applyReaderSettings === 'function') window.applyReaderSettings({ reflow: options.reflow !== false });
+        if (options.reflow !== false && !readerState.apiMode && readerState.document && typeof window.renderReader === 'function') window.renderReader();
         if (typeof window.syncReaderSettingsControls === 'function') window.syncReaderSettingsControls();
         if (typeof window.saveReaderState === 'function') window.saveReaderState();
         if (typeof window.scheduleReaderPreferenceSave === 'function') window.scheduleReaderPreferenceSave();

@@ -38,6 +38,20 @@
         return String(content || '').split('\n').map((line) => line.trim()).filter(Boolean);
     }
 
+    function legacyReaderChapter(chapter, chapterIndex) {
+        const chapterId = String(chapter.id || `legacy-chapter-${chapterIndex + 1}`);
+        const paragraphs = readerParagraphs(chapter.content);
+        return {
+            chapterId,
+            title: chapter.title || `第 ${chapterIndex + 1} 章`,
+            blocks: (paragraphs.length ? paragraphs : ['这一章暂时没有正文。']).map((text, blockIndex) => ({
+                blockId: `${chapterId}:legacy-block:${blockIndex + 1}`,
+                type: 'paragraph',
+                text
+            }))
+        };
+    }
+
     function readerDocumentKey() {
         const documentData = readerState.document || {};
         return documentData.source === 'project'
@@ -315,19 +329,15 @@
         if (elements.prev) elements.prev.disabled = readerState.chapterIndex <= 0;
         if (elements.next) elements.next.disabled = readerState.chapterIndex >= chapters.length - 1;
 
-        elements.content.replaceChildren();
-        const paragraphs = readerParagraphs(chapter.content);
-        if (!paragraphs.length) {
-            const empty = document.createElement('p');
-            empty.textContent = '这一章暂时没有正文。';
-            elements.content.appendChild(empty);
-        } else {
-            paragraphs.forEach((paragraph) => {
-                const node = document.createElement('p');
-                node.textContent = paragraph;
-                elements.content.appendChild(node);
-            });
+        const projectedChapter = legacyReaderChapter(chapter, readerState.chapterIndex);
+        const chapterChanged = readerState.activeChapterId !== projectedChapter.chapterId;
+        readerState.currentChapter = projectedChapter;
+        readerState.activeChapterId = projectedChapter.chapterId;
+        if (chapterChanged) {
+            readerState.anchorLocator = null;
+            readerState.pageIndex = 0;
         }
+        if (typeof renderReaderReading === 'function') renderReaderReading({ locator: readerState.anchorLocator });
 
         if (elements.chapters) {
             elements.chapters.replaceChildren();
@@ -340,6 +350,8 @@
                 button.addEventListener('click', () => {
                     rememberReaderScroll();
                     readerState.chapterIndex = index;
+                    readerState.anchorLocator = null;
+                    readerState.pageIndex = 0;
                     saveReaderState();
                     renderReader();
                 });
@@ -347,5 +359,6 @@
             });
         }
 
-        restoreReaderScroll();
+        if (readerState.effectiveLayoutMode === 'flow' && !readerState.anchorLocator) restoreReaderScroll();
+        else updateReaderProgress();
     }

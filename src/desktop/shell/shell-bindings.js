@@ -151,7 +151,7 @@
                 return;
             }
 
-            if (readerState.apiMode && readerState.effectiveLayoutMode !== 'flow') {
+            if (readerState.currentChapter && readerState.effectiveLayoutMode !== 'flow') {
                 if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
                     event.preventDefault();
                     if (typeof queueReaderPageTurn === 'function') queueReaderPageTurn(-1);
@@ -164,7 +164,7 @@
                 }
             }
 
-            if (readerState.apiMode && readerState.effectiveLayoutMode === 'flow'
+            if (readerState.currentChapter && readerState.effectiveLayoutMode === 'flow'
                 && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
                 event.preventDefault();
                 scrollReaderFlowPage(event.key === 'ArrowRight' ? 1 : -1);

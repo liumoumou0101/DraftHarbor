@@ -90,6 +90,8 @@
         const sameProject = previous && previous.source === 'project' && previous.projectId === documentData.projectId;
         readerState.document = documentData;
         readerState.chapterIndex = sameProject ? readerState.chapterIndex : 0;
+        readerState.anchorLocator = null;
+        readerState.pageIndex = 0;
         saveReaderState();
         renderReader();
 

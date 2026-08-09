@@ -299,6 +299,7 @@
         }
         readerState.anchorLocator = locator || readerState.anchorLocator;
         applyReaderSettings({ reflow });
+        if (reflow && !readerState.apiMode && readerState.document && typeof renderReader === 'function') renderReader();
         syncReaderSettingsControls();
         if (refreshProgress && typeof updateReaderWorkspaceProgress === 'function') updateReaderWorkspaceProgress();
         saveReaderState();

@@ -1092,6 +1092,49 @@ async function selectReaderStudioSection(page, section) {
         await page.click('[data-view-target="reader"]');
         await page.waitForFunction(() => document.getElementById('desktop-root').dataset.view === 'reader');
         await page.waitForFunction(() => document.querySelector('[data-reader-shell]').dataset.readerHudState === 'visible');
+        await page.setViewportSize({ width: 2048, height: 1110 });
+        await page.evaluate(() => {
+            readerState.layoutMode = 'double-page';
+            window.loadLegacyReaderProjectProjection({
+                source: 'project',
+                projectId: 'legacy-project-fallback',
+                title: '项目兼容投影',
+                fileName: 'legacy-project.draftharbor',
+                chapters: [{
+                    id: 'legacy-chapter',
+                    title: '兼容章节',
+                    content: Array.from({ length: 180 }, (_, index) => `兼容投影长段落 ${index + 1}。这一段用于验证真实项目回退路径也会进入新版分页引擎。`).join('\n\n')
+                }]
+            });
+        });
+        await page.waitForFunction(() => readerState.apiMode === false
+            && readerState.layoutMode === 'double-page'
+            && readerState.effectiveLayoutMode === 'double-page'
+            && document.querySelector('[data-reader-content]').dataset.readerLayout === 'double-page'
+            && document.querySelectorAll('.desktop-reader-page-deck > [data-reader-page]').length === 2);
+        const legacyDoublePage = await page.evaluate(() => {
+            const content = document.querySelector('[data-reader-content]');
+            const pages = Array.from(document.querySelectorAll('.desktop-reader-page-deck > [data-reader-page]'));
+            const [left, right] = pages.map((pageNode) => pageNode.getBoundingClientRect());
+            return {
+                quickLayout: document.querySelector('[data-reader-quick-layout]').value,
+                spread: document.querySelector('.desktop-reader-page-deck').dataset.readerSpread,
+                aligned: Math.abs(left.top - right.top) < 2,
+                ordered: left.right <= right.left,
+                hasVerticalOverflow: content.scrollHeight > content.clientHeight + 1
+            };
+        });
+        assert.deepStrictEqual(legacyDoublePage, { quickLayout: 'double-page', spread: 'double', aligned: true, ordered: true, hasVerticalOverflow: false }, 'legacy project fallback must visually render a true two-page spread');
+        await page.focus('[data-reader-quick-layout]');
+        await page.selectOption('[data-reader-quick-layout]', 'single-page');
+        await page.waitForFunction(() => readerState.effectiveLayoutMode === 'single-page' && document.querySelectorAll('.desktop-reader-page-deck > [data-reader-page]').length === 1);
+        await page.focus('[data-reader-quick-layout]');
+        await page.selectOption('[data-reader-quick-layout]', 'double-page');
+        await page.waitForFunction(() => readerState.effectiveLayoutMode === 'double-page' && document.querySelectorAll('.desktop-reader-page-deck > [data-reader-page]').length === 2);
+        assert.strictEqual(await page.evaluate(() => document.activeElement?.matches('[data-reader-quick-layout]')), false, 'legacy project quick layout must release focus after switching');
+        const legacyPageIndex = await page.evaluate(() => readerState.pageIndex);
+        await page.keyboard.press('ArrowRight');
+        await page.waitForFunction((previous) => readerState.pageIndex > previous, legacyPageIndex);
         await page.click('[data-reader-exit]');
         await page.waitForFunction(() => document.getElementById('desktop-root').dataset.view === 'bookshelf');
 

@@ -19,12 +19,13 @@
         const chapter = readerState.currentChapter;
         if (!chapter || !window.DraftHarborReaderLocator) return null;
         try {
+            const legacyKey = readerState.document && (readerState.document.projectId || readerState.document.fileName || readerState.document.title) || 'document';
             return window.DraftHarborReaderLocator.locatorFromBlockPosition({
-                documentId: readerState.activeDocumentId,
+                documentId: readerState.activeDocumentId || `legacy:${legacyKey}`,
                 chapterId: readerState.activeChapterId,
                 blockId,
                 offset
-            }, { revisionId: readerState.activeRevisionId, chapters: [chapter] });
+            }, { revisionId: readerState.activeRevisionId || `legacy-revision:${legacyKey}`, chapters: [chapter] });
         } catch (error) {
             console.warn('Failed to create reader locator:', error);
             return null;
@@ -32,7 +33,7 @@
     }
 
     function captureReaderPositionLocator() {
-        if (!readerState.apiMode || !readerState.currentChapter) return null;
+        if (!readerState.currentChapter) return null;
         if (readerState.effectiveLayoutMode !== 'flow') {
             const spreadSize = readerState.effectiveLayoutMode === 'double-page' ? 2 : 1;
             if (readerState.anchorLocator) {
