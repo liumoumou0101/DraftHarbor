@@ -80,7 +80,7 @@
             mode: 'local',
             endpoint: 'http://localhost:8080',
             temperature: 0.8,
-            maxTokens: 2000,
+            maxTokens: 8000,
             ...extras
         };
     }
@@ -120,7 +120,7 @@
             elements.apiKey.disabled = provider.mode === 'local';
         }
         if (elements.temperature) elements.temperature.value = defaults.temperature === undefined ? 0.8 : defaults.temperature;
-        if (elements.maxTokens) elements.maxTokens.value = defaults.maxTokens || 300;
+        if (elements.maxTokens) elements.maxTokens.value = defaults.maxTokens || 8000;
         if (elements.providerDefaults) elements.providerDefaults.checked = !!defaults.useProviderDefaults;
         if (elements.globalPromptEnabled) elements.globalPromptEnabled.checked = !!(settings.globalPrompt && settings.globalPrompt.enabled);
         if (elements.globalPrompt) elements.globalPrompt.value = settings.globalPrompt && settings.globalPrompt.content || '';
@@ -192,7 +192,7 @@
         const summaries = {
             provider: `${provider.mode === 'api' ? '云端' : '本地'} · ${settingsProviderLabel(provider.provider)}`,
             profiles: `${provider.mode === 'api' ? '默认连接' : '本地默认'}${profiles.length ? ` · ${profiles.length} 个独立档案` : ''}`,
-            generation: defaults.useProviderDefaults ? '跟随模型默认值' : `${defaults.temperature ?? 0.8} · ${formatNumber(defaults.maxTokens || 2000)} tokens`,
+            generation: defaults.useProviderDefaults ? '跟随模型默认值' : `${defaults.temperature ?? 0.8} · ${formatNumber(defaults.maxTokens || 8000)} tokens`,
             workflow: (settings.workflowGeneration || {}).providerProfileId && (settings.workflowGeneration || {}).providerProfileId !== 'inherit'
                 ? '专用配置组已选择' : '继承默认写作连接',
             'compendium-agent': settings.compendiumAgent && settings.compendiumAgent.enabled ? (settings.compendiumAgent.providerProfileId ? '专用配置组已选择' : '请选择配置组') : '未启用',
@@ -640,7 +640,7 @@
             },
             generationDefaults: {
                 temperature: elements.temperature ? Number(elements.temperature.value) : 0.8,
-                maxTokens: elements.maxTokens ? Number(elements.maxTokens.value) : 2000,
+                maxTokens: elements.maxTokens ? Number(elements.maxTokens.value) : 8000,
                 useProviderDefaults: !!(elements.providerDefaults && elements.providerDefaults.checked)
             },
             globalPrompt: {

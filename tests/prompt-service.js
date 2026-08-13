@@ -26,11 +26,11 @@ const PromptTemplateSchema = require('../src/core/prompt/prompt-template-schema'
     assert.strictEqual(saved.prompt.category, 'prose');
 
     const expectedDefaultCounts = {
-      prose: 20,
-      rewrite: 24,
-      summary: 8,
-      workshop: 10,
-      workflow: 8
+      prose: 13,
+      rewrite: 11,
+      summary: 5,
+      workshop: 6,
+      workflow: 6
     };
     for (const [category, expectedCount] of Object.entries(expectedDefaultCounts)) {
       const templates = PromptTemplateSchema.defaultPromptTemplates(category, 'prompt-project');
@@ -40,16 +40,29 @@ const PromptTemplateSchema = require('../src/core/prompt/prompt-template-schema'
       assert.ok(templates.every((prompt) => prompt.content && prompt.content.trim().length > 20), `${category} templates should include usable content`);
     }
 
+    const outputLengthDebt = /\d+\s*[-–~到至]\s*\d+\s*段|2-3 paragraphs|\d{2,}\s*[-–]\s*\d{3,}\s*字|60%\s*-\s*80%|1\.3-1\.8/i;
+    for (const category of Object.keys(expectedDefaultCounts)) {
+      const templates = PromptTemplateSchema.defaultPromptTemplates(category, 'prompt-project');
+      for (const prompt of templates) {
+        const blob = `${prompt.title}\n${prompt.systemContent}\n${prompt.content}`;
+        assert.ok(!outputLengthDebt.test(blob), `${prompt.id} should not hard-code paragraph or character quotas`);
+      }
+    }
+
     const listed = await promptService.listPrompts(dataRoot, 'prompt-project', { category: 'prose' });
-    assert.ok(listed.prompts.length >= 21, 'prose prompt list should include saved and expanded default prompts');
+    assert.ok(listed.prompts.length >= 14, 'prose prompt list should include saved and expanded default prompts');
     assert.strictEqual(listed.prompts[0].title, 'Quiet Style');
     assert.ok(listed.prompts.some((prompt) => prompt.id === 'default-prose'), 'prose prompt list should keep the default prose template');
-    assert.ok(listed.prompts.some((prompt) => prompt.title === '对白场景：人物交锋'), 'prose prompt list should include scenario-specific writing templates');
+    assert.ok(listed.prompts.some((prompt) => prompt.title === '对白交锋'), 'prose prompt list should include scenario-specific writing templates');
 
     const rewriteDefaults = await promptService.listPrompts(dataRoot, 'prompt-project', { category: 'rewrite' });
-    assert.ok(rewriteDefaults.prompts.length >= 24, 'rewrite category should include expanded default rewrite templates');
+    assert.ok(rewriteDefaults.prompts.length >= 11, 'rewrite category should include expanded default rewrite templates');
     assert.ok(rewriteDefaults.prompts.every((prompt) => prompt.category === 'rewrite'), 'rewrite defaults should stay in rewrite category');
     assert.ok(rewriteDefaults.prompts.some((prompt) => prompt.id === 'default-rewrite-balanced'), 'rewrite defaults should include balanced polish');
+    const tension = PromptTemplateSchema.rewritePresetByKey('tension');
+    assert.ok(tension && tension.content.includes('紧张感'), 'rewrite presets should be keyed from the template catalog');
+    const rewriteKeys = rewriteDefaults.prompts.map((prompt) => prompt.key).filter(Boolean);
+    assert.strictEqual(new Set(rewriteKeys).size, rewriteKeys.length, 'rewrite preset keys should be unique');
 
     for (const category of ['summary', 'workshop', 'workflow']) {
       const defaults = await promptService.listPrompts(dataRoot, 'prompt-project', { category });
@@ -58,7 +71,7 @@ const PromptTemplateSchema = require('../src/core/prompt/prompt-template-schema'
     }
 
     const dialogueSearch = await promptService.listPrompts(dataRoot, 'prompt-project', { category: 'prose', query: '对白' });
-    assert.ok(dialogueSearch.prompts.some((prompt) => prompt.title === '对白场景：人物交锋'), 'query should find built-in prose scenario templates');
+    assert.ok(dialogueSearch.prompts.some((prompt) => prompt.title === '对白交锋'), 'query should find built-in prose scenario templates');
 
     const deleteDefault = await promptService.deletePrompt(dataRoot, 'prompt-project', 'default-rewrite-balanced');
     assert.strictEqual(deleteDefault.deleted, 0, 'default prompt delete should be ignored');

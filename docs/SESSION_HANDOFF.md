@@ -1,8 +1,106 @@
 # DraftHarbor 会话交接
 
-最后更新：2026-08-02。此文件是 DraftHarbor 后续会话的入口；功能状态以当前仓库、`docs/FEATURE_TODO.md`、对应设计/验收文档与本文件共同为准。
+最后更新：2026-08-13。此文件是 DraftHarbor 后续会话的入口；功能状态以当前仓库、`docs/FEATURE_TODO.md`、对应设计/验收文档与本文件共同为准。
 
-## 2026-08-02：Codex 复核入口（当前未提交工作区）
+## 2026-08-13：写作提示词装配收口
+
+### 一句话结论
+
+写作区「一块块写」的停笔条件从固定段数改成**写完本拍即停**；篇幅只用模糊档。内置模板从占位题材表收成更少、角度更清楚的一套，改写预设与模板库合成一个源，讨论区可以选内置讨论角度。DeepSeek-V4-Pro-0813 对照说明：这类成人虚构更像思考链变听话，不是硬墙变厚。
+
+### 产品决策
+
+1. **停笔看拍，不看段数、不看具体字数。** `buildFictionPrompt` 不再追加 `Write the next 2-3 paragraphs`。默认 closer：接着上文、只完成本拍、不要用固定段数或具体字数卡篇幅、不要提前写下一拍或后续情节。
+2. **模糊篇幅，不当硬配额。** `generationDefaults.lengthHint` / 写作区「篇幅」三档：`brief`（写紧一点）、`natural`（按拍写完，默认）、`expanded`（稍展开）。旧 `{ minChars, maxChars }` 忽略，回落到 `natural`。
+3. **稿纸「目标字数」和 `maxTokens` 不是文学长度。** 前者只显示进度；后者是 API 天花板（开思考时思维链也占额度）。续写 6000 / 改写前后文 1200 / 重生成 ±8000 / 摘要源约 18000 是**输入上下文预算**，未改。
+4. **日常路径不要再叠硬破限词。** 正式版思考开着时，无前缀基线综合分高于 DAN / 系统覆盖；硬破限变慢且不更好。越狱文仍可放用户指令栈，产品默认不注入。
+
+### 模板与接线
+
+| 类别 | 原来 | 现在 | 原则 |
+|---|---:|---:|---|
+| 正文 | 20 | 13 | 拍的职责 + 网文/文学两种口气 |
+| 改写 | 24 条库 + 20 个硬编码预设 | 11，下拉与库同一套 | 对原文做什么 |
+| 摘要 | 8 | 5 | 续写检索笔记 |
+| 讨论 | 10，聊天不用 | 6，讨论区可选 | 开写前问什么 |
+| 工作流 | 8 | 6 | 可确认的件 |
+
+正文模板共用中文契约（视角、跟上文口气、只出正文），每条只多一句「这一拍特别管什么」。默认正文不再写「输出 2–4 段」。改写/摘要去掉 60%–80%、1.3–1.8 倍、120–220 字等配额。
+
+改写下拉由 `defaultPromptTemplates('rewrite')` 的 `key`/`hint`/`content` 填充；选「加压」等预设不再另写一份文案。讨论区输入上方增加「讨论角度」，写入 `workshopSession.promptTemplateId`（默认 `default-workshop-coach`），发送时用该模板的 system + 用法说明。讨论默认 system 改为中文。
+
+### 对照测试（真实 DeepSeek，数据保留、未进仓库正文）
+
+- 思考关 7 破限词：无硬拒；基线露骨词下降，曾误读成「甲厚了」。
+- 思考开：无前缀最好；硬破限最慢；`2–3 段` 会和 beat 字数打架。
+- 分块拍对照：本拍已切小时，2–3 段与「写完本拍即停」成文质量打平。墙钟 93s 对 32s，思考文本 3055 对 2411，**不能**说成思考 token 三倍，也不能排除网络波动。
+- 「精简拼装输出为空」同时拿掉了部分写作指令，只能当线索，不能单独证明现有骨架不可再精简。
+- 篇幅三档复测（2026-08-13 夜，27 次，思考开）：brief 字数中位 259、natural 427、expanded 340（均值 432）。**brief 明显更短且 9/9 写完本拍、0 越界**；expanded 波动大，中位并不稳定长于 natural，不能当成「选展开就一定更长」。0 次拒绝。报告：`.ai_state/writer-length-hint-repeat-20260813-length-repeat/REPORT.md`。
+- **R18 同法再测 27 次**（窗上进入 / 地毯口交 / 窗边骑乘）：0 拒绝；brief/natural/expanded 中位 409 / 652 / 802。唯一「离开」命中是「嘴唇离开」假阳性。露骨词中位均为 1（近义漏计）。报告：`.ai_state/writer-length-hint-r18-20260813-length-r18/REPORT.md`。
+- 材料在本机 `.ai_state/jailbreak-variants-compare-20260813*`、`writer-assembly-length-20260813-assembly`、`writer-length-hint-repeat-20260813-length-repeat`，以及桌面 `test/DeepSeek-V4-Pro-0813复测`。
+
+### 2026-08-13 夜：token 截断与思考额度
+
+R18 复测里至少 3 次撞到 `maxTokens: 4000`（`window-natural-3`、`ride-natural-2`、`ride-expanded-2`），正文停在半句。旧脚本没记 `finishReason`，把截断算成有效完成。软件旧默认还是 2000，开思考时比测试更容易截断。
+
+处理：
+
+- 测试补录 `finishReason`；`length` 单独计截断，不算有效完成，也不进字数中位。
+- 新装默认 `maxTokens` 8000。写作区开思考且当前上限低于 8000 时，本次请求提到 8000，并在采样提示里说明。
+- 正文生成若 `finishReason=length`，顶部状态写成「输出因额度用尽被截断，已写入正文，未保存」，不再被普通未保存文案盖掉。
+- 清掉 4 个真实 API 脚本 ESLint 警告；阅读器触控/滚轮/滑动回归恢复默认执行。
+
+用旧默认 2000 的真实验收仍应单独看截断率，不能再用「0 空/拒」代替「写完了」。
+
+**2000 验收（2026-08-13，思考开，3 拍 × 3 档 × 2 次 = 18）：** 有效完成 13/18，`finishReason=length` 截断 5/18。窗边骑乘 natural 两发都截断。另有 4 次第一次思考把 2000 额度吃光、正文为空，重试后才出字。报告：`.ai_state/writer-length-hint-r18-20260813-r18-2000t/REPORT.md`。
+
+**8000 验收（窗边骑乘，最容易截断的一拍，3 档 × 2 次 = 6）：** 6/6 `finish=stop`，截断 0，无空正文重试。natural 字数 1190 / 881。报告：`.ai_state/writer-length-hint-r18-20260813-r18-8000t-ride/REPORT.md`。保底 8000 后截断率从该拍 2000 组的 4/6 降到 0/6。
+
+### 2026-08-13 晚：Codex 复核后的门禁修复
+
+- 「风格」快捷改指向仍存在的 `literary`，不再静默回落润色。
+- `loadWorkshopTemplates` 登记进 `.eslintrc.js` 的 shell 全局表。
+- `writer-core.js` 压回 1400 行门禁内。
+- `summary-workflow` 断言改为新摘要模板措辞。
+- closer 去掉「下一段」歧义。
+
+本切片**方向保留，未宣称效果完美**。Codex 第二轮指出的 token 截断已按产品保护处理；用旧默认 2000 的真实验收仍要单独看截断率。
+
+### 关键文件
+
+- `src/core/generation/prompt-builder.js` — closer、`normalizeLengthHint`、`lengthHint`
+- `src/core/prompt/prompt-template-schema.js` — 内置模板、`rewritePresetByKey`
+- `src/core/settings/settings-schema.js` — `generationDefaults.lengthHint`
+- `src/core/workshop/workshop-schema.js` / `workshop-prompt.js` — 会话模板 ID、中文讨论装配
+- `src/desktop/shell/writer-generation.js`、`writer-prompts.js`、`writer-bindings.js`
+- `src/desktop/shell/workshop.js`、`desktop/fragments/workshop.html`、`writer.html`
+
+### 验证
+
+```powershell
+node tests/core-generation.js
+node tests/prompt-service.js
+node tests/workshop-service.js
+node tests/settings-service.js
+node tests/context-prompt-core.js
+```
+
+### 明确未做
+
+- 未做成人向专用内置模板；亲密场面用「情感拉扯」+ 拍里写清。
+- 改写「下拉」和「提示词管理器」仍是两个入口，内容已同源。
+- 工作流「目标字数 / 每场约 N 字」仍是软目标，本切片未改装配内核。
+- 已把默认 `maxTokens` 从 2000 提到 8000；开思考且当前上限低于 8000 时，写作区会按 8000 发送并提示额度不足。旧设置里仍保存 2000 的用户走这条保护。
+- 篇幅复测脚本补录 `finishReason`：`length` 截断单独统计，不算有效完成。
+- 阅读器触控选择回归改为在保留选区的前提下派发事件，避免 Playwright click 先清掉选区。
+
+### 下一会话
+
+作者在写作区过一遍：选模板、三档篇幅、改写下拉、讨论角度。不必重跑破限词矩阵，除非正式版再次换模型。
+
+---
+
+## 2026-08-02：Codex 复核入口（当时未提交工作区）
 
 ### 一句话结论
 

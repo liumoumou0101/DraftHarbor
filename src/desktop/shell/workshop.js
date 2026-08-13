@@ -17,6 +17,8 @@
             emptyContent: document.querySelector('[data-workshop-empty-content]'),
             input: document.querySelector('[data-workshop-input]'),
             inputRow: document.querySelector('.desktop-workshop-input-row'),
+            composer: document.querySelector('.desktop-workshop-composer'),
+            template: document.querySelector('[data-workshop-template]'),
             send: document.querySelector('[data-workshop-send]'),
             toCompendium: document.querySelector('[data-workshop-to-compendium]'),
             toSummary: document.querySelector('[data-workshop-to-summary]'),
@@ -27,6 +29,59 @@
 
     function selectedWorkshopSession() {
         return workshopState.sessions.find((session) => session.id === workshopState.selectedId) || null;
+    }
+
+    function defaultWorkshopTemplates() {
+        const schema = window.DraftHarborPromptTemplateSchema;
+        return schema && typeof schema.defaultPromptTemplates === 'function'
+            ? schema.defaultPromptTemplates('workshop', currentProjectId())
+            : [];
+    }
+
+    function selectedWorkshopTemplate() {
+        const session = selectedWorkshopSession();
+        const templateId = (session && session.promptTemplateId) || 'default-workshop-coach';
+        return workshopState.templates.find((prompt) => prompt.id === templateId)
+            || workshopState.templates[0]
+            || {};
+    }
+
+    function renderWorkshopTemplateOptions() {
+        const elements = workshopElements();
+        if (!elements.template) return;
+        const session = selectedWorkshopSession();
+        const current = (session && session.promptTemplateId) || 'default-workshop-coach';
+        if (!workshopState.templates.length) {
+            workshopState.templates = defaultWorkshopTemplates();
+        }
+        elements.template.replaceChildren();
+        workshopState.templates.forEach((prompt) => {
+            const option = document.createElement('option');
+            option.value = prompt.id;
+            option.textContent = prompt.title || prompt.id;
+            elements.template.appendChild(option);
+        });
+        if (workshopState.templates.some((prompt) => prompt.id === current)) {
+            elements.template.value = current;
+        }
+    }
+
+    async function loadWorkshopTemplates() {
+        const projectId = currentProjectId();
+        const defaults = defaultWorkshopTemplates();
+        if (!projectId) {
+            workshopState.templates = defaults;
+            return;
+        }
+        try {
+            const response = await fetch(`/api/prompts?${new URLSearchParams({ projectId, category: 'workshop' }).toString()}`, { cache: 'no-store' });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+            workshopState.templates = result.prompts && result.prompts.length ? result.prompts : defaults;
+        } catch (error) {
+            console.warn('Failed to load workshop prompts:', error);
+            workshopState.templates = defaults;
+        }
     }
 
     function selectedAssistantMessage() {
@@ -78,6 +133,12 @@
         if (elements.input && elements.input.value !== workshopState.input) elements.input.value = workshopState.input;
         if (elements.input) elements.input.disabled = !session || workshopState.generating;
         if (elements.inputRow) elements.inputRow.hidden = !session;
+        if (elements.composer) elements.composer.hidden = !session;
+        renderWorkshopTemplateOptions();
+        if (elements.template) {
+            elements.template.disabled = !session || workshopState.generating;
+            if (session) elements.template.value = session.promptTemplateId || 'default-workshop-coach';
+        }
         if (elements.send) elements.send.disabled = !session || workshopState.generating || !workshopState.input.trim();
         [elements.toCompendium, elements.toSummary, elements.insertDraft].forEach((button) => {
             if (button) {
@@ -228,6 +289,7 @@
 
     async function loadWorkshopSessions() {
         const projectId = currentProjectId();
+        await loadWorkshopTemplates();
         if (!projectId) {
             workshopState.sessions = [];
             workshopState.selectedId = '';
@@ -267,9 +329,11 @@
     async function createWorkshopSession() {
         const projectId = currentProjectId();
         if (!projectId || !window.DraftHarborWorkshopSchema) return;
+        const elements = workshopElements();
         const session = window.DraftHarborWorkshopSchema.createWorkshopSession({
             projectId,
-            title: `对话 ${workshopState.sessions.length + 1}`
+            title: `对话 ${workshopState.sessions.length + 1}`,
+            promptTemplateId: (elements.template && elements.template.value) || 'default-workshop-coach'
         });
         const saved = await saveWorkshopSession(session);
         workshopState.sessions = [saved, ...workshopState.sessions];
@@ -316,7 +380,6 @@
         setWorkshopStatus('生成中...', 'info');
         renderWorkshop();
         try {
-            const workshopPrompts = (nativeEditorState.snapshot && nativeEditorState.snapshot.prompts || []).filter((prompt) => prompt.category === 'workshop');
             const prompt = window.DraftHarborWorkshopPrompt.buildWorkshopPrompt({
                 project: {
                     ...nativeEditorState.snapshot,
@@ -326,7 +389,7 @@
                     ...session,
                     messages: session.messages.slice(0, -2)
                 },
-                template: workshopPrompts[0] || {},
+                template: selectedWorkshopTemplate(),
                 message: text,
                 currentSceneId: nativeEditorState.activeSceneId
             });
@@ -535,6 +598,24 @@
                     event.preventDefault();
                     sendWorkshopMessage();
                 }
+            });
+        }
+        if (elements.template) {
+            elements.template.addEventListener('change', async () => {
+                const session = selectedWorkshopSession();
+                if (!session) return;
+                session.promptTemplateId = elements.template.value || 'default-workshop-coach';
+                session.updatedAt = new Date().toISOString();
+                try {
+                    const saved = await saveWorkshopSession(session);
+                    const index = workshopState.sessions.findIndex((item) => item.id === saved.id);
+                    if (index >= 0) workshopState.sessions[index] = saved;
+                    if (nativeEditorState.snapshot) nativeEditorState.snapshot.workshopSessions = workshopState.sessions;
+                    setWorkshopStatus('讨论角度已保存', 'ok');
+                } catch (error) {
+                    setWorkshopStatus(`保存讨论角度失败：${error.message || error}`, 'error');
+                }
+                renderWorkshop();
             });
         }
         if (elements.send) elements.send.addEventListener('click', sendWorkshopMessage);

@@ -32,6 +32,8 @@ const WorkshopPrompt = require('../src/core/workshop/workshop-prompt');
     });
     assert.strictEqual(appended.session.messages.length, 2);
 
+    const PromptTemplateSchema = require('../src/core/prompt/prompt-template-schema');
+    const plotDoctor = PromptTemplateSchema.defaultPromptTemplates('workshop').find((item) => item.id === 'default-workshop-plot-doctor');
     const prompt = WorkshopPrompt.buildWorkshopPrompt({
       project: {
         currentSceneId: 's1',
@@ -39,9 +41,13 @@ const WorkshopPrompt = require('../src/core/workshop/workshop-prompt');
         scenes: [{ id: 's1', title: 'Scene', summary: 'A summary.' }]
       },
       session: appended.session,
+      template: plotDoctor,
       message: 'Discuss @[Ada].'
     });
     assert.ok(prompt.messages.some((message) => message.content.includes('Pilot.')), 'workshop prompt should include project context');
+    assert.ok(prompt.messages[0].content.includes('因果'), 'workshop should apply the selected discussion template');
+    assert.ok(prompt.messages.some((message) => String(message.content || '').includes('项目上下文')), 'workshop context heading should be Chinese');
+    assert.strictEqual(saved.session.promptTemplateId, 'default-workshop-coach');
 
     servers = await startDesktopServers({ appRoot: path.resolve(__dirname, '..'), dataRoot });
     const apiList = await fetch(servers.appUrl + '/api/workshop-sessions?projectId=workshop-project');

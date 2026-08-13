@@ -56,9 +56,16 @@
                             </button>
                         </div>
                     </div>
-                    <div class="desktop-workshop-input-row">
-                        <textarea data-workshop-input placeholder="输入想讨论的问题。可用 @[资料标题] 或 #[场景标题] 引用上下文。"></textarea>
-                        <button class="desktop-primary-action" type="button" data-workshop-send>发送</button>
+                    <div class="desktop-workshop-composer">
+                        <label class="desktop-workshop-template">
+                            <span>讨论角度</span>
+                            <select data-workshop-template aria-label="讨论角度"></select>
+                        </label>
+                        <div class="desktop-workshop-input-row">
+                            <textarea data-workshop-input placeholder="输入想讨论的问题。可用 @[资料标题] 或 #[场景标题] 引用上下文。"></textarea>
+                            <button class="desktop-primary-action" type="button" data-workshop-send>发送</button>
+                        </div>
+                    </div>
                     </div>
                 </section>
             </section>

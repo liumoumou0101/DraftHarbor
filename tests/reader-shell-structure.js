@@ -3,7 +3,8 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
-const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
+// Keep structural byte budgets stable across Git's LF/CRLF working-tree conversion.
+const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8').replace(/\r\n/g, '\n');
 const html = read('desktop/fragments/reader.html');
 const desktop = read('desktop.html');
 const bindings = read('src/desktop/shell/shell-bindings.js');

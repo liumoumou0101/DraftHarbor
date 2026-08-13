@@ -86,6 +86,36 @@
         return blocks.length ? ['PREVIOUS SCENES:', ...blocks].join('\n\n') : '';
     }
 
+    const LENGTH_HINTS = Object.freeze({
+        brief: '这一拍写紧一点，点到即止，不要铺开。',
+        natural: '',
+        expanded: '这一拍可以稍展开感官、动作和对话，但仍写完即停。'
+    });
+
+    function normalizeLengthHint(value) {
+        if (value && typeof value === 'object') {
+            if (value.scale) return normalizeLengthHint(value.scale);
+            return 'natural';
+        }
+        const raw = text(value).trim().toLowerCase();
+        if (['brief', 'short', 'tight', '短', '紧', '写紧'].includes(raw)) return 'brief';
+        if (['expanded', 'long', 'open', '长', '展开', '稍展开'].includes(raw)) return 'expanded';
+        return 'natural';
+    }
+
+    function resolveOutputCloser(options) {
+        const custom = text(options.outputCloser).trim();
+        if (custom) return custom;
+        const lines = [
+            '接着当前正文往下写，语言和文风与已有正文、本拍一致。',
+            '只完成本拍（BEAT TO EXPAND）里点到的事，写完即停。',
+            '不要用固定段数或具体字数限制篇幅，也不要提前写下一拍或后续情节。'
+        ];
+        const extra = LENGTH_HINTS[normalizeLengthHint(options.lengthHint)];
+        if (extra) lines.push(extra);
+        return lines.join('');
+    }
+
     function buildFictionPrompt(input) {
         const source = input && typeof input === 'object' ? input : {};
         const options = source.options && typeof source.options === 'object' ? source.options : {};
@@ -110,7 +140,7 @@
         const priorScenes = renderSceneSummaries(options.sceneSummaries);
         if (priorScenes) sections.push(priorScenes);
         sections.push(`BEAT TO EXPAND:\n${beat}`);
-        sections.push('Continue in the same language as the beat. Write the next 2-3 paragraphs:');
+        sections.push(resolveOutputCloser(options));
 
         return promptObject([
             { role: 'system', content: system },
@@ -124,5 +154,13 @@
         });
     }
 
-    return Object.freeze({ cleanBeat, messagesToChatML, promptObject, buildFictionPrompt });
+    return Object.freeze({
+        cleanBeat,
+        messagesToChatML,
+        promptObject,
+        buildFictionPrompt,
+        resolveOutputCloser,
+        normalizeLengthHint,
+        LENGTH_HINTS
+    });
 });

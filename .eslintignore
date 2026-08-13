@@ -2,3 +2,4 @@ node_modules/
 release/
 .ai_state/
 coverage/
+src/vendor/

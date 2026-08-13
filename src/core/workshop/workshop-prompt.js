@@ -5,7 +5,7 @@
         root.DraftHarborWorkshopPrompt = factory(root.DraftHarborContextResolver);
     }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (ContextResolver) {
-    const DEFAULT_SYSTEM = 'You are a creative writing assistant helping brainstorm and develop fiction. Be concrete, useful, and concise unless the author asks for depth.';
+    const DEFAULT_SYSTEM = '你是具体的写作搭档。结合项目上下文说话，少空鼓励。先回答眼前的问题，再给可执行的下一步。';
 
     function contextBlock(context) {
         const parts = [];
@@ -46,13 +46,13 @@
             : { compendiumEntries: [], sceneSummaries: [] };
         const messages = [{
             role: 'system',
-            content: template.systemContent || template.content || DEFAULT_SYSTEM
+            content: [template.systemContent, template.content].filter(Boolean).join('\n') || DEFAULT_SYSTEM
         }];
         const block = contextBlock(context);
         if (block) {
             messages.push({
                 role: 'system',
-                content: `Project context:\n${block}`
+                content: `项目上下文：\n${block}`
             });
         }
         messages.push(...historyMessages(session, input.historyLimit || 20));

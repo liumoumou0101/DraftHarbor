@@ -183,6 +183,7 @@
         isSaving: false,
         generation: {
             beat: '',
+            lengthHint: 'natural',
             text: '',
             reasoning: '',
             prompt: null,
@@ -238,7 +239,8 @@
         selectedId: '',
         input: '',
         generating: false,
-        selectedAssistantMessageId: ''
+        selectedAssistantMessageId: '',
+        templates: []
     };
     const workflowState = {
         runs: [],

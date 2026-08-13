@@ -22,7 +22,7 @@
     function selectedPromptTemplate() {
         return promptState.prompts.find((prompt) => prompt.id === promptState.selectedId)
             || promptState.prompts[0]
-            || { id: 'default-prose', title: '正文续写：均衡扩写', category: 'prose', content: '', systemContent: '' };
+            || { id: 'default-prose', title: '均衡续写', category: 'prose', content: '', systemContent: '' };
     }
 
     function selectedSummaryPromptTemplate(scope) {
@@ -123,8 +123,9 @@
             if (nativeEditorState.snapshot) nativeEditorState.snapshot.prompts = promptState.prompts.filter((prompt) => !isNativeDefaultPrompt(prompt));
         } catch (error) {
             console.warn('Failed to load prompts:', error);
-            promptState.prompts = [{ id: 'default-prose', title: '正文续写：均衡扩写', category: 'prose', content: '', systemContent: '' }];
+            promptState.prompts = [{ id: 'default-prose', title: '均衡续写', category: 'prose', content: '', systemContent: '' }];
         }
+        if (typeof loadWorkshopTemplates === 'function') await loadWorkshopTemplates();
         renderNativeGeneration();
     }
 
@@ -239,6 +240,7 @@
                 btn.classList.toggle('is-active', task === nativeEditorState.rewrite.rewriteTask);
             });
         }
+        renderRewritePresetOptions();
         if (elements.rewritePreset && elements.rewritePreset.value !== nativeEditorState.rewrite.preset) {
             elements.rewritePreset.value = nativeEditorState.rewrite.preset;
         }
@@ -525,62 +527,59 @@
         elements.contextSummary.textContent = parts.join(' | ');
     }
 
+    function rewritePresetCatalog() {
+        const schema = window.DraftHarborPromptTemplateSchema;
+        if (!schema || typeof schema.defaultPromptTemplates !== 'function') return [];
+        return schema.defaultPromptTemplates('rewrite').filter((prompt) => prompt.key);
+    }
+
+    function rewritePresetRecord(key) {
+        const schema = window.DraftHarborPromptTemplateSchema;
+        if (schema && typeof schema.rewritePresetByKey === 'function') {
+            return schema.rewritePresetByKey(key);
+        }
+        return rewritePresetCatalog().find((prompt) => prompt.key === key) || rewritePresetCatalog()[0] || null;
+    }
+
+    function renderRewritePresetOptions() {
+        const elements = nativeEditorElements();
+        if (!elements.rewritePreset) return;
+        const current = nativeEditorState.rewrite.preset || 'balanced-polish';
+        const presets = rewritePresetCatalog();
+        if (!presets.length) return;
+        elements.rewritePreset.replaceChildren();
+        presets.forEach((prompt) => {
+            const option = document.createElement('option');
+            option.value = prompt.key;
+            option.textContent = prompt.title || prompt.key;
+            elements.rewritePreset.appendChild(option);
+        });
+        const custom = document.createElement('option');
+        custom.value = 'custom';
+        custom.textContent = '自定义';
+        elements.rewritePreset.appendChild(custom);
+        elements.rewritePreset.value = presets.some((prompt) => prompt.key === current) || current === 'custom'
+            ? current
+            : 'balanced-polish';
+    }
+
     function updateRewritePresetDescription() {
         var elements = nativeEditorElements();
         if (!elements.rewritePresetDescription) return;
         var preset = nativeEditorState.rewrite.preset || 'balanced-polish';
-        var descriptions = {
-            'balanced-polish': '使语言更自然、流畅、有画面感，保留原意。长度接近原文。',
-            tighten: '压缩并精炼，删去重复拖沓，表达更干净有力。长度约原文 60%-80%。',
-            expand: '适度扩写，补足动作、心理和环境细节。长度约原文 1.3-1.8 倍。',
-            'show-dont-tell': '把直白说明改写为具体动作、感官细节和场景表现。',
-            sensory: '增强感官描写和空间感，优先使用视觉、声音、触感等细节。',
-            tension: '提高紧张感和压迫感，加强动作节奏和未知感。',
-            'pace-fast': '让节奏更快利落，减少解释，使用更短句子和直接冲突。',
-            'pace-slow': '放慢节奏，增加停顿、细微动作和情绪层次。',
-            'dialogue-natural': '对白更自然有角色感，减少书面腔，加入动作承载潜台词。',
-            subtext: '增加潜台词，把真实想法藏在措辞、停顿和反应里。',
-            'emotion-deeper': '通过身体反应、记忆闪回、细微动作表现情绪，避免堆砌标签。',
-            'character-voice': '贴合当前视角人物的性格、年龄和情绪，使角色声音更鲜明。',
-            literary: '语言更凝练，意象更准确，节奏有余韵，避免华丽堆砌。',
-            webnovel: '适合中文网文连载，节奏明确，情绪外放，冲突清楚。',
-            cinematic: '增强电影镜头感，用清晰画面调度和动作顺序呈现。',
-            clarity: '理清句子逻辑、人物指代和因果关系，让读者更容易理解。',
-            continuity: '更自然衔接上下文，注意代词、时间和叙述视角一致性。',
-            'remove-cliche': '去掉陈词滥调和套路化表达，换成更具体的表达。',
-            'grammar-copyedit': '只做校对级修改：错别字、病句、标点，尽量保留原句结构。',
-            'same-meaning-alt': '不改变原意，换一种更自然、更有可读性的写法。长度接近原文。',
-            custom: '手动输入改写要求。'
-        };
-        elements.rewritePresetDescription.textContent = descriptions[preset] || '';
+        if (preset === 'custom') {
+            elements.rewritePresetDescription.textContent = '手动输入改写要求。';
+            return;
+        }
+        var record = rewritePresetRecord(preset);
+        elements.rewritePresetDescription.textContent = record && record.hint ? record.hint : '';
     }
 
     function rewriteInstructionText() {
-        const preset = nativeEditorState.rewrite.preset || 'polish';
         const custom = (nativeEditorState.rewrite.instruction || '').trim();
-        const presets = {
-            'balanced-polish': '重写选中文本，使语言更自然、流畅、有画面感，同时保留原意、事实信息、人物关系和叙事视角。不要扩写过多，长度尽量接近原文。',
-            tighten: '压缩并精炼选中文本，删去重复、拖沓、解释过度的句子，让表达更干净有力。保留关键动作、信息和情绪，长度约为原文的 60%-80%。',
-            expand: '适度扩写选中文本，补足必要的动作衔接、心理反应、环境细节和节奏停顿。不要改变剧情走向和人物意图，长度约为原文的 1.3-1.8 倍。',
-            'show-dont-tell': '把选中文本中的直白说明、总结性描述和情绪标签，改写成具体动作、感官细节、人物反应和可观察的场景表现。',
-            sensory: '增强选中文本的感官描写和空间感，优先使用视觉、声音、触感、气味或温度等细节，让场景更可感。',
-            tension: '提高选中文本的紧张感和压迫感。加强动作节奏、停顿、未知感、人物警觉或危险暗示。不要提前揭示答案。',
-            'pace-fast': '让选中文本节奏更快、更利落。减少解释和内心独白，使用更短的句子、更清晰的动作链和更直接的冲突推进。',
-            'pace-slow': '放慢选中文本叙事节奏，增加停顿、观察、细微动作和情绪层次，让读者更充分地感受到这一刻的重要性。',
-            'dialogue-natural': '重写选中文本中的对白，让台词更自然、有角色感，减少书面腔和信息直给，并加入适量动作或停顿承载潜台词。',
-            subtext: '增加潜台词。让人物少直接说出真实想法，把矛盾、犹豫、亲近或敌意藏在措辞、停顿、动作和反应里。',
-            'emotion-deeper': '加深人物情绪层次。通过身体反应、记忆闪回、细微动作或自我克制表现情绪，避免直接堆砌情绪标签。',
-            'character-voice': '让语言更贴合当前视角人物的性格、身份、年龄、经历和情绪状态。调整用词、观察重点和反应方式，使角色声音更鲜明。',
-            literary: '将选中文本重写得更文学化：语言更凝练，意象更准确，节奏更有余韵。避免华丽堆砌和空泛比喻。',
-            webnovel: '将选中文本重写得更适合中文网文连载：节奏明确，情绪更外放，冲突更清楚，句子更有推进力。',
-            cinematic: '增强电影镜头感。用清晰的画面调度、动作顺序、视线移动和环境反应呈现场景，直接写成小说正文。',
-            clarity: '理清句子逻辑、人物指代、动作先后和因果关系。不要改变剧情，只让读者更容易理解正在发生什么。',
-            continuity: '让选中文本更自然地衔接上下文。注意代词、时间、动作连续性、情绪延续和叙述视角一致性。',
-            'remove-cliche': '去掉陈词滥调、套路化形容和常见套话，换成更具体、更贴合当前场景和人物的表达。',
-            'grammar-copyedit': '只做校对级修改：修正错别字、病句、标点、重复和明显不顺的表达。尽量保留原句结构、风格和长度。',
-            'same-meaning-alt': '在不改变原意、不增删剧情信息的前提下，把选中文本换一种更自然、更有可读性的写法。长度接近原文。'
-        };
-        return custom || presets[preset] || presets['balanced-polish'];
+        if (custom && nativeEditorState.rewrite.preset === 'custom') return custom;
+        const record = rewritePresetRecord(nativeEditorState.rewrite.preset || 'balanced-polish');
+        return custom || (record && record.content) || '';
     }
 
     async function loadRewritePrompts() {
@@ -870,20 +869,34 @@
             elements.writerTemperature.disabled = temperatureDisabled;
         }
         if (elements.writerMaxTokens) {
-            elements.writerMaxTokens.value = defaults.maxTokens || 2000;
+            elements.writerMaxTokens.value = defaults.maxTokens || 8000;
             elements.writerMaxTokens.disabled = useProviderDefaults;
         }
         if (elements.writerProviderDefaults) {
             elements.writerProviderDefaults.checked = useProviderDefaults;
         }
+        if (elements.lengthHint) {
+            const hint = defaults.lengthHint || 'natural';
+            nativeEditorState.generation.lengthHint = hint;
+            elements.lengthHint.value = hint;
+        }
         if (elements.writerSamplingHint) {
+            const maxTokens = Number(defaults.maxTokens) || 8000;
+            const schema = window.DraftHarborSettingsSchema;
+            const quotaHint = thinkingActive && schema && typeof schema.thinkingOutputQuotaHint === 'function'
+                ? schema.thinkingOutputQuotaHint(maxTokens, true)
+                : '';
             if (useProviderDefaults) {
                 elements.writerSamplingHint.textContent = '已交给服务商默认参数';
             } else if (effectiveProfile.provider === 'deepseek' && thinkingActive) {
-                elements.writerSamplingHint.textContent = 'DeepSeek Thinking 不发送温度参数';
+                elements.writerSamplingHint.textContent = quotaHint
+                    ? `DeepSeek Thinking 不发送温度参数。${quotaHint}`
+                    : 'DeepSeek Thinking 不发送温度参数';
+            } else if (quotaHint) {
+                elements.writerSamplingHint.textContent = quotaHint;
             } else {
-                const maxTokens = defaults.maxTokens || 2000;
                 elements.writerSamplingHint.textContent = maxTokens <= 800 ? '输出偏短，适合短句测试' : `约 ${maxTokens} tokens`;
             }
+            elements.writerSamplingHint.classList.toggle('is-warn', !!quotaHint);
         }
     }

@@ -59,7 +59,7 @@ function snapshot() {
     await page.click('[data-native-generate-scene-summary]');
     await page.waitForFunction(() => document.querySelector('[data-native-scene-summary]').value === 'Scene summary.');
     const scenePrompt = await page.evaluate(() => window.__draftHarborLastSummaryPrompt);
-    assert.ok(scenePrompt.some((message) => message.content.includes('角色目标与关系变化')), 'scene summary should use the default scene summary template');
+    assert.ok(scenePrompt.some((message) => message.content.includes('发生了什么') && message.content.includes('谁的目标变了')), 'scene summary should use the default scene summary template');
     await page.waitForFunction(() => document.querySelector('[data-native-summary-dialog]').open);
     await page.click('[data-native-summary-dialog-close]');
     await page.click('[data-native-save-scene]');
@@ -71,7 +71,7 @@ function snapshot() {
     await page.click('[data-native-generate-chapter-summary]');
     await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('章节摘要已生成'));
     const chapterPrompt = await page.evaluate(() => window.__draftHarborLastSummaryPrompt);
-    assert.ok(chapterPrompt.some((message) => message.content.includes('下一章承接点')), 'chapter summary should use the default chapter summary template');
+    assert.ok(chapterPrompt.some((message) => message.content.includes('下一章从哪接')), 'chapter summary should use the default chapter summary template');
     await page.waitForFunction(() => document.querySelector('[data-native-summary-dialog]').open);
     await page.click('[data-native-summary-dialog-close]');
     await page.click('[data-native-save-scene]');

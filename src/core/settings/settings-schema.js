@@ -141,12 +141,37 @@
         };
     }
 
+    function normalizeLengthHint(value) {
+        var raw = String(value == null ? '' : value).trim().toLowerCase();
+        if (raw === 'brief' || raw === 'short' || raw === 'tight') return 'brief';
+        if (raw === 'expanded' || raw === 'long' || raw === 'open') return 'expanded';
+        return 'natural';
+    }
+
+    const DEFAULT_MAX_TOKENS = 8000;
+    const THINKING_OUTPUT_FLOOR = 8000;
+
     function normalizeGenerationDefaults(input = {}) {
         return {
             temperature: finiteNumber(input.temperature, 0.8, 0, 2),
-            maxTokens: Math.round(finiteNumber(input.maxTokens, 2000, 1, 200000)),
-            useProviderDefaults: !!input.useProviderDefaults
+            maxTokens: Math.round(finiteNumber(input.maxTokens, DEFAULT_MAX_TOKENS, 1, 200000)),
+            useProviderDefaults: !!input.useProviderDefaults,
+            lengthHint: normalizeLengthHint(input.lengthHint)
         };
+    }
+
+    function thinkingOutputQuota(maxTokens, enableThinking) {
+        const requested = Math.round(finiteNumber(maxTokens, DEFAULT_MAX_TOKENS, 1, 200000));
+        if (!enableThinking || requested >= THINKING_OUTPUT_FLOOR) {
+            return { requested: requested, effective: requested, raised: false };
+        }
+        return { requested: requested, effective: THINKING_OUTPUT_FLOOR, raised: true };
+    }
+
+    function thinkingOutputQuotaHint(maxTokens, enableThinking) {
+        const quota = thinkingOutputQuota(maxTokens, enableThinking);
+        if (!quota.raised) return '';
+        return '思考会占用输出额度，当前 ' + quota.requested + ' 偏低，正文可能写到一半被截断。本次将按 ' + quota.effective + ' 发送。';
     }
 
     function normalizeLocalModelSettings(input = {}) {
@@ -359,6 +384,10 @@
         DEFAULT_THEME,
         PROVIDER_MODES,
         PROVIDERS,
+        DEFAULT_MAX_TOKENS,
+        THINKING_OUTPUT_FLOOR,
+        thinkingOutputQuota,
+        thinkingOutputQuotaHint,
         isApiCompatibleProvider,
         getProviderMetadata,
         isKnownDefaultEndpoint,

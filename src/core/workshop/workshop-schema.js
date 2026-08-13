@@ -43,6 +43,7 @@
             id: cleanString(input.id, makeId('workshop')),
             projectId: cleanString(input.projectId),
             title: cleanString(input.title || input.name, '新对话') || '新对话',
+            promptTemplateId: cleanString(input.promptTemplateId, 'default-workshop-coach') || 'default-workshop-coach',
             messages: Array.isArray(input.messages) ? input.messages.map(createWorkshopMessage) : [],
             directiveContract: {
                 enabled: !!rawContract.enabled,

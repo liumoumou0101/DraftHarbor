@@ -132,7 +132,9 @@ loadWorkflowEvents
 loadWorkflowGraphTemplates
 loadWorkflowRuns
 loadWorkshopSessions
+loadWorkshopTemplates
 loadWriterModelOverride
+closeReaderAnnotationDialog
 markNativeDirty
 markWorkflowAnswerStarted
 markWorkflowStreamSaving

@@ -909,18 +909,25 @@ async function selectReaderStudioSection(page, section) {
         assert.strictEqual(await page.evaluate(() => readerState.pageIndex), disabledWheelPageIndex, 'disabled pointer page turn must suppress wheel input');
         await page.evaluate(() => { readerState.pointerPageTurn = true; });
 
-        await page.evaluate(() => {
+        await page.waitForFunction(() => !document.querySelector('.desktop-reader-page-deck')?.classList.contains('is-reader-transitioning'));
+        await page.waitForTimeout(800);
+        const mergeStart = await page.evaluate(() => {
             window.__readerStateWrites = 0;
             const originalFetch = window.fetch;
             window.fetch = (...args) => {
                 if (String(args[0]).includes('/api/reader/state') && args[1] && args[1].method === 'POST') window.__readerStateWrites += 1;
                 return originalFetch(...args);
             };
+            const start = readerState.pageIndex;
             queueReaderPageTurn(1);
             queueReaderPageTurn(1);
             queueReaderPageTurn(1);
+            return start;
         });
-        await page.waitForFunction(() => readerState.pageIndex >= 3);
+        await page.waitForFunction((start) => {
+            const last = Math.max(0, readerState.pages.length - 1);
+            return readerState.pageIndex >= Math.min(start + 3, last);
+        }, mergeStart);
         await page.waitForTimeout(700);
         assert.ok(await page.evaluate(() => window.__readerStateWrites) <= 1, 'rapid page turns should merge into at most one authoritative position write');
 
