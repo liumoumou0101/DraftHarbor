@@ -230,6 +230,13 @@
         }, onActivity);
     }
 
+    function resolveModelCatalog() {
+        if (typeof module === 'object' && module.exports) {
+            try { return require('../settings/model-catalog'); } catch (error) { /* browser bundle */ }
+        }
+        return runtime.DraftHarborModelCatalog || null;
+    }
+
     function resolveDeepSeekSelection(config) {
         const requested = String(config.model || config.aiModel || 'deepseek-v4-pro').trim();
         const aliases = {
@@ -245,28 +252,52 @@
         };
     }
 
+    function resolveChatSelection(config) {
+        const provider = String(config.provider || '');
+        if (provider === 'deepseek') return resolveDeepSeekSelection(config);
+        const catalog = resolveModelCatalog();
+        const requested = String(config.model || config.aiModel || '').trim();
+        const entry = catalog && typeof catalog.getProviderModelEntry === 'function'
+            ? catalog.getProviderModelEntry(provider, requested)
+            : getModelCapability(requested);
+        const thinkingSupported = !!(entry && entry.thinkingSupported);
+        return {
+            model: requested || 'gpt-4o-mini',
+            thinking: thinkingSupported && !!config.enableThinking,
+            thinkingSupported,
+            capability: entry || getModelCapability(requested)
+        };
+    }
+
+    function resolveChatEndpoint(config) {
+        const catalog = resolveModelCatalog();
+        if (catalog && typeof catalog.resolveProviderEndpoint === 'function') {
+            return catalog.resolveProviderEndpoint(config.provider, config.endpoint || config.aiEndpoint, config);
+        }
+        return config.endpoint || config.aiEndpoint
+            || (config.provider === 'deepseek' ? 'https://api.deepseek.com/chat/completions' : '');
+    }
+
     function createChatRequest(messages, config) {
-        const deepSeek = config.provider === 'deepseek';
-        const selection = deepSeek
-            ? resolveDeepSeekSelection(config)
-            : { model: config.model || config.aiModel || 'gpt-4o-mini', thinking: false };
+        const selection = resolveChatSelection(config);
+        const capability = selection.capability || getModelCapability(selection.model) || {};
+        const sendThinking = !!selection.thinkingSupported || config.provider === 'deepseek';
         const body = { model: selection.model, messages, stream: true };
         if (config.includeUsage) body.stream_options = { include_usage: true };
-        if (deepSeek) body.thinking = { type: selection.thinking ? 'enabled' : 'disabled' };
+        if (sendThinking) body.thinking = { type: selection.thinking ? 'enabled' : 'disabled' };
         if (!config.useProviderDefaults) {
             body.temperature = numeric(config.temperature, 0.8);
             body.max_tokens = numeric(config.maxTokens, 300);
         }
         if (selection.thinking) {
-            const unsupported = new Set((getModelCapability(selection.model) || {}).thinkingDisabledParams || []);
+            const unsupported = new Set(capability.thinkingDisabledParams || []);
             for (const key of unsupported) delete body[key];
         }
-        return { body, deepSeek, thinking: selection.thinking };
+        return { body, thinking: selection.thinking, thinkingSupported: sendThinking };
     }
 
     async function requestChat(messages, emit, config, onActivity) {
-        const endpoint = config.endpoint || config.aiEndpoint
-            || (config.provider === 'deepseek' ? 'https://api.deepseek.com/chat/completions' : '');
+        const endpoint = resolveChatEndpoint(config);
         if (!endpoint) throw new Error('API endpoint is required.');
         const request = createChatRequest(messages, config);
         const response = await fetch(endpoint, {
@@ -280,8 +311,23 @@
         });
         if (!response.ok) {
             const retryAfter = response.headers && response.headers.get ? response.headers.get('retry-after') : null;
-            const message = response.status === 429 ? 'AI Provider 请求过于频繁，请稍后重试。' : `AI Provider 返回 HTTP ${response.status}。`;
-            throw providerError(`provider_http_${response.status}`, message, { status: response.status, retryAfter });
+            let providerType = '';
+            let detail = '';
+            try {
+                const raw = await response.text();
+                const parsed = raw ? JSON.parse(raw) : null;
+                const err = parsed && parsed.error ? parsed.error : parsed;
+                providerType = String((err && (err.type || err.code)) || '');
+                detail = String((err && err.message) || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+            } catch (_) { /* keep status-only fallback */ }
+            const message = response.status === 429
+                ? (detail || 'AI Provider 请求过于频繁，请稍后重试。')
+                : (detail || `AI Provider 返回 HTTP ${response.status}。`);
+            throw providerError(`provider_http_${response.status}`, message, {
+                status: response.status,
+                retryAfter,
+                providerType
+            });
         }
         if (typeof onActivity === 'function') onActivity();
 
@@ -302,8 +348,8 @@
             if (payload && payload.usage) emit('', { type: 'usage', usage: payload.usage });
             const choice = payload && payload.choices && payload.choices[0];
             const delta = choice && choice.delta ? choice.delta : {};
-            if (request.thinking && delta.reasoning_content) emit(delta.reasoning_content, { type: 'reasoning' });
-            if (delta.content) emit(delta.content, request.thinking ? { type: 'content' } : undefined);
+            if (delta.reasoning_content) emit(delta.reasoning_content, { type: 'reasoning' });
+            if (delta.content) emit(delta.content, { type: 'content' });
             if (choice && choice.finish_reason) emit('', { type: 'finish', finishReason: choice.finish_reason });
         }, onActivity);
     }

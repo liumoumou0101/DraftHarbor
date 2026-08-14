@@ -85,11 +85,22 @@ function createProtocolRouter(dependencies) {
       }
 
       const bodyBuffer = await readFetchBodyStream(fetchRequest.body);
-      const request = createMockNodeRequest(method, pathname + (fetchUrl.search || ''), bodyBuffer, fetchHeadersToPlain(fetchRequest));
+      const request = createMockNodeRequest(method, pathname + (fetchUrl.search || ''), bodyBuffer, fetchHeadersToPlain(fetchRequest), { signal: fetchRequest.signal });
       const mockResponse = createMockNodeResponse();
       if (pathname.startsWith('/api/')) {
-        const handled = await handleAppApi(request, mockResponse.response, appRoot, dataRoot, fetchUrl, { openPath, revealPath });
-        return handled ? mockResponseToFetchResponse(mockResponse) : jsonFetchResponse(404, { ok: false, error: 'Not found' });
+        let handled = false;
+        const handledPromise = handleAppApi(request, mockResponse.response, appRoot, dataRoot, fetchUrl, { openPath, revealPath })
+          .then((value) => { handled = value; return value; });
+        await Promise.race([
+          typeof mockResponse.whenHeadersSent === 'function' ? mockResponse.whenHeadersSent() : handledPromise,
+          handledPromise
+        ]);
+        if (!mockResponse.response.headersSent) {
+          handled = await handledPromise;
+          return handled ? mockResponseToFetchResponse(mockResponse) : jsonFetchResponse(404, { ok: false, error: 'Not found' });
+        }
+        handledPromise.catch(() => {});
+        return mockResponseToFetchResponse(mockResponse);
       }
       if (['/version', '/health', '/update/status', '/update/download', '/update/clear'].includes(pathname)) {
         await handleUpdaterApi(request, mockResponse.response, appRoot, dataRoot, fetchUrl);

@@ -6,6 +6,7 @@ const projectService = require('./project-service');
 const Review = require('./workflow-review-service');
 const PlanningSchema = require('../../src/core/workflow/workflow-planning-schema');
 const { createGuidedRuntime } = require('./workflow-guided-runtime-service');
+const generationBridge = require('./generation-bridge-service');
 
 const STAGES = Object.freeze([
   { id: 'source', title: '来源快照', capabilityId: 'writer.snapshot', description: '冻结本次续写使用的原文范围。' },
@@ -81,6 +82,7 @@ async function appendEvent(targetPath, runId, type, nodeId, payload = {}) {
 }
 
 async function startGuidedContinuation(options = {}) {
+  if (options.dataRoot) options = await generationBridge.stampLaunchGenerationPolicy(options.dataRoot, options);
   const dataRoot = options.dataRoot;
   const projectId = clean(options.projectId);
   if (!dataRoot || !projectId) throw new Error('guided workflow dataRoot and projectId are required');

@@ -737,11 +737,10 @@
                 writerModelOverride.customModel = String(saved.customModel || '').trim();
                 if (saved.model === '__custom__') {
                     writerModelOverride.model = '__custom__';
-                } else if (saved.model && saved.model !== 'inherit' && saved.model !== 'deepseek-v4-flash' && saved.model !== 'deepseek-v4-pro') {
-                    writerModelOverride.model = '__custom__';
-                    writerModelOverride.customModel = String(saved.model || '').trim();
-                } else if (saved.model === 'inherit' || saved.model === 'deepseek-v4-flash' || saved.model === 'deepseek-v4-pro') {
+                } else if (saved.model && saved.model !== 'inherit') {
                     writerModelOverride.model = saved.model;
+                } else {
+                    writerModelOverride.model = 'inherit';
                 }
                 writerModelOverride.thinking = !!saved.thinking;
             }
@@ -828,7 +827,29 @@
         inheritModel.textContent = '继承该配置默认模型';
         elements.modelSelect.appendChild(inheritModel);
         if (canSelectModel) {
-            catalog.getProviderModels(effectiveProfile.provider).forEach((model) => {
+            const hidePrivacy = !!(normalizeDesktopSettings(settingsState.settings || {}).modelCatalogPreferences || {}).hidePrivacyRiskModels;
+            const models = catalog.getProviderModels(effectiveProfile.provider, {
+                catalog: (effectiveProfile.provider === 'opencode-zen' || effectiveProfile.provider === 'opencode-go')
+                    ? ((settingsState.modelCatalogs && settingsState.modelCatalogs[effectiveProfile.provider]) || settingsState.modelCatalog)
+                    : null,
+                hidePrivacyRiskModels: hidePrivacy
+            });
+            const groups = { free: '免费已兼容', paid: '付费已兼容', other: '其他已兼容', pending: '待适配', offline: '已下线' };
+            Object.keys(groups).forEach((key) => {
+                const items = models.filter((item) => item.id !== '__custom__' && (catalog.modelGroup ? catalog.modelGroup(item) : 'other') === key);
+                if (!items.length) return;
+                const group = document.createElement('optgroup');
+                group.label = groups[key];
+                items.forEach((model) => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = catalog.modelOptionLabel ? catalog.modelOptionLabel(model) : (model.label || model.id);
+                    if (catalog.isModelSelectable && !catalog.isModelSelectable(model) && model.id !== '__custom__') option.disabled = true;
+                    group.appendChild(option);
+                });
+                elements.modelSelect.appendChild(group);
+            });
+            models.filter((model) => model.id === '__custom__').forEach((model) => {
                 const option = document.createElement('option');
                 option.value = model.id;
                 option.textContent = model.label || model.id;

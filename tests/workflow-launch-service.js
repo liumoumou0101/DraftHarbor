@@ -35,7 +35,13 @@ const paths = require('../desktop/storage/library-paths');
     const opened = await projectService.openProject(dataRoot, result.projectId);
     assert.strictEqual(opened.project.title, '工作流新作');
     const stored = await runStore.readWorkflowV2Run(paths.projectDir(dataRoot, result.projectId), result.runId);
-    assert.deepStrictEqual(stored.definitionSnapshot.definition.settings.generationPolicy, generationPolicy);
+    const frozen = stored.definitionSnapshot.definition.settings.generationPolicy;
+    assert.strictEqual(frozen.providerProfileId, 'inherit');
+    assert.strictEqual(frozen.snapshot.model, 'workflow-test-model');
+    assert.strictEqual(frozen.snapshot.temperature, 0.6);
+    assert.strictEqual(frozen.snapshot.maxTokens, 4800);
+    assert.strictEqual(frozen.snapshot.endpoint, '', 'launch stamp must not persist a client endpoint');
+    assert.notStrictEqual(frozen.snapshot.provider, 'deepseek', 'empty disk settings must not keep a client-forged provider');
     assert.ok(!JSON.stringify(stored).includes('apiKey'), 'workflow snapshot must not store an API key');
     console.log('Workflow launch service test passed.');
   } finally {

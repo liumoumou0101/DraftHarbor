@@ -4,6 +4,7 @@ const inputService = require('./workflow-input-service');
 const RewriteService = require('./workflow-rewrite-service');
 const RewriteSchema = require('../../src/core/workflow/workflow-rewrite-schema');
 const { createGuidedRuntime } = require('./workflow-guided-runtime-service');
+const generationBridge = require('./generation-bridge-service');
 
 const STAGES = Object.freeze([
   { id: 'source', title: '重写来源快照', capabilityId: 'writer.snapshot', description: '冻结本次重写的选区、场景或章节。' },
@@ -65,6 +66,7 @@ function nodeStates() {
 }
 
 async function startGuidedRewrite(options = {}) {
+  if (options.dataRoot) options = await generationBridge.stampLaunchGenerationPolicy(options.dataRoot, options);
   const projectId = clean(options.projectId);
   if (!options.dataRoot || !projectId) throw new Error('rewrite workflow dataRoot and projectId are required');
   const runId = clean(options.runId, id('rewrite-run'));

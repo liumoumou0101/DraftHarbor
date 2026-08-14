@@ -72,6 +72,8 @@
                                 <option value="anthropic">Anthropic</option>
                                 <option value="google">Google AI</option>
                                 <option value="deepseek">DeepSeek</option>
+                                <option value="opencode-zen">OpenCode Zen</option>
+                                <option value="opencode-go">OpenCode Go</option>
                                 <option value="nanogpt">NanoGPT</option>
                                 <option value="custom">Custom</option>
                             </select>
@@ -80,14 +82,26 @@
                             <span>Endpoint</span>
                             <input type="url" data-settings-endpoint placeholder="http://localhost:8080 或 https://.../chat/completions">
                         </label>
+                        <p class="desktop-settings-desc" data-settings-zen-hint hidden>OpenCode 使用官方固定地址，无需填写完整 Endpoint。</p>
                         <label>
                             <span>Model</span>
-                            <input type="text" data-settings-model placeholder="模型名">
+                            <input type="text" data-settings-model placeholder="模型名" list="settings-model-options">
+                            <datalist id="settings-model-options" data-settings-model-options></datalist>
                         </label>
                         <label>
                             <span>API Key</span>
                             <input type="password" data-settings-api-key placeholder="留空表示保持现有密钥">
                         </label>
+                        <div data-settings-catalog-panel hidden>
+                            <p class="desktop-settings-desc" data-settings-catalog-status>模型目录尚未更新</p>
+                            <label class="desktop-settings-check">
+                                <input type="checkbox" data-settings-hide-privacy-models>
+                                <span>隐藏可能采集内容用于改进的模型</span>
+                            </label>
+                            <div class="desktop-settings-actions">
+                                <button class="desktop-secondary-action" type="button" data-settings-refresh-catalog>更新模型列表</button>
+                            </div>
+                        </div>
                     </section>
 
                     <section class="desktop-settings-section" data-settings-section="profiles">
@@ -113,6 +127,8 @@
                                 <span>Provider</span>
                                 <select data-settings-profile-provider>
                                     <option value="deepseek">DeepSeek</option>
+                                    <option value="opencode-zen">OpenCode Zen</option>
+                                <option value="opencode-go">OpenCode Go</option>
                                     <option value="openai">OpenAI</option>
                                     <option value="openrouter">OpenRouter</option>
                                     <option value="nanogpt">NanoGPT</option>
@@ -197,6 +213,8 @@
                                 <span>Provider</span>
                                 <select data-settings-compendium-agent-api-provider>
                                     <option value="deepseek">DeepSeek</option>
+                                    <option value="opencode-zen">OpenCode Zen</option>
+                                <option value="opencode-go">OpenCode Go</option>
                                     <option value="openai">OpenAI</option>
                                     <option value="openrouter">OpenRouter</option>
                                     <option value="nanogpt">NanoGPT</option>
@@ -325,7 +343,7 @@
                     </section>
                     <div class="desktop-settings-actions desktop-settings-global-actions">
                         <button class="desktop-primary-action" type="submit">保存设置</button>
-                        <button class="desktop-secondary-action" type="button" data-settings-test>检查配置</button>
+                        <button class="desktop-secondary-action" type="button" data-settings-test>测试连接并获取模型</button>
                         <button class="desktop-secondary-action" type="button" data-settings-refresh>重新读取</button>
                     </div>
                     </form>

@@ -10,6 +10,7 @@ const InstructionStack = require('../../src/core/generation/instruction-stack');
 const CreationService = require('./workflow-creation-service');
 const Review = require('./workflow-review-service');
 const { createGuidedRuntime } = require('./workflow-guided-runtime-service');
+const generationBridge = require('./generation-bridge-service');
 
 const STAGES = Object.freeze([
   { id: 'brief', title: '创作 Brief', capabilityId: 'creation.brief', description: '确认题材、核心创意、规模和创作边界。' },
@@ -276,6 +277,7 @@ function nodeStates() {
 }
 
 async function startGuidedCreation(options = {}) {
+  if (options.dataRoot) options = await generationBridge.stampLaunchGenerationPolicy(options.dataRoot, options);
   const projectId = clean(options.projectId);
   if (!options.dataRoot || !projectId) throw new Error('creation workflow dataRoot and projectId are required');
   const brief = CreationSchema.createCreationBrief(options.brief || options);

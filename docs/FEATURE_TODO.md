@@ -2,6 +2,8 @@
 
 本文件是稿湾功能开发的唯一进度记录。开始、暂停、完成或取消功能时，必须同步更新状态、完成证据和下一步；不要只依赖对话记录或本机 Agent 日志。
 
+不影响发布、尚无明确用户痛点的低优先级想法统一记录在 `docs/OPTIONAL_IMPROVEMENTS.md`，出现明确收益证据后再转入本文件。
+
 状态：`未开始`、`进行中`、`待验收`、`已完成`、`阻塞`。
 
 当前主线（2026-08-13）：写作区提示词装配 W-01 已收口（按拍停笔、模糊篇幅、内置模板精简、改写同源、讨论可选角度、思考额度保底）。工作流 F-09.6A–J 质量收敛仍在工作区；下一步优先 **F-09.6K 分级复测**；暂停扩张 F-11。详细交接见 `docs/SESSION_HANDOFF.md` 2026-08-13 节。
@@ -898,6 +900,29 @@ F-10.4A 阶段退出：定位与导入两条路径具备预览、确认、版本
 - [x] F-12.10（2026-08-04）：用户字体文件安装与管理（TTF/OTF/WOFF2 校验、稳定摘要 ID、TTF/OTF name/OS/2 元数据识别、本地字体目录原子提交、重复/缺失/非法格式回退、字体管理/预览/删除和偏好回退已接通；桌面、存储、安全回归通过）。
 - [x] F-12.11（2026-08-04）：TTS/自动阅读（本机 SpeechSynthesis Provider、段落队列/安全切分、Locator 同步、声音/语速/音量/段落停顿、自动进章、定时停止，以及翻页/批注/面板/失焦冲突暂停已接通；Reader 核心、桌面模拟语音和无障碍回归通过）。
 - [x] F-12.12（2026-08-04）：EPUB 格式扩展（新增安全 Import Adapter，支持 mimetype/container.xml/OPF/spine、章节标题/段落/强调/代码和本地图片说明映射；拒绝路径穿越、符号链接、压缩炸弹、脚本/样式/远程资源和任意 HTML；EPUB 复用导入草稿、Reader Document、Revision、Locator、State、Annotation 与 Transfer 契约；核心适配器、存储接线、桌面文件选择器和发布门禁回归通过）。
+
+## 规划阶段：OpenCode Zen Provider 与动态模型目录
+
+| 编号 | 功能 | 状态 | 依赖 | 完成标准 | 下一步 |
+| --- | --- | --- | --- | --- | --- |
+| F-13 | OpenCode Zen / Go 预设、后台安全生成桥接与动态模型目录 | 待验收 | Provider Stream、设置配置组、Writer/Workshop/Workflow/资料库管家生成入口 | 一组 OpenCode Key 可安全用于各模块；Zen 按量与 Go 月卡分通道；已适配 Chat Completions 可切换；目录可更新且不静默改模型 | 2026-08-14 次轮：空白 Key 只在 Provider+规范化 Endpoint 未变，或 Zen↔Go 时保留；Writer/Workshop 不再继承当前 Workflow Run。未跑 pack / packaged-smoke。报告：`docs/GROK46_OPENCODE_ZEN_IMPLEMENTATION_REPORT.md` |
+
+### F-13 产品决策
+
+- Zen 是多协议网关；模型出现在在线目录不代表稿湾已兼容。只有“在线可用且适配完成”的模型可以选择。
+- 第一阶段先支持 Chat Completions，不等待 Responses、Anthropic Messages 和 Google 原生协议全部完成。
+- `/models` 当前不提供价格、免费状态或协议，必须与版本化兼容性清单合并；不通过模型名或单次请求猜测是否免费。
+- 自动更新仅刷新目录和状态，不自动替换默认模型、项目选择或历史工作流快照。
+- Zen 当前没有可供渲染层使用的 CORS 预检响应，后台生成桥接是发布预设的前置条件；禁止关闭 Electron Web 安全绕过。
+- 免费模型可能收集内容用于改进，首次用于项目正文前必须提示，且支持隐藏此类模型。
+- OpenCode Zen（`/zen/v1` 按量）与 OpenCode Go（`/zen/go/v1` 月卡）是两条通道。同一把 Key 可以登录两边，但 Go 订阅不会自动套到 Zen 按量地址。稿湾用两个 Provider ID 分开表达。
+
+### F-13 建议阶段
+
+- [x] F-13.1（2026-08-14）：后台安全生成桥接、统一流式事件、取消/超时/错误映射、密钥退出渲染层。定向：`node tests/generation-bridge.js`、`node tests/settings-service.js`。
+- [x] F-13.2（2026-08-14）：`opencode-zen` 预设与 Chat Completions 模型、能力驱动思考配置、真实连接测试。定向：`node tests/provider-stream.js`。同日补 `opencode-go`（`https://opencode.ai/zen/go/v1`）月卡通道。
+- [x] F-13.3（2026-08-14，瘦身）：内置兼容/免费/隐私清单 + `/models` 存在性缓存 + 手动刷新 + 下线/待适配禁用。未做远端 GitHub 清单发布管道。定向：`node tests/model-catalog-service.js`。
+- [ ] F-13.4：Responses、Anthropic Messages、Google 原生协议按独立验收逐步开放。
 
 ## 统一规则
 

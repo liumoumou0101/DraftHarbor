@@ -903,10 +903,10 @@
         const startedAt = new Date().toISOString();
         let failureMessage = '';
         try {
-            if (!window.DraftHarborProviderStream || typeof window.DraftHarborProviderStream.streamGeneration !== 'function') {
+            if (!desktopGenerationAvailable()) {
                 throw new Error('Native generation provider stream is not loaded.');
             }
-            await window.DraftHarborProviderStream.streamGeneration(prompt, (token, meta) => {
+            await streamDesktopGeneration(prompt, (token, meta) => {
                 if (meta && meta.type === 'finish') {
                     generation.finishReason = meta.finishReason || '';
                     return;
@@ -992,10 +992,7 @@
         }
         nativeAITaskRunner = window.DraftHarborAITaskRunner.createAITaskRunner({
             streamGeneration(prompt, onToken, config) {
-                if (!window.DraftHarborProviderStream || typeof window.DraftHarborProviderStream.streamGeneration !== 'function') {
-                    throw new Error('Native generation provider stream is not loaded.');
-                }
-                return window.DraftHarborProviderStream.streamGeneration(prompt, onToken, config);
+                return streamDesktopGeneration(prompt, onToken, config);
             }
         });
         return nativeAITaskRunner;
@@ -1210,7 +1207,7 @@
         renderNativeGeneration();
         setNativeSaveStatus(scope === 'chapter' ? '正在生成章节摘要...' : '正在生成场景摘要...', 'info');
         try {
-            await window.DraftHarborProviderStream.streamGeneration(prompt, (token, meta) => {
+            await streamDesktopGeneration(prompt, (token, meta) => {
                 if (meta && meta.type && meta.type !== 'content') return;
                 summary += token;
                 if (scope === 'scene' && elements.summary) elements.summary.value = summary;

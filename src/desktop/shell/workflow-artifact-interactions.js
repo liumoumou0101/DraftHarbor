@@ -336,7 +336,7 @@
         const instruction = String(feedback || '').trim();
         if (!projectId || !run || !artifact) return;
         if (!instruction) throw new Error('请先填写修改意见');
-        if (!window.DraftHarborProviderStream || typeof window.DraftHarborProviderStream.streamGeneration !== 'function') {
+        if (!desktopGenerationAvailable()) {
             throw new Error('生成服务尚未加载');
         }
         workflowState.artifactRewriteBusy = true;
@@ -344,6 +344,7 @@
         const stageConfig = guidedStageProviderConfig(artifact.nodeId, run);
         const config = {
             ...stageConfig,
+            ...workflowGenerationScope(run),
             ...(selectedModel && selectedModel !== 'inherit' ? { model: selectedModel } : {}),
             enableThinking: enableThinking !== false,
             includeUsage: true
@@ -368,7 +369,7 @@
                     }
                 ]
             };
-            await window.DraftHarborProviderStream.streamGeneration(prompt, (token, meta) => {
+            await streamDesktopGeneration(prompt, (token, meta) => {
                 if (meta && meta.type === 'reasoning') appendWorkflowReasoning(token);
                 else if (!meta || meta.type === 'content') {
                     markWorkflowAnswerStarted();

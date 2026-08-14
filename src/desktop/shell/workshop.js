@@ -393,10 +393,10 @@
                 message: text,
                 currentSceneId: nativeEditorState.activeSceneId
             });
-            if (!window.DraftHarborProviderStream || typeof window.DraftHarborProviderStream.streamGeneration !== 'function') {
+            if (!desktopGenerationAvailable()) {
                 throw new Error('Provider stream is not loaded');
             }
-            await window.DraftHarborProviderStream.streamGeneration(prompt, (token, meta) => {
+            await streamDesktopGeneration(prompt, (token, meta) => {
                 if (meta && meta.type && meta.type !== 'content') return;
                 assistantMessage.content += token;
                 renderWorkshop();

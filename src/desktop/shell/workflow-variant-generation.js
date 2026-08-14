@@ -16,7 +16,7 @@
             });
             const prepared = await preparedResponse.json().catch(() => ({}));
             if (!preparedResponse.ok || !prepared.ok) throw new Error(prepared.error || `HTTP ${preparedResponse.status}`);
-            const config = guidedStageProviderConfig(isRewriteWorkflow(run) ? 'repair' : 'draft', run);
+            const config = Object.assign({}, guidedStageProviderConfig(isRewriteWorkflow(run) ? 'repair' : 'draft', run), workflowGenerationScope(run));
             const outputs = [];
             beginWorkflowReasoning(config, `替代版本 · ${label}`);
             for (let index = 0; index < prepared.prompts.length; index += 1) {
@@ -30,7 +30,7 @@
                     total: prepared.prompts.length,
                     model: config.model
                 });
-                await window.DraftHarborProviderStream.streamGeneration(item.prompt, (token, meta) => {
+                await streamDesktopGeneration(item.prompt, (token, meta) => {
                     if (meta?.type === 'reasoning') appendWorkflowReasoning(token);
                     else if (!meta || meta.type === 'content') {
                         markWorkflowAnswerStarted();

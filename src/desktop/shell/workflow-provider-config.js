@@ -52,8 +52,18 @@
             inherited.value = 'inherit'; inherited.textContent = `使用配置默认模型（${config.model || '未设置'}）`;
             select.appendChild(inherited);
             if (config.mode === 'api' && catalog.isApiCompatibleProvider(config.provider)) {
-                catalog.getProviderModels(config.provider).filter((item) => item.id !== '__custom__').forEach((item) => {
-                    const option = document.createElement('option'); option.value = item.id; option.textContent = item.label || item.id; select.appendChild(option);
+                const hidePrivacy = !!(settings.modelCatalogPreferences || {}).hidePrivacyRiskModels;
+                catalog.getProviderModels(config.provider, {
+                    catalog: (config.provider === 'opencode-zen' || config.provider === 'opencode-go')
+                        ? ((settingsState.modelCatalogs && settingsState.modelCatalogs[config.provider]) || settingsState.modelCatalog)
+                        : null,
+                    hidePrivacyRiskModels: hidePrivacy
+                }).filter((item) => item.id !== '__custom__').forEach((item) => {
+                    const option = document.createElement('option');
+                    option.value = item.id;
+                    option.textContent = catalog.modelOptionLabel ? catalog.modelOptionLabel(item) : (item.label || item.id);
+                    if (catalog.isModelSelectable && !catalog.isModelSelectable(item)) option.disabled = true;
+                    select.appendChild(option);
                 });
             }
             select.disabled = select.options.length < 2;

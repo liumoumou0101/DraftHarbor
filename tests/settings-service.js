@@ -54,6 +54,18 @@ const SettingsSchema = require('../src/core/settings/settings-schema');
     });
     assert.strictEqual(updated.providerSettings.model, 'second-model');
     assert.strictEqual(updated.providerSettings.apiKey, 'secret', 'blank apiKey should preserve existing secret');
+    assert.strictEqual(SettingsSchema.canRetainStoredApiKey(
+      { provider: 'deepseek', endpoint: 'https://api.deepseek.com/chat/completions' },
+      { provider: 'deepseek', endpoint: 'https://api.deepseek.com/chat/completions/' }
+    ), true);
+    assert.strictEqual(SettingsSchema.canRetainStoredApiKey(
+      { provider: 'opencode-zen' },
+      { provider: 'opencode-go' }
+    ), true, 'Zen and Go may share one OpenCode key');
+    assert.strictEqual(SettingsSchema.canRetainStoredApiKey(
+      { provider: 'deepseek', endpoint: 'https://api.deepseek.com/chat/completions' },
+      { provider: 'openai-compatible', endpoint: 'https://evil.example/v1/chat/completions' }
+    ), false);
     const workflowConfigured = await settingsService.updateSettings(dataRoot, { workflowGeneration: { providerProfileId: 'workflow-profile' } });
     assert.strictEqual(workflowConfigured.workflowGeneration.providerProfileId, 'workflow-profile', 'workflow provider selection should persist separately from the default writing connection');
     assert.strictEqual(updated.generationDefaults.maxTokens, 777);
@@ -115,6 +127,27 @@ const SettingsSchema = require('../src/core/settings/settings-schema');
     assert.strictEqual(updatedDsProfile.apiKey, 'ds-secret-1', 'blank apiKey should preserve profile secret');
     assert.strictEqual(updatedDsProfile.name, 'My DeepSeek Updated');
 
+    var reboundProfile = await settingsService.updateProviderProfile(dataRoot, {
+      id: dsProfile.id,
+      name: 'My DeepSeek Updated',
+      provider: 'openai-compatible',
+      endpoint: 'https://evil.example/v1/chat/completions',
+      apiKey: ''
+    });
+    var reboundDsProfile = reboundProfile.providerProfiles.find(function (p) { return p.id === dsProfile.id; });
+    assert.strictEqual(reboundDsProfile.apiKey, '', 'changing profile provider/endpoint must drop the stored key');
+    assert.strictEqual(reboundDsProfile.hasApiKey, false);
+
+    var restoredDs = await settingsService.updateProviderProfile(dataRoot, {
+      id: dsProfile.id,
+      name: 'My DeepSeek Updated',
+      provider: 'deepseek',
+      endpoint: 'https://api.deepseek.com/chat/completions',
+      apiKey: 'ds-secret-1'
+    });
+    dsProfile = restoredDs.providerProfiles.find(function (p) { return p.id === dsProfile.id; });
+    assert.strictEqual(dsProfile.apiKey, 'ds-secret-1');
+
     var publicAll = settingsService.publicSettings(updatedDs);
     var pubDs = publicAll.providerProfiles.find(function (p) { return p.id === dsProfile.id; });
     assert.strictEqual(pubDs.apiKey, '', 'public profile should not expose apiKey');
@@ -130,6 +163,8 @@ const SettingsSchema = require('../src/core/settings/settings-schema');
     assert.ok(getResponse.ok && getBody.ok, 'GET /api/settings should return ok');
     assert.strictEqual(getBody.settings.providerSettings.apiKey, '', 'settings API should not expose raw API key');
     assert.strictEqual(getBody.settings.providerSettings.hasApiKey, true);
+    assert.strictEqual(getBody.runtimeProvider.apiKey, '', 'runtimeProvider must not expose the API key');
+    assert.ok(getBody.runtimeProvider.hasApiKey, 'runtimeProvider should still report hasApiKey');
     assert.ok(Array.isArray(getBody.settings.providerProfiles), 'API should return providerProfiles array');
     var apiProfiles = getBody.settings.providerProfiles;
     var apiDs = apiProfiles.find(function (p) { return p.id === dsProfile.id; });
@@ -141,8 +176,9 @@ const SettingsSchema = require('../src/core/settings/settings-schema');
     assert.strictEqual(getBody.storageLocations.backupLocation, path.join(dataRoot, 'projects', 'backups'), 'GET /api/settings should resolve the effective backup folder');
     var rtDs = getBody.runtimeProviderProfiles.find(function (p) { return p.id === dsProfile.id; });
     assert.ok(rtDs, 'runtimeProviderProfiles should include the deepseek profile');
-    assert.strictEqual(rtDs.apiKey, 'ds-secret-1', 'runtimeProviderProfiles should expose real profile apiKey');
+    assert.strictEqual(rtDs.apiKey, '', 'runtimeProviderProfiles must not expose real profile apiKey');
     assert.strictEqual(rtDs.hasApiKey, true);
+    assert.ok(!JSON.stringify(getBody).includes('ds-secret-1'), 'settings API JSON must not contain the saved test key');
 
     const postResponse = await fetch(servers.appUrl + '/api/settings', {
       method: 'POST',
@@ -194,7 +230,8 @@ const SettingsSchema = require('../src/core/settings/settings-schema');
     assert.strictEqual(delBody.settings.providerProfiles.length, 1, 'should have 1 profile remaining');
     assert.ok(Array.isArray(delBody.runtimeProviderProfiles), 'delete response should have runtimeProviderProfiles');
     assert.strictEqual(delBody.runtimeProviderProfiles.length, 1, 'delete runtimeProviderProfiles should have 1 profile');
-    assert.strictEqual(delBody.runtimeProviderProfiles[0].apiKey, 'oa-secret-2', 'remaining profile should have real apiKey in runtimeProviderProfiles');
+    assert.strictEqual(delBody.runtimeProviderProfiles[0].apiKey, '', 'remaining profile must not expose apiKey in runtimeProviderProfiles');
+    assert.strictEqual(delBody.runtimeProviderProfiles[0].hasApiKey, true, 'remaining profile should still report hasApiKey');
 
     // Phase 33: test-provider-profile endpoint tests
     var remainingProfile = delBody.runtimeProviderProfiles[0];
@@ -238,6 +275,79 @@ const SettingsSchema = require('../src/core/settings/settings-schema');
       assert.strictEqual(pubRemainingProfile.apiKey, '', 'public profile should not expose apiKey after test-provider-profile');
       assert.strictEqual(pubRemainingProfile.hasApiKey, true, 'public profile should have hasApiKey true');
     }
+
+    await settingsService.writeSettings(dataRoot, {
+      providerSettings: {
+        mode: 'api',
+        provider: 'deepseek',
+        endpoint: 'https://api.deepseek.com/chat/completions',
+        apiKey: 'PROFILE_DISK_KEY',
+        model: 'deepseek-v4-flash'
+      }
+    });
+    const rebindGlobal = await fetch(servers.appUrl + '/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        settings: {
+          providerSettings: {
+            mode: 'api',
+            provider: 'openai-compatible',
+            endpoint: 'https://evil.example/v1/chat/completions',
+            apiKey: '',
+            model: 'stolen-model'
+          }
+        }
+      })
+    });
+    const rebindGlobalBody = await rebindGlobal.json();
+    assert.ok(rebindGlobal.ok && rebindGlobalBody.ok, 'rebinding settings should still return 200');
+    assert.strictEqual(rebindGlobalBody.settings.providerSettings.hasApiKey, false, 'public settings must not claim a key after provider/endpoint change');
+    const reboundGlobal = await settingsService.readSettings(dataRoot);
+    assert.strictEqual(reboundGlobal.providerSettings.apiKey, '', 'blank key must not follow a DeepSeek config to an arbitrary endpoint');
+    assert.ok(String(reboundGlobal.providerSettings.endpoint).includes('evil.example'));
+
+    const zenSaved = await settingsService.writeSettings(dataRoot, {
+      providerSettings: {
+        mode: 'api',
+        provider: 'opencode-zen',
+        apiKey: 'OPENCODE_SHARED_KEY',
+        model: 'deepseek-v4-flash'
+      }
+    });
+    const zenToGo = await settingsService.updateSettings(dataRoot, {
+      providerSettings: { provider: 'opencode-go', apiKey: '', model: 'glm-5.2' }
+    });
+    assert.strictEqual(zenSaved.providerSettings.apiKey, 'OPENCODE_SHARED_KEY');
+    assert.strictEqual(zenToGo.providerSettings.provider, 'opencode-go');
+    assert.strictEqual(zenToGo.providerSettings.apiKey, 'OPENCODE_SHARED_KEY', 'Zen to Go may keep the same OpenCode key');
+
+    const profileCreated = await settingsService.updateProviderProfile(dataRoot, {
+      name: 'rebind-profile',
+      provider: 'deepseek',
+      endpoint: 'https://api.deepseek.com/chat/completions',
+      apiKey: 'PROFILE_DISK_KEY'
+    });
+    const createdProfile = profileCreated.providerProfiles.find(function (item) { return item.name === 'rebind-profile'; });
+    const rebindProfile = await fetch(servers.appUrl + '/api/settings/provider-profiles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        profile: {
+          id: createdProfile.id,
+          name: 'rebind-profile',
+          provider: 'openai-compatible',
+          endpoint: 'https://evil.example/v1/chat/completions',
+          apiKey: ''
+        }
+      })
+    });
+    const rebindProfileBody = await rebindProfile.json();
+    assert.ok(rebindProfile.ok && rebindProfileBody.ok, 'rebinding a profile should still return 200');
+    const storedProfile = (await settingsService.readSettings(dataRoot)).providerProfiles.find(function (item) {
+      return item.id === createdProfile.id;
+    });
+    assert.strictEqual(storedProfile.apiKey, '', 'blank profile key must not follow a DeepSeek profile to an arbitrary endpoint');
 
     console.log('Settings service test passed.');
   } finally {

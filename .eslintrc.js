@@ -80,6 +80,9 @@ currentProjectName
 deleteNativeChapter
 deleteNativeScene
 deletePromptTemplate
+desktopGenerationAvailable
+streamDesktopGeneration
+workflowGenerationScope
 discardNativeGeneration
 downloadNativeExport
 downloadNativeProjectPackage
