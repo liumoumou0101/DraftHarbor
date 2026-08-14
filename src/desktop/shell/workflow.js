@@ -608,10 +608,10 @@
             });
             const prepared = await prepareResponse.json().catch(() => ({}));
             if (!prepareResponse.ok || !prepared.ok) throw new Error(prepared.error || `HTTP ${prepareResponse.status}`);
-            if (!window.DraftHarborProviderStream || typeof window.DraftHarborProviderStream.streamGeneration !== 'function') {
+            if (!desktopGenerationAvailable()) {
                 throw new Error('Native generation provider stream is not loaded.');
             }
-            const providerConfig = guidedStageProviderConfig(step.id, run);
+            const providerConfig = Object.assign({}, guidedStageProviderConfig(step.id, run), workflowGenerationScope(run));
             beginWorkflowReasoning(providerConfig, step.title || step.id);
             beginWorkflowStreamStage({
                 runId: run.id,
@@ -620,7 +620,7 @@
                 total: 1,
                 model: providerConfig.model
             });
-            await window.DraftHarborProviderStream.streamGeneration(prepared.prompt, (token, meta) => {
+            await streamDesktopGeneration(prepared.prompt, (token, meta) => {
                 if (meta && meta.type === 'reasoning') {
                     appendWorkflowReasoning(token);
                     return;

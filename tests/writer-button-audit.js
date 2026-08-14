@@ -620,7 +620,7 @@ async function openNativeModelSettings(page) {
     assert.ok(lastGenConfig, 'generation stub should receive a config object');
     assert.strictEqual(lastGenConfig.model, 'deepseek-v4-pro', 'generation config should use deepseek-v4-pro model');
     assert.strictEqual(lastGenConfig.enableThinking, true, 'generation config should have enableThinking true');
-    assert.strictEqual(lastGenConfig.apiKey, 'writer-audit-test-key', 'global inherit generation config should keep the runtime API key');
+    assert.ok(!lastGenConfig.apiKey, 'renderer generation config must not include the API key');
     await page.waitForFunction(() => document.querySelector('[data-native-scene-editor]').value.includes('Audit generated text.'));
     const inlineGenerationLayout = await page.evaluate(() => {
       const editor = document.querySelector('[data-native-scene-editor]');
@@ -729,7 +729,7 @@ async function openNativeModelSettings(page) {
     assert.ok(inheritConfig, 'inherit generation stub should receive a config object');
     assert.strictEqual(inheritConfig.model, 'deepseek-v4-pro', 'inherit config should keep global DeepSeek model');
     assert.strictEqual(inheritConfig.enableThinking, true, 'inherit + thinking should pass enableThinking true');
-    assert.strictEqual(inheritConfig.apiKey, 'writer-audit-test-key', 'inherit + thinking should keep the global runtime API key');
+    assert.ok(!inheritConfig.apiKey, 'inherit + thinking must not expose the API key to the renderer');
     await page.click('[data-native-discard-generation]');
     await page.waitForFunction(() => document.querySelector('[data-native-generation-output]').hidden);
 
@@ -1170,7 +1170,7 @@ async function openNativeModelSettings(page) {
     assert.strictEqual(dsProfileConfig.provider, 'deepseek', 'profile DS config should have provider deepseek');
     assert.strictEqual(dsProfileConfig.enableThinking, true, 'profile DS config should have enableThinking true');
     assert.strictEqual(dsProfileConfig.model, 'deepseek-v4-pro', 'profile DS config should use deepseek-v4-pro');
-    assert.strictEqual(dsProfileConfig.apiKey, 'writer-audit-ds-key', 'profile DS config should use profile API key');
+    assert.ok(!dsProfileConfig.apiKey, 'profile DS config must not expose the API key to the renderer');
     await page.click('[data-native-discard-generation]');
     await page.waitForFunction(() => document.querySelector('[data-native-generation-output]').hidden);
 
@@ -1228,7 +1228,7 @@ async function openNativeModelSettings(page) {
     assert.strictEqual(oaProfileConfig.provider, 'openai', 'profile OA config should have provider openai');
     assert.ok(!oaProfileConfig.enableThinking, 'profile OA config should NOT have enableThinking');
     assert.ok(oaProfileConfig.model === 'gpt-4o-mini' || oaProfileConfig.model === 'gpt-4o-mini', 'profile OA config should use chosen model');
-    assert.strictEqual(oaProfileConfig.apiKey, 'writer-audit-oa-key', 'profile OA config should use profile API key');
+    assert.ok(!oaProfileConfig.apiKey, 'profile OA config must not expose the API key to the renderer');
     await page.click('[data-native-discard-generation]');
     await page.waitForFunction(() => document.querySelector('[data-native-generation-output]').hidden);
 
@@ -1284,7 +1284,7 @@ async function openNativeModelSettings(page) {
     var reloadConfig = await page.evaluate(function () { return window.__lastDraftHarborGenerationConfig; });
     assert.ok(reloadConfig, 'reload generation should receive config');
     assert.strictEqual(reloadConfig.provider, 'deepseek', 'reload config should have provider deepseek');
-    assert.strictEqual(reloadConfig.apiKey, 'writer-audit-ds-key', 'reload config should still have profile API key');
+    assert.ok(!reloadConfig.apiKey, 'reload config must not expose the API key to the renderer');
 
     // Phase 33: Profile test button, inline status, and writer integration
 

@@ -259,13 +259,21 @@
                                     <div class="desktop-native-copilot-section-head">
                                         <span>建议</span>
                                     </div>
-                                    <button type="button" data-native-copilot-suggestion="用具体动作和感官细节续写下一段，避免直接解释人物情绪。">增强画面感</button>
+                                    <button type="button" data-native-copilot-suggestion="用具体动作和感官细节续写当前场面，避免直接解释人物情绪。">增强画面感</button>
                                     <button type="button" data-native-copilot-suggestion="提高这一场的紧张感，让人物目标、阻碍和风险更清楚。">提高张力</button>
                                     <button type="button" data-native-copilot-suggestion="检查当前场景是否贴合前文连续性，并续写一段自然过渡。">贴合上下文</button>
                                 </div>
                                 <div class="desktop-native-generation-input">
                                     <textarea data-native-beat-input placeholder="输入这一段要发生什么，或写下续写方向"></textarea>
                                     <div class="desktop-native-generation-actions">
+                                        <label class="desktop-native-length-hint">
+                                            <span>篇幅</span>
+                                            <select data-native-length-hint aria-label="本拍篇幅">
+                                                <option value="brief">写紧一点</option>
+                                                <option value="natural" selected>按拍写完</option>
+                                                <option value="expanded">稍展开</option>
+                                            </select>
+                                        </label>
                                         <button class="desktop-secondary-action" type="button" data-native-preview-prompt>预览</button>
                                         <button class="desktop-primary-action" type="button" data-native-generate>生成</button>
                                         <button class="desktop-secondary-action" type="button" data-native-cancel-generation hidden>取消</button>
@@ -360,26 +368,17 @@
                                 <label>
                                     <span>改写预设</span>
                                     <select data-native-rewrite-preset>
-                                        <option value="balanced-polish">均衡润色</option>
-                                        <option value="tighten">压缩精炼</option>
-                                        <option value="expand">适度扩写</option>
-                                        <option value="show-dont-tell">少解释多呈现</option>
-                                        <option value="sensory">增强感官</option>
-                                        <option value="tension">提高紧张感</option>
-                                        <option value="pace-fast">加快节奏</option>
-                                        <option value="pace-slow">放慢节奏</option>
-                                        <option value="dialogue-natural">对白自然化</option>
-                                        <option value="subtext">增加潜台词</option>
-                                        <option value="emotion-deeper">加深情绪</option>
-                                        <option value="character-voice">强化角色声音</option>
-                                        <option value="literary">文学化</option>
-                                        <option value="webnovel">网文爽感</option>
-                                        <option value="cinematic">电影镜头感</option>
-                                        <option value="clarity">理清逻辑</option>
-                                        <option value="continuity">贴合上下文</option>
-                                        <option value="remove-cliche">去套路化</option>
-                                        <option value="grammar-copyedit">校对修正</option>
-                                        <option value="same-meaning-alt">换一种写法</option>
+                                        <option value="balanced-polish">润色</option>
+                                        <option value="tighten">压缩</option>
+                                        <option value="expand">铺开</option>
+                                        <option value="show-dont-tell">少说多看</option>
+                                        <option value="dialogue-natural">对白口吻</option>
+                                        <option value="character-voice">角色声音</option>
+                                        <option value="tension">加压</option>
+                                        <option value="pace-fast">加快</option>
+                                        <option value="continuity">接上文</option>
+                                        <option value="literary">凝练</option>
+                                        <option value="grammar-copyedit">校对</option>
                                         <option value="custom">自定义</option>
                                     </select>
                                     <small data-native-rewrite-preset-description></small>

@@ -350,12 +350,19 @@
         }
         if (elements.writerMaxTokens) {
             elements.writerMaxTokens.addEventListener('change', function () {
-                saveWriterGenerationDefaults({ maxTokens: Number(elements.writerMaxTokens.value || 2000) });
+                saveWriterGenerationDefaults({ maxTokens: Number(elements.writerMaxTokens.value || 8000) });
             });
         }
         if (elements.writerProviderDefaults) {
             elements.writerProviderDefaults.addEventListener('change', function () {
                 saveWriterGenerationDefaults({ useProviderDefaults: !!elements.writerProviderDefaults.checked });
+            });
+        }
+        if (elements.lengthHint) {
+            elements.lengthHint.addEventListener('change', function () {
+                const hint = elements.lengthHint.value || 'natural';
+                nativeEditorState.generation.lengthHint = hint;
+                saveWriterGenerationDefaults({ lengthHint: hint });
             });
         }
         if (elements.previewRewrite) elements.previewRewrite.addEventListener('click', showNativeRewritePreview);
@@ -385,7 +392,7 @@
                 polish: 'balanced-polish',
                 expand: 'expand',
                 shorten: 'tighten',
-                style: 'same-meaning-alt'
+                style: 'literary'
             };
             elements.rewriteTaskButtons.forEach((btn) => {
                 btn.addEventListener('click', () => {

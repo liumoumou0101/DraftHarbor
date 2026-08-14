@@ -98,7 +98,7 @@
         const elements = workflowElements();
         const source = workflowState.creationBrief || creationBriefFromInputs(elements);
         if (!source.premise) throw new Error('请先写下一点灵感、关键词或故事片段');
-        if (!window.DraftHarborProviderStream || typeof window.DraftHarborProviderStream.streamGeneration !== 'function') throw new Error('生成服务尚未加载');
+        if (!desktopGenerationAvailable()) throw new Error('生成服务尚未加载');
         workflowState.creationBriefGenerating = true;
         renderCreationBrief();
         setCreationBriefStatus('AI 正在补全创作设定…');
@@ -108,7 +108,7 @@
         beginWorkflowReasoningBatch(taskLabel, 0, 1);
         try {
             let text = '';
-            await window.DraftHarborProviderStream.streamGeneration(creationBriefPrompt(source, fields, instruction), (token, meta) => {
+            await streamDesktopGeneration(creationBriefPrompt(source, fields, instruction), (token, meta) => {
                 if (meta && meta.type === 'reasoning') appendWorkflowReasoning(token);
                 else if (!meta || meta.type === 'content') {
                     markWorkflowAnswerStarted();
@@ -259,7 +259,7 @@
         let repairedFinishReason = '';
         setWorkflowStatus(`返回内容不完整，正在自动修复：${prompt.title || step.title}`, 'info');
         beginWorkflowReasoningBatch(`自动修复：${prompt.title || step.title}`, 0, 1);
-        await window.DraftHarborProviderStream.streamGeneration(
+        await streamDesktopGeneration(
             guidedJsonRepairPrompt(step, prompt, output, finishReason),
             (token, meta) => {
                 if (meta && meta.type === 'usage') usage.push({ promptId: `${prompt.id}-repair`, model: stageConfig.model, ...meta.usage });
@@ -344,10 +344,10 @@
             if (typeof window.setWorkflowStreamUsageHint === 'function') {
                 window.setWorkflowStreamUsageHint(estimateUsageHint);
             }
-            const stageConfig = guidedStageProviderConfig(step.id, run);
+            const stageConfig = Object.assign({}, guidedStageProviderConfig(step.id, run), workflowGenerationScope(run));
             beginWorkflowReasoning(stageConfig, step.title || step.id);
             if (prepared.outputFormat !== 'text') hideWorkflowStreamStage();
-            if ((prepared.prompts || []).length && (!window.DraftHarborProviderStream || typeof window.DraftHarborProviderStream.streamGeneration !== 'function')) {
+            if ((prepared.prompts || []).length && !desktopGenerationAvailable()) {
                 throw new Error('生成服务尚未加载');
             }
             let completedIncrementally = false;
@@ -379,7 +379,7 @@
                     });
                 }
                 let progressContentStarted = false;
-                await window.DraftHarborProviderStream.streamGeneration(prompt.prompt, (token, meta) => {
+                await streamDesktopGeneration(prompt.prompt, (token, meta) => {
                     if (meta && meta.type === 'usage') {
                         usage.push({ promptId: prompt.id, model: stageConfig.model, ...meta.usage });
                         const providerHint = typeof window.workflowUsageHintFromMeta === 'function'

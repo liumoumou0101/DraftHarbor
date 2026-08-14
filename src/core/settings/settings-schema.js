@@ -32,6 +32,8 @@
         'anthropic',
         'google',
         'deepseek',
+        'opencode-zen',
+        'opencode-go',
         'nanogpt',
         'openai-compatible',
         'custom'
@@ -39,7 +41,13 @@
     const PROVIDER_DEFAULT_ENDPOINTS = Object.freeze({
         deepseek: 'https://api.deepseek.com/chat/completions',
         openai: 'https://api.openai.com/v1/chat/completions',
-        openrouter: 'https://openrouter.ai/api/v1/chat/completions'
+        openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+        'opencode-zen': 'https://opencode.ai/zen/v1/chat/completions',
+        'opencode-go': 'https://opencode.ai/zen/go/v1/chat/completions'
+    });
+    const PROVIDER_DEFAULT_BASE_URLS = Object.freeze({
+        'opencode-zen': 'https://opencode.ai/zen/v1',
+        'opencode-go': 'https://opencode.ai/zen/go/v1'
     });
     const PROVIDER_DEFAULT_MODELS = Object.freeze({
         deepseek: 'deepseek-v4-pro',
@@ -83,6 +91,13 @@
     function providerDefaultEndpoint(provider) {
         return PROVIDER_DEFAULT_ENDPOINTS[provider] || '';
     }
+    function providerDefaultBaseUrl(provider) {
+        if (ModelCatalog && typeof ModelCatalog.getProviderMetadata === 'function') {
+            var meta = ModelCatalog.getProviderMetadata(provider);
+            if (meta && meta.defaultBaseUrl) return meta.defaultBaseUrl;
+        }
+        return PROVIDER_DEFAULT_BASE_URLS[provider] || '';
+    }
     function providerDefaultModel(provider) {
         return PROVIDER_DEFAULT_MODELS[provider] || '';
     }
@@ -105,7 +120,7 @@
         if (ModelCatalog && typeof ModelCatalog.isApiCompatibleProvider === 'function') {
             return ModelCatalog.isApiCompatibleProvider(provider);
         }
-        return ['deepseek','openai','openrouter','nanogpt','openai-compatible','custom'].indexOf(provider) >= 0;
+        return ['deepseek','openai','openrouter','opencode-zen','opencode-go','nanogpt','openai-compatible','custom'].indexOf(provider) >= 0;
     }
 
     function cleanString(value, fallback = '') {
@@ -119,6 +134,32 @@
         return Math.max(min, Math.min(max, number));
     }
 
+    function comparableProviderBinding(input) {
+        const normalized = normalizeProviderSettings(input || {});
+        var endpoint = String(normalized.endpoint || '').trim();
+        if (ModelCatalog && typeof ModelCatalog.resolveProviderEndpoint === 'function'
+            && typeof ModelCatalog.isOpencodeProvider === 'function'
+            && ModelCatalog.isOpencodeProvider(normalized.provider)) {
+            endpoint = ModelCatalog.resolveProviderEndpoint(normalized.provider, endpoint, {});
+        }
+        return {
+            provider: String(normalized.provider || ''),
+            endpoint: endpoint.replace(/\/+$/, '').toLowerCase()
+        };
+    }
+
+    function canRetainStoredApiKey(currentInput, nextInput) {
+        const current = comparableProviderBinding(currentInput);
+        const next = comparableProviderBinding(nextInput);
+        if (!current.provider || !next.provider) return false;
+        if (ModelCatalog && typeof ModelCatalog.isOpencodeProvider === 'function'
+            && ModelCatalog.isOpencodeProvider(current.provider)
+            && ModelCatalog.isOpencodeProvider(next.provider)) {
+            return true;
+        }
+        return current.provider === next.provider && current.endpoint === next.endpoint;
+    }
+
     function normalizeProviderSettings(input = {}) {
         const mode = PROVIDER_MODES.includes(input.mode || input.aiMode) ? (input.mode || input.aiMode) : 'local';
         const provider = PROVIDERS.includes(input.provider || input.aiProvider) ? (input.provider || input.aiProvider) : (mode === 'local' ? 'lmstudio' : 'openai-compatible');
@@ -128,25 +169,55 @@
             && !!PROVIDER_DEFAULT_ENDPOINTS[provider]
             && (!endpointInput || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(endpointInput));
         const defaultModel = provider === 'deepseek' ? 'deepseek-v4-pro' : '';
+        const defaultBaseUrl = providerDefaultBaseUrl(provider);
+        const isOpencode = provider === 'opencode-zen' || provider === 'opencode-go';
+        const endpoint = isOpencode
+            ? (PROVIDER_DEFAULT_ENDPOINTS[provider] || defaultEndpoint)
+            : (shouldUseProviderDefaultEndpoint ? defaultEndpoint : cleanString(endpointInput || defaultEndpoint));
         return {
             mode,
             provider,
             apiKey: cleanString(input.apiKey || input.aiApiKey),
             model: cleanString(input.model || input.aiModel || defaultModel),
-            endpoint: shouldUseProviderDefaultEndpoint ? defaultEndpoint : cleanString(endpointInput || defaultEndpoint),
-            baseUrl: cleanString(input.baseUrl),
+            endpoint,
+            baseUrl: isOpencode ? (defaultBaseUrl || cleanString(input.baseUrl)) : cleanString(input.baseUrl),
             organization: cleanString(input.organization),
             hasApiKey: !!input.hasApiKey || !!(input.apiKey || input.aiApiKey),
             updatedAt: input.updatedAt || ''
         };
     }
 
+    function normalizeLengthHint(value) {
+        var raw = String(value == null ? '' : value).trim().toLowerCase();
+        if (raw === 'brief' || raw === 'short' || raw === 'tight') return 'brief';
+        if (raw === 'expanded' || raw === 'long' || raw === 'open') return 'expanded';
+        return 'natural';
+    }
+
+    const DEFAULT_MAX_TOKENS = 8000;
+    const THINKING_OUTPUT_FLOOR = 8000;
+
     function normalizeGenerationDefaults(input = {}) {
         return {
             temperature: finiteNumber(input.temperature, 0.8, 0, 2),
-            maxTokens: Math.round(finiteNumber(input.maxTokens, 2000, 1, 200000)),
-            useProviderDefaults: !!input.useProviderDefaults
+            maxTokens: Math.round(finiteNumber(input.maxTokens, DEFAULT_MAX_TOKENS, 1, 200000)),
+            useProviderDefaults: !!input.useProviderDefaults,
+            lengthHint: normalizeLengthHint(input.lengthHint)
         };
+    }
+
+    function thinkingOutputQuota(maxTokens, enableThinking) {
+        const requested = Math.round(finiteNumber(maxTokens, DEFAULT_MAX_TOKENS, 1, 200000));
+        if (!enableThinking || requested >= THINKING_OUTPUT_FLOOR) {
+            return { requested: requested, effective: requested, raised: false };
+        }
+        return { requested: requested, effective: THINKING_OUTPUT_FLOOR, raised: true };
+    }
+
+    function thinkingOutputQuotaHint(maxTokens, enableThinking) {
+        const quota = thinkingOutputQuota(maxTokens, enableThinking);
+        if (!quota.raised) return '';
+        return '思考会占用输出额度，当前 ' + quota.requested + ' 偏低，正文可能写到一半被截断。本次将按 ' + quota.effective + ' 发送。';
     }
 
     function normalizeLocalModelSettings(input = {}) {
@@ -166,14 +237,19 @@
         var endpointInput = cleanString(input.endpoint || '');
         var shouldUseDefault = !!PROVIDER_DEFAULT_ENDPOINTS[provider]
             && (!endpointInput || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(endpointInput));
+        const defaultBaseUrl = providerDefaultBaseUrl(provider);
+        const isOpencode = provider === 'opencode-zen' || provider === 'opencode-go';
+        const endpoint = isOpencode
+            ? (PROVIDER_DEFAULT_ENDPOINTS[provider] || defaultEndpoint)
+            : (shouldUseDefault ? defaultEndpoint : cleanString(endpointInput || defaultEndpoint));
         return {
             id: profileId,
             name: cleanString(input.name || input.label) || provider,
             provider: provider,
             apiKey: cleanString(input.apiKey),
             model: cleanString(input.model),
-            endpoint: shouldUseDefault ? defaultEndpoint : cleanString(endpointInput || defaultEndpoint),
-            baseUrl: cleanString(input.baseUrl),
+            endpoint,
+            baseUrl: isOpencode ? (defaultBaseUrl || cleanString(input.baseUrl)) : cleanString(input.baseUrl),
             organization: cleanString(input.organization),
             hasApiKey: !!input.hasApiKey || !!input.apiKey,
             updatedAt: input.updatedAt || ''
@@ -219,6 +295,17 @@
         };
     }
 
+    function normalizeModelCatalogPreferences(input = {}) {
+        const source = input && typeof input === 'object' ? input : {};
+        const acknowledged = Array.isArray(source.acknowledgedPrivacyModels)
+            ? source.acknowledgedPrivacyModels.map(function (id) { return cleanString(id); }).filter(Boolean)
+            : [];
+        return {
+            hidePrivacyRiskModels: !!source.hidePrivacyRiskModels,
+            acknowledgedPrivacyModels: acknowledged
+        };
+    }
+
     function normalizeDesktopSettings(input = {}) {
         const providerInput = input.providerSettings || input.provider || input.ai || input;
         const generationInput = input.generationDefaults || input.generation || input;
@@ -252,6 +339,7 @@
             appearance: normalizeAppearanceSettings(input.appearance || input.appearanceSettings || {}),
             compendiumAgent: normalizeCompendiumAgentSettings(input.compendiumAgent),
             workflowGeneration: normalizeWorkflowGeneration(input.workflowGeneration),
+            modelCatalogPreferences: normalizeModelCatalogPreferences(input.modelCatalogPreferences),
             globalPrompt,
             directiveStack,
             globalStyleGuardRules: Array.isArray(input.globalStyleGuardRules) ? input.globalStyleGuardRules : [],
@@ -276,14 +364,19 @@
         var defaults = settings.generationDefaults;
         var local = settings.localModelSettings;
         if (selectedProfile) {
+            var selectedEndpoint = selectedProfile.endpoint;
+            var selectedBaseUrl = selectedProfile.baseUrl;
+            if (ModelCatalog && typeof ModelCatalog.isOpencodeProvider === 'function' && ModelCatalog.isOpencodeProvider(selectedProfile.provider)) {
+                selectedEndpoint = ModelCatalog.resolveProviderEndpoint(selectedProfile.provider, selectedProfile.endpoint, extras);
+                selectedBaseUrl = selectedProfile.provider === 'opencode-go' ? ModelCatalog.GO_BASE_URL : ModelCatalog.ZEN_BASE_URL;
+            }
             return {
                 mode: 'api',
                 provider: selectedProfile.provider,
                 apiKey: selectedProfile.apiKey,
                 model: extras.model || selectedProfile.model || provider.model,
-                endpoint: selectedProfile.endpoint,
-                baseUrl: selectedProfile.baseUrl,
-                organization: selectedProfile.organization,
+                endpoint: selectedEndpoint,
+                baseUrl: selectedBaseUrl,
                 temperature: defaults.temperature,
                 maxTokens: defaults.maxTokens,
                 useProviderDefaults: defaults.useProviderDefaults,
@@ -295,13 +388,19 @@
             };
         }
         var mode = provider.mode;
+        var resolvedEndpoint = mode === 'local' ? (local.endpoint || provider.endpoint) : provider.endpoint;
+        var resolvedBaseUrl = provider.baseUrl;
+        if (mode === 'api' && ModelCatalog && typeof ModelCatalog.isOpencodeProvider === 'function' && ModelCatalog.isOpencodeProvider(provider.provider)) {
+            resolvedEndpoint = ModelCatalog.resolveProviderEndpoint(provider.provider, provider.endpoint, extras);
+            resolvedBaseUrl = provider.provider === 'opencode-go' ? ModelCatalog.GO_BASE_URL : ModelCatalog.ZEN_BASE_URL;
+        }
         return {
             mode,
             provider: provider.provider,
             apiKey: provider.apiKey,
             model: provider.model || local.model,
-            endpoint: mode === 'local' ? (local.endpoint || provider.endpoint) : provider.endpoint,
-            baseUrl: provider.baseUrl,
+            endpoint: resolvedEndpoint,
+            baseUrl: resolvedBaseUrl,
             organization: provider.organization,
             temperature: defaults.temperature,
             maxTokens: defaults.maxTokens,
@@ -332,6 +431,15 @@
         };
     }
 
+    function publicRuntimeConfig(config = {}) {
+        var source = config && typeof config === 'object' ? config : {};
+        return {
+            ...source,
+            hasApiKey: !!source.hasApiKey || !!source.apiKey,
+            apiKey: ''
+        };
+    }
+
     function providerProfileRuntimeConfigs(settingsInput = {}) {
         var settings = normalizeDesktopSettings(settingsInput);
         var profiles = settings.providerProfiles || [];
@@ -339,7 +447,7 @@
         return profiles.filter(function (profile) {
             return isApiCompatibleProvider(profile.provider);
         }).map(function (profile) {
-            return {
+            return publicRuntimeConfig({
                 id: profile.id,
                 name: profile.name,
                 provider: profile.provider,
@@ -350,7 +458,7 @@
                 organization: profile.organization,
                 hasApiKey: !!profile.apiKey,
                 updatedAt: profile.updatedAt
-            };
+            });
         });
     }
 
@@ -359,13 +467,21 @@
         DEFAULT_THEME,
         PROVIDER_MODES,
         PROVIDERS,
+        DEFAULT_MAX_TOKENS,
+        THINKING_OUTPUT_FLOOR,
+        thinkingOutputQuota,
+        thinkingOutputQuotaHint,
         isApiCompatibleProvider,
         getProviderMetadata,
         isKnownDefaultEndpoint,
         isKnownDefaultModelHint,
         providerDefaultEndpoint,
+        providerDefaultBaseUrl,
         providerDefaultModel,
+        normalizeModelCatalogPreferences,
         normalizeProviderSettings,
+        comparableProviderBinding,
+        canRetainStoredApiKey,
         normalizeProviderProfile,
         normalizeGenerationDefaults,
         normalizeLocalModelSettings,
@@ -377,6 +493,7 @@
         normalizeDesktopSettings,
         normalizeWorkflowGeneration,
         providerRuntimeConfig,
+        publicRuntimeConfig,
         publicSettings,
         providerProfileRuntimeConfigs
     };

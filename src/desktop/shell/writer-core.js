@@ -100,7 +100,7 @@
             promptTemplate: document.querySelector('[data-native-prompt-template]'),
             managePrompts: document.querySelector('[data-native-manage-prompts]'),
             genTaskButtons: Array.from(document.querySelectorAll('[data-native-gen-task]')),
-            beatInput: document.querySelector('[data-native-beat-input]'),
+            beatInput: document.querySelector('[data-native-beat-input]'), lengthHint: document.querySelector('[data-native-length-hint]'),
             insertMode: document.querySelector('[data-native-generation-insert-mode]'),
             previewPrompt: document.querySelector('[data-native-preview-prompt]'),
             generate: document.querySelector('[data-native-generate]'),
@@ -893,9 +893,8 @@
         nativeEditorState.dirty = false;
         nativeEditorState.isSaving = false;
         nativeEditorState.generation = {
-            beat: '',
-            text: '',
-            reasoning: '',
+            beat: '', lengthHint: (nativeEditorState.generation && nativeEditorState.generation.lengthHint) || 'natural',
+            text: '', reasoning: '', finishReason: '',
             prompt: null,
             record: null,
             aiTaskRecord: null,

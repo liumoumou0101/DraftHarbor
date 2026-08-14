@@ -307,11 +307,64 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
     assert.strictEqual(modelCatalog.isApiCompatibleProvider('google'), false, 'google should not be API-compatible');
     assert.strictEqual(modelCatalog.isThinkingSupported('deepseek', 'deepseek-v4-pro'), true);
     assert.strictEqual(modelCatalog.isThinkingSupported('openai', 'gpt-4o'), false, 'non-deepseek should not support thinking');
+    assert.strictEqual(modelCatalog.isApiCompatibleProvider('opencode-zen'), true, 'opencode-zen should be API-compatible');
+    assert.strictEqual(modelCatalog.isThinkingSupported('opencode-zen', 'deepseek-v4-pro'), true, 'Zen DeepSeek should support thinking');
+    assert.strictEqual(modelCatalog.isThinkingSupported('opencode-zen', 'minimax-m3'), false, 'unknown Zen thinking should stay off');
+    var pickle = modelCatalog.getProviderModelEntry('opencode-zen', 'big-pickle');
+    assert.ok(pickle, 'big-pickle should exist without a -free suffix');
+    assert.strictEqual(pickle.pricingClass, 'free');
+    assert.strictEqual(pickle.privacyClass, 'may-train');
+    assert.strictEqual(modelCatalog.resolveProviderEndpoint('opencode-zen', 'https://evil.example/v1'), modelCatalog.ZEN_CHAT_ENDPOINT);
+    assert.strictEqual(modelCatalog.isApiCompatibleProvider('opencode-go'), true, 'opencode-go should be API-compatible');
+    assert.strictEqual(modelCatalog.resolveProviderEndpoint('opencode-go', 'https://evil.example/v1'), modelCatalog.GO_CHAT_ENDPOINT);
+    assert.strictEqual(modelCatalog.defaultTestModel('opencode-go', ''), 'glm-5.2');
+    assert.ok(modelCatalog.getProviderModelEntry('opencode-go', 'glm-5.2'));
 
     var dsModels = modelCatalog.getProviderModels('deepseek');
     assert.ok(dsModels.length >= 3, 'deepseek should have models + custom option');
     assert.ok(dsModels.some(function (m) { return m.id === 'deepseek-v4-pro'; }), 'should have deepseek-v4-pro');
     assert.ok(dsModels.some(function (m) { return m.id === '__custom__'; }), 'should have custom option');
+
+    // Test 9: Zen DeepSeek thinking uses official endpoint and reasoning_content.
+    globalThis.fetch = async (url, init) => {
+        assert.strictEqual(url, 'https://opencode.ai/zen/v1/chat/completions', 'Zen requests must use the official chat endpoint');
+        var body = JSON.parse(init.body);
+        assert.strictEqual(body.model, 'deepseek-v4-flash');
+        assert.strictEqual(body.thinking.type, 'enabled');
+        var encoder = new TextEncoder();
+        var stream = new ReadableStream({
+            start(controller) {
+                controller.enqueue(encoder.encode('data: ' + JSON.stringify({ choices: [{ delta: { reasoning_content: 'think' } }] }) + '\n\n'));
+                controller.enqueue(encoder.encode('data: ' + JSON.stringify({ choices: [{ delta: { content: 'answer' } }] }) + '\n\n'));
+                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                controller.close();
+            }
+        });
+        return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    };
+    try {
+        var zenTokens = [];
+        var zenMeta = [];
+        await providerStream.streamGeneration(
+            { messages: [{ role: 'user', content: 'Zen thinking' }] },
+            function (token, meta) { zenTokens.push(token); zenMeta.push(meta); },
+            {
+                mode: 'api',
+                provider: 'opencode-zen',
+                model: 'deepseek-v4-flash',
+                enableThinking: true,
+                endpoint: 'https://evil.example/chat/completions',
+                apiKey: 'zen-key'
+            }
+        );
+        assert.strictEqual(zenTokens[0], 'think');
+        assert.strictEqual(zenMeta[0] && zenMeta[0].type, 'reasoning');
+        assert.strictEqual(zenTokens[1], 'answer');
+        assert.strictEqual(zenMeta[1] && zenMeta[1].type, 'content');
+        console.log('Provider stream OpenCode Zen thinking test passed.');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
 
     console.log('Provider stream tests passed.');
 })().catch((error) => {

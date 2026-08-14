@@ -25,6 +25,12 @@
             compendiumAgentApiStatus: document.querySelector('[data-settings-compendium-agent-api-status]'),
             test: document.querySelector('[data-settings-test]'),
             refresh: document.querySelector('[data-settings-refresh]'),
+            zenHint: document.querySelector('[data-settings-zen-hint]'),
+            catalogPanel: document.querySelector('[data-settings-catalog-panel]'),
+            catalogStatus: document.querySelector('[data-settings-catalog-status]'),
+            refreshCatalog: document.querySelector('[data-settings-refresh-catalog]'),
+            hidePrivacyModels: document.querySelector('[data-settings-hide-privacy-models]'),
+            modelOptions: document.querySelector('[data-settings-model-options]'),
             ttsVoice: document.querySelector('[data-settings-tts-voice]'),
             ttsRate: document.querySelector('[data-settings-tts-rate]'),
             ttsRateValue: document.querySelector('[data-settings-tts-rate-value]'),
@@ -80,7 +86,7 @@
             mode: 'local',
             endpoint: 'http://localhost:8080',
             temperature: 0.8,
-            maxTokens: 2000,
+            maxTokens: 8000,
             ...extras
         };
     }
@@ -112,7 +118,31 @@
 
         if (elements.mode) elements.mode.value = provider.mode || 'local';
         if (elements.provider) elements.provider.value = provider.provider || (provider.mode === 'local' ? 'lmstudio' : 'openai-compatible');
-        if (elements.endpoint) elements.endpoint.value = provider.mode === 'local' ? (local.endpoint || provider.endpoint || '') : (provider.endpoint || '');
+        const catalog = modelCatalog();
+        const isOpencode = catalog.isOpencodeProvider
+            ? catalog.isOpencodeProvider(provider.provider)
+            : (provider.provider === 'opencode-zen' || provider.provider === 'opencode-go');
+        const opencodeMeta = isOpencode ? catalog.getProviderMetadata(provider.provider) : null;
+        if (elements.endpoint) {
+            elements.endpoint.value = provider.mode === 'local'
+                ? (local.endpoint || provider.endpoint || '')
+                : (isOpencode ? ((opencodeMeta && opencodeMeta.defaultBaseUrl) || provider.baseUrl || '') : (provider.endpoint || ''));
+            elements.endpoint.readOnly = isOpencode && provider.mode === 'api';
+        }
+        if (elements.zenHint) {
+            elements.zenHint.hidden = !(isOpencode && provider.mode === 'api');
+            if (isOpencode && opencodeMeta) {
+                elements.zenHint.textContent = provider.provider === 'opencode-go'
+                    ? 'OpenCode Go 使用月卡地址 https://opencode.ai/zen/go/v1，无需填写完整 Endpoint。'
+                    : 'OpenCode Zen 使用按量地址 https://opencode.ai/zen/v1，无需填写完整 Endpoint。';
+            }
+        }
+        if (elements.catalogPanel) elements.catalogPanel.hidden = !(isOpencode && provider.mode === 'api');
+        if (elements.hidePrivacyModels) {
+            elements.hidePrivacyModels.checked = !!(settings.modelCatalogPreferences && settings.modelCatalogPreferences.hidePrivacyRiskModels);
+        }
+        renderSettingsModelOptions(provider.provider);
+        renderSettingsCatalogStatus();
         if (elements.model) elements.model.value = provider.model || local.model || '';
         if (elements.apiKey) {
             elements.apiKey.value = '';
@@ -120,7 +150,7 @@
             elements.apiKey.disabled = provider.mode === 'local';
         }
         if (elements.temperature) elements.temperature.value = defaults.temperature === undefined ? 0.8 : defaults.temperature;
-        if (elements.maxTokens) elements.maxTokens.value = defaults.maxTokens || 300;
+        if (elements.maxTokens) elements.maxTokens.value = defaults.maxTokens || 8000;
         if (elements.providerDefaults) elements.providerDefaults.checked = !!defaults.useProviderDefaults;
         if (elements.globalPromptEnabled) elements.globalPromptEnabled.checked = !!(settings.globalPrompt && settings.globalPrompt.enabled);
         if (elements.globalPrompt) elements.globalPrompt.value = settings.globalPrompt && settings.globalPrompt.content || '';
@@ -192,7 +222,7 @@
         const summaries = {
             provider: `${provider.mode === 'api' ? '云端' : '本地'} · ${settingsProviderLabel(provider.provider)}`,
             profiles: `${provider.mode === 'api' ? '默认连接' : '本地默认'}${profiles.length ? ` · ${profiles.length} 个独立档案` : ''}`,
-            generation: defaults.useProviderDefaults ? '跟随模型默认值' : `${defaults.temperature ?? 0.8} · ${formatNumber(defaults.maxTokens || 2000)} tokens`,
+            generation: defaults.useProviderDefaults ? '跟随模型默认值' : `${defaults.temperature ?? 0.8} · ${formatNumber(defaults.maxTokens || 8000)} tokens`,
             workflow: (settings.workflowGeneration || {}).providerProfileId && (settings.workflowGeneration || {}).providerProfileId !== 'inherit'
                 ? '专用配置组已选择' : '继承默认写作连接',
             'compendium-agent': settings.compendiumAgent && settings.compendiumAgent.enabled ? (settings.compendiumAgent.providerProfileId ? '专用配置组已选择' : '请选择配置组') : '未启用',
@@ -258,9 +288,106 @@
             isKnownDefaultEndpoint: function () { return false; },
             isKnownDefaultModelHint: function () { return false; },
             isApiCompatibleProvider: function (provider) {
-                return ['deepseek', 'openai', 'openrouter', 'nanogpt', 'openai-compatible', 'custom'].indexOf(provider) >= 0;
+                return ['deepseek', 'openai', 'openrouter', 'opencode-zen', 'opencode-go', 'nanogpt', 'openai-compatible', 'custom'].indexOf(provider) >= 0;
             }
         };
+    }
+
+    function currentModelCatalog(provider) {
+        const catalogs = settingsState.modelCatalogs || {};
+        if (provider && catalogs[provider]) return catalogs[provider];
+        if (settingsState.modelCatalog && (!provider || settingsState.modelCatalog.provider === provider)) {
+            return settingsState.modelCatalog;
+        }
+        return provider ? null : (settingsState.modelCatalog || null);
+    }
+
+    function renderSettingsModelOptions(provider) {
+        const list = settingsElements().modelOptions;
+        if (!list) return;
+        list.replaceChildren();
+        const catalog = modelCatalog();
+        const hidePrivacy = !!(normalizeDesktopSettings(settingsState.settings || {}).modelCatalogPreferences || {}).hidePrivacyRiskModels;
+        catalog.getProviderModels(provider, {
+            catalog: (provider === 'opencode-zen' || provider === 'opencode-go') ? currentModelCatalog(provider) : null,
+            hidePrivacyRiskModels: hidePrivacy
+        }).forEach((item) => {
+            if (!item || item.id === '__custom__') return;
+            const option = document.createElement('option');
+            option.value = item.id;
+            option.textContent = catalog.modelOptionLabel ? catalog.modelOptionLabel(item) : (item.label || item.id);
+            list.appendChild(option);
+        });
+    }
+
+    function renderSettingsCatalogStatus() {
+        const status = settingsElements().catalogStatus;
+        if (!status) return;
+        const catalog = currentModelCatalog();
+        if (!catalog) {
+            status.textContent = '模型目录使用安装包内置清单。';
+            return;
+        }
+        const updated = catalog.fetchedAt ? new Date(catalog.fetchedAt).toLocaleString() : '尚未成功联网';
+        const source = catalog.source === 'builtin' ? '内置清单' : '在线目录缓存';
+        const diff = catalog.diff || {};
+        const parts = [`上次更新：${updated}`, `来源：${source}`];
+        if (diff.added || diff.removed || diff.changed) {
+            parts.push(`新增 ${diff.added || 0} / 下线 ${diff.removed || 0} / 状态变化 ${diff.changed || 0}`);
+        }
+        if (catalog.lastError) parts.push(`最近刷新失败：${catalog.lastError}`);
+        status.textContent = parts.join(' · ');
+    }
+
+    function refreshStaleModelCatalogs() {
+        const catalogs = settingsState.modelCatalogs || {};
+        ['opencode-zen', 'opencode-go'].forEach((provider) => {
+            const catalog = catalogs[provider];
+            if (!catalog || !catalog.stale) return;
+            fetch('/api/settings/refresh-model-catalog', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider })
+            }).then((response) => response.json().catch(() => ({}))).then((result) => {
+                if (!result || !result.catalog) return;
+                settingsState.modelCatalogs = Object.assign({}, settingsState.modelCatalogs || {}, {
+                    [provider]: result.catalog
+                });
+                const current = ((normalizeDesktopSettings(settingsState.settings || {}).providerSettings || {}).provider) || '';
+                if (current === provider) {
+                    settingsState.modelCatalog = result.catalog;
+                    renderSettingsModelOptions(provider);
+                    renderSettingsCatalogStatus();
+                    if (typeof renderWriterModelControl === 'function') renderWriterModelControl();
+                }
+            }).catch(() => {});
+        });
+    }
+
+    async function refreshSettingsModelCatalog() {
+        setSettingsStatus('正在更新模型列表...', 'info');
+        const provider = (settingsElements().provider && settingsElements().provider.value)
+            || ((normalizeDesktopSettings(settingsState.settings || {}).providerSettings || {}).provider)
+            || 'opencode-go';
+        const response = await fetch('/api/settings/refresh-model-catalog', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider: provider === 'opencode-zen' ? 'opencode-zen' : 'opencode-go' })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.catalog) throw new Error(result.error || `HTTP ${response.status}`);
+        settingsState.modelCatalog = result.catalog;
+        settingsState.modelCatalogs = Object.assign({}, settingsState.modelCatalogs || {}, {
+            [result.catalog.provider || provider]: result.catalog
+        });
+        renderSettingsModelOptions(result.catalog.provider || provider);
+        renderSettingsCatalogStatus();
+        renderWriterModelControl();
+        const catalog = result.catalog;
+        const diff = catalog.diff || {};
+        setSettingsStatus(catalog.refreshFailed
+            ? `模型列表更新失败，已保留上次缓存：${catalog.lastError || '网络错误'}`
+            : `模型列表已更新：新增 ${diff.added || 0}，下线 ${diff.removed || 0}，状态变化 ${diff.changed || 0}`, catalog.refreshFailed ? 'error' : 'ok');
     }
 
     function settingsWithRuntimeProfiles() {
@@ -552,14 +679,16 @@
             const response = await fetch('/api/settings/test-provider-profile', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ profileId, live: false })
+                body: JSON.stringify({ profileId, live: true })
             });
             const result = await response.json().catch(() => ({}));
             const detail = result.result || result;
             profileTestState[profileId] = {
                 running: false,
                 tone: result.ok ? 'ok' : 'error',
-                message: result.ok ? '配置可用' : (detail.error || result.error || '测试失败')
+                message: result.ok
+                    ? `连接可用${detail.model ? ' · ' + detail.model : ''}${detail.statusCode ? ' · HTTP ' + detail.statusCode : ''}`
+                    : ((detail.error || result.error || '测试失败') + (detail.statusCode ? `（HTTP ${detail.statusCode}）` : ''))
             };
         } catch (error) {
             profileTestState[profileId] = { running: false, tone: 'error', message: error.message || String(error) };
@@ -638,9 +767,13 @@
                 model,
                 apiKey: elements.apiKey ? elements.apiKey.value.trim() : ''
             },
+            modelCatalogPreferences: {
+                ...((current.modelCatalogPreferences) || {}),
+                hidePrivacyRiskModels: !!(elements.hidePrivacyModels && elements.hidePrivacyModels.checked)
+            },
             generationDefaults: {
                 temperature: elements.temperature ? Number(elements.temperature.value) : 0.8,
-                maxTokens: elements.maxTokens ? Number(elements.maxTokens.value) : 2000,
+                maxTokens: elements.maxTokens ? Number(elements.maxTokens.value) : 8000,
                 useProviderDefaults: !!(elements.providerDefaults && elements.providerDefaults.checked)
             },
             globalPrompt: {
@@ -680,6 +813,13 @@
         if (mode === 'api' && provider === 'deepseek' && !elements.model.value.trim()) {
             elements.model.value = 'deepseek-v4-pro';
         }
+        if (mode === 'api' && (provider === 'opencode-zen' || provider === 'opencode-go')) {
+            const meta = modelCatalog().getProviderMetadata(provider);
+            elements.endpoint.value = (meta && meta.defaultBaseUrl) || (provider === 'opencode-go' ? 'https://opencode.ai/zen/go/v1' : 'https://opencode.ai/zen/v1');
+            elements.endpoint.readOnly = true;
+        } else if (elements.endpoint) {
+            elements.endpoint.readOnly = false;
+        }
     }
 
     async function loadSettings() {
@@ -696,10 +836,13 @@
             settingsState.settings = normalizeDesktopSettings(result.settings || {});
             settingsState.runtimeProvider = result.runtimeProvider || runtimeProviderConfig();
             settingsState.runtimeProviderProfiles = result.runtimeProviderProfiles || null;
+            settingsState.modelCatalog = result.modelCatalog || settingsState.modelCatalog || null;
+            settingsState.modelCatalogs = result.modelCatalogs || settingsState.modelCatalogs || null;
             settingsState.storageLocations = result.storageLocations || null;
             var appearance = normalizeDesktopSettings(settingsState.settings).appearance || {};
             applyDesktopTheme(appearance.theme || 'morandi-ink');
             setSettingsStatus('设置已读取', 'ok');
+            refreshStaleModelCatalogs();
             return settingsState.settings;
         })();
         try {
@@ -740,6 +883,8 @@
             settingsState.settings = normalizeDesktopSettings(result.settings || {});
             settingsState.runtimeProvider = result.runtimeProvider || runtimeProviderConfig();
             settingsState.runtimeProviderProfiles = result.runtimeProviderProfiles || null;
+            settingsState.modelCatalog = result.modelCatalog || settingsState.modelCatalog || null;
+            settingsState.modelCatalogs = result.modelCatalogs || settingsState.modelCatalogs || null;
             settingsState.storageLocations = result.storageLocations || settingsState.storageLocations;
             var appearance = normalizeDesktopSettings(settingsState.settings).appearance || {};
             applyDesktopTheme(appearance.theme || 'morandi-ink');
@@ -791,18 +936,27 @@
             const response = await fetch('/api/settings/test-provider', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // 密钥不会回显到页面；仅检查已保存配置，避免空输入覆盖有效密钥。
-                body: JSON.stringify({ live: false })
+                body: JSON.stringify({ live: true })
             });
             const result = await response.json().catch(() => ({}));
             if (!response.ok) {
                 throw new Error(result.error || `HTTP ${response.status}`);
             }
             if (!result.ok) {
-                throw new Error(result.result && result.result.error ? result.result.error : '配置不可用');
+                const detail = result.result || {};
+                const who = detail.provider ? `${detail.provider} ` : '';
+                throw new Error((detail.error || result.error || '配置不可用') + (detail.statusCode ? `（${who}HTTP ${detail.statusCode}）` : ''));
             }
-            const checked = result.result && result.result.checked === 'configuration' ? '配置格式可用' : '连接可用';
+            const detail = result.result || {};
+            const who = detail.provider ? `（${detail.provider}${detail.model ? ' · ' + detail.model : ''}）` : '';
+            const checked = detail.checked === 'configuration'
+                ? `配置格式可用${who}`
+                : (detail.statusCode ? `连接可用${who} · HTTP ${detail.statusCode}` : `连接可用${who}`);
             setSettingsStatus(checked, 'ok');
+            const providerSelect = settingsElements().provider;
+            if (providerSelect && (providerSelect.value === 'opencode-zen' || providerSelect.value === 'opencode-go')) {
+                try { await refreshSettingsModelCatalog(); } catch (_catalogError) { /* keep connection result */ }
+            }
         } catch (error) {
             setSettingsStatus(`检查失败：${error.message || error}`, 'error');
         }
@@ -813,6 +967,12 @@
         if (elements.form) elements.form.addEventListener('submit', saveSettings);
         if (elements.test) elements.test.addEventListener('click', testSettingsProvider);
         if (elements.refresh) elements.refresh.addEventListener('click', loadSettings);
+        if (elements.refreshCatalog) {
+            elements.refreshCatalog.addEventListener('click', async () => {
+                try { await refreshSettingsModelCatalog(); }
+                catch (error) { setSettingsStatus(`更新模型列表失败：${error.message || error}`, 'error'); }
+            });
+        }
 
         document.querySelectorAll('[data-settings-cat-target]').forEach((button) => {
             button.addEventListener('click', () => {

@@ -360,6 +360,10 @@
                 } else {
                     elements.generationOutputStatus.textContent = '正在生成，完成后可保留、重试或撤回。';
                 }
+            } else if (generation.finishReason === 'length') {
+                elements.generationOutputStatus.textContent = isPreviewTask
+                    ? '输出因额度用尽被截断。预览后可保留，或提高最大输出后重试。'
+                    : '输出因额度用尽被截断，已写入正文。可撤回后提高最大输出再试。';
             } else if (isPreviewTask) {
                 elements.generationOutputStatus.textContent = '预览结果后点击"保留"替换原文，撤回会保持原文。';
             } else {
@@ -401,9 +405,14 @@
         }
         if (elements.discardGeneration) elements.discardGeneration.disabled = generation.inProgress || !generation.text;
         if (elements.insertMode) elements.insertMode.disabled = generation.inProgress || !generation.text;
+        if (elements.lengthHint) {
+            const hint = generation.lengthHint || 'natural';
+            elements.lengthHint.value = hint;
+            elements.lengthHint.disabled = generation.inProgress;
+        }
         if (elements.promptTemplate) {
             elements.promptTemplate.replaceChildren();
-            const prompts = promptState.prompts.length ? promptState.prompts : [{ id: 'default-prose', title: '正文续写：均衡扩写' }];
+            const prompts = promptState.prompts.length ? promptState.prompts : [{ id: 'default-prose', title: '均衡续写' }];
             prompts.forEach((prompt) => {
                 const option = document.createElement('option');
                 option.value = prompt.id;
@@ -667,7 +676,8 @@
                 sceneSummaries: Array.from(sceneSummaryMap.values()),
                 compendiumEntries: Array.from(compendiumMap.values()),
                 systemPrompt: template.systemContent || '',
-                prosePrompt: [chapter && chapter.summary && !chapter.summaryStale ? `Chapter context: ${chapter.summary}` : '', template.content || '', context.manualText || '', nativeAvoidanceInstruction()].filter(Boolean).join('\n\n')
+                prosePrompt: [chapter && chapter.summary && !chapter.summaryStale ? `Chapter context: ${chapter.summary}` : '', template.content || '', context.manualText || '', nativeAvoidanceInstruction()].filter(Boolean).join('\n\n'),
+                lengthHint: nativeEditorState.generation.lengthHint || 'natural'
             }
         });
     }
@@ -700,7 +710,13 @@
         if (writerModelOverride.thinking && modelCatalog().isThinkingSupported(effectiveProfile.provider, selectedModel || effectiveProfile.model)) {
             extras.enableThinking = true;
         }
-        return runtimeProviderConfig(extras);
+        const config = runtimeProviderConfig(extras);
+        const schema = window.DraftHarborSettingsSchema;
+        if (config && config.enableThinking && !config.useProviderDefaults && schema && typeof schema.thinkingOutputQuota === 'function') {
+            const quota = schema.thinkingOutputQuota(config.maxTokens, true);
+            if (quota.raised) config.maxTokens = quota.effective;
+        }
+        return config;
     }
 
     function prepareInlineGeneration(task, prompt) {
@@ -875,6 +891,7 @@
         if (generation.text && generation.inlineBaseText) restorePendingInlineGeneration();
         generation.text = '';
         generation.reasoning = '';
+        generation.finishReason = '';
         generation.prompt = prompt;
         generation.record = null;
         if (!prepareInlineGeneration('fiction-prose', prompt)) return { ok: false, reason: 'no-editor' };
@@ -886,15 +903,16 @@
         const startedAt = new Date().toISOString();
         let failureMessage = '';
         try {
-            if (!window.DraftHarborProviderStream || typeof window.DraftHarborProviderStream.streamGeneration !== 'function') {
+            if (!desktopGenerationAvailable()) {
                 throw new Error('Native generation provider stream is not loaded.');
             }
-            await window.DraftHarborProviderStream.streamGeneration(prompt, (token, meta) => {
-                if (meta && meta.type === 'reasoning') {
-                    generation.reasoning += token;
-                } else {
-                    generation.text += token;
+            await streamDesktopGeneration(prompt, (token, meta) => {
+                if (meta && meta.type === 'finish') {
+                    generation.finishReason = meta.finishReason || '';
+                    return;
                 }
+                if (meta && meta.type === 'reasoning') generation.reasoning += token;
+                else if (!meta || meta.type === 'content') generation.text += token;
                 syncInlineGenerationToEditor();
                 renderNativeGeneration();
             }, { ...nativeGenerationConfig(generation.abortController && generation.abortController.signal), taskKind: 'writer-prose' });
@@ -927,9 +945,11 @@
             snapshot.promptHistory = snapshot.promptHistory || [];
             snapshot.promptHistory.push(record);
             generation.record = record;
-            setNativeSaveStatus('生成完成', 'ok');
+            const truncated = generation.finishReason === 'length';
             flushNativeEditorFields();
-            markNativeDirty('生成结果已写入正文，未保存');
+            markNativeDirty(truncated
+                ? '输出因额度用尽被截断，已写入正文，未保存。可提高最大输出后重试'
+                : '生成结果已写入正文，未保存');
             return { ok: true, record };
         } catch (error) {
             if (error && error.name === 'AbortError') {
@@ -972,10 +992,7 @@
         }
         nativeAITaskRunner = window.DraftHarborAITaskRunner.createAITaskRunner({
             streamGeneration(prompt, onToken, config) {
-                if (!window.DraftHarborProviderStream || typeof window.DraftHarborProviderStream.streamGeneration !== 'function') {
-                    throw new Error('Native generation provider stream is not loaded.');
-                }
-                return window.DraftHarborProviderStream.streamGeneration(prompt, onToken, config);
+                return streamDesktopGeneration(prompt, onToken, config);
             }
         });
         return nativeAITaskRunner;
@@ -997,6 +1014,7 @@
         generation.beat = prompt.instruction;
         generation.text = '';
         generation.reasoning = '';
+        generation.finishReason = '';
         generation.prompt = prompt;
         generation.record = null;
         generation.aiTaskRecord = null;
@@ -1175,7 +1193,7 @@
         const prompt = {
             messages: [
                 { role: 'system', content: ['你是小说编辑助手。请只输出简洁、准确、可用于后续上下文检索的摘要正文。不要加入评价，也不要输出思考过程、分析、推理步骤或 <think> 标签。', summaryTemplate.systemContent || '', nativeAvoidanceInstruction()].filter(Boolean).join('\n\n') },
-                { role: 'user', content: [summaryTemplate.content || `请为“${targetTitle}”生成 ${scope === 'chapter' ? '章节' : '场景'}摘要。`, `对象：“${targetTitle}”。摘要控制在 120-220 字。`, sourceInfo && sourceInfo.compressed ? '输入内容已按长度预算压缩；请仅依据提供内容概括，不要补写未提供的剧情。' : '', sourceText].filter(Boolean).join('\n\n') }
+                { role: 'user', content: [summaryTemplate.content || `请为“${targetTitle}”生成 ${scope === 'chapter' ? '章节' : '场景'}摘要。`, `对象：“${targetTitle}”。写一小段摘要即可，只记事实，不要写成正文。`, sourceInfo && sourceInfo.compressed ? '输入内容已按长度预算压缩；请仅依据提供内容概括，不要补写未提供的剧情。' : '', sourceText].filter(Boolean).join('\n\n') }
             ],
             asString() {
                 return this.messages.map((message) => `<|im_start|>${message.role}\n${message.content}<|im_end|>`).join('\n');
@@ -1189,7 +1207,7 @@
         renderNativeGeneration();
         setNativeSaveStatus(scope === 'chapter' ? '正在生成章节摘要...' : '正在生成场景摘要...', 'info');
         try {
-            await window.DraftHarborProviderStream.streamGeneration(prompt, (token, meta) => {
+            await streamDesktopGeneration(prompt, (token, meta) => {
                 if (meta && meta.type && meta.type !== 'content') return;
                 summary += token;
                 if (scope === 'scene' && elements.summary) elements.summary.value = summary;

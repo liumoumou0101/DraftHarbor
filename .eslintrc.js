@@ -80,6 +80,9 @@ currentProjectName
 deleteNativeChapter
 deleteNativeScene
 deletePromptTemplate
+desktopGenerationAvailable
+streamDesktopGeneration
+workflowGenerationScope
 discardNativeGeneration
 downloadNativeExport
 downloadNativeProjectPackage
@@ -132,7 +135,9 @@ loadWorkflowEvents
 loadWorkflowGraphTemplates
 loadWorkflowRuns
 loadWorkshopSessions
+loadWorkshopTemplates
 loadWriterModelOverride
+closeReaderAnnotationDialog
 markNativeDirty
 markWorkflowAnswerStarted
 markWorkflowStreamSaving

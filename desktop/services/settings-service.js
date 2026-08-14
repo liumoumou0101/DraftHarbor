@@ -20,12 +20,31 @@ async function writeSettings(dataRoot, settingsInput) {
   return settingsStore.writeSettings(dataRoot, settingsInput);
 }
 
+function incomingApiKey(source) {
+  if (!source || !Object.prototype.hasOwnProperty.call(source, 'apiKey')) return '';
+  return String(source.apiKey || '').trim();
+}
+
+function resolveRetainedApiKey(currentBinding, nextBinding, incomingKey) {
+  if (incomingKey) return incomingKey;
+  if (currentBinding && currentBinding.apiKey && SettingsSchema.canRetainStoredApiKey(currentBinding, nextBinding)) {
+    return currentBinding.apiKey;
+  }
+  return '';
+}
+
 async function updateSettings(dataRoot, patch = {}) {
   const current = await readSettings(dataRoot);
   const providerPatch = { ...(patch.providerSettings || {}) };
-  if (Object.prototype.hasOwnProperty.call(providerPatch, 'apiKey') && !String(providerPatch.apiKey || '').trim() && current.providerSettings.apiKey) {
-    providerPatch.apiKey = current.providerSettings.apiKey;
-  }
+  const nextBinding = SettingsSchema.normalizeProviderSettings({
+    ...current.providerSettings,
+    ...providerPatch
+  });
+  providerPatch.apiKey = resolveRetainedApiKey(
+    current.providerSettings,
+    nextBinding,
+    incomingApiKey(providerPatch)
+  );
   let directiveStack = typeof SettingsSchema.mergeDirectiveStackSettings === 'function'
     ? SettingsSchema.mergeDirectiveStackSettings(current.directiveStack, patch.directiveStack || {})
     : { ...(current.directiveStack || {}), ...(patch.directiveStack || {}) };
@@ -65,6 +84,10 @@ async function updateSettings(dataRoot, patch = {}) {
       ...current.workflowGeneration,
       ...(patch.workflowGeneration || {})
     },
+    modelCatalogPreferences: {
+      ...(current.modelCatalogPreferences || {}),
+      ...(patch.modelCatalogPreferences || {})
+    },
     globalPrompt: {
       ...current.globalPrompt,
       ...(patch.globalPrompt || {})
@@ -77,12 +100,10 @@ async function updateProviderProfile(dataRoot, profile) {
   const current = await readSettings(dataRoot);
   const profiles = [...(current.providerProfiles || [])];
   const normalized = SettingsSchema.normalizeProviderProfile(profile);
-  if (Object.prototype.hasOwnProperty.call(profile, 'apiKey') && !String(profile.apiKey || '').trim()) {
-    const existing = profiles.find(function (p) { return p.id === normalized.id; });
-    if (existing && existing.apiKey) {
-      normalized.apiKey = existing.apiKey;
-      normalized.hasApiKey = true;
-    }
+  const existing = profiles.find(function (p) { return p.id === normalized.id; });
+  if (existing) {
+    normalized.apiKey = resolveRetainedApiKey(existing, normalized, incomingApiKey(profile));
+    normalized.hasApiKey = !!normalized.apiKey;
   }
   const idx = profiles.findIndex(function (p) { return p.id === normalized.id; });
   if (idx >= 0) {
@@ -107,17 +128,71 @@ function runtimeProviderConfig(settingsInput, extras = {}) {
   return SettingsSchema.providerRuntimeConfig(settingsInput, extras);
 }
 
+function publicRuntimeProvider(settingsInput, extras = {}) {
+  return SettingsSchema.publicRuntimeConfig(runtimeProviderConfig(settingsInput, extras));
+}
+
 function runtimeProviderProfiles(settingsInput) {
   return SettingsSchema.providerProfileRuntimeConfigs(settingsInput);
 }
 
-function requestUrl(url, { method = 'GET', headers = {}, body = '', timeoutMs = 2500 } = {}) {
+function sanitizeKey(value) {
+  return String(value || '').trim().replace(/^Bearer\s+/i, '').trim();
+}
+
+function sanitizeProviderMessage(value) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!text || /<\/?[a-z][\s\S]*>/i.test(text)) return '';
+  if (/api[_-]?key|authorization|bearer\s+\S+/i.test(text) && text.length > 80) return '';
+  return text.slice(0, 180);
+}
+
+function extractErrorMessage(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  try {
+    const parsed = JSON.parse(text);
+    const message = parsed && parsed.error && (parsed.error.message || parsed.error.code)
+      ? (parsed.error.message || parsed.error.code)
+      : (parsed.message || parsed.error || '');
+    return sanitizeProviderMessage(message);
+  } catch (error) {
+    return sanitizeProviderMessage(text);
+  }
+}
+
+function resolveLiveTest(config) {
+  const ModelCatalog = require('../../src/core/settings/model-catalog');
+  if (ModelCatalog.isOpencodeProvider(config.provider)) {
+    return {
+      model: ModelCatalog.defaultTestModel(config.provider, config.model),
+      endpoint: ModelCatalog.resolveProviderEndpoint(config.provider, config.endpoint)
+    };
+  }
+  return {
+    model: config.model || 'model-check',
+    endpoint: config.endpoint
+  };
+}
+
+function requestUrl(url, { method = 'GET', headers = {}, body = '', timeoutMs = 2500, readBody = false } = {}) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const client = parsed.protocol === 'https:' ? https : http;
     const request = client.request(parsed, { method, headers, timeout: timeoutMs }, (response) => {
-      response.resume();
-      response.on('end', () => resolve({ statusCode: response.statusCode || 0 }));
+      const retryAfter = response.headers && response.headers['retry-after'];
+      const chunks = [];
+      let size = 0;
+      response.on('data', (chunk) => {
+        if (!readBody || size > 2048) return;
+        size += chunk.length;
+        chunks.push(chunk);
+      });
+      response.on('end', () => resolve({
+        statusCode: response.statusCode || 0,
+        retryAfter: retryAfter || null,
+        body: readBody ? Buffer.concat(chunks).toString('utf8') : ''
+      }));
     });
     request.on('timeout', () => {
       request.destroy(new Error('Connection timed out'));
@@ -151,7 +226,7 @@ async function testProvider(settingsInput, options = {}) {
   if (!config.endpoint) {
     return { ok: false, mode: 'api', provider: config.provider, error: 'API endpoint is required.' };
   }
-  if (!config.apiKey) {
+  if (!sanitizeKey(config.apiKey)) {
     return { ok: false, mode: 'api', provider: config.provider, error: 'API key is required.' };
   }
   if (!live) {
@@ -159,21 +234,36 @@ async function testProvider(settingsInput, options = {}) {
   }
 
   try {
+    const liveTarget = resolveLiveTest(config);
+    const model = liveTarget.model;
     const body = JSON.stringify({
-      model: config.model || 'model-check',
+      model,
       messages: [{ role: 'user', content: 'ping' }],
       max_tokens: 1,
       stream: false
     });
-    const result = await requestUrl(config.endpoint, {
+    const result = await requestUrl(liveTarget.endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`
+        Authorization: `Bearer ${sanitizeKey(config.apiKey)}`
       },
-      body
+      body,
+      timeoutMs: 15000,
+      readBody: true
     });
-    return { ok: result.statusCode >= 200 && result.statusCode < 300, mode: 'api', provider: config.provider, statusCode: result.statusCode };
+    const ok = result.statusCode >= 200 && result.statusCode < 300;
+    const detail = extractErrorMessage(result.body);
+    const classified = !ok ? require('./generation-bridge-service').classifyHttpStatus(result.statusCode, result.retryAfter, { message: detail }) : null;
+    return {
+      ok,
+      mode: 'api',
+      provider: config.provider,
+      model,
+      statusCode: result.statusCode,
+      checked: 'live',
+      error: !ok ? ((classified && classified.message) || detail || `HTTP ${result.statusCode}`) : undefined
+    };
   } catch (error) {
     return { ok: false, mode: 'api', provider: config.provider, error: error.message };
   }
@@ -196,7 +286,7 @@ async function testProviderProfile(dataRoot, profileId, options = {}) {
     mode: 'api',
     provider: profile.provider,
     endpoint: profile.endpoint,
-    apiKey: profile.apiKey,
+    apiKey: sanitizeKey(profile.apiKey),
     model: profile.model
   };
   const live = !!options.live;
@@ -210,21 +300,37 @@ async function testProviderProfile(dataRoot, profileId, options = {}) {
     return { ok: true, mode: 'api', provider: config.provider, profileId: profile.id, checked: 'configuration', endpoint: config.endpoint };
   }
   try {
+    const liveTarget = resolveLiveTest(config);
+    const model = liveTarget.model;
     const body = JSON.stringify({
-      model: config.model || 'model-check',
+      model,
       messages: [{ role: 'user', content: 'ping' }],
       max_tokens: 1,
       stream: false
     });
-    const result = await requestUrl(config.endpoint, {
+    const result = await requestUrl(liveTarget.endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: 'Bearer ' + config.apiKey
       },
-      body: body
+      body: body,
+      timeoutMs: 15000,
+      readBody: true
     });
-    return { ok: result.statusCode >= 200 && result.statusCode < 300, mode: 'api', provider: config.provider, profileId: profile.id, statusCode: result.statusCode };
+    const ok = result.statusCode >= 200 && result.statusCode < 300;
+    const detail = extractErrorMessage(result.body);
+    const classified = !ok ? require('./generation-bridge-service').classifyHttpStatus(result.statusCode, result.retryAfter, { message: detail }) : null;
+    return {
+      ok,
+      mode: 'api',
+      provider: config.provider,
+      profileId: profile.id,
+      model,
+      statusCode: result.statusCode,
+      checked: 'live',
+      error: !ok ? ((classified && classified.message) || detail || `HTTP ${result.statusCode}`) : undefined
+    };
   } catch (error) {
     return { ok: false, mode: 'api', provider: config.provider, profileId: profile.id, error: error.message };
   }
@@ -238,6 +344,7 @@ module.exports = {
   deleteProviderProfile,
   publicSettings,
   runtimeProviderConfig,
+  publicRuntimeProvider,
   runtimeProviderProfiles,
   projectSaveRoot,
   backupRoot,

@@ -25,9 +25,36 @@ assert.ok(prompt.messages[1].content.includes('CURRENT SCENE SO FAR'));
 assert.ok(prompt.messages[1].content.includes('COMPENDIUM REFERENCES'));
 assert.ok(prompt.messages[1].content.includes('PREVIOUS SCENES'));
 assert.ok(prompt.messages[1].content.includes('BEAT TO EXPAND'));
+assert.ok(prompt.messages[1].content.includes('只完成本拍'));
+assert.ok(prompt.messages[1].content.includes('写完即停'));
+assert.ok(prompt.messages[1].content.includes('不要提前写下一拍或后续情节'));
+assert.ok(!prompt.messages[1].content.includes('2-3 paragraphs'));
+assert.ok(!prompt.messages[1].content.includes('写下一段'));
 assert.ok(!prompt.messages[1].content.includes('@[Alice]'));
 assert.ok(!prompt.messages[1].content.includes('#[Old Scene]'));
 assert.ok(prompt.asString().includes('<|im_start|>system'));
+
+const withHint = PromptBuilder.buildFictionPrompt({
+    beat: 'She steps into the rain.',
+    options: { lengthHint: 'brief' }
+});
+assert.ok(withHint.messages[1].content.includes('写紧一点'));
+assert.ok(!withHint.messages[1].content.includes('400'));
+assert.ok(!withHint.messages[1].content.includes('800'));
+assert.strictEqual(PromptBuilder.normalizeLengthHint({ minChars: 400, maxChars: 800 }), 'natural');
+
+const withExpanded = PromptBuilder.buildFictionPrompt({
+    beat: 'She steps into the rain.',
+    options: { lengthHint: '展开' }
+});
+assert.ok(withExpanded.messages[1].content.includes('稍展开'));
+
+const withCustomCloser = PromptBuilder.buildFictionPrompt({
+    beat: 'She steps into the rain.',
+    options: { outputCloser: '只写这一拍，然后停下。' }
+});
+assert.ok(withCustomCloser.messages[1].content.includes('只写这一拍，然后停下。'));
+assert.ok(!withCustomCloser.messages[1].content.includes('只完成本拍'));
 
 const request = ProviderClient.createProviderRequest({
     task: 'draft-scene',

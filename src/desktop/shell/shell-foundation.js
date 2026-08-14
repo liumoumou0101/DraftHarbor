@@ -1,3 +1,33 @@
+    function desktopGenerationAvailable() {
+        return !!(window.DraftHarborDesktopGeneration && typeof window.DraftHarborDesktopGeneration.streamGeneration === 'function')
+            || !!(window.DraftHarborProviderStream && typeof window.DraftHarborProviderStream.streamGeneration === 'function');
+    }
+
+    function workflowGenerationScope(run) {
+        const projectId = typeof currentProjectId === 'function' ? currentProjectId() : '';
+        const runId = run && run.id ? String(run.id) : '';
+        if (!projectId || !runId) return {};
+        return { projectId: projectId, runId: runId };
+    }
+
+    function streamDesktopGeneration(prompt, onToken, config) {
+        const client = window.DraftHarborDesktopGeneration || window.DraftHarborProviderStream;
+        if (!client || typeof client.streamGeneration !== 'function') throw new Error('生成服务尚未加载');
+        const settings = typeof settingsState !== 'undefined' && settingsState.settings
+            ? settingsState.settings
+            : {};
+        const prefs = settings.modelCatalogPreferences || {};
+        const source = config && typeof config === 'object' ? config : {};
+        const next = Object.assign({}, source, {
+            catalog: (typeof settingsState !== 'undefined' && settingsState.modelCatalog) || source.catalog || null
+        });
+        if (!next.projectId) delete next.projectId;
+        if (!next.runId) delete next.runId;
+        return client.streamGeneration(prompt, onToken, next, {
+            acknowledgedPrivacyModels: prefs.acknowledgedPrivacyModels || []
+        });
+    }
+
     const viewTitles = {
         bookshelf: '书库',
         writer: '写作',
@@ -183,6 +213,7 @@
         isSaving: false,
         generation: {
             beat: '',
+            lengthHint: 'natural',
             text: '',
             reasoning: '',
             prompt: null,
@@ -238,7 +269,8 @@
         selectedId: '',
         input: '',
         generating: false,
-        selectedAssistantMessageId: ''
+        selectedAssistantMessageId: '',
+        templates: []
     };
     const workflowState = {
         runs: [],
@@ -345,6 +377,8 @@
         settings: null,
         runtimeProvider: null,
         runtimeProviderProfiles: null,
+        modelCatalog: null,
+        modelCatalogs: null,
         storageLocations: null,
         loading: false,
         loadPromise: null,
