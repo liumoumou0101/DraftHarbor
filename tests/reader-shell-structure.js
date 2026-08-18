@@ -110,6 +110,11 @@ assert.ok(settings.includes('readerStatusBarState'), 'reader settings must keep 
 assert.ok(appearanceStudio.includes('readerAppearanceStudioBeginSession') || appearanceStudio.includes('appearanceBeginSession'), 'appearance studio must capture a reversible session baseline');
 assert.ok(appearanceStudio.includes('/api/reader/appearances'), 'appearance studio must persist user profiles through the local API');
 assert.ok(appearanceCss.includes('data-reader-material="grain"'), 'appearance styles must provide the grain material');
+assert.ok(appearanceCss.includes('data-reader-material="fiber"'), 'appearance styles must provide the fiber material');
+assert.ok(appearanceCss.includes('data-reader-material="aged"'), 'appearance styles must provide the aged material');
+assert.ok(appearanceCss.includes('data-reader-material="xuan"'), 'appearance styles must provide the xuan material');
+assert.ok(html.includes('data-reader-float-hud'), 'reader shell must expose the idle floating HUD');
+assert.ok(html.includes('data-reader-theme-chip'), 'quick appearance must expose theme chips');
 assert.ok(appearanceCss.includes('data-reader-paper-shadow="false"'), 'appearance styles must support disabling paper shadow');
 assert.ok(appearanceCss.includes('data-reader-vignette="false"'), 'appearance styles must support disabling the vignette');
 assert.ok(appearanceCss.includes('assets/reader/paper-grain.svg'), 'appearance styles must use the local paper grain asset');

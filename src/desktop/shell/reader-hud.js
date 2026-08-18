@@ -1,6 +1,5 @@
 (function () {
     const AUTO_IDLE_DELAY = 3600;
-    const AUTO_HIDE_DELAY = 2600;
     let bound = false;
     let observer = null;
 
@@ -67,9 +66,22 @@
         if (focusToggle) {
             focusToggle.setAttribute('aria-pressed', readerState.focusMode ? 'true' : 'false');
             focusToggle.textContent = readerState.focusMode ? '退出专注' : '专注阅读';
-            focusToggle.title = readerState.focusMode ? '退出专注阅读模式' : '隐藏阅读控件并收起桌面壳层';
+            focusToggle.title = readerState.focusMode ? '退出专注阅读并离开全屏' : '进入全屏专注阅读，Esc 退出';
         }
+        readerHudSyncFloat(shell, state);
         if (state === 'hidden') readerHudMoveFocusOutOfHiddenControls(shell);
+    }
+
+    function readerHudSyncFloat(shell = readerHudShell(), state = readerState.hudState) {
+        const floatHud = shell && shell.querySelector('[data-reader-float-hud]');
+        if (!floatHud) return;
+        const title = shell.querySelector('[data-reader-title]');
+        const progress = shell.querySelector('[data-reader-progress-percent]');
+        const floatTitle = floatHud.querySelector('[data-reader-float-title]');
+        const floatProgress = floatHud.querySelector('[data-reader-float-progress]');
+        if (floatTitle && title) floatTitle.textContent = title.textContent;
+        if (floatProgress && progress) floatProgress.textContent = progress.textContent;
+        floatHud.setAttribute('aria-hidden', state === 'idle' ? 'false' : 'true');
     }
 
     function readerHudTransition(event, context = readerHudContext()) {
@@ -87,6 +99,7 @@
     }
 
     function readerHudSyncContext() {
+        if (readerState.focusMode) return;
         const context = readerHudContext();
         if (context.selectionActive) {
             if (readerState.hudState !== 'selection-active') readerHudTransition('selection-start', context);
@@ -106,7 +119,7 @@
     function readerHudSchedule() {
         readerHudCancelTimer();
         const root = readerHudRoot();
-        if (!root || root.dataset.view !== 'reader') return;
+        if (!root || root.dataset.view !== 'reader' || readerState.focusMode) return;
         if (readerState.hudMode === 'visible') {
             readerHudTransition('show');
             return;
@@ -125,21 +138,12 @@
                 return;
             }
             readerHudTransition('idle', current);
-            readerState.hudTimer = window.setTimeout(() => {
-                readerState.hudTimer = null;
-                const latest = readerHudContext();
-                if (latest.panelOpen || latest.selectionActive || readerState.hudMode !== 'auto') {
-                    readerHudSchedule();
-                    return;
-                }
-                readerHudTransition('hide', latest);
-            }, AUTO_HIDE_DELAY);
         }, AUTO_IDLE_DELAY);
     }
 
     function readerHudActivity() {
         const root = readerHudRoot();
-        if (!root || root.dataset.view !== 'reader') return;
+        if (!root || root.dataset.view !== 'reader' || readerState.focusMode) return;
         const context = readerHudContext();
         readerHudTransition('activity', context);
         readerHudSchedule();
@@ -196,6 +200,10 @@
             readerHudNotifySelection(false);
             return true;
         }
+        if (readerState.focusMode) {
+            readerHudExitFocusMode();
+            return true;
+        }
         if (readerState.hudState === 'hidden' || readerState.hudState === 'idle') {
             readerHudShow();
             return true;
@@ -204,9 +212,39 @@
         return true;
     }
 
+    function readerIsDocumentFullscreen() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement);
+    }
+
+    async function readerQueryWindowFullscreen() {
+        try {
+            if (window.draftHarborDesktop && typeof window.draftHarborDesktop.isFullscreen === 'function') {
+                return !!(await window.draftHarborDesktop.isFullscreen());
+            }
+        } catch (_) { /* browser preview has no Electron fullscreen bridge */ }
+        return readerIsDocumentFullscreen();
+    }
+
+    async function readerSetFullscreen(on) {
+        try {
+            if (window.draftHarborDesktop && typeof window.draftHarborDesktop.setFullscreen === 'function') {
+                return !!(await window.draftHarborDesktop.setFullscreen(!!on));
+            }
+            if (on && !readerIsDocumentFullscreen() && document.documentElement.requestFullscreen) {
+                await document.documentElement.requestFullscreen();
+            } else if (!on && readerIsDocumentFullscreen() && document.exitFullscreen) {
+                await document.exitFullscreen();
+            }
+        } catch (error) {
+            console.warn('Reader fullscreen request failed.', error);
+        }
+        return readerIsDocumentFullscreen();
+    }
+
     function readerHudEnterFocusMode() {
         if (readerState.drawer && typeof setReaderDrawer === 'function') setReaderDrawer('');
         readerState.focusMode = true;
+        readerState.focusOwnsFullscreen = false;
         if (typeof closeReaderAnnotationDialog === 'function') closeReaderAnnotationDialog();
         if (typeof clearReaderTransferSelection === 'function') clearReaderTransferSelection();
         window.getSelection()?.removeAllRanges();
@@ -216,14 +254,22 @@
         readerHudCancelTimer();
         readerHudTransition('hide', { panelOpen: false, dialogOpen: false, selectionActive: false, focusWithinInteractive: false });
         readerHudShell()?.querySelector('[data-reader-content]')?.focus({ preventScroll: true });
+        readerQueryWindowFullscreen().then((alreadyFullscreen) => {
+            if (!readerState.focusMode || alreadyFullscreen) return;
+            readerState.focusOwnsFullscreen = true;
+            return readerSetFullscreen(true);
+        }).catch((error) => console.warn('Reader focus fullscreen failed.', error));
     }
 
     function readerHudExitFocusMode() {
+        const owned = !!readerState.focusOwnsFullscreen;
         readerState.focusMode = false;
+        readerState.focusOwnsFullscreen = false;
         const root = readerHudRoot();
         if (root) root.dataset.readerFocusMode = 'false';
         window.syncReaderIllustrationControls?.();
         readerHudShow();
+        if (owned) readerSetFullscreen(false);
     }
 
     function readerHudToggleFocusMode() {
@@ -232,12 +278,19 @@
     }
 
     function readerHudLeaveReader() {
+        const owned = !!readerState.focusOwnsFullscreen;
         readerHudCancelTimer();
         readerState.focusMode = false;
+        readerState.focusOwnsFullscreen = false;
         const root = readerHudRoot();
         if (root) root.dataset.readerFocusMode = 'false';
         const shell = readerHudShell();
         if (shell) readerHudApply({ state: 'hidden', previousState: 'hidden' });
+        if (owned) readerSetFullscreen(false);
+    }
+
+    function readerHudOnFullscreenChanged(isFullscreen) {
+        if (readerState.focusMode && readerState.focusOwnsFullscreen && !isFullscreen) readerHudExitFocusMode();
     }
 
     function initializeReaderHud() {
@@ -253,6 +306,8 @@
             if (!root || root.dataset.view !== 'reader' || event.key === 'Escape') return;
             readerHudActivity();
         });
+        document.addEventListener('fullscreenchange', () => readerHudOnFullscreenChanged(readerIsDocumentFullscreen()));
+        window.draftHarborDesktop?.onFullscreenChanged?.((on) => readerHudOnFullscreenChanged(!!on));
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) readerHudCancelTimer();
             else readerHudSchedule();
@@ -263,6 +318,19 @@
             subtree: true,
             attributeFilter: ['open', 'hidden', 'aria-hidden', 'data-reader-drawer']
         });
+        document.querySelector('[data-reader-float-library]')?.addEventListener('click', () => {
+            document.querySelector('[data-reader-library-toggle]')?.click();
+        });
+        document.querySelector('[data-reader-float-settings]')?.addEventListener('click', () => {
+            document.querySelector('[data-reader-settings-toggle]')?.click();
+        });
+        document.querySelector('[data-reader-float-focus]')?.addEventListener('click', () => readerHudToggleFocusMode());
+        const title = shell.querySelector('[data-reader-title]');
+        const progress = shell.querySelector('[data-reader-progress-percent]');
+        if (title || progress) {
+            const floatObserver = new MutationObserver(() => readerHudSyncFloat());
+            [title, progress].filter(Boolean).forEach((node) => floatObserver.observe(node, { childList: true, characterData: true, subtree: true }));
+        }
         readerHudApply({ state: readerState.hudState || 'visible', previousState: readerState.hudPreviousState || 'visible' });
         readerHudSyncContext();
     }

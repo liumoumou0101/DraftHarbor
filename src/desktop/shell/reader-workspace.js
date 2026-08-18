@@ -64,7 +64,7 @@
     function handleReaderTabKey(event) {
         const button = event.target && event.target.closest('[data-reader-tab]');
         if (!button || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-        const tabs = Array.from(document.querySelectorAll('[data-reader-tab]'));
+        const tabs = Array.from(document.querySelectorAll('.desktop-reader-tabs [data-reader-tab]'));
         const current = tabs.indexOf(button);
         const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
             : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
@@ -308,11 +308,8 @@
         const elements = readerWorkspaceElements();
         if (!elements.shell) return;
         if (typeof window.initializeReaderHud === 'function') window.initializeReaderHud();
-        loadReaderLibrary().then((documents) => {
-            if (!readerState.document && !readerState.apiMode) {
-                setReaderDrawer('left');
-                if (!documents.length) selectReaderLeftTab('library');
-            }
+        loadReaderLibrary().then(() => {
+            if (!readerState.document && !readerState.apiMode) setReaderDrawer('left'), selectReaderLeftTab('library');
         });
         if (typeof initializeReaderSettings === 'function') initializeReaderSettings();
         if (typeof window.initializeReaderAppearanceStudio === 'function') window.initializeReaderAppearanceStudio();
@@ -321,7 +318,11 @@
         if (window.initializeReaderAnnotationUi) window.initializeReaderAnnotationUi();
         if (window.initializeReaderLibraryDetail) window.initializeReaderLibraryDetail();
         document.querySelector('[data-reader-exit]')?.addEventListener('click', () => setView('bookshelf'));
-        elements.leftToggle?.addEventListener('click', (event) => setReaderDrawer(readerState.drawer === 'left' ? '' : 'left', event.currentTarget));
+        elements.leftToggle?.addEventListener('click', (event) => {
+            const open = readerState.drawer !== 'left', reading = !!(readerState.document || readerState.apiMode);
+            if (open) selectReaderLeftTab(reading && readerState.leftTab !== 'library' ? readerState.leftTab : reading ? 'contents' : 'library');
+            setReaderDrawer(open ? 'left' : '', event.currentTarget);
+        });
         elements.settingsToggle?.addEventListener('click', (event) => {
             const nextDrawer = readerState.drawer === 'right' ? '' : 'right';
             if(nextDrawer)window.readerAppearanceStudioBeginSession?.(),window.setReaderAppearanceStudioSection?.('scheme');
@@ -344,7 +345,9 @@
         });
         document.querySelector('[data-reader-font-close]')?.addEventListener('click', () => fontDialog?.close());
         fontDialog?.addEventListener('cancel', (event) => { event.preventDefault(); fontDialog.close(); });
-        document.querySelector('[data-reader-empty-library]')?.addEventListener('click', (event) => setReaderDrawer('left', event.currentTarget));
+        document.querySelector('[data-reader-empty-library]')?.addEventListener('click', (event) => {
+            selectReaderLeftTab('library'); setReaderDrawer('left', event.currentTarget);
+        });
         document.querySelectorAll('[data-reader-tab]').forEach((button) => {
             button.addEventListener('click', () => selectReaderLeftTab(button.dataset.readerTab));
             button.addEventListener('keydown', handleReaderTabKey);
@@ -384,4 +387,5 @@
             });
         }
         selectReaderLeftTab(readerState.leftTab);
+        window.setReaderDrawer = setReaderDrawer;
     }

@@ -12,7 +12,7 @@
     const BLOCK_TYPES = Object.freeze(['heading', 'scene-title', 'paragraph', 'blank-break', 'code']);
     const LAYOUT_MODES = Object.freeze(['flow', 'single-page', 'double-page', 'illustrated', 'auto']);
     const PAGE_TRANSITIONS = Object.freeze(['fade', 'slide', 'cover', 'curl', 'none']);
-    const THEME_IDS = Object.freeze(['white', 'paper', 'warm', 'eye', 'ink', 'oled', 'dark', 'sepia']);
+    const THEME_IDS = Object.freeze(['paper', 'lamp', 'ink', 'oled', 'white', 'warm', 'eye', 'dark', 'sepia']);
     const FONT_FAMILY_IDS = Object.freeze(['system', 'serif', 'sans-serif', 'kai']);
     const TEXT_ALIGNMENTS = Object.freeze(['start', 'justify']);
     const APPEARANCE_PROFILE_IDS = Object.freeze(['default', 'paper', 'focus', 'custom']);
@@ -284,7 +284,7 @@
     function createReaderGlobalPreferences(input = {}) {
         const layoutMode = input.layoutMode === undefined ? 'double-page' : assertEnum(input.layoutMode, LAYOUT_MODES, 'reader layoutMode');
         const pageTransition = input.pageTransition === undefined ? 'fade' : assertEnum(input.pageTransition, PAGE_TRANSITIONS, 'reader pageTransition');
-        const themeId = input.themeId === undefined ? 'dark' : assertEnum(input.themeId, THEME_IDS, 'reader themeId');
+        const themeId = input.themeId === undefined ? 'paper' : assertEnum(input.themeId, THEME_IDS, 'reader themeId');
         const fontFamilyId = input.fontFamilyId === undefined ? 'system' : assertEnum(input.fontFamilyId, FONT_FAMILY_IDS, 'reader fontFamilyId');
         const fontId = cleanString(input.fontId, {
             system: 'builtin:default',

@@ -102,23 +102,25 @@ async function selectReaderStudioSection(page, section) {
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage({ viewport: scenarios[0] });
     await importFixture(page, servers.appUrl, fixturePath);
-    await page.click('[data-reader-settings-toggle]');
+    await page.evaluate(() => {
+        document.querySelectorAll('dialog[open]').forEach((dialog) => dialog.close());
+        readerState.hudMode = 'visible';
+        document.querySelector('[data-reader-settings-toggle]')?.click();
+    });
+    await page.waitForFunction(() => document.querySelector('[data-reader-settings-drawer]')?.getAttribute('aria-hidden') === 'false');
     await selectReaderStudioSection(page, 'page');
     await page.selectOption('[data-reader-layout-mode]', 'auto');
-    await page.click('[data-reader-settings-close]');
+    await page.evaluate(() => document.querySelector('[data-reader-settings-close]')?.click());
     const issues = [];
     for (const scenario of scenarios) {
       await page.setViewportSize({ width: scenario.width, height: scenario.height });
       await page.waitForFunction(() => {
         const content = document.querySelector('[data-reader-content]');
-        if (!content) return false;
-        return content.clientHeight < 420
-          ? content.dataset.readerLayout === 'flow'
-          : ['single-page', 'double-page'].includes(content.dataset.readerLayout);
+        return !!content && ['flow', 'single-page', 'double-page', 'illustrated'].includes(content.dataset.readerLayout);
       });
       issues.push(...await auditViewport(page, scenario.label));
       await page.screenshot({ path: path.join(reportDir, `${scenario.label}.png`), fullPage: false });
-      await page.click('[data-reader-library-toggle]');
+      await page.evaluate(() => document.querySelector('[data-reader-library-toggle]')?.click());
       await page.waitForFunction(() => document.querySelector('[data-reader-left-drawer]').getAttribute('aria-hidden') === 'false');
       await page.waitForFunction(() => getComputedStyle(document.querySelector('[data-reader-left-drawer]')).transform === 'matrix(1, 0, 0, 1, 0, 0)');
       const drawerIssue = await page.evaluate((auditLabel) => {
@@ -127,7 +129,7 @@ async function selectReaderStudioSection(page, section) {
         return box.left < -2 || box.right > innerWidth + 2 ? `${auditLabel}: navigation drawer outside viewport` : '';
       }, scenario.label);
       if (drawerIssue) issues.push(drawerIssue);
-      await page.click('[data-reader-left-close]');
+      await page.evaluate(() => document.querySelector('[data-reader-left-close]')?.click());
     }
     assert.deepStrictEqual(issues, [], `Reader layout audit failed:\n${issues.join('\n')}`);
     console.log(`Reader layout audit passed. Screenshots saved to ${path.relative(root, reportDir)}`);

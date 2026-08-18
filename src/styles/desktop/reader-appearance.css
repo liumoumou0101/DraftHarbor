@@ -1,3 +1,47 @@
+.desktop-view-reader[data-reader-theme="lamp"],
+.desktop-reader-shell[data-reader-theme="lamp"],
+.desktop-reader-stage[data-reader-theme="lamp"] {
+    --reader-environment: #c4b396; --reader-page: #f3e6c6; --reader-text: #3a2e1c; --reader-mutedText: #6f5c3d;
+    --reader-control: #ead9b0; --reader-controlText: #3a2e1c; --reader-material: #ebdbb4; --reader-effect: #7a6238;
+    --reader-chrome: #e6d5ab; --reader-line: #cbb892; --reader-lineStrong: #b49d72; --reader-accent: #7a6238;
+    --reader-accentText: #f3e6c6; --reader-danger: #a35348; --reader-warning: #8a6828;
+    --reader-accent-rgb: 122, 98, 56; --reader-effect-rgb: 122, 98, 56; --reader-line-rgb: 203, 184, 146;
+}
+.desktop-view-reader[data-reader-theme="ink"],
+.desktop-reader-shell[data-reader-theme="ink"],
+.desktop-reader-stage[data-reader-theme="ink"] {
+    --reader-environment: #26251f; --reader-page: #2f2d27; --reader-text: #e5ded0; --reader-mutedText: #b9ae9d;
+    --reader-control: #3a3730; --reader-controlText: #e5ded0; --reader-material: #343129; --reader-effect: #000000;
+    --reader-chrome: #2c2a24; --reader-line: #454138; --reader-lineStrong: #5a554a; --reader-accent: #b0b98a;
+    --reader-accentText: #26251f; --reader-danger: #d17872; --reader-warning: #d0a45e;
+    --reader-accent-rgb: 176, 185, 138; --reader-effect-rgb: 0, 0, 0; --reader-line-rgb: 69, 65, 56;
+}
+.desktop-view-reader[data-reader-theme="oled"],
+.desktop-reader-shell[data-reader-theme="oled"],
+.desktop-reader-stage[data-reader-theme="oled"] {
+    --reader-environment: #000000; --reader-page: #070707; --reader-text: #e6e1d6; --reader-mutedText: #b8b2a6;
+    --reader-control: #161616; --reader-controlText: #e6e1d6; --reader-material: #101010; --reader-effect: #000000;
+    --reader-chrome: #0c0c0c; --reader-line: #2a2a2a; --reader-lineStrong: #3d3d3d; --reader-accent: #c4c1a8;
+    --reader-accentText: #111111; --reader-danger: #d17872; --reader-warning: #d0a45e;
+    --reader-accent-rgb: 196, 193, 168; --reader-effect-rgb: 0, 0, 0; --reader-line-rgb: 42, 42, 42;
+}
+
+.desktop-view-reader,
+.desktop-reader-shell {
+    --reader-environment: #d2c8b8; --reader-page: #f1eadb; --reader-text: #2c2822; --reader-mutedText: #6e665b;
+    --reader-control: #e7dece; --reader-controlText: #2c2822; --reader-material: #e8dfd0; --reader-effect: #6a6154;
+    --reader-chrome: #e4dccf; --reader-line: #c9bfae; --reader-lineStrong: #b4a894; --reader-accent: #6f6a4e;
+    --reader-accentText: #f1eadb; --reader-danger: #a35348; --reader-warning: #9a7040;
+    --reader-accent-rgb: 111, 106, 78; --reader-effect-rgb: 106, 97, 84; --reader-line-rgb: 201, 191, 174;
+    --reader-shell-surface: var(--reader-environment);
+    --reader-shell-overlay: color-mix(in srgb, var(--reader-chrome) 94%, transparent);
+    --reader-ink: var(--reader-text); --reader-muted: var(--reader-mutedText); --reader-panel: var(--reader-chrome); --reader-border: var(--reader-line);
+    --desktop-text: var(--reader-text); --desktop-muted: var(--reader-mutedText); --desktop-faint: var(--reader-mutedText);
+    --desktop-accent: var(--reader-accent); --desktop-accent-strong: var(--reader-accent); --desktop-accent-rgb: var(--reader-accent-rgb);
+    --desktop-line: color-mix(in srgb, var(--reader-line) 72%, transparent); --desktop-line-strong: var(--reader-lineStrong);
+    --desktop-panel: var(--reader-chrome); --desktop-danger: var(--reader-danger); --desktop-warning: var(--reader-warning);
+}
+
 .desktop-reader-reading-center {
     display: grid;
     justify-items: center;
@@ -15,23 +59,16 @@
     font-size: 11px;
 }
 
-.desktop-reader-quick-appearance select,
-.desktop-reader-quick-appearance output {
-    min-height: 25px;
-    padding: 3px 6px;
-    border: 1px solid rgba(var(--desktop-accent-rgb), 0.22);
-    border-radius: 6px;
-    background: var(--reader-control, rgba(255, 255, 255, 0.05));
-    color: var(--reader-controlText, var(--desktop-muted));
-    font: inherit;
-}
-
 .desktop-reader-quick-appearance output {
     display: inline-grid;
     min-width: 42px;
+    min-height: 25px;
     place-items: center;
-    border-color: transparent;
+    padding: 3px 6px;
+    border: 0;
     background: transparent;
+    color: var(--reader-controlText, var(--desktop-muted));
+    font: inherit;
 }
 
 .desktop-reader-quick-appearance .desktop-reader-tool {
@@ -98,7 +135,7 @@
     box-sizing: border-box;
     width: 100%;
     height: 100%;
-    background: var(--reader-page, #121419);
+    background: var(--reader-page, #f1eadb);
 }
 
 /* Position the paper itself around the live spread's spine instead of covering
@@ -149,7 +186,7 @@
 }
 
 .desktop-reader-page-transition-layer > .desktop-reader-page-deck > .desktop-reader-page {
-    background: var(--reader-page, #121419);
+    background: var(--reader-page, #f1eadb);
 }
 
 .desktop-reader-page-transition-layer > .desktop-reader-page-deck.is-reader-transitioning-in {
@@ -286,7 +323,7 @@
 
 .desktop-reader-studio-tabs {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 5px;
     padding-bottom: 12px;
     border-bottom: 1px solid var(--desktop-line);
@@ -323,7 +360,7 @@
 }
 
 .desktop-reader-stage {
-    background: radial-gradient(circle at 50% -15%, rgba(146, 164, 184, 0.09), transparent 34%), var(--reader-environment, var(--reader-shell-surface, #121419));
+    background: radial-gradient(circle at 50% -15%, rgba(var(--reader-accent-rgb, 111, 106, 78), 0.08), transparent 34%), var(--reader-environment, var(--reader-shell-surface, #d2c8b8));
 }
 
 .desktop-reader-stage[data-reader-vignette="true"] {
@@ -335,17 +372,35 @@
 }
 
 .desktop-reader-content {
-    background: var(--reader-page, #121419);
+    background: var(--reader-page, #f1eadb);
     color: var(--reader-text, #dce0e6);
 }
 
-.desktop-reader-stage[data-reader-material="soft"] .desktop-reader-content {
-    background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 36%, rgba(0, 0, 0, 0.035));
+.desktop-reader-stage[data-reader-material="soft"] :is(.desktop-reader-content, .desktop-reader-page, .desktop-reader-page-flip-sheet),
+.desktop-reader-material-chip > span[data-reader-material="soft"] {
+    background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 36%, color-mix(in srgb, var(--reader-effect) 8%, transparent));
 }
 
-.desktop-reader-stage[data-reader-material="grain"] .desktop-reader-content {
-    background-image: url("../../../assets/reader/paper-grain.svg"), radial-gradient(rgba(100, 80, 50, 0.08) 0.65px, transparent 0.8px);
+.desktop-reader-stage[data-reader-material="grain"] :is(.desktop-reader-content, .desktop-reader-page, .desktop-reader-page-flip-sheet),
+.desktop-reader-material-chip > span[data-reader-material="grain"] {
+    background-image: url("../../../assets/reader/paper-grain.svg"), radial-gradient(color-mix(in srgb, var(--reader-effect) 14%, transparent) 0.65px, transparent 0.8px);
     background-size: 12px 12px, 5px 5px;
+}
+
+.desktop-reader-stage[data-reader-material="fiber"] :is(.desktop-reader-content, .desktop-reader-page, .desktop-reader-page-flip-sheet),
+.desktop-reader-material-chip > span[data-reader-material="fiber"] {
+    background-image: repeating-linear-gradient(90deg, transparent, transparent 11px, color-mix(in srgb, var(--reader-effect) 8%, transparent) 12px), repeating-linear-gradient(0deg, transparent, transparent 6px, color-mix(in srgb, var(--reader-text) 4%, transparent) 7px);
+}
+
+.desktop-reader-stage[data-reader-material="aged"] :is(.desktop-reader-content, .desktop-reader-page, .desktop-reader-page-flip-sheet),
+.desktop-reader-material-chip > span[data-reader-material="aged"] {
+    background-image: radial-gradient(circle at 18% 24%, color-mix(in srgb, #8a6230 18%, transparent) 0 1.1px, transparent 2px), radial-gradient(circle at 74% 70%, color-mix(in srgb, #6a4020 14%, transparent) 0 1px, transparent 2px), linear-gradient(180deg, color-mix(in srgb, #c4a06a 12%, transparent), transparent 32%, color-mix(in srgb, var(--reader-effect) 8%, transparent));
+    background-size: 132px 104px, 168px 142px, 100% 100%;
+}
+
+.desktop-reader-stage[data-reader-material="xuan"] :is(.desktop-reader-content, .desktop-reader-page, .desktop-reader-page-flip-sheet),
+.desktop-reader-material-chip > span[data-reader-material="xuan"] {
+    background-image: radial-gradient(ellipse at 30% 40%, color-mix(in srgb, var(--reader-effect) 9%, transparent) 0 16px, transparent 40px), repeating-linear-gradient(14deg, transparent, transparent 13px, color-mix(in srgb, var(--reader-text) 4%, transparent) 14px);
 }
 
 .desktop-reader-stage[data-reader-paper-shadow="false"] .desktop-reader-page {
@@ -444,8 +499,7 @@
 }
 
 @media (max-width: 560px) {
-    .desktop-reader-quick-appearance select[data-reader-quick-font-family],
-    .desktop-reader-quick-appearance select[data-reader-quick-layout] {
+    .desktop-reader-quick-appearance [data-reader-layout-chips] {
         display: none;
     }
 }

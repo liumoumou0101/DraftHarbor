@@ -4,13 +4,18 @@ const Preferences = require('../src/core/document/reader-preferences');
 const defaults = Preferences.createReaderPreferencesV2({});
 assert.strictEqual(defaults.schemaVersion, 2);
 assert.strictEqual(defaults.layoutMode, 'double-page');
+assert.strictEqual(defaults.themeId, 'paper');
 assert.strictEqual(defaults.fontId, 'builtin:default');
+assert.strictEqual(Preferences.createReaderAppearanceProfile({ profileId: 'focus' }).preferences.themeId, 'lamp');
 assert.strictEqual(defaults.appearanceProfileId, 'default');
 assert.strictEqual(defaults.statusBarMode, 'auto');
 assert.deepStrictEqual(defaults.statusBarFields, ['chapter', 'page', 'percent']);
 assert.strictEqual(defaults.statusBarAutoHide, true);
 assert.strictEqual(defaults.keyboardPageTurn, true);
 assert.strictEqual(Preferences.createReaderPreferencesV2({ pageTransition: 'cover' }).pageTransition, 'cover');
+assert.strictEqual(Preferences.createReaderPreferencesV2({ paperMaterial: 'xuan' }).paperMaterial, 'xuan');
+assert.strictEqual(Preferences.createReaderPreferencesV2({ paperMaterial: 'fiber' }).paperMaterial, 'fiber');
+assert.strictEqual(Preferences.createReaderPreferencesV2({ paperMaterial: 'aged' }).paperMaterial, 'aged');
 assert.strictEqual(Preferences.createReaderPreferencesV2({ themeId: 'user:quiet-night' }).themeId, 'user:quiet-night');
 
 const migrated = Preferences.migrateReaderPreferences({

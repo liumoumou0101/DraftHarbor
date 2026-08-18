@@ -1,4 +1,4 @@
-    /* global animateReaderPageTurn initializeReaderImportWizard readerCanPageTurn */
+    /* global initializeReaderImportWizard readerCanPageTurn */
 
     function bindReader() {
         loadReaderState();
@@ -19,7 +19,6 @@
         const scrollReaderFlowPage = (direction) => {
             if (!elements.content) return false;
             elements.content.scrollBy({ top: direction * Math.max(220, elements.content.clientHeight * 0.82), behavior: 'smooth' });
-            if (typeof animateReaderPageTurn === 'function') animateReaderPageTurn(direction);
             return true;
         };
         if (elements.content) {
@@ -87,15 +86,6 @@
         if (elements.lineHeight) {
             elements.lineHeight.addEventListener('input', () => {
                 readerState.lineHeight = Number(elements.lineHeight.value) || 1.8;
-                applyReaderSettings();
-                saveReaderState();
-                if (typeof scheduleReaderPreferenceSave === 'function') scheduleReaderPreferenceSave();
-            });
-        }
-
-        if (elements.theme) {
-            elements.theme.addEventListener('change', () => {
-                readerState.theme = elements.theme.value || 'dark';
                 applyReaderSettings();
                 saveReaderState();
                 if (typeof scheduleReaderPreferenceSave === 'function') scheduleReaderPreferenceSave();

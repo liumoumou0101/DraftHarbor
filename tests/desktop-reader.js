@@ -203,6 +203,7 @@ async function selectReaderStudioSection(page, section) {
             && readerState.tts.settings.autoAdvance === false);
         await page.click('[data-reader-settings-close]');
         await page.click('[data-reader-library-toggle]');
+        await page.click('[data-reader-tab="library"]');
         await page.waitForSelector('[data-reader-library] .desktop-reader-library-card');
         assert.ok(await page.locator('[data-reader-library] input[aria-label="搜索书库"]').count(), 'Reader library should expose a search control');
         const firstLibraryCard = page.locator('[data-reader-library] .desktop-reader-library-card').first();
@@ -229,7 +230,7 @@ async function selectReaderStudioSection(page, section) {
         assert.deepStrictEqual(initial.chapters, ['Chapter One', 'Chapter Two'], 'reader should detect markdown chapters');
         assert.strictEqual(initial.progress, '0%', 'reader progress should start at the beginning of the book');
         assert.ok(initial.body.includes('First paragraph.') && initial.body.includes('Second paragraph.'), 'reader should render chapter paragraphs');
-        assert.strictEqual(await page.locator('[data-reader-quick-theme]').inputValue(), 'ink', 'legacy dark preference should map to a visible quick theme');
+        assert.strictEqual(await page.locator('[data-reader-quick-theme]').inputValue(), 'paper', 'fresh reader should default to the independent book-page theme');
 
         await page.click('[data-reader-next]');
         await page.waitForFunction(() => document.querySelector('[data-reader-title]').textContent.includes('Chapter Two'));
@@ -384,11 +385,11 @@ async function selectReaderStudioSection(page, section) {
         assert.strictEqual(focusedShell.dropzoneDisplay, 'none', 'Reader focus mode must hide the illustration dropzone');
         assert.strictEqual(focusedShell.removeDisplay, 'none', 'Reader focus mode must hide illustration removal controls');
         await page.keyboard.press('Escape');
-        await page.waitForFunction(() => document.querySelector('[data-reader-shell]').dataset.readerControlsVisible === 'true');
-        await page.click('[data-reader-focus-toggle]');
         await page.waitForFunction(() => {
             const root = document.getElementById('desktop-root');
-            return root.dataset.readerFocusMode === 'false'
+            const shell = document.querySelector('[data-reader-shell]');
+            return shell.dataset.readerControlsVisible === 'true'
+                && root.dataset.readerFocusMode === 'false'
                 && getComputedStyle(document.querySelector('.desktop-rail')).visibility !== 'hidden'
                 && getComputedStyle(document.querySelector('.desktop-main > .desktop-topbar')).display !== 'none';
         });
@@ -408,7 +409,11 @@ async function selectReaderStudioSection(page, section) {
             readerState.hudMode = 'auto';
             window.readerHudShow();
         });
-        await page.waitForFunction(() => document.querySelector('[data-reader-shell]').dataset.readerHudState === 'hidden', null, { timeout: 9000 });
+        await page.waitForFunction(() => document.querySelector('[data-reader-shell]').dataset.readerHudState === 'idle', null, { timeout: 9000 });
+        await page.waitForFunction(() => {
+            const hud = document.querySelector('[data-reader-float-hud]');
+            return hud && getComputedStyle(hud).opacity !== '0' && hud.getAttribute('aria-hidden') === 'false';
+        });
         await page.mouse.move(520, 390);
         await page.waitForFunction(() => document.querySelector('[data-reader-shell]').dataset.readerHudState === 'visible');
 
@@ -439,6 +444,7 @@ async function selectReaderStudioSection(page, section) {
         assert.strictEqual(formalLibrary.documents.length, 1, 'confirmed file import should enter the Reader Store once');
 
         await page.click('[data-reader-library-toggle]');
+        await page.click('[data-reader-tab="library"]');
         await page.waitForSelector('[data-reader-library] .desktop-reader-library-item');
         await page.waitForFunction(() => readerState.apiMode === true);
         await page.waitForFunction(() => document.querySelector('[data-reader-left-drawer]').getAttribute('aria-hidden') === 'false');
@@ -753,7 +759,7 @@ async function selectReaderStudioSection(page, section) {
         await selectReaderStudioSection(page, 'font');
         await page.selectOption('[data-reader-font-family]', 'kai');
         await selectReaderStudioSection(page, 'paper');
-        await page.selectOption('select[data-reader-theme]', 'sepia');
+        await page.selectOption('select[data-reader-theme]', 'lamp');
         await selectReaderStudioSection(page, 'motion');
         await page.selectOption('[data-reader-page-transition]', 'cover');
         await page.waitForFunction(() => readerEffectiveTransition() === 'cover');
@@ -771,8 +777,8 @@ async function selectReaderStudioSection(page, section) {
                 locator: captureReaderPositionLocator()
             };
         });
-        assert.notStrictEqual(scopedPreferences.globalTheme, 'sepia', 'per-book changes must not overwrite global preferences');
-        assert.strictEqual(scopedPreferences.overrides.themeId, 'sepia', 'per-book theme override should be authoritative');
+        assert.notStrictEqual(scopedPreferences.globalTheme, 'lamp', 'per-book changes must not overwrite global preferences');
+        assert.strictEqual(scopedPreferences.overrides.themeId, 'lamp', 'per-book theme override should be authoritative');
         assert.strictEqual(scopedPreferences.overrides.fontFamilyId, 'kai', 'stable font family id should persist per book');
         assert.strictEqual(scopedPreferences.overrides.letterSpacing, 0.06, 'letter spacing should persist per book');
         assert.strictEqual(scopedPreferences.overrides.pageMargin, 64, 'page margin should persist per book');
@@ -787,7 +793,7 @@ async function selectReaderStudioSection(page, section) {
         await page.waitForFunction(() => document.querySelector('[data-reader-left-drawer]')?.getAttribute('aria-hidden') === 'false');
         await page.waitForSelector('[data-reader-library] .desktop-reader-library-item');
         await page.click('[data-reader-library] .desktop-reader-library-card .desktop-secondary-action');
-        await page.waitForFunction(() => readerState.apiMode && readerState.preferenceScope === 'document' && readerState.theme === 'sepia');
+        await page.waitForFunction(() => readerState.apiMode && readerState.preferenceScope === 'document' && readerState.theme === 'lamp');
         await page.waitForFunction(() => document.querySelector('[data-reader-content]').dataset.readerLayout === 'single-page');
         await page.click('[data-reader-settings-toggle]');
         await selectReaderStudioSection(page, 'font');
@@ -1058,7 +1064,18 @@ async function selectReaderStudioSection(page, section) {
             const content = document.querySelector('[data-reader-content]');
             return readerState.activeChapterId === chapterId && content.scrollTop > scrollTop + 10;
         }, flowKeyboardState);
-        assert.strictEqual(await page.locator('[data-reader-content]').getAttribute('data-reader-transition'), 'curl', 'flow navigation should honor the selected curl transition');
+        const flowMotion = await page.evaluate(() => ({
+            layout: document.querySelector('[data-reader-content]')?.dataset.readerLayout,
+            contentTransitioning: document.querySelector('[data-reader-content]')?.classList.contains('is-reader-transitioning') === true,
+            pageFlipActive: document.querySelector('[data-reader-content]')?.classList.contains('is-reader-page-flip-active') === true,
+            pageFlipState: document.querySelector('[data-reader-page-flip-host]')?.dataset.readerPageFlipState || 'idle'
+        }));
+        assert.deepStrictEqual(flowMotion, {
+            layout: 'flow',
+            contentTransitioning: false,
+            pageFlipActive: false,
+            pageFlipState: 'idle'
+        }, 'flow navigation must scroll without the abandoned page-turn animation');
         const flowScrolledTop = await page.locator('[data-reader-content]').evaluate((content) => content.scrollTop);
         await page.keyboard.press('ArrowLeft');
         await page.waitForFunction((scrollTop) => document.querySelector('[data-reader-content]').scrollTop < scrollTop - 10, flowScrolledTop);
@@ -1115,17 +1132,17 @@ async function selectReaderStudioSection(page, section) {
         assert.strictEqual(await page.locator('[data-reader-position-label]').getAttribute('aria-live'), 'polite', 'reading position changes should be announced politely');
         assert.strictEqual(await page.locator('[data-reader-progress-percent]').getAttribute('aria-live'), 'polite', 'book progress changes should be announced politely');
         await page.waitForTimeout(220);
-        await page.locator('[data-reader-left-close]').focus();
+        await page.evaluate(() => readerDrawerFocusable(document.querySelector('[data-reader-left-drawer]'))[0].focus());
         await page.keyboard.press('Shift+Tab');
         assert.strictEqual(await page.evaluate(() => document.activeElement === readerDrawerFocusable(document.querySelector('[data-reader-left-drawer]')).at(-1)), true, 'Shift+Tab at the start of a drawer must wrap to its last reachable control');
         await page.keyboard.press('Tab');
-        assert.strictEqual(await page.evaluate(() => document.activeElement === document.querySelector('[data-reader-left-close]')), true, 'Tab at the end of a drawer must wrap to its close control');
+        assert.strictEqual(await page.evaluate(() => document.activeElement === readerDrawerFocusable(document.querySelector('[data-reader-left-drawer]'))[0]), true, 'Tab at the end of a drawer must wrap to its first reachable control');
         await page.locator('[data-reader-tab="bookmarks"]').focus();
         await page.keyboard.press('Home');
-        assert.strictEqual(await page.locator('[data-reader-tab="library"]').getAttribute('aria-selected'), 'true', 'Home should select the first navigation tab');
-        assert.strictEqual(await page.locator('[data-reader-tab="library"]').getAttribute('tabindex'), '0', 'the selected tab should be the only tab in the natural tab order');
+        assert.strictEqual(await page.locator('.desktop-reader-tabs [data-reader-tab="contents"]').getAttribute('aria-selected'), 'true', 'Home should select the first navigation tab');
+        assert.strictEqual(await page.locator('.desktop-reader-tabs [data-reader-tab="contents"]').getAttribute('tabindex'), '0', 'the selected tab should be the only tab in the natural tab order');
         await page.keyboard.press('ArrowRight');
-        assert.strictEqual(await page.locator('[data-reader-tab="contents"]').getAttribute('aria-selected'), 'true', 'ArrowRight should advance and select a navigation tab');
+        assert.strictEqual(await page.locator('[data-reader-tab="search"]').getAttribute('aria-selected'), 'true', 'ArrowRight should advance and select a navigation tab');
         await page.keyboard.press('End');
         assert.strictEqual(await page.locator('[data-reader-tab="history"]').getAttribute('aria-selected'), 'true', 'End should select the final navigation tab');
         await page.click('[data-reader-tab="bookmarks"]');
