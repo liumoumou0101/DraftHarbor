@@ -114,6 +114,9 @@ assert.ok(!desktopMarkup.includes('legacy-writer-frame'), 'desktop markup should
 assert.ok(!desktopMarkup.includes('data-native-open-legacy'), 'desktop markup should not contain the legacy writer button');
 assert.ok(desktopMarkup.includes('data-settings-theme'), 'desktop markup should expose the desktop theme setting');
 assert.ok(desktopMarkup.includes('data-settings-theme-choice="morandi-ink"'), 'desktop markup should include Morandi Ink as a selectable theme');
+assert.ok(desktopMarkup.includes('data-settings-theme-choice="night-paper"'), 'desktop markup should include Night Paper as a selectable theme');
+assert.ok(desktopMarkup.includes('data-settings-theme-choice="harbor-dusk"'), 'desktop markup should include Harbor Dusk as a selectable theme');
+assert.ok(desktopMarkup.includes('data-settings-theme-choice="xuan-paper"'), 'desktop markup should include Xuan Paper as a selectable theme');
 assert.ok(desktopMarkup.includes('data-native-paper-heading'), 'desktop markup should include the writer manuscript paper heading');
 assert.ok(desktopMarkup.includes('data-native-paper-footer'), 'desktop markup should include the writer manuscript paper footer');
 assert.ok(desktopMarkup.includes('data-native-copilot-greeting'), 'desktop markup should include the Copilot assistant brief');

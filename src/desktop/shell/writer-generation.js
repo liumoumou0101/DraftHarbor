@@ -2,42 +2,30 @@
 
     function readNativeGenerationOutputPosition() {
         try {
-            const raw = window.localStorage.getItem(NATIVE_GENERATION_OUTPUT_POSITION_KEY);
-            if (!raw) return null;
-            const value = JSON.parse(raw);
+            const value = JSON.parse(window.localStorage.getItem(NATIVE_GENERATION_OUTPUT_POSITION_KEY) || 'null');
             if (!value || !Number.isFinite(Number(value.left)) || !Number.isFinite(Number(value.top))) return null;
             return { left: Number(value.left), top: Number(value.top) };
-        } catch (error) {
-            return null;
-        }
+        } catch (error) { return null; }
     }
 
     function writeNativeGenerationOutputPosition(position) {
         if (!position) return;
         try {
             window.localStorage.setItem(NATIVE_GENERATION_OUTPUT_POSITION_KEY, JSON.stringify({
-                left: Math.round(position.left),
-                top: Math.round(position.top)
+                left: Math.round(position.left), top: Math.round(position.top)
             }));
-        } catch (error) {
-            /* Ignore unavailable storage (private mode or an embedded test page). */
-        }
+        } catch (error) { /* ignore */ }
     }
 
     function clearNativeGenerationOutputPosition() {
-        try {
-            window.localStorage.removeItem(NATIVE_GENERATION_OUTPUT_POSITION_KEY);
-        } catch (error) {
-            /* Ignore unavailable storage. */
-        }
+        try { window.localStorage.removeItem(NATIVE_GENERATION_OUTPUT_POSITION_KEY); } catch (error) { /* ignore */ }
     }
 
     function nativeGenerationOutputFooterReserve(bodyRect) {
         const footer = document.querySelector('[data-native-paper-footer]');
         if (!footer || window.getComputedStyle(footer).display === 'none') return 12;
         const footerRect = footer.getBoundingClientRect();
-        if (footerRect.height < 1) return 12;
-        return Math.max(12, bodyRect.bottom - footerRect.top + 8);
+        return footerRect.height < 1 ? 12 : Math.max(12, bodyRect.bottom - footerRect.top + 8);
     }
 
     function clampNativeGenerationOutputPosition(position, bodyRect, outputRect) {

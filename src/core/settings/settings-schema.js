@@ -21,8 +21,24 @@
     } catch (e) {
         CompendiumAgentPolicy = (typeof DraftHarborCompendiumAgentPolicy !== 'undefined') ? DraftHarborCompendiumAgentPolicy : null;
     }
-    const THEMES = Object.freeze(['morandi-ink', 'mist-library', 'ash-rose']);
+    const THEMES = Object.freeze([
+        'morandi-ink',
+        'mist-library',
+        'ash-rose',
+        'night-paper',
+        'harbor-dusk',
+        'xuan-paper'
+    ]);
+    const LIGHT_THEMES = Object.freeze(['mist-library', 'xuan-paper']);
     const DEFAULT_THEME = 'morandi-ink';
+    const THEME_LABELS = Object.freeze({
+        'morandi-ink': '墨灰书房',
+        'mist-library': '雾光书库',
+        'ash-rose': '灰玫瑰工作室',
+        'night-paper': '夜纸护眼',
+        'harbor-dusk': '湾暮灯金',
+        'xuan-paper': '素宣'
+    });
     const PROVIDER_MODES = Object.freeze(['local', 'api']);
     const PROVIDERS = Object.freeze([
         'lmstudio',
@@ -464,6 +480,8 @@
 
     return {
         THEMES,
+        LIGHT_THEMES,
+        THEME_LABELS,
         DEFAULT_THEME,
         PROVIDER_MODES,
         PROVIDERS,

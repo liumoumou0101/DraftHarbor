@@ -112,8 +112,15 @@ async function openNativeModelSettings(page) {
       const output = document.querySelector('[data-native-generation-output]');
       const result = document.querySelector('[data-native-generation-result]');
       const previous = html.dataset.desktopTheme;
-      html.dataset.desktopTheme = 'mist-library';
-      if (root) root.setAttribute('data-desktop-theme', 'mist-library');
+      if (typeof applyDesktopTheme === 'function') applyDesktopTheme('mist-library');
+      else {
+        html.dataset.desktopTheme = 'mist-library';
+        html.dataset.desktopThemeScheme = 'light';
+        if (root) {
+          root.setAttribute('data-desktop-theme', 'mist-library');
+          root.setAttribute('data-desktop-theme-scheme', 'light');
+        }
+      }
       output.hidden = false;
       output.classList.remove('is-inline-confirmation');
       result.hidden = false;
@@ -123,8 +130,11 @@ async function openNativeModelSettings(page) {
         header: window.getComputedStyle(output.querySelector('strong')).color,
         assistant: window.getComputedStyle(document.querySelector('.desktop-native-assistant')).backgroundColor
       };
-      html.dataset.desktopTheme = previous;
-      if (root) root.setAttribute('data-desktop-theme', previous);
+      if (typeof applyDesktopTheme === 'function') applyDesktopTheme(previous);
+      else {
+        html.dataset.desktopTheme = previous;
+        if (root) root.setAttribute('data-desktop-theme', previous);
+      }
       output.hidden = true;
       output.classList.remove('is-inline-confirmation');
       return styles;

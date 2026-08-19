@@ -186,6 +186,7 @@ profileTestState
 projectCreatorElements
 projectEditorElements
 projectLibraryState
+rememberLastOpenedProject
 promptState
 queueReaderDocumentStateWrite
 queueReaderPageTurn
