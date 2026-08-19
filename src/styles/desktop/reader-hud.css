@@ -215,3 +215,18 @@
             transition: none;
         }
 }
+
+@media (min-height: 1200px) {
+    .desktop-reader-content[data-reader-layout="double-page"] {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .desktop-reader-content[data-reader-layout="double-page"] .desktop-reader-page-deck {
+        flex: 0 1 auto;
+        width: min(1680px, 100%);
+        height: 1140px;
+        max-height: 100%;
+    }
+}

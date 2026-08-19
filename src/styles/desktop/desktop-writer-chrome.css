@@ -82,6 +82,73 @@
     grid-row: 2;
 }
 
+/* Focus mode hides outline + assistant, but leftover 2/3-column templates still
+   auto-place the editor into the outline track and keep an empty dock row. */
+.desktop-native-writer.is-focus-mode,
+.desktop-native-writer.is-focus-mode.is-assistant-bottom,
+.desktop-native-writer.is-focus-mode.is-outline-collapsed,
+.desktop-native-writer.is-focus-mode.is-assistant-collapsed,
+:root[data-desktop-theme] .desktop-native-writer.is-focus-mode,
+:root[data-desktop-theme] .desktop-native-writer.is-focus-mode.is-assistant-bottom {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+}
+
+.desktop-native-writer.is-focus-mode .desktop-native-editor,
+.desktop-native-writer.is-focus-mode.is-assistant-bottom .desktop-native-editor,
+:root[data-desktop-theme] .desktop-native-writer.is-focus-mode .desktop-native-editor {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    min-height: 0;
+}
+
+.desktop-native-writer.is-focus-mode .desktop-native-paper-heading,
+.desktop-native-writer.is-focus-mode.is-assistant-bottom .desktop-native-paper-heading {
+    display: grid;
+    grid-column: 1;
+    grid-row: 1;
+    padding: clamp(16px, 2.2vh, 38px) clamp(36px, 5vw, 76px) 12px;
+}
+
+.desktop-native-writer.is-focus-mode .desktop-native-paper-heading strong,
+.desktop-native-writer.is-focus-mode.is-assistant-bottom .desktop-native-paper-heading strong {
+    font-size: clamp(24px, 3vw, 42px);
+}
+
+.desktop-native-writer.is-focus-mode .desktop-native-editor-body,
+.desktop-native-writer.is-focus-mode.is-assistant-bottom .desktop-native-editor-body,
+:root[data-desktop-theme] .desktop-native-writer.is-focus-mode .desktop-native-editor-body {
+    --native-paper-page-width: min(calc(100% - 64px), calc(var(--native-editor-text-width, 780px) + 132px));
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    min-height: 0;
+    padding-block: clamp(18px, 2.4vw, 34px);
+}
+
+.desktop-native-writer.is-focus-mode .desktop-native-editor-body > textarea,
+.desktop-native-writer.is-focus-mode.is-assistant-bottom .desktop-native-editor-body > textarea,
+:root[data-desktop-theme] .desktop-native-writer.is-focus-mode .desktop-native-editor-body > textarea {
+    grid-column: 1;
+    grid-row: 2;
+    width: var(--native-paper-page-width);
+    max-width: calc(100% - 32px);
+    min-width: 0;
+    height: 100%;
+    min-height: 0;
+    margin-inline: auto;
+    padding-block: calc(28px + var(--native-editor-paragraph-spacing, 0em));
+    padding-left: clamp(36px, 5vw, 82px);
+    padding-right: clamp(36px, 5vw, 82px);
+}
+
+.desktop-native-writer.is-focus-mode .desktop-native-paper-footer,
+.desktop-native-writer.is-focus-mode.is-assistant-bottom .desktop-native-paper-footer {
+    grid-column: 1;
+    grid-row: 3;
+}
+
 .desktop-native-writer.is-assistant-bottom .desktop-native-paper-heading {
     display: none;
 }
@@ -697,7 +764,8 @@
     display: grid;
     gap: 14px;
     align-content: start;
-    max-width: 1480px;
+    max-width: none;
+    width: 100%;
 }
 
 .desktop-bookshelf-header {
@@ -931,4 +999,78 @@
 
 .desktop-project-more-toggle.is-expanded {
     color: var(--desktop-text);
+}
+
+.desktop-native-editor-body > textarea,
+:root[data-desktop-theme] .desktop-native-editor-body > textarea {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--desktop-paper-text) 26%, transparent) transparent;
+}
+
+.desktop-native-editor-body > textarea::-webkit-scrollbar {
+    width: 8px;
+}
+
+.desktop-native-editor-body > textarea::-webkit-scrollbar-track {
+    margin-block: 10px;
+    background: transparent;
+}
+
+.desktop-native-editor-body > textarea::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--desktop-paper-text) 22%, transparent);
+    background-clip: padding-box;
+}
+
+.desktop-native-editor-body > textarea::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--desktop-paper-text) 36%, transparent);
+    background-clip: padding-box;
+}
+
+.desktop-project-grid {
+    justify-content: start;
+}
+
+@media (min-width: 1600px) {
+    .desktop-project-grid,
+    :root[data-desktop-theme] .desktop-project-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 340px));
+        justify-content: start;
+        gap: 18px;
+    }
+}
+
+@media (min-width: 1800px) {
+    .desktop-native-writer.is-assistant-bottom .desktop-native-editor-body,
+    :root[data-desktop-theme] .desktop-native-writer.is-assistant-bottom .desktop-native-editor-body,
+    .desktop-native-writer.is-focus-mode .desktop-native-editor-body,
+    :root[data-desktop-theme] .desktop-native-writer.is-focus-mode .desktop-native-editor-body {
+        --native-paper-page-width: min(calc(100% - 72px), max(calc(var(--native-editor-text-width, 780px) + 132px), 1480px));
+    }
+
+    .desktop-native-writer:not(.is-assistant-bottom):not(.is-focus-mode) .desktop-native-editor-body,
+    :root[data-desktop-theme] .desktop-native-writer:not(.is-assistant-bottom):not(.is-focus-mode) .desktop-native-editor-body {
+        --native-paper-page-width: min(calc(100% - 40px), max(calc(var(--native-editor-text-width, 780px) + 132px), 1140px));
+    }
+}
+
+@media (min-width: 2200px) {
+    .desktop-native-writer.is-assistant-bottom .desktop-native-editor-body,
+    :root[data-desktop-theme] .desktop-native-writer.is-assistant-bottom .desktop-native-editor-body,
+    .desktop-native-writer.is-focus-mode .desktop-native-editor-body,
+    :root[data-desktop-theme] .desktop-native-writer.is-focus-mode .desktop-native-editor-body {
+        --native-paper-page-width: min(calc(100% - 80px), max(calc(var(--native-editor-text-width, 780px) + 132px), 1640px));
+    }
+
+    .desktop-native-writer:not(.is-assistant-bottom):not(.is-focus-mode) .desktop-native-editor-body,
+    :root[data-desktop-theme] .desktop-native-writer:not(.is-assistant-bottom):not(.is-focus-mode) .desktop-native-editor-body {
+        --native-paper-page-width: min(calc(100% - 48px), max(calc(var(--native-editor-text-width, 780px) + 132px), 1280px));
+    }
+
+    .desktop-project-grid,
+    :root[data-desktop-theme] .desktop-project-grid {
+        grid-template-columns: repeat(auto-fill, minmax(300px, 360px));
+        gap: 20px;
+    }
 }

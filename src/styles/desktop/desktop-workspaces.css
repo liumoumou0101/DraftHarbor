@@ -406,8 +406,8 @@
 }
 
 .desktop-native-writer.is-focus-mode .desktop-native-editor-body > textarea {
-    padding-left: max(80px, calc((100vw - 920px) / 2));
-    padding-right: max(80px, calc((100vw - 920px) / 2));
+    padding-left: clamp(36px, 5vw, 82px);
+    padding-right: clamp(36px, 5vw, 82px);
 }
 
 @media (max-width: 1180px) {
@@ -818,8 +818,8 @@
 }
 
 .desktop-native-writer.is-focus-mode .desktop-native-editor-body > textarea {
-    padding-left: max(72px, calc((100vw - 940px) / 2));
-    padding-right: max(72px, calc((100vw - 940px) / 2));
+    padding-left: clamp(36px, 5vw, 82px);
+    padding-right: clamp(36px, 5vw, 82px);
 }
 
 @media (min-width: 1800px) {

@@ -148,6 +148,13 @@ async function auditCurrentViewport(page, label) {
       if (floor && editor.getBoundingClientRect().height + tolerance < floor) {
         issues.push(`${auditLabel}: textarea height ${Math.round(editor.getBoundingClientRect().height)}px < ${floor}px`);
       }
+      if (window.innerWidth === 2560 && writer) {
+        const paperWidth = editor.getBoundingClientRect().width;
+        const minPaper = writer.classList.contains('is-assistant-bottom') ? 1480 : 1080;
+        if (paperWidth + tolerance < minPaper) {
+          issues.push(`${auditLabel}: 2K paper width ${Math.round(paperWidth)}px < ${minPaper}px`);
+        }
+      }
     }
     if (assistant && writer && writer.classList.contains('is-assistant-bottom')) {
       const dockTarget = { 720: 208, 1080: 270, 1440: 360 }[window.innerHeight];
@@ -198,6 +205,76 @@ async function auditCurrentViewport(page, label) {
         issues.push(`${auditLabel}: opening advanced changed dock height`);
       }
       advanced.open = wasOpen;
+    }
+
+    return issues;
+  }, label);
+}
+
+async function auditFocusModeViewport(page, label) {
+  return page.evaluate((auditLabel) => {
+    const issues = [];
+    const writer = document.querySelector('[data-native-writer]');
+    const editor = document.querySelector('.desktop-native-editor');
+    const textarea = document.querySelector('[data-native-scene-editor]');
+    const outline = document.querySelector('.desktop-native-outline');
+    const assistant = document.querySelector('.desktop-native-assistant');
+    if (!writer || !editor || !textarea) {
+      issues.push(`${auditLabel}: missing writer, editor, or textarea`);
+      return issues;
+    }
+    if (!writer.classList.contains('is-focus-mode')) {
+      issues.push(`${auditLabel}: writer is not in focus mode`);
+    }
+
+    const writerStyle = window.getComputedStyle(writer);
+    const columnTracks = writerStyle.gridTemplateColumns.trim().split(/\s+/).filter(Boolean);
+    if (columnTracks.length !== 1) {
+      issues.push(`${auditLabel}: focus mode kept ${columnTracks.length} grid columns (${writerStyle.gridTemplateColumns})`);
+    }
+    const rowTracks = writerStyle.gridTemplateRows.trim().split(/\s+/).filter(Boolean);
+    if (rowTracks.length !== 1) {
+      issues.push(`${auditLabel}: focus mode kept ${rowTracks.length} grid rows (${writerStyle.gridTemplateRows})`);
+    }
+
+    const writerRect = writer.getBoundingClientRect();
+    const editorRect = editor.getBoundingClientRect();
+    const textareaRect = textarea.getBoundingClientRect();
+    if (editorRect.width + 2 < writerRect.width * 0.85) {
+      issues.push(`${auditLabel}: editor width ${Math.round(editorRect.width)}px is stuck in a leftover column of writer ${Math.round(writerRect.width)}px`);
+    }
+    if (editorRect.height + 2 < writerRect.height * 0.85) {
+      issues.push(`${auditLabel}: editor height ${Math.round(editorRect.height)}px does not fill writer ${Math.round(writerRect.height)}px`);
+    }
+
+    const outlineStyle = outline ? window.getComputedStyle(outline) : null;
+    const assistantStyle = assistant ? window.getComputedStyle(assistant) : null;
+    if (outlineStyle && outlineStyle.display !== 'none') {
+      issues.push(`${auditLabel}: outline is still visible in focus mode`);
+    }
+    if (assistantStyle && assistantStyle.display !== 'none') {
+      issues.push(`${auditLabel}: assistant is still visible in focus mode`);
+    }
+
+    const minTextareaWidth = window.innerWidth >= 1800 ? 700 : 520;
+    if (textareaRect.width + 2 < minTextareaWidth) {
+      issues.push(`${auditLabel}: textarea width ${Math.round(textareaRect.width)}px < ${minTextareaWidth}px`);
+    }
+    const textareaFloor = { 720: 360, 768: 400, 1061: 560, 1080: 640, 1440: 860 }[window.innerHeight];
+    if (textareaFloor && textareaRect.height + 2 < textareaFloor) {
+      issues.push(`${auditLabel}: textarea height ${Math.round(textareaRect.height)}px < ${textareaFloor}px`);
+    }
+
+    const textareaStyle = window.getComputedStyle(textarea);
+    const padLeft = Number.parseFloat(textareaStyle.paddingLeft) || 0;
+    const padRight = Number.parseFloat(textareaStyle.paddingRight) || 0;
+    if (padLeft + padRight > textareaRect.width * 0.45) {
+      issues.push(`${auditLabel}: textarea padding ${Math.round(padLeft + padRight)}px crushes ${Math.round(textareaRect.width)}px paper`);
+    }
+
+    const doc = document.documentElement;
+    if (doc.scrollWidth > window.innerWidth + 2) {
+      issues.push(`${auditLabel}: horizontal overflow ${doc.scrollWidth}px > ${window.innerWidth}px`);
     }
 
     return issues;
@@ -257,6 +334,36 @@ async function auditCurrentViewport(page, label) {
           await page.screenshot({ path: screenshotPath, fullPage: false });
           allIssues.push(...await auditCurrentViewport(page, label));
         }
+      }
+    }
+
+    const focusCases = [
+      { theme: 'morandi-ink', viewport: { width: 1280, height: 720 } },
+      { theme: 'morandi-ink', viewport: { width: 1920, height: 1080 } },
+      { theme: 'morandi-ink', viewport: { width: 2560, height: 1440 } },
+      { theme: 'mist-library', viewport: { width: 1280, height: 720 } },
+      { theme: 'mist-library', viewport: { width: 1920, height: 1080 } }
+    ];
+    for (const placement of ['bottom', 'right']) {
+      await setAssistantPlacement(page, placement);
+      for (const focusCase of focusCases) {
+        await page.evaluate((nextTheme) => {
+          if (typeof applyDesktopTheme === 'function') applyDesktopTheme(nextTheme);
+          else {
+            document.documentElement.dataset.desktopTheme = nextTheme;
+            document.querySelector('#desktop-root')?.setAttribute('data-desktop-theme', nextTheme);
+          }
+        }, focusCase.theme);
+        await page.setViewportSize(focusCase.viewport);
+        const alreadyFocus = await page.evaluate(() => document.querySelector('[data-native-writer]')?.classList.contains('is-focus-mode'));
+        if (!alreadyFocus) await page.click('[data-native-focus-mode]');
+        await page.waitForFunction(() => document.querySelector('[data-native-writer]').classList.contains('is-focus-mode'));
+        await page.waitForTimeout(150);
+        const label = `focus-${focusCase.theme}-${placement}-${focusCase.viewport.width}x${focusCase.viewport.height}`;
+        await page.screenshot({ path: path.join(reportDir, `writer-${label}.png`), fullPage: false });
+        allIssues.push(...await auditFocusModeViewport(page, label));
+        await page.click('[data-native-focus-mode]');
+        await page.waitForFunction(() => !document.querySelector('[data-native-writer]').classList.contains('is-focus-mode'));
       }
     }
 
