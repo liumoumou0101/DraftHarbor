@@ -44,7 +44,8 @@
         query: '',
         sort: 'recent',
         editingProject: null,
-        editingCoverImage: ''
+        editingCoverImage: '',
+        lastOpenedId: ''
     };
     const READER_STORAGE_KEY = 'draftharbor:desktop:reader';
     const NATIVE_EDITOR_PREFS_STORAGE_KEY = 'draftharbor:desktop:nativeEditorPrefs';
@@ -52,7 +53,16 @@
     const TTS_VOICE_KEY = 'draftharbor:ttsVoice';
     const TTS_SPEED_KEY = 'draftharbor:ttsSpeed';
     const DESKTOP_THEME_KEY = 'draftharbor:desktop:theme';
-    const DESKTOP_THEMES = new Set(['morandi-ink', 'mist-library', 'ash-rose']);
+    const DESKTOP_THEMES = new Set(
+        window.DraftHarborSettingsSchema && Array.isArray(window.DraftHarborSettingsSchema.THEMES)
+            ? window.DraftHarborSettingsSchema.THEMES
+            : ['morandi-ink', 'mist-library', 'ash-rose', 'night-paper', 'harbor-dusk', 'xuan-paper']
+    );
+    const LIGHT_DESKTOP_THEMES = new Set(
+        window.DraftHarborSettingsSchema && Array.isArray(window.DraftHarborSettingsSchema.LIGHT_THEMES)
+            ? window.DraftHarborSettingsSchema.LIGHT_THEMES
+            : ['mist-library', 'xuan-paper']
+    );
     const readerState = {
         document: null,
         chapterIndex: 0,
@@ -415,9 +425,14 @@
 
     function applyDesktopTheme(theme) {
         theme = normalizeDesktopTheme(theme);
+        var scheme = LIGHT_DESKTOP_THEMES.has(theme) ? 'light' : 'dark';
         var root = document.getElementById('desktop-root');
         document.documentElement.dataset.desktopTheme = theme;
-        if (root) root.dataset.desktopTheme = theme;
+        document.documentElement.dataset.desktopThemeScheme = scheme;
+        if (root) {
+            root.dataset.desktopTheme = theme;
+            root.dataset.desktopThemeScheme = scheme;
+        }
         try {
             localStorage.setItem(DESKTOP_THEME_KEY, theme);
         } catch (e) { /* ignore */ }
@@ -473,6 +488,7 @@
         if (['writer', 'compendium', 'workflow'].includes(nextView) && typeof activateReaderTransferTarget === 'function') {
             activateReaderTransferTarget(nextView);
         }
+        if (nextView === 'bookshelf' && typeof renderProjectLibrary === 'function') renderProjectLibrary();
     }
 
     function contextStripElements() {

@@ -33,6 +33,7 @@ models/
 playwright-report/
 test-results/
 .ai_state/
+cache/
 
 # Python, editors and operating systems
 __pycache__/

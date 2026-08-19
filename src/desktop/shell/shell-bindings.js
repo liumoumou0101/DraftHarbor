@@ -215,6 +215,39 @@
     }
 
     function bindProjectLibrary() {
+        if (typeof openDesktopProject === 'function' && !openDesktopProject.__remembersLastOpened) {
+            const originalOpen = openDesktopProject;
+            openDesktopProject = async function (project) {
+                if (project && project.id && project.health !== 'invalid' && typeof rememberLastOpenedProject === 'function') {
+                    rememberLastOpenedProject(project.id);
+                }
+                return originalOpen(project);
+            };
+            openDesktopProject.__remembersLastOpened = true;
+        }
+        const moreButton = document.querySelector('[data-bookshelf-more]');
+        const moreMenu = document.querySelector('[data-bookshelf-more-menu]');
+        const closeBookshelfMore = () => {
+            if (!moreButton || !moreMenu) return;
+            moreMenu.hidden = true;
+            moreButton.setAttribute('aria-expanded', 'false');
+        };
+        if (moreButton && moreMenu) {
+            moreButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+                const open = moreMenu.hidden;
+                moreMenu.hidden = !open;
+                moreButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
+            moreMenu.querySelectorAll('[role="menuitem"]').forEach((item) => {
+                item.addEventListener('click', closeBookshelfMore);
+            });
+            document.addEventListener('click', (event) => {
+                if (moreMenu.hidden) return;
+                if (event.target && event.target.closest && event.target.closest('[data-bookshelf-more-wrap]')) return;
+                closeBookshelfMore();
+            });
+        }
         document.querySelectorAll('[data-refresh-projects]').forEach((button) => {
             button.addEventListener('click', () => {
                 loadProjectLibrary();

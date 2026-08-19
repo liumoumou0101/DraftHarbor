@@ -94,11 +94,17 @@ async function submitNativeName(page, value) {
         await page.click('[data-toggle-fullscreen]');
         assert.strictEqual(await page.evaluate(() => window.__fullscreenClicked), true, 'fullscreen button should call desktop API');
 
+        assert.strictEqual(await page.locator('.desktop-placeholder-copy').count(), 0, 'bookshelf should not keep a left action column');
+        assert.strictEqual(await page.locator('[data-bookshelf-more]').count(), 1, 'maintenance actions should live in the 维护 menu');
+
         let cardText = await page.locator('.desktop-project-card').first().innerText();
         assert.ok(cardText.includes('短篇集'), 'first card should render project name');
         assert.ok(cardText.includes('字'), 'first card should render word count');
+        assert.ok(!cardText.includes('打开写作器'), 'project card should not expose a second open-writer action');
 
-        await page.locator('.desktop-mini-action').first().click();
+        const firstCard = page.locator('.desktop-project-card').first();
+        await firstCard.locator('.desktop-project-more-toggle').click();
+        await firstCard.locator('[data-project-edit]').click();
         await page.fill('[data-project-edit-name]', '短篇集修订版');
         await page.selectOption('[data-project-edit-status]', '修订中');
         await page.fill('[data-project-edit-tags]', '短篇, 测试');
@@ -154,12 +160,20 @@ async function submitNativeName(page, value) {
         );
 
         await page.click('[data-view-target="bookshelf"]');
-        await page.waitForFunction(() => document.querySelectorAll('.desktop-project-card').length === 1);
+        await page.fill('[data-project-search]', '');
+        await page.selectOption('[data-project-sort]', 'words');
+        await page.waitForFunction(() => document.querySelectorAll('.desktop-project-card').length === 2);
+        const pinnedCard = page.locator('.desktop-project-card').first();
+        const pinnedText = await pinnedCard.innerText();
+        assert.ok(pinnedText.includes('短篇集修订版'), 'last opened project should stay pinned above the current sort');
+        assert.ok(pinnedText.includes('最近'), 'last opened card should show a 最近 badge');
+        assert.strictEqual(await pinnedCard.evaluate((card) => card.classList.contains('is-recent')), true, 'last opened card should use the recent modifier');
         page.once('dialog', async (dialog) => {
             await dialog.accept();
         });
-        await page.locator('.desktop-mini-action-danger').first().click();
-        await page.waitForFunction(() => document.querySelectorAll('.desktop-project-card').length === 0);
+        await pinnedCard.locator('.desktop-project-more-toggle').click();
+        await pinnedCard.locator('.desktop-mini-action-danger').click();
+        await page.waitForFunction(() => document.querySelectorAll('.desktop-project-card').length === 1);
 
         const removedListResponse = await fetch(servers.appUrl + '/api/list-projects');
         const removedListBody = await removedListResponse.json();

@@ -44,6 +44,16 @@ const SettingsSchema = require('../src/core/settings/settings-schema');
       'morandi-ink',
       'unknown desktop themes should fall back to Morandi Ink'
     );
+    assert.strictEqual(
+      SettingsSchema.normalizeDesktopSettings({ appearance: { theme: 'harbor-dusk' } }).appearance.theme,
+      'harbor-dusk',
+      'new desktop themes should be accepted'
+    );
+    assert.deepStrictEqual(
+      [...SettingsSchema.THEMES],
+      ['morandi-ink', 'mist-library', 'ash-rose', 'night-paper', 'harbor-dusk', 'xuan-paper'],
+      'desktop theme catalog should include night, day, rose, dark paper, harbor, and xuan'
+    );
 
     const saved = await settingsService.writeSettings(dataRoot, normalized);
     assert.strictEqual(saved.providerSettings.model, 'test-model');

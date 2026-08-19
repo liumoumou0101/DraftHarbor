@@ -214,10 +214,13 @@
         const provider = settings.providerSettings || {};
         const profiles = settings.providerProfiles || [];
         const defaults = settings.generationDefaults || {};
-        const themeLabels = {
+        const themeLabels = (window.DraftHarborSettingsSchema && window.DraftHarborSettingsSchema.THEME_LABELS) || {
             'morandi-ink': '墨灰书房',
             'mist-library': '雾光书库',
-            'ash-rose': '灰玫瑰工作室'
+            'ash-rose': '灰玫瑰工作室',
+            'night-paper': '夜纸护眼',
+            'harbor-dusk': '湾暮灯金',
+            'xuan-paper': '素宣'
         };
         const summaries = {
             provider: `${provider.mode === 'api' ? '云端' : '本地'} · ${settingsProviderLabel(provider.provider)}`,

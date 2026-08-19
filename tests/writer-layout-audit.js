@@ -18,7 +18,11 @@ const viewports = [
   { width: 2560, height: 1440 }
 ];
 
-const themes = ['morandi-ink', 'mist-library', 'ash-rose'];
+const themes = ['morandi-ink', 'mist-library', 'ash-rose', 'night-paper', 'harbor-dusk', 'xuan-paper'];
+const sampleViewports = [
+  { width: 1280, height: 720 },
+  { width: 1920, height: 1080 }
+];
 
 async function openWriterProject(page, appUrl) {
   await page.goto(`${appUrl}/desktop.html`, { waitUntil: 'domcontentloaded' });
@@ -237,11 +241,15 @@ async function auditCurrentViewport(page, label) {
       await setAssistantPlacement(page, placement);
       for (const theme of themes) {
         await page.evaluate((nextTheme) => {
-          document.documentElement.dataset.desktopTheme = nextTheme;
-          document.querySelector('#desktop-root')?.setAttribute('data-desktop-theme', nextTheme);
+          if (typeof applyDesktopTheme === 'function') applyDesktopTheme(nextTheme);
+          else {
+            document.documentElement.dataset.desktopTheme = nextTheme;
+            document.querySelector('#desktop-root')?.setAttribute('data-desktop-theme', nextTheme);
+          }
         }, theme);
 
-        for (const viewport of viewports) {
+        const themeViewports = theme === 'morandi-ink' ? viewports : sampleViewports;
+        for (const viewport of themeViewports) {
           await page.setViewportSize(viewport);
           await page.waitForTimeout(150);
           const label = `${theme}-${placement}-${viewport.width}x${viewport.height}`;

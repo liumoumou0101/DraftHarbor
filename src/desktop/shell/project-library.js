@@ -1,10 +1,40 @@
-    function createProjectCard(project) {
+    const LAST_OPENED_PROJECT_KEY = 'draftharbor:desktop:lastOpenedProjectId';
+
+    function bookCoverTone(project) {
+        const key = String((project && (project.id || project.name)) || '');
+        let hash = 2166136261;
+        for (let i = 0; i < key.length; i += 1) {
+            hash ^= key.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+        return String(Math.abs(hash) % 6);
+    }
+
+    function rememberLastOpenedProject(projectId) {
+        const id = String(projectId || '');
+        if (!id) return;
+        projectLibraryState.lastOpenedId = id;
+        try { window.localStorage.setItem(LAST_OPENED_PROJECT_KEY, id); } catch (error) { /* ignore */ }
+    }
+
+    function loadLastOpenedProjectId() {
+        if (projectLibraryState.lastOpenedId) return projectLibraryState.lastOpenedId;
+        try {
+            projectLibraryState.lastOpenedId = window.localStorage.getItem(LAST_OPENED_PROJECT_KEY) || '';
+        } catch (error) {
+            projectLibraryState.lastOpenedId = '';
+        }
+        return projectLibraryState.lastOpenedId;
+    }
+
+    function createProjectCard(project, options = {}) {
         const card = document.createElement('article');
         card.className = 'desktop-project-card';
+        if (options.recent) card.classList.add('is-recent');
         card.dataset.projectId = project.id || '';
         card.dataset.projectFilename = project.filename || '';
         card.dataset.projectSource = project.source || 'legacy-snapshot';
-        card.title = project.name || '未命名项目';
+        card.title = [project.name || '未命名项目', project.filename || project.path || ''].filter(Boolean).join('\n');
         card.tabIndex = 0;
         card.setAttribute('role', 'button');
 
@@ -16,10 +46,18 @@
             image.alt = '';
             cover.appendChild(image);
         } else {
+            cover.classList.add('is-placeholder');
+            cover.dataset.coverTone = bookCoverTone(project);
             const glyph = document.createElement('span');
             glyph.className = 'desktop-project-cover-glyph';
             glyph.textContent = firstBookGlyph(project.name);
             cover.appendChild(glyph);
+        }
+        if (options.recent) {
+            const recentFlag = document.createElement('span');
+            recentFlag.className = 'desktop-project-recent-flag';
+            recentFlag.textContent = '最近';
+            cover.appendChild(recentFlag);
         }
 
         const body = document.createElement('div');
@@ -31,18 +69,13 @@
 
         const badges = document.createElement('div');
         badges.className = 'desktop-project-badges';
-        const sourceBadge = document.createElement('span');
-        sourceBadge.className = 'desktop-project-badge desktop-project-source-badge';
-        sourceBadge.dataset.projectSourceBadge = project.source || 'legacy-snapshot';
-        sourceBadge.textContent = project.source === 'project-directory' ? '项目目录' : '旧快照';
-        badges.appendChild(sourceBadge);
         if (project.status) {
             const status = document.createElement('span');
             status.className = 'desktop-project-badge';
             status.textContent = project.status;
             badges.appendChild(status);
         }
-        (project.tags || []).slice(0, 3).forEach((tag) => {
+        (project.tags || []).slice(0, 2).forEach((tag) => {
             const tagBadge = document.createElement('span');
             tagBadge.className = 'desktop-project-badge';
             tagBadge.textContent = tag;
@@ -97,16 +130,6 @@
         });
         actions.appendChild(continueButton);
 
-        const editButton = document.createElement('button');
-        editButton.type = 'button';
-        editButton.className = 'desktop-mini-action';
-        editButton.textContent = '编辑信息';
-        editButton.addEventListener('click', (event) => {
-            event.stopPropagation();
-            openProjectEditor(project);
-        });
-        actions.appendChild(editButton);
-
         const moreButton = document.createElement('button');
         moreButton.type = 'button';
         moreButton.className = 'desktop-mini-action desktop-project-more-toggle';
@@ -126,6 +149,16 @@
         moreDrawer.className = 'desktop-project-more-drawer';
         moreDrawer.hidden = true;
         moreDrawer.dataset.projectMoreDrawer = '';
+
+        const editButton = document.createElement('button');
+        editButton.type = 'button';
+        editButton.className = 'desktop-mini-action';
+        editButton.dataset.projectEdit = '';
+        editButton.textContent = '编辑信息';
+        editButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            openProjectEditor(project);
+        });
 
         const revealButton = document.createElement('button');
         revealButton.type = 'button';
@@ -174,15 +207,16 @@
             await removeProjectFromLibrary(project);
         });
 
-        moreDrawer.append(revealButton, copyPathButton, exportPackageButton, backupButton);
+        moreDrawer.append(editButton, revealButton, copyPathButton, exportPackageButton, backupButton, removeButton);
 
         actions.append(moreButton, moreDrawer);
 
-        const removeRow = document.createElement('div');
-        removeRow.className = 'desktop-project-remove-row';
-        removeRow.appendChild(removeButton);
+        const meta = document.createElement('div');
+        meta.className = 'desktop-project-meta';
+        meta.append(time);
+        if (project.health === 'invalid') meta.append(path);
 
-        body.append(name, badges, description, stats, time, path, actions, removeRow);
+        body.append(name, badges, description, stats, meta, actions);
         card.append(cover, body);
 
         const openProject = async () => {
@@ -295,7 +329,11 @@
         setProjectLibraryStatus('', 'ok');
         const shownText = projects.length === total ? `共 ${total} 本作品` : `显示 ${projects.length} / ${total} 本`;
         setShelfStatus(shownText);
-        projects.forEach((project) => {
+        const lastId = loadLastOpenedProjectId();
+        const recent = lastId ? projects.find((project) => project.id === lastId) : null;
+        const rest = recent ? projects.filter((project) => project.id !== lastId) : projects;
+        if (recent) grid.appendChild(createProjectCard(recent, { recent: true }));
+        rest.forEach((project) => {
             grid.appendChild(createProjectCard(project));
         });
     }
@@ -513,6 +551,10 @@
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) {
                 throw new Error(result.error || `HTTP ${response.status}`);
+            }
+            if (project && project.id && projectLibraryState.lastOpenedId === project.id) {
+                projectLibraryState.lastOpenedId = '';
+                try { window.localStorage.removeItem(LAST_OPENED_PROJECT_KEY); } catch (error) { /* ignore */ }
             }
             await loadProjectLibrary();
             setProjectLibraryStatus('已移出书库，文件仍保留在 .removed-projects 文件夹。', 'ok');

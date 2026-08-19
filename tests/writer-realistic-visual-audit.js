@@ -17,7 +17,11 @@ const viewports = [
   { width: 1920, height: 1080 }
 ];
 
-const themes = ['morandi-ink', 'mist-library', 'ash-rose'];
+const themes = ['morandi-ink', 'mist-library', 'ash-rose', 'night-paper', 'harbor-dusk', 'xuan-paper'];
+const sampleViewports = [
+  { width: 1280, height: 720 },
+  { width: 1920, height: 1080 }
+];
 
 const prose = [
   'The harbor bell rang once through the fog, then seemed to hang there, suspended over the black water as if the whole coast had forgotten how to breathe.',
@@ -268,11 +272,15 @@ async function auditViewport(page, label) {
       await setAssistantPlacement(page, placement);
       for (const theme of themes) {
         await page.evaluate((nextTheme) => {
-          document.documentElement.dataset.desktopTheme = nextTheme;
-          document.querySelector('#desktop-root')?.setAttribute('data-desktop-theme', nextTheme);
+          if (typeof applyDesktopTheme === 'function') applyDesktopTheme(nextTheme);
+          else {
+            document.documentElement.dataset.desktopTheme = nextTheme;
+            document.querySelector('#desktop-root')?.setAttribute('data-desktop-theme', nextTheme);
+          }
         }, theme);
 
-        for (const viewport of viewports) {
+        const themeViewports = theme === 'morandi-ink' ? viewports : sampleViewports;
+        for (const viewport of themeViewports) {
           await page.setViewportSize(viewport);
           await page.waitForTimeout(180);
           const label = `${theme}-${placement}-${viewport.width}x${viewport.height}`;

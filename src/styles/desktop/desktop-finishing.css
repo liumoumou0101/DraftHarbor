@@ -88,9 +88,7 @@
     padding-bottom: max(132px, calc(24px + var(--native-editor-paragraph-spacing, 0em)));
 }
 
-[data-desktop-theme="mist-library"] .desktop-native-editor-body,
-[data-desktop-theme="morandi-ink"] .desktop-native-editor-body,
-[data-desktop-theme="ash-rose"] .desktop-native-editor-body {
+:root[data-desktop-theme] .desktop-native-editor-body {
     --native-paper-page-width: min(calc(100% - 56px), calc(var(--native-editor-text-width, 780px) + 132px));
     padding-block: clamp(18px, 2.4vw, 34px);
 }
@@ -104,9 +102,7 @@
     border-color: rgba(78, 68, 58, 0.12);
 }
 
-[data-desktop-theme="mist-library"] .desktop-native-editor-body > textarea,
-[data-desktop-theme="morandi-ink"] .desktop-native-editor-body > textarea,
-[data-desktop-theme="ash-rose"] .desktop-native-editor-body > textarea {
+:root[data-desktop-theme] .desktop-native-editor-body > textarea {
     width: var(--native-paper-page-width);
     height: 100%;
     margin: 0 auto;
@@ -135,9 +131,7 @@
 
 @media (max-width: 1280px) {
     .desktop-native-editor-body,
-    [data-desktop-theme="mist-library"] .desktop-native-editor-body,
-    [data-desktop-theme="morandi-ink"] .desktop-native-editor-body,
-    [data-desktop-theme="ash-rose"] .desktop-native-editor-body {
+    :root[data-desktop-theme] .desktop-native-editor-body {
         --native-paper-page-width: min(calc(100% - 32px), calc(var(--native-editor-text-width, 720px) + 86px));
         padding-block: 14px;
     }
