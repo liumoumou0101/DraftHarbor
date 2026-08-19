@@ -252,14 +252,23 @@
                 elements.regenerateUseContext.checked = nativeEditorState.rewrite.regenerateUseContext;
             }
         }
-        var hasSelection = !!(elements.editor && elements.editor.selectionStart !== elements.editor.selectionEnd);
-        if (elements.rewriteOriginalText && hasSelection && elements.editor) {
-            var originalText = elements.editor.value.slice(elements.editor.selectionStart, elements.editor.selectionEnd);
+        const rewriteContextChars = document.querySelector('[data-native-rewrite-context-chars]');
+        const regenerateContextChars = document.querySelector('[data-native-regenerate-context-chars]');
+        if (rewriteContextChars && Number(rewriteContextChars.value) !== nativeRewriteContextChars()) {
+            rewriteContextChars.value = String(nativeRewriteContextChars());
+        }
+        if (regenerateContextChars) {
+            if (Number(regenerateContextChars.value) !== nativeRegenerateContextChars()) {
+                regenerateContextChars.value = String(nativeRegenerateContextChars());
+            }
+            regenerateContextChars.disabled = nativeEditorState.rewrite.regenerateUseContext === false;
+        }
+        var hasSelection = rememberNativeRewriteSelection();
+        if (elements.rewriteOriginalText) {
+            var originalText = nativeEditorState.rewrite.originalText || '';
             if (elements.rewriteOriginalText.value !== originalText) {
                 elements.rewriteOriginalText.value = originalText;
             }
-        } else if (elements.rewriteOriginalText && !hasSelection) {
-            if (elements.rewriteOriginalText.value) elements.rewriteOriginalText.value = '';
         }
         updateRewritePresetDescription();
         renderRewriteSavedPrompts();
@@ -575,11 +584,93 @@
         elements.rewritePresetDescription.textContent = record && record.hint ? record.hint : '';
     }
 
+    function nativeRewritePreviewPending() {
+        const generation = nativeEditorState.generation || {};
+        return (generation.task === 'rewrite' || generation.task === 'regenerate-selection')
+            && !!(generation.text || generation.inProgress);
+    }
+
+    function rememberNativeRewriteSelection() {
+        const editor = nativeEditorElements().editor;
+        if (nativeRewritePreviewPending()) {
+            return nativeEditorState.rewrite.selectionEnd > nativeEditorState.rewrite.selectionStart;
+        }
+        if (!editor || editor.disabled) return nativeEditorState.rewrite.selectionEnd > nativeEditorState.rewrite.selectionStart;
+        const start = Number(editor.selectionStart) || 0;
+        const end = Number(editor.selectionEnd) || 0;
+        if (end > start) {
+            nativeEditorState.rewrite.selectionStart = start;
+            nativeEditorState.rewrite.selectionEnd = end;
+            nativeEditorState.rewrite.originalText = editor.value.slice(start, end);
+            return true;
+        }
+        return nativeEditorState.rewrite.selectionEnd > nativeEditorState.rewrite.selectionStart;
+    }
+
+    function restoreNativeRewriteSelection() {
+        const editor = nativeEditorElements().editor;
+        if (!editor) return false;
+        const liveStart = Number(editor.selectionStart) || 0;
+        const liveEnd = Number(editor.selectionEnd) || 0;
+        if (liveEnd > liveStart && !nativeRewritePreviewPending()) {
+            nativeEditorState.rewrite.selectionStart = liveStart;
+            nativeEditorState.rewrite.selectionEnd = liveEnd;
+            nativeEditorState.rewrite.originalText = editor.value.slice(liveStart, liveEnd);
+            return true;
+        }
+        const start = Number(nativeEditorState.rewrite.selectionStart) || 0;
+        const end = Number(nativeEditorState.rewrite.selectionEnd) || 0;
+        if (end <= start) return false;
+        editor.focus({ preventScroll: true });
+        editor.setSelectionRange(start, end);
+        return true;
+    }
+
     function rewriteInstructionText() {
         const custom = (nativeEditorState.rewrite.instruction || '').trim();
         if (custom && nativeEditorState.rewrite.preset === 'custom') return custom;
         const record = rewritePresetRecord(nativeEditorState.rewrite.preset || 'balanced-polish');
         return custom || (record && record.content) || '';
+    }
+
+    const NATIVE_CONTEXT_BUDGETS_KEY = 'draftharbor:nativeContextBudgets';
+
+    function clampNativeContextChars(value, min, max, fallback) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return fallback;
+        return Math.min(max, Math.max(min, Math.round(number)));
+    }
+
+    function nativeRewriteContextChars() {
+        return clampNativeContextChars(nativeEditorState.rewrite.rewriteContextChars, 0, 8000, 1200);
+    }
+
+    function nativeRegenerateContextChars() {
+        return clampNativeContextChars(nativeEditorState.rewrite.regenerateContextChars, 0, 20000, 8000);
+    }
+
+    function loadNativeContextBudgets() {
+        try {
+            const saved = JSON.parse(window.localStorage.getItem(NATIVE_CONTEXT_BUDGETS_KEY) || '{}');
+            if (!saved || typeof saved !== 'object') return;
+            if (saved.rewrite != null) nativeEditorState.rewrite.rewriteContextChars = clampNativeContextChars(saved.rewrite, 0, 8000, 1200);
+            if (saved.regenerate != null) nativeEditorState.rewrite.regenerateContextChars = clampNativeContextChars(saved.regenerate, 0, 20000, 8000);
+            if (typeof saved.regenerateUseContext === 'boolean') nativeEditorState.rewrite.regenerateUseContext = saved.regenerateUseContext;
+        } catch (error) {
+            /* ignore */
+        }
+    }
+
+    function saveNativeContextBudgets() {
+        try {
+            window.localStorage.setItem(NATIVE_CONTEXT_BUDGETS_KEY, JSON.stringify({
+                rewrite: nativeRewriteContextChars(),
+                regenerate: nativeRegenerateContextChars(),
+                regenerateUseContext: nativeEditorState.rewrite.regenerateUseContext !== false
+            }));
+        } catch (error) {
+            /* ignore */
+        }
     }
 
     async function loadRewritePrompts() {
@@ -630,6 +721,7 @@
         const elements = nativeEditorElements();
         const scene = currentNativeScene();
         if (!scene || !elements.editor) return null;
+        if (!restoreNativeRewriteSelection()) return null;
         const start = elements.editor.selectionStart || 0;
         const end = elements.editor.selectionEnd || 0;
         if (start === end) return null;
@@ -639,6 +731,7 @@
         nativeEditorState.rewrite.selectionEnd = end;
         const instruction = rewriteInstructionText();
         const avoidance = nativeAvoidanceInstruction();
+        const contextChars = nativeRewriteContextChars();
         return {
             messages: [
                 {
@@ -650,7 +743,7 @@
                     content: [
                         `改写要求：${instruction}`,
                         '',
-                        `当前场景上下文：\n${elements.editor.value.slice(Math.max(0, start - 1200), Math.min(elements.editor.value.length, end + 1200))}`,
+                        `当前场景上下文：\n${elements.editor.value.slice(Math.max(0, start - contextChars), Math.min(elements.editor.value.length, end + contextChars))}`,
                         '',
                         `需要改写的文本：\n${selectedText}`,
                         '',
@@ -670,6 +763,7 @@
         const elements = nativeEditorElements();
         const scene = currentNativeScene();
         if (!scene || !elements.editor) return null;
+        if (!restoreNativeRewriteSelection()) return null;
         const start = elements.editor.selectionStart || 0;
         const end = elements.editor.selectionEnd || 0;
         if (start === end) return null;
@@ -679,9 +773,10 @@
         nativeEditorState.rewrite.selectionStart = start;
         nativeEditorState.rewrite.selectionEnd = end;
         var useContext = nativeEditorState.rewrite.regenerateUseContext !== false;
+        const contextChars = nativeRegenerateContextChars();
         const instruction = (nativeEditorState.rewrite.instruction || '').trim() || '重新生成选中文段，使它自然衔接前后文，并保留当前剧情意图。';
-        const contextBefore = useContext ? value.slice(Math.max(0, start - 8000), start) : '[用户选择不发送上下文]';
-        const contextAfter = useContext ? value.slice(end, Math.min(value.length, end + 8000)) : '[用户选择不发送上下文]';
+        const contextBefore = useContext ? value.slice(Math.max(0, start - contextChars), start) : '[用户选择不发送上下文]';
+        const contextAfter = useContext ? value.slice(end, Math.min(value.length, end + contextChars)) : '[用户选择不发送上下文]';
         const contextInstruction = useContext
             ? '必须使用前后文保持连续性，替换文本要能自然插回原位置。'
             : '请根据用户要求重新生成选中文段。';

@@ -5,6 +5,7 @@ const path = require('path');
 const { chromium } = require('playwright');
 const { startDesktopServers } = require('../desktop/local-server');
 const projectService = require('../desktop/services/project-service');
+const { openNativePanel, openGenerationAdvanced, clickMoreAction, openOutlineMenu, setAssistantPlacement } = require('./helpers/native-panel');
 
 async function submitNativeName(page, value) {
   await page.waitForFunction(() => {
@@ -105,6 +106,65 @@ async function openNativeModelSettings(page) {
       });
       assert.ok(flow.outputBottom <= flow.footerTop + 1, 'bottom generation output should stay above the paper footer');
     }
+    const rewriteCardColors = await page.evaluate(() => {
+      const root = document.querySelector('#desktop-root');
+      const html = document.documentElement;
+      const output = document.querySelector('[data-native-generation-output]');
+      const result = document.querySelector('[data-native-generation-result]');
+      const previous = html.dataset.desktopTheme;
+      html.dataset.desktopTheme = 'mist-library';
+      if (root) root.setAttribute('data-desktop-theme', 'mist-library');
+      output.hidden = false;
+      output.classList.remove('is-inline-confirmation');
+      result.hidden = false;
+      const styles = {
+        output: window.getComputedStyle(output).backgroundColor,
+        result: window.getComputedStyle(result).backgroundColor,
+        header: window.getComputedStyle(output.querySelector('strong')).color,
+        assistant: window.getComputedStyle(document.querySelector('.desktop-native-assistant')).backgroundColor
+      };
+      html.dataset.desktopTheme = previous;
+      if (root) root.setAttribute('data-desktop-theme', previous);
+      output.hidden = true;
+      output.classList.remove('is-inline-confirmation');
+      return styles;
+    });
+    assert.notStrictEqual(rewriteCardColors.output, 'rgb(23, 28, 37)', 'rewrite/preview card should not keep the hardcoded navy panel');
+    assert.notStrictEqual(rewriteCardColors.result, 'rgb(40, 49, 66)', 'rewrite result should not keep the hardcoded navy paper');
+    assert.notStrictEqual(rewriteCardColors.assistant, 'rgb(23, 26, 34)', 'bottom Copilot should not keep the hardcoded navy dock');
+    assert.notStrictEqual(rewriteCardColors.header, 'rgb(255, 253, 247)', 'rewrite card title should follow theme text, not forced cream');
+    const rewriteCardSize = await page.evaluate(() => {
+      const output = document.querySelector('[data-native-generation-output]');
+      const result = document.querySelector('[data-native-generation-result]');
+      const footer = document.querySelector('[data-native-paper-footer]');
+      output.hidden = false;
+      output.classList.remove('is-inline-confirmation');
+      result.hidden = false;
+      result.textContent = '短句。';
+      const short = output.getBoundingClientRect();
+      result.textContent = Array.from({ length: 80 }, (_, index) => `第${index + 1}段改写预览，用来确认窗口会随正文变高。`).join('\n');
+      const long = output.getBoundingClientRect();
+      const resultRect = result.getBoundingClientRect();
+      const footerRect = footer.getBoundingClientRect();
+      const size = {
+        width: long.width,
+        shortHeight: short.height,
+        longHeight: long.height,
+        resultHeight: resultRect.height,
+        resultScrolls: result.scrollHeight > result.clientHeight + 1,
+        outputBottom: long.bottom,
+        footerTop: footerRect.top,
+        maxHeight: window.innerHeight * 0.48
+      };
+      output.hidden = true;
+      return size;
+    });
+    assert.ok(rewriteCardSize.width >= 380, `rewrite preview card should be wide enough to read, got ${rewriteCardSize.width}`);
+    assert.ok(rewriteCardSize.longHeight > rewriteCardSize.shortHeight + 24, `rewrite preview should grow with longer text, short ${rewriteCardSize.shortHeight} long ${rewriteCardSize.longHeight}`);
+    assert.ok(rewriteCardSize.longHeight <= rewriteCardSize.maxHeight + 8, 'rewrite preview should stop growing once it hits the manuscript cap');
+    assert.ok(rewriteCardSize.resultScrolls, 'very long rewrite text should scroll inside the preview card');
+    assert.ok(rewriteCardSize.outputBottom <= rewriteCardSize.footerTop + 1, 'rewrite preview card should stay above the paper footer');
+
     await page.evaluate(() => {
       const output = document.querySelector('[data-native-generation-output]');
       output.hidden = true;
@@ -149,13 +209,28 @@ async function openNativeModelSettings(page) {
     await page.click('[data-toggle-rail]');
     await page.waitForFunction(() => !document.querySelector('#desktop-root').classList.contains('is-rail-collapsed'));
 
-    await page.click('[data-native-toggle-outline]');
+    await clickMoreAction(page, '[data-native-toggle-outline]');
     await page.waitForFunction(() => document.querySelector('[data-native-writer]').classList.contains('is-outline-collapsed'));
-    await page.click('[data-native-toggle-outline]');
+    const collapsedBottomLayout = await page.evaluate(() => {
+      const writer = document.querySelector('[data-native-writer]').getBoundingClientRect();
+      const editor = document.querySelector('.desktop-native-editor').getBoundingClientRect();
+      const assistant = document.querySelector('.desktop-native-assistant').getBoundingClientRect();
+      return {
+        bottom: document.querySelector('[data-native-writer]').classList.contains('is-assistant-bottom'),
+        writerW: writer.width,
+        editorW: editor.width,
+        assistantW: assistant.width
+      };
+    });
+    if (collapsedBottomLayout.bottom) {
+      assert.ok(collapsedBottomLayout.editorW > collapsedBottomLayout.writerW * 0.7, 'hiding outline in bottom layout should keep the manuscript wide');
+      assert.ok(collapsedBottomLayout.assistantW > collapsedBottomLayout.writerW * 0.7, 'hiding outline in bottom layout should keep Copilot full width');
+    }
+    await clickMoreAction(page, '[data-native-toggle-outline]');
     await page.waitForFunction(() => !document.querySelector('[data-native-writer]').classList.contains('is-outline-collapsed'));
 
     // The outline divider is only active in the right-hand assistant layout.
-    await page.click('[data-native-assistant-placement]');
+    await clickMoreAction(page, '[data-native-assistant-placement]');
     await page.waitForFunction(() => !document.querySelector('[data-native-writer]').classList.contains('is-assistant-bottom'));
 
     await page.evaluate(() => {
@@ -178,20 +253,20 @@ async function openNativeModelSettings(page) {
     await page.waitForFunction(() => Number.parseFloat(document.querySelector('[data-native-writer]').style.getPropertyValue('--native-outline-width')) >= 210);
     assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('draftharbor:nativeSidebarWidths')).outline >= 210), 'resized outline width should persist locally');
 
-    await page.click('[data-native-toggle-assistant]');
+    await clickMoreAction(page, '[data-native-toggle-assistant]');
     await page.waitForFunction(() => document.querySelector('[data-native-writer]').classList.contains('is-assistant-collapsed'));
-    await page.click('[data-native-toggle-assistant]');
+    await clickMoreAction(page, '[data-native-toggle-assistant]');
     await page.waitForFunction(() => !document.querySelector('[data-native-writer]').classList.contains('is-assistant-collapsed'));
 
     await page.click('[data-native-focus-mode]');
     await page.waitForFunction(() => document.querySelector('[data-native-writer]').classList.contains('is-focus-mode'));
     await page.click('[data-native-focus-mode]');
     await page.waitForFunction(() => !document.querySelector('[data-native-writer]').classList.contains('is-focus-mode'));
-    await page.click('[data-native-assistant-placement]');
+    await clickMoreAction(page, '[data-native-assistant-placement]');
     await page.waitForFunction(() => document.querySelector('[data-native-writer]').classList.contains('is-assistant-bottom'));
-    await page.click('[data-native-assistant-placement]');
+    await clickMoreAction(page, '[data-native-assistant-placement]');
     await page.waitForFunction(() => !document.querySelector('[data-native-writer]').classList.contains('is-assistant-bottom'));
-    await page.click('[data-native-toggle-typography]');
+    await clickMoreAction(page, '[data-native-toggle-typography]');
     await page.waitForFunction(() => !document.querySelector('[data-native-typography]').hidden);
     await page.evaluate(() => {
       const fontSize = document.querySelector('[data-native-editor-font-size]');
@@ -248,14 +323,32 @@ async function openNativeModelSettings(page) {
       const stats = document.querySelector('[data-native-editor-stats]');
       return stats && !/\//.test(stats.textContent) && stats.textContent.includes('字');
     });
-    await page.click('[data-native-toggle-typography]');
+    await page.keyboard.press('Escape');
     await page.waitForFunction(() => document.querySelector('[data-native-typography]').hidden);
 
     await page.click('[data-native-add-scene]');
     await submitNativeName(page, 'Audit Added Scene');
     await page.waitForFunction(() => document.querySelector('[data-native-scene-title]').textContent.includes('Audit Added Scene'));
 
-    await page.click('[data-native-panel-tab="structure"]');
+    await setAssistantPlacement(page, 'bottom');
+    await openOutlineMenu(page, '.desktop-native-scene.is-active');
+    await page.click('[data-native-outline-action="move-up"]');
+    await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('未保存'));
+    await openOutlineMenu(page, '.desktop-native-scene.is-active');
+    await page.click('[data-native-outline-action="move-down"]');
+
+    await setAssistantPlacement(page, 'right');
+    await openOutlineMenu(page, '.desktop-native-scene.is-active');
+    await page.click('[data-native-outline-action="rename"]');
+    await submitNativeName(page, 'Outline Menu Scene');
+    await page.waitForFunction(() => document.querySelector('[data-native-scene-title]').textContent.includes('Outline Menu Scene'));
+    await openOutlineMenu(page, '.desktop-native-chapter.is-active');
+    await page.waitForFunction(() => document.querySelector('[data-native-outline-menu]').dataset.nativeOutlineKind === 'chapter');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => document.querySelector('[data-native-outline-menu]').hidden);
+    await setAssistantPlacement(page, 'bottom');
+
+    await openNativePanel(page, 'structure');
     await page.click('[data-native-move-scene-up]');
     await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('未保存'));
     const unsavedStatus = await page.locator('[data-native-save-status]');
@@ -267,7 +360,7 @@ async function openNativeModelSettings(page) {
     await submitNativeName(page, 'Audit Chapter');
     await page.waitForFunction(() => document.querySelector('[data-native-chapter-title]').textContent.includes('Audit Chapter'));
 
-    await page.click('[data-native-panel-tab="metadata"]');
+    await openNativePanel(page, 'metadata');
     await page.fill('[data-native-scene-summary]', 'Audit summary.');
     await page.fill('[data-native-scene-tags]', 'audit, ui');
     await page.fill('[data-native-scene-pov]', 'Mira');
@@ -326,7 +419,7 @@ async function openNativeModelSettings(page) {
     await page.click('[data-native-summary-dialog-edit]');
     await page.waitForFunction(() => document.querySelector('[data-native-panel="metadata"]').classList.contains('is-active'));
 
-    await page.click('[data-native-panel-tab="structure"]');
+    await openNativePanel(page, 'structure');
     await page.click('[data-native-rename-scene]');
     await submitNativeName(page, 'Renamed Audit Scene');
     await page.waitForFunction(() => document.querySelector('[data-native-scene-title]').textContent.includes('Renamed Audit Scene'));
@@ -388,7 +481,7 @@ async function openNativeModelSettings(page) {
     const packageDownload = await packageDownloadPromise;
     assert.ok(packageDownload.suggestedFilename().endsWith('.draftharbor-project.zip'), 'project package export should download');
 
-    await page.click('[data-native-panel-tab="search"]');
+    await openNativePanel(page, 'search');
     await page.fill('[data-native-scene-editor]', 'Audit one. Audit two. Audit three.');
     await page.evaluate(() => {
       window.__draftHarborLastUtterance = null;
@@ -404,9 +497,9 @@ async function openNativeModelSettings(page) {
         this.text = text;
       } });
     });
-    await page.click('[data-native-read-aloud]');
+    await clickMoreAction(page, '[data-native-read-aloud]');
     await page.waitForFunction(() => document.querySelector('[data-native-read-aloud]').hidden);
-    await page.click('[data-native-stop-reading]');
+    await clickMoreAction(page, '[data-native-stop-reading]');
     await page.waitForFunction(() => !document.querySelector('[data-native-read-aloud]').hidden);
 
     await page.click('[data-view-target="settings"]');
@@ -431,7 +524,7 @@ async function openNativeModelSettings(page) {
     await page.waitForFunction(() => document.querySelector('[data-settings-tts-rate-value]').textContent === '1.5');
 
     await page.click('[data-view-target="writer"]');
-    await page.waitForSelector('[data-native-read-aloud]:not([disabled])');
+    await page.waitForSelector('[data-native-read-aloud]:not([disabled])', { state: 'attached' });
     await page.waitForFunction(() => !document.querySelector('[data-native-read-aloud]').hidden);
     await page.evaluate(() => {
       window.__draftHarborLastUtterance = null;
@@ -447,7 +540,7 @@ async function openNativeModelSettings(page) {
         this.text = text;
       } });
     });
-    await page.click('[data-native-read-aloud]');
+    await clickMoreAction(page, '[data-native-read-aloud]');
     await page.waitForFunction(() => document.querySelector('[data-native-read-aloud]').hidden);
     const ttsUtterance = await page.evaluate(() => {
       var utterance = window.__draftHarborLastUtterance;
@@ -457,7 +550,7 @@ async function openNativeModelSettings(page) {
     assert.ok(ttsUtterance, 'TTS utterance should be created on second read-aloud');
     assert.strictEqual(ttsUtterance.rate, 1.5, 'TTS utterance rate should match settings value 1.5');
     assert.strictEqual(ttsUtterance.voiceName, 'Second Voice', 'TTS utterance voice should match settings selection');
-    await page.click('[data-native-stop-reading]');
+    await clickMoreAction(page, '[data-native-stop-reading]');
     await page.waitForFunction(() => !document.querySelector('[data-native-read-aloud]').hidden);
     await page.fill('[data-native-search]', 'Audit');
     await page.waitForFunction(() => document.querySelectorAll('[data-native-scene-id]').length >= 1);
@@ -512,13 +605,13 @@ async function openNativeModelSettings(page) {
       const status = document.querySelector('[data-native-search-status]');
       return status && status.textContent === '';
     });
-    await page.click('[data-native-toggle-specials]');
+    await clickMoreAction(page, '[data-native-toggle-specials]');
     await page.locator('[data-native-special-char]').nth(2).click();
     await page.waitForFunction(() => document.querySelector('[data-native-scene-editor]').value.includes('\u2026'));
     await page.fill('[data-native-scene-editor]', 'Auto -- replace.');
     await page.waitForFunction(() => document.querySelector('[data-native-scene-editor]').value.includes('Auto \u2014 replace.'));
 
-    await page.click('[data-native-panel-tab="generate"]');
+    await openNativePanel(page, 'generate');
 
     // Configure provider to DeepSeek via settings so model control is enabled
     await page.click('[data-view-target="settings"]');
@@ -609,6 +702,7 @@ async function openNativeModelSettings(page) {
     await page.waitForFunction(() => document.querySelector('[data-native-gen-task="beat"]').classList.contains('is-active'));
     await page.click('[data-native-gen-task="continue"]');
     await page.waitForFunction(() => document.querySelector('[data-native-gen-task="continue"]').classList.contains('is-active'));
+    await openGenerationAdvanced(page);
     await page.click('[data-native-preview-prompt]');
     await page.waitForFunction(() => document.querySelector('[data-native-prompt-dialog]').open);
     await page.click('[data-native-close-prompt]');
@@ -663,16 +757,19 @@ async function openNativeModelSettings(page) {
       const handle = document.querySelector('[data-native-generation-drag-handle]');
       const output = document.querySelector('[data-native-generation-output]');
       const body = document.querySelector('.desktop-native-editor-body');
+      const startRect = output.getBoundingClientRect();
       const start = handle.getBoundingClientRect();
       const pointerDown = new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: start.left + 4, clientY: start.top + 4, pointerId: 41 });
-      const pointerMove = new PointerEvent('pointermove', { bubbles: true, clientX: -5000, clientY: -5000, pointerId: 41 });
-      const pointerUp = new PointerEvent('pointerup', { bubbles: true, button: 0, clientX: -5000, clientY: -5000, pointerId: 41 });
+      const pointerMove = new PointerEvent('pointermove', { bubbles: true, clientX: start.left + 4 + 72, clientY: start.top + 4 + 56, pointerId: 41 });
+      const pointerUp = new PointerEvent('pointerup', { bubbles: true, button: 0, clientX: start.left + 4 + 72, clientY: start.top + 4 + 56, pointerId: 41 });
       handle.dispatchEvent(pointerDown);
       handle.dispatchEvent(pointerMove);
       handle.dispatchEvent(pointerUp);
       const outputRect = output.getBoundingClientRect();
       const bodyRect = body.getBoundingClientRect();
       window.__draftHarborGenerationDragAudit = {
+        movedX: outputRect.left - startRect.left,
+        movedY: outputRect.top - startRect.top,
         left: outputRect.left,
         top: outputRect.top,
         right: outputRect.right,
@@ -682,9 +779,43 @@ async function openNativeModelSettings(page) {
       };
     });
     const dragAudit = await page.evaluate(() => window.__draftHarborGenerationDragAudit);
+    assert.ok(Math.abs(dragAudit.movedX) > 24 || Math.abs(dragAudit.movedY) > 24, `dragged generation confirmation should stay where it was dropped, moved ${dragAudit.movedX},${dragAudit.movedY}`);
     assert.ok(dragAudit.left >= dragAudit.body.left - 1 && dragAudit.right <= dragAudit.body.right + 1, 'dragged generation confirmation should clamp horizontally to the editor body');
     assert.ok(dragAudit.top >= dragAudit.body.top - 1 && dragAudit.bottom <= dragAudit.body.bottom + 1, 'dragged generation confirmation should clamp vertically to the editor body');
     assert.ok(dragAudit.stored, 'dragged generation confirmation should persist its position');
+    await page.evaluate(() => {
+      const handle = document.querySelector('[data-native-generation-drag-handle]');
+      const output = document.querySelector('[data-native-generation-output]');
+      const body = document.querySelector('.desktop-native-editor-body');
+      const start = handle.getBoundingClientRect();
+      handle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: start.left + 4, clientY: start.top + 4, pointerId: 42 }));
+      handle.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: -5000, clientY: -5000, pointerId: 42 }));
+      handle.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, clientX: -5000, clientY: -5000, pointerId: 42 }));
+      const outputRect = output.getBoundingClientRect();
+      const bodyRect = body.getBoundingClientRect();
+      window.__draftHarborGenerationClampAudit = {
+        left: outputRect.left,
+        top: outputRect.top,
+        right: outputRect.right,
+        bottom: outputRect.bottom,
+        body: { left: bodyRect.left, top: bodyRect.top, right: bodyRect.right, bottom: bodyRect.bottom }
+      };
+    });
+    const clampAudit = await page.evaluate(() => window.__draftHarborGenerationClampAudit);
+    assert.ok(clampAudit.left >= clampAudit.body.left - 1 && clampAudit.right <= clampAudit.body.right + 1, 'generation confirmation dragged off-canvas should clamp horizontally');
+    assert.ok(clampAudit.top >= clampAudit.body.top - 1 && clampAudit.bottom <= clampAudit.body.bottom + 1, 'generation confirmation dragged off-canvas should clamp vertically');
+    const buttonDragAudit = await page.evaluate(() => {
+      const accept = document.querySelector('[data-native-accept-generation]');
+      const output = document.querySelector('[data-native-generation-output]');
+      const startRect = output.getBoundingClientRect();
+      const start = accept.getBoundingClientRect();
+      accept.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: start.left + 4, clientY: start.top + 4, pointerId: 43 }));
+      accept.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: start.left + 4 + 80, clientY: start.top + 4 + 40, pointerId: 43 }));
+      accept.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, clientX: start.left + 4 + 80, clientY: start.top + 4 + 40, pointerId: 43 }));
+      const after = output.getBoundingClientRect();
+      return { movedX: after.left - startRect.left, movedY: after.top - startRect.top };
+    });
+    assert.ok(Math.abs(buttonDragAudit.movedX) < 2 && Math.abs(buttonDragAudit.movedY) < 2, 'action buttons should not drag the confirmation card');
     await page.dblclick('[data-native-generation-drag-handle]');
     await page.waitForFunction(() => !!localStorage.getItem('draftharbor:nativeGenerationOutputPosition'));
     await page.selectOption('[data-native-generation-insert-mode]', 'cursor');
@@ -823,7 +954,7 @@ async function openNativeModelSettings(page) {
     });
     await page.click('[data-prompt-manager-close]');
     await page.waitForFunction(() => !document.querySelector('[data-prompt-manager-dialog]').open);
-    await page.click('[data-native-panel-tab="rewrite"]');
+    await openNativePanel(page, 'rewrite');
     await page.selectOption('[data-native-rewrite-saved-prompt]', { label: 'Audit Rewrite Prompt' });
     await page.waitForFunction(() => document.querySelector('[data-native-rewrite-instruction]').value.includes('冷峻克制'));
     await page.selectOption('[data-native-rewrite-preset]', 'tension');
@@ -861,6 +992,13 @@ async function openNativeModelSettings(page) {
     });
     await page.waitForFunction(() => document.querySelector('[data-native-scene-editor]').value === 'Rewrite this audit sentence.');
     await page.waitForFunction(() => !document.querySelector('[data-native-generation-output]').hidden);
+    const rewriteCostNoteHidden = await page.evaluate(() => {
+      const note = document.querySelector('[data-native-generation-cost-note]');
+      const title = document.querySelector('[data-native-generation-output-title]');
+      return { hidden: !note || note.hidden, title: title ? title.textContent : '' };
+    });
+    assert.ok(rewriteCostNoteHidden.hidden, 'rewrite confirmation should not show the regenerate long-context warning');
+    assert.strictEqual(rewriteCostNoteHidden.title, '生成结果待确认');
     await page.fill('[data-native-scene-editor]', 'Rewrite changed audit sentence.');
     await page.click('[data-native-accept-generation]');
     await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('原文已发生变化'));
@@ -902,6 +1040,37 @@ async function openNativeModelSettings(page) {
         }
       };
     });
+    await page.locator('[data-native-rewrite-regenerate]').evaluate((el) => { el.open = true; });
+    await page.fill('[data-native-regenerate-context-chars]', '8000');
+    await page.locator('[data-native-regenerate-use-context]').check();
+    await page.click('[data-native-regenerate-selection]');
+    await page.waitForFunction(() => {
+      const result = document.querySelector('[data-native-generation-result]');
+      return result && result.textContent.includes('Regenerated passage');
+    }, null, { timeout: 5000 }).catch(async (error) => {
+      const outputText = await page.locator('[data-native-generation-result]').textContent();
+      throw new Error(`${error.message}\nOutput text after regeneration click: ${outputText}\nBrowser messages:\n${browserMessages.join('\n')}`);
+    });
+    const regenerateWarning = await page.evaluate(() => {
+      const note = document.querySelector('[data-native-generation-cost-note]');
+      const title = document.querySelector('[data-native-generation-output-title]');
+      return {
+        hidden: !note || note.hidden,
+        text: note ? note.textContent : '',
+        title: title ? title.textContent : ''
+      };
+    });
+    assert.strictEqual(regenerateWarning.hidden, false, 'regenerate confirmation should warn about long context');
+    assert.ok(regenerateWarning.text.includes('8000'), 'regenerate warning should show the configured context window');
+    assert.strictEqual(regenerateWarning.title, '重生成结果待确认');
+    await page.click('[data-native-discard-generation]');
+    await page.evaluate(() => {
+      const editor = document.querySelector('[data-native-scene-editor]');
+      editor.focus();
+      editor.setSelectionRange(0, 12);
+      editor.dispatchEvent(new Event('select', { bubbles: true }));
+    });
+    await page.locator('[data-native-rewrite-regenerate]').evaluate((el) => { el.open = true; });
     await page.locator('[data-native-regenerate-use-context]').uncheck();
     await page.click('[data-native-regenerate-selection]');
     await page.waitForFunction(() => {
@@ -925,7 +1094,22 @@ async function openNativeModelSettings(page) {
       editor.setSelectionRange(0, 10);
       editor.dispatchEvent(new Event('select', { bubbles: true }));
     });
-    await page.click('[data-native-panel-tab="rewrite"]');
+    await openNativePanel(page, 'rewrite');
+    const rewriteChips = await page.evaluate(() => {
+      const group = document.querySelector('[data-native-rewrite-task-group]');
+      const groupRect = group.getBoundingClientRect();
+      return Array.from(group.querySelectorAll('button')).map((button) => {
+        const rect = button.getBoundingClientRect();
+        return {
+          label: button.textContent.trim(),
+          clippedX: rect.left < groupRect.left - 1 || rect.right > groupRect.right + 1,
+          height: rect.height
+        };
+      });
+    });
+    rewriteChips.forEach((chip) => {
+      assert.ok(!chip.clippedX && chip.height > 8, `rewrite task chip "${chip.label}" should stay fully visible in the Copilot panel`);
+    });
     await page.click('[data-native-rewrite-task="expand"]');
     await page.waitForFunction(() => document.querySelector('[data-native-rewrite-task="expand"]').classList.contains('is-active'));
     await page.waitForFunction(() => document.querySelector('[data-native-rewrite-preset]').value === 'expand');
@@ -933,10 +1117,10 @@ async function openNativeModelSettings(page) {
     await page.waitForFunction(() => document.querySelector('[data-native-rewrite-task="polish"]').classList.contains('is-active'));
     await page.waitForFunction(() => document.querySelector('[data-native-rewrite-preset]').value === 'balanced-polish');
 
-    await page.click('[data-native-panel-tab="characters"]');
+    await openNativePanel(page, 'characters');
     await page.click('[data-native-new-character]');
     await page.waitForFunction(() => document.querySelector('[data-native-character-list]').textContent.includes('新人物'));
-    await page.click('[data-native-panel-tab="context"]');
+    await openNativePanel(page, 'context');
     await page.waitForFunction(() => document.querySelector('[data-native-context-compendium]').textContent.includes('新人物'));
     await page.locator('[data-native-context-compendium] input[type="checkbox"]').first().check();
     await page.waitForSelector('[data-native-context-compendium-tags]');
@@ -956,8 +1140,9 @@ async function openNativeModelSettings(page) {
     assert.ok(summaryText.includes('摘要'), 'context summary should show mode labels');
     assert.ok(summaryText.includes('全文'), 'context summary should show full-text chapter mode');
 
-    await page.click('[data-native-panel-tab="generate"]');
+    await openNativePanel(page, 'generate');
     await page.click('[data-native-gen-task="continue"]');
+    await openGenerationAdvanced(page);
     await page.click('[data-native-preview-prompt]');
     await page.waitForFunction(() => document.querySelector('[data-native-prompt-dialog]').open);
     const fullContextPrompt = await page.locator('[data-native-prompt-preview]').textContent();
@@ -976,7 +1161,7 @@ async function openNativeModelSettings(page) {
     await page.click('[data-prompt-manager-close]');
     await page.waitForFunction(() => !document.querySelector('[data-prompt-manager-dialog]').open);
 
-    await page.click('[data-native-panel-tab="history"]');
+    await openNativePanel(page, 'history');
     await page.waitForFunction(() => document.querySelector('[data-native-generation-history]').textContent.includes('Retry and discard audit'));
     const proseHistoryItem = page.locator('.desktop-native-history-item').filter({ hasText: 'Retry and discard audit' }).first();
     await proseHistoryItem.locator('[data-native-history-reuse]').click();
@@ -1023,7 +1208,7 @@ async function openNativeModelSettings(page) {
     const oldHistoryTextCountAfter = (editorAfterRetry.match(/Audit generated text\./g) || []).length;
     assert.strictEqual(oldHistoryTextCountAfter, oldHistoryTextCountBefore, 'history retry should not insert the old stored result again');
     assert.ok(editorAfterRetry.includes('History retry fresh text.'), 'history retry should stream the fresh result through the normal generation path');
-    await page.click('[data-native-panel-tab="history"]');
+    await openNativePanel(page, 'history');
     await page.waitForFunction(() => document.querySelector('[data-native-generation-history]').textContent.includes('History retry fresh text.'));
     const freshHistoryItem = page.locator('.desktop-native-history-item').filter({ hasText: 'History retry fresh text.' }).first();
     assert.ok(await freshHistoryItem.locator('[data-native-history-task]').count() > 0, 'history card should have task label');
@@ -1055,11 +1240,97 @@ async function openNativeModelSettings(page) {
     assert.ok(aiTaskHistory.some((record) => record.aiTask.action === 'regenerate-selection'), 'saved regeneration history should retain unified AI task metadata');
     assert.ok(aiTaskHistory.every((record) => record.aiTask.outputContract === 'text'), 'selection task history should retain its output contract');
 
+    await page.evaluate(() => {
+      const discard = document.querySelector('[data-native-discard-generation]');
+      const output = document.querySelector('[data-native-generation-output]');
+      if (discard && output && !output.hidden) discard.click();
+    });
+    await page.fill('[data-native-scene-editor]', 'Context menu polish this sentence for the audit.');
+    await page.evaluate(() => {
+      const editor = document.querySelector('[data-native-scene-editor]');
+      editor.focus();
+      editor.setSelectionRange(0, 18);
+      editor.dispatchEvent(new Event('select', { bubbles: true }));
+      window.__lastDraftHarborGenerationPrompt = '';
+      window.__draftHarborGenerationStub = async (prompt, onToken) => {
+        window.__lastDraftHarborGenerationPrompt = prompt && typeof prompt.asString === 'function' ? prompt.asString() : '';
+        onToken('Polished from context menu');
+      };
+      editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 140, clientY: 180 }));
+    });
+    await page.waitForFunction(() => !document.querySelector('[data-native-context-menu]').hidden);
+    await page.click('[data-native-context-action="rewrite-selection"]');
+    await page.waitForFunction(() => document.querySelector('[data-native-panel="rewrite"]').classList.contains('is-active'));
+    const contextPolishSetup = await page.evaluate(() => {
+      const editor = document.querySelector('[data-native-scene-editor]');
+      const output = document.querySelector('[data-native-generation-output]');
+      return {
+        panel: document.querySelector('[data-native-panel="rewrite"]').classList.contains('is-active'),
+        task: document.querySelector('[data-native-rewrite-task="polish"]').classList.contains('is-active'),
+        original: document.querySelector('[data-native-rewrite-original-text]').value,
+        editor: editor.value,
+        selection: editor.value.slice(editor.selectionStart, editor.selectionEnd),
+        outputHidden: !output || output.hidden,
+        sentPrompt: window.__lastDraftHarborGenerationPrompt || ''
+      };
+    });
+    assert.ok(contextPolishSetup.panel, '润色选区 should open the rewrite panel');
+    assert.ok(contextPolishSetup.task, '润色选区 should select the polish rewrite task');
+    assert.ok(contextPolishSetup.original.includes('Context menu'), '润色选区 should keep the selected original in the rewrite panel');
+    assert.strictEqual(contextPolishSetup.editor, 'Context menu polish this sentence for the audit.');
+    assert.ok(contextPolishSetup.selection.includes('Context menu'), '润色选区 should restore the manuscript selection for comparison');
+    assert.ok(contextPolishSetup.outputHidden, '润色选区 should not start generation immediately');
+    assert.strictEqual(contextPolishSetup.sentPrompt, '', '润色选区 should not send a prompt until 改写选中文本 is clicked');
+    await page.click('[data-native-start-rewrite]');
+    await page.waitForFunction(() => {
+      const result = document.querySelector('[data-native-generation-result]');
+      return result && result.textContent.includes('Polished from context menu');
+    });
+    const contextPolish = await page.evaluate(() => ({
+      prompt: window.__lastDraftHarborGenerationPrompt || '',
+      title: document.querySelector('[data-native-generation-output-title]').textContent,
+      costHidden: document.querySelector('[data-native-generation-cost-note]').hidden,
+      editor: document.querySelector('[data-native-scene-editor]').value,
+      result: document.querySelector('[data-native-generation-result]').textContent
+    }));
+    assert.ok(contextPolish.prompt.includes('当前场景上下文'), '改写选中文本 should run the short rewrite prompt');
+    assert.ok(!contextPolish.prompt.includes('\n前文：'), '改写选中文本 should not use the regenerate before/after contract');
+    assert.strictEqual(contextPolish.title, '生成结果待确认');
+    assert.ok(contextPolish.costHidden, 'rewrite confirmation should not show the regenerate cost warning');
+    assert.strictEqual(contextPolish.editor, 'Context menu polish this sentence for the audit.', 'rewrite preview must not rewrite the manuscript until accept');
+    assert.ok(contextPolish.result.includes('Polished from context menu'), 'rewrite preview should show the new text in the confirmation card');
+    await page.click('[data-native-discard-generation]');
+
+    await page.evaluate(() => {
+      const editor = document.querySelector('[data-native-scene-editor]');
+      editor.focus();
+      editor.setSelectionRange(0, 18);
+      editor.dispatchEvent(new Event('select', { bubbles: true }));
+      window.__draftHarborGenerationStub = async (prompt, onToken) => {
+        window.__lastDraftHarborGenerationPrompt = prompt && typeof prompt.asString === 'function' ? prompt.asString() : '';
+        onToken('Regenerated from context menu');
+      };
+      editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 140, clientY: 180 }));
+    });
+    await page.waitForFunction(() => !document.querySelector('[data-native-context-menu]').hidden);
+    await page.click('[data-native-context-action="regenerate-selection"]');
+    await page.waitForFunction(() => {
+      const result = document.querySelector('[data-native-generation-result]');
+      return result && result.textContent.includes('Regenerated from context menu');
+    });
+    const contextRegen = await page.evaluate(() => ({
+      prompt: window.__lastDraftHarborGenerationPrompt || '',
+      title: document.querySelector('[data-native-generation-output-title]').textContent
+    }));
+    assert.ok(contextRegen.prompt.includes('前文：') || contextRegen.prompt.includes('用户选择不发送上下文'), '重生成选区 should run the regenerate prompt');
+    assert.strictEqual(contextRegen.title, '重生成结果待确认');
+    await page.click('[data-native-discard-generation]');
+
     page.once('dialog', async (dialog) => {
       assert.strictEqual(dialog.type(), 'confirm');
       await dialog.accept();
     });
-    await page.click('[data-native-panel-tab="structure"]');
+    await openNativePanel(page, 'structure');
     await page.click('[data-native-delete-scene]');
     await page.waitForFunction(() => !document.querySelector('[data-native-scene-title]').textContent.includes('Renamed Audit Scene'));
 
@@ -1098,7 +1369,7 @@ async function openNativeModelSettings(page) {
 
     // 2. Navigate to writer page, verify profile select shows configured profiles only
     await page.click('[data-view-target="writer"]');
-    await page.click('[data-native-panel-tab="generate"]');
+    await openNativePanel(page, 'generate');
     await openNativeModelSettings(page);
     await page.waitForSelector('[data-native-profile-select]', { timeout: 5000 });
 
@@ -1246,7 +1517,7 @@ async function openNativeModelSettings(page) {
     });
     // Navigate back to writer, select DS profile, generate again
     await page.click('[data-view-target="writer"]');
-    await page.click('[data-native-panel-tab="generate"]');
+    await openNativePanel(page, 'generate');
     await openNativeModelSettings(page);
     await page.waitForSelector('[data-native-profile-select]', { timeout: 5000 });
     // Select the DeepSeek profile
@@ -1332,7 +1603,7 @@ async function openNativeModelSettings(page) {
 
     // Writer profile select should still contain only configured API-compatible profiles
     await page.click('[data-view-target="writer"]');
-    await page.click('[data-native-panel-tab="generate"]');
+    await openNativePanel(page, 'generate');
     await openNativeModelSettings(page);
     await page.waitForSelector('[data-native-profile-select]', { timeout: 5000 });
 

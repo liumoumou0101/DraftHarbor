@@ -6,6 +6,7 @@ const { chromium } = require('playwright');
 const { startDesktopServers } = require('../desktop/local-server');
 const projectService = require('../desktop/services/project-service');
 const compendiumService = require('../desktop/services/compendium-service');
+const { setAssistantPlacement } = require('./helpers/native-panel');
 
 const projectRoot = path.resolve(__dirname, '..');
 const reportDir = path.join(projectRoot, '.ai_state', 'test_reports', 'phase58_realistic_writer');
@@ -193,7 +194,7 @@ async function auditViewport(page, label) {
     }
 
     const requiredVisible = [
-      ['paper', '.desktop-native-paper-heading'],
+      ['paper', '[data-native-scene-title]'],
       ['editor', '[data-native-scene-editor]'],
       ['outline', '.desktop-native-outline'],
       ['copilot', '.desktop-native-assistant'],
@@ -232,7 +233,10 @@ async function auditViewport(page, label) {
     const editor = document.querySelector('[data-native-scene-editor]');
     if (editor) {
       const editorRect = rectOf(editor);
-      if (editorRect.width < 420) issues.push(`${auditLabel}: manuscript editor too narrow (${editorRect.width}px)`);
+      const writer = document.querySelector('[data-native-writer]');
+      const rightOnLaptop = window.innerWidth <= 1280 && writer && !writer.classList.contains('is-assistant-bottom');
+      const minWidth = rightOnLaptop ? 360 : 420;
+      if (editorRect.width < minWidth) issues.push(`${auditLabel}: manuscript editor too narrow (${editorRect.width}px)`);
       if (editor.scrollHeight <= editor.clientHeight) issues.push(`${auditLabel}: realistic prose should create manuscript scroll density`);
     }
 
@@ -260,18 +264,21 @@ async function auditViewport(page, label) {
     await openWriterProject(page, servers.appUrl);
 
     const allIssues = [];
-    for (const theme of themes) {
-      await page.evaluate((nextTheme) => {
-        document.documentElement.dataset.desktopTheme = nextTheme;
-        document.querySelector('#desktop-root')?.setAttribute('data-desktop-theme', nextTheme);
-      }, theme);
+    for (const placement of ['bottom', 'right']) {
+      await setAssistantPlacement(page, placement);
+      for (const theme of themes) {
+        await page.evaluate((nextTheme) => {
+          document.documentElement.dataset.desktopTheme = nextTheme;
+          document.querySelector('#desktop-root')?.setAttribute('data-desktop-theme', nextTheme);
+        }, theme);
 
-      for (const viewport of viewports) {
-        await page.setViewportSize(viewport);
-        await page.waitForTimeout(180);
-        const label = `${theme}-${viewport.width}x${viewport.height}`;
-        await page.screenshot({ path: path.join(reportDir, `realistic-${label}.png`), fullPage: false });
-        allIssues.push(...await auditViewport(page, label));
+        for (const viewport of viewports) {
+          await page.setViewportSize(viewport);
+          await page.waitForTimeout(180);
+          const label = `${theme}-${placement}-${viewport.width}x${viewport.height}`;
+          await page.screenshot({ path: path.join(reportDir, `realistic-${label}.png`), fullPage: false });
+          allIssues.push(...await auditViewport(page, label));
+        }
       }
     }
 

@@ -4,6 +4,7 @@ const os = require('os');
 const path = require('path');
 const { chromium } = require('playwright');
 const { startDesktopServers } = require('../desktop/local-server');
+const { openNativePanel, openGenerationAdvanced, clickMoreAction } = require('./helpers/native-panel');
 
 function snapshot(id, name, text, exportedAt) {
     return {
@@ -182,19 +183,19 @@ async function submitNativeName(page, value) {
         await submitNativeName(page, 'Second Scene');
         await page.waitForFunction(() => document.querySelector('[data-native-scene-title]').textContent === 'Second Scene');
         await page.fill('[data-native-scene-editor]', 'Second native scene.');
-        await page.click('[data-native-panel-tab="structure"]');
+        await openNativePanel(page, 'structure');
         await page.click('[data-native-rename-scene]');
         await submitNativeName(page, 'Renamed Second Scene');
         await page.waitForFunction(() => document.querySelector('[data-native-scene-title]').textContent === 'Renamed Second Scene');
-        await page.click('[data-native-panel-tab="metadata"]');
+        await openNativePanel(page, 'metadata');
         await page.fill('[data-native-scene-summary]', 'A saved native scene summary.');
         await page.fill('[data-native-scene-tags]', 'draft, important');
         await page.fill('[data-native-scene-pov]', 'Ada');
         await page.selectOption('[data-native-scene-tense]', 'present');
-        await page.click('[data-native-panel-tab="structure"]');
+        await openNativePanel(page, 'structure');
         await page.click('[data-native-move-scene-up]');
         await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('未保存'));
-        await page.click('[data-native-panel-tab="search"]');
+        await openNativePanel(page, 'search');
         await page.fill('[data-native-search]', 'Renamed Second');
         await page.waitForFunction(() => {
             const scenes = Array.from(document.querySelectorAll('[data-native-scene-id]'));
@@ -202,7 +203,7 @@ async function submitNativeName(page, value) {
         });
         await page.fill('[data-native-search]', '');
         await page.waitForFunction(() => document.querySelectorAll('[data-native-scene-id]').length >= 2);
-        await page.click('[data-native-panel-tab="structure"]');
+        await openNativePanel(page, 'structure');
         await page.click('[data-native-rename-chapter]');
         await submitNativeName(page, 'Opening Chapter');
         await page.waitForFunction(() => document.querySelector('[data-native-chapter-title]').textContent === '第 1 章 · Opening Chapter');
@@ -215,7 +216,7 @@ async function submitNativeName(page, value) {
         });
         await page.click('[data-native-delete-chapter]');
         await page.waitForFunction(() => document.querySelector('[data-native-chapter-title]').textContent === '第 1 章 · Opening Chapter');
-        await page.click('[data-native-panel-tab="search"]');
+        await openNativePanel(page, 'search');
         await page.fill('[data-native-search]', 'Second native');
         await page.waitForFunction(() => document.querySelectorAll('[data-native-scene-id]').length === 1);
         await page.click('[data-native-scene-id]');
@@ -230,13 +231,13 @@ async function submitNativeName(page, value) {
             assert.strictEqual(dialog.type(), 'confirm');
             await dialog.accept();
         });
-        await page.click('[data-native-panel-tab="structure"]');
+        await openNativePanel(page, 'structure');
         await page.click('[data-native-delete-scene]');
         await page.waitForFunction(() => document.querySelector('[data-native-scene-title]').textContent !== 'Temporary Scene');
         await page.click('[data-native-save-scene]');
         await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('已保存'));
         const downloadPromise = page.waitForEvent('download');
-        await page.click('[data-native-panel-tab="structure"]');
+        await openNativePanel(page, 'structure');
         await page.click('[data-native-export-md]');
         const download = await downloadPromise;
         assert.ok(download.suggestedFilename().endsWith('.md'), 'native editor should export Markdown');
@@ -263,7 +264,7 @@ async function submitNativeName(page, value) {
         assert.ok(compendiumApiResponse.ok && compendiumApiBody.ok, 'native compendium API should stay readable after UI save');
         assert.strictEqual(compendiumApiBody.entries[0].title, 'Ada Navigator', 'native compendium UI should save entries');
         await page.click('[data-view-target="writer"]');
-        await page.click('[data-native-panel-tab="generate"]');
+        await openNativePanel(page, 'generate');
         await page.evaluate(() => {
             const advanced = document.querySelector('[data-native-generation-advanced]');
             if (advanced) advanced.open = true;
@@ -328,7 +329,7 @@ async function submitNativeName(page, value) {
         await page.click('[data-compendium-agent-cancel]');
         await page.waitForFunction(() => !document.querySelector('[data-compendium-agent-modal]').open);
         await page.click('[data-view-target="writer"]');
-        await page.click('[data-native-style-guard]');
+        await clickMoreAction(page, '[data-native-style-guard]');
         await page.waitForFunction(() => document.querySelector('[data-style-guard-modal]') && !document.querySelector('[data-style-guard-modal]').hidden);
         await page.selectOption('[data-style-guard-scope]', 'global');
         await page.fill('[data-style-guard-rules]', '冷月像银盘 | 避免陈旧比喻');
@@ -413,6 +414,7 @@ async function submitNativeName(page, value) {
         await page.waitForFunction(() => window.DraftHarborProviderStream && typeof window.DraftHarborProviderStream.streamGeneration === 'function');
         await page.fill('[data-native-beat-input]', '让主角发现一封旧信。');
         await page.waitForFunction(() => !document.querySelector('[data-native-generate]').disabled);
+        await openGenerationAdvanced(page);
         await page.click('[data-native-preview-prompt]');
         await page.waitForFunction(() => document.querySelector('[data-native-prompt-preview]').textContent.includes('BEAT TO EXPAND'));
         const previewText = await page.locator('[data-native-prompt-preview]').innerText();
@@ -455,7 +457,7 @@ async function submitNativeName(page, value) {
         await page.waitForFunction(() => document.querySelector('[data-native-writer]').classList.contains('is-focus-mode'));
         await page.click('[data-native-focus-mode]');
         await page.waitForFunction(() => !document.querySelector('[data-native-writer]').classList.contains('is-focus-mode'));
-        await page.click('[data-native-panel-tab="generate"]');
+        await openNativePanel(page, 'generate');
         await page.evaluate(() => {
             window.__draftHarborGenerationStub = async (prompt, onToken, config) => {
                 window.__nativeGenerationCalls += 1;
@@ -658,12 +660,12 @@ async function submitNativeName(page, value) {
 
         // Phase 35: Cross-module linkage UI tests
 
-        // Context strip: visible on writer, shows project info
+        // Context strip: hidden on writer (W-02); project title still lives in the outline.
         await page.click('[data-view-target="writer"]');
-        await page.waitForSelector('[data-context-strip]:not([hidden])');
-        var contextText = await page.locator('[data-context-strip]').innerText();
-        assert.ok(contextText.includes('Desktop Draft'), 'context strip should show project title');
-        assert.ok(contextText.includes('资料'), 'context strip should show compendium summary');
+        await page.waitForFunction(function () {
+            var strip = document.querySelector('[data-context-strip]');
+            return strip && strip.hidden;
+        });
 
         // Context strip: hidden on bookshelf
         await page.click('[data-view-target="bookshelf"]');
@@ -699,7 +701,10 @@ async function submitNativeName(page, value) {
 
         // Writer handoff: Save to compendium
         await page.click('[data-view-target="writer"]');
-        await page.waitForSelector('[data-native-save-to-compendium]:not([disabled])');
+        await page.waitForFunction(function () {
+            var btn = document.querySelector('[data-native-save-to-compendium]');
+            return btn && !btn.disabled;
+        });
         await page.fill('[data-native-scene-editor]', 'Handoff test text for saving.');
         await page.evaluate(function () {
             var editor = document.querySelector('[data-native-scene-editor]');
@@ -707,7 +712,7 @@ async function submitNativeName(page, value) {
             editor.setSelectionRange(0, 12);
             editor.dispatchEvent(new Event('select', { bubbles: true }));
         });
-        await page.click('[data-native-save-to-compendium]');
+        await clickMoreAction(page, '[data-native-save-to-compendium]');
         await page.waitForFunction(function () {
             return document.querySelector('[data-native-extract-modal]') && !document.querySelector('[data-native-extract-modal]').hidden;
         });
@@ -734,7 +739,10 @@ async function submitNativeName(page, value) {
 
         // Writer handoff: Send to workshop
         await page.click('[data-view-target="writer"]');
-        await page.waitForSelector('[data-native-send-to-workshop]:not([disabled])');
+        await page.waitForFunction(function () {
+            var btn = document.querySelector('[data-native-send-to-workshop]');
+            return btn && !btn.disabled;
+        });
         await page.evaluate(function () {
             var editor = document.querySelector('[data-native-scene-editor]');
             var text = 'Discussion test excerpt.';
@@ -746,7 +754,7 @@ async function submitNativeName(page, value) {
             editor.setSelectionRange(start, start + text.length);
             editor.dispatchEvent(new Event('select', { bubbles: true }));
         });
-        await page.click('[data-native-send-to-workshop]');
+        await clickMoreAction(page, '[data-native-send-to-workshop]');
         await page.waitForFunction(function () {
             return document.querySelector('[data-view-panel="workshop"]') && document.querySelector('[data-view-panel="workshop"]').classList.contains('is-active');
         });

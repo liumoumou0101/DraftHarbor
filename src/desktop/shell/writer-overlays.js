@@ -2,14 +2,16 @@
         const elements = nativeEditorElements();
         const scene = currentNativeScene();
         if (!elements.contextMenu || !scene) return;
-        const hasSelection = !!(elements.editor && elements.editor.selectionStart !== elements.editor.selectionEnd);
+        if (typeof rememberNativeRewriteSelection === 'function') rememberNativeRewriteSelection();
+        const hasSelection = !!(elements.editor && elements.editor.selectionStart !== elements.editor.selectionEnd)
+            || (nativeEditorState.rewrite.selectionEnd > nativeEditorState.rewrite.selectionStart);
         if (elements.contextSelectionActions) elements.contextSelectionActions.hidden = !hasSelection;
         if (elements.contextViewSummary) elements.contextViewSummary.disabled = !String(scene.summary || '').trim();
         closeNativeWriterPopovers({ keep: 'context-menu' });
         elements.contextMenu.hidden = false;
         const rect = elements.contextMenu.getBoundingClientRect();
-        elements.contextMenu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - rect.width - 8))}px`;
-        elements.contextMenu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - rect.height - 8))}px`;
+        elements.contextMenu.style.left = `${Math.max(8, Math.min(x + 2, window.innerWidth - rect.width - 8))}px`;
+        elements.contextMenu.style.top = `${Math.max(8, Math.min(y + 2, window.innerHeight - rect.height - 8))}px`;
         const firstAction = elements.contextMenu.querySelector('button:not([disabled])');
         if (firstAction) firstAction.focus({ preventScroll: true });
     }

@@ -3,7 +3,7 @@
     const NATIVE_OUTLINE_MIN_WIDTH = 210;
     const NATIVE_ASSISTANT_MIN_WIDTH = 320;
     const NATIVE_EDITOR_MIN_WIDTH = 420;
-    const NATIVE_ASSISTANT_MIN_HEIGHT = 300;
+    const NATIVE_ASSISTANT_MIN_HEIGHT = 208;
     const NATIVE_ASSISTANT_MAX_HEIGHT = 760;
 
     function clampNativeSidebarWidth(value, minimum, maximum, fallback) {
@@ -43,7 +43,7 @@
 
     function nativeAssistantHeightBounds(root) {
         const rootHeight = root.getBoundingClientRect().height;
-        const availableHeight = rootHeight > 0 ? rootHeight - 220 : NATIVE_ASSISTANT_MAX_HEIGHT;
+        const availableHeight = rootHeight > 0 ? rootHeight - 280 : NATIVE_ASSISTANT_MAX_HEIGHT;
         const maxHeight = Math.max(
             NATIVE_ASSISTANT_MIN_HEIGHT,
             Math.min(NATIVE_ASSISTANT_MAX_HEIGHT, availableHeight)
