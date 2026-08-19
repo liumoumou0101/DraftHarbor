@@ -39,6 +39,22 @@
         return canShowSpread ? 'double-page' : 'single-page';
     }
 
+    function pagedGeometry(input = {}) {
+        const viewportWidth = finiteNumber(input.viewportWidth, 900, 240, 100000);
+        const viewportHeight = finiteNumber(input.viewportHeight, 700, 120, 100000);
+        const effective = cleanMode(input.effectiveMode);
+        const gap = finiteNumber(input.gap, 28, 0, 96);
+        const innerWidth = Math.max(240, viewportWidth);
+        const innerHeight = Math.max(120, viewportHeight);
+        const spread = effective === 'double-page' || effective === 'illustrated';
+        const spreadMax = spread ? Math.min(1680, innerWidth) : Math.min(980, innerWidth);
+        const pageWidth = spread
+            ? Math.max(220, (spreadMax - gap) / 2)
+            : Math.max(320, spreadMax);
+        const pageHeight = Math.max(120, Math.min(innerHeight, Math.round(pageWidth * 1.38)));
+        return { pageWidth, pageHeight, spreadMax, innerWidth, innerHeight };
+    }
+
     function estimatePageCapacity(input = {}) {
         const width = finiteNumber(input.pageWidth, 720, 240, 2400);
         const height = finiteNumber(input.pageHeight, 720, 120, 2400);
@@ -51,9 +67,10 @@
         const usableWidth = Math.max(120, width - pageMargin * 2 - bookSpine * 0.25);
         const usableHeight = Math.max(fontSize * lineHeight * 3, height - pageMargin * 2);
         const weightFactor = 1 + ((fontWeight - 400) / 500) * 0.06;
-        const averageGlyphWidth = fontSize * Math.max(0.72, (0.95 + letterSpacing) * weightFactor);
+        const averageGlyphWidth = fontSize * Math.max(0.84, (0.96 + letterSpacing) * weightFactor);
         const charactersPerLine = Math.max(8, Math.floor(usableWidth / averageGlyphWidth));
-        const linesPerPage = Math.max(3, Math.floor((usableHeight / (fontSize * lineHeight)) * 0.58));
+        const lineBox = fontSize * lineHeight;
+        const linesPerPage = Math.max(3, Math.floor((usableHeight / lineBox) * 0.8));
         return Math.max(64, charactersPerLine * linesPerPage);
     }
 
@@ -189,7 +206,7 @@
 
     function layoutCacheKey(input = {}) {
         const normalized = {
-            layoutVersion: 1,
+            layoutVersion: 4,
             revisionId: String(input.revisionId || ''),
             chapterId: String(input.chapterId || ''),
             requestedMode: cleanMode(input.requestedMode),
@@ -217,6 +234,7 @@
         LAYOUT_MODES,
         effectiveLayoutMode,
         estimatePageCapacity,
+        pagedGeometry,
         buildReaderPages,
         pageIndexForLocator,
         locatorPositionForPage,

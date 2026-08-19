@@ -11,6 +11,38 @@ assert.strictEqual(Layout.effectiveLayoutMode('illustrated', 420), 'single-page'
 assert.strictEqual(Layout.effectiveLayoutMode('auto', 920), 'double-page');
 assert.strictEqual(Layout.effectiveLayoutMode('auto', 700), 'single-page');
 
+const laptopSpread = Layout.pagedGeometry({
+  viewportWidth: 1280, viewportHeight: 720, effectiveMode: 'double-page', gap: 28
+});
+assert.ok(laptopSpread.pageWidth >= 220, 'laptop double-page must keep a usable page width');
+assert.ok(laptopSpread.pageHeight >= 500, 'laptop double-page should still fill most of the stage height');
+
+const twoKSpread = Layout.pagedGeometry({
+  viewportWidth: 2560, viewportHeight: 1440, effectiveMode: 'double-page', gap: 28
+});
+assert.ok(twoKSpread.spreadMax <= 1680, '2K double-page spread must not grow without a cap');
+assert.ok(twoKSpread.pageHeight < 1300, '2K double-page height must follow a book proportion instead of the full window');
+assert.ok(twoKSpread.pageHeight / twoKSpread.pageWidth < 1.5, '2K pages should stay near a book aspect');
+
+const twoKSingle = Layout.pagedGeometry({
+  viewportWidth: 2560, viewportHeight: 1440, effectiveMode: 'single-page', gap: 28
+});
+assert.ok(twoKSingle.pageWidth <= 980, '2K single-page width stays capped');
+
+const twoKCapacity = Layout.estimatePageCapacity({
+  pageWidth: twoKSpread.pageWidth,
+  pageHeight: twoKSpread.pageHeight,
+  fontSize: 20,
+  lineHeight: 1.8,
+  pageMargin: 48,
+  paragraphSpacing: 1.05
+});
+const twoKLineBox = 20 * 1.8;
+const twoKUsable = twoKSpread.pageHeight - 96;
+const twoKFillRatio = twoKCapacity / Math.max(1, Math.floor(twoKUsable / twoKLineBox) * Math.floor((twoKSpread.pageWidth - 96) / 20));
+assert.ok(twoKCapacity >= 720, `2K 20px pages must hold a full leaf, got ${twoKCapacity}`);
+assert.ok(twoKFillRatio >= 0.7, `2K capacity should fill most of the leaf, got ${twoKFillRatio.toFixed(2)}`);
+
 const chapter = {
   chapterId: 'long',
   blocks: [

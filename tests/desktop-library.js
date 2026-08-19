@@ -82,6 +82,21 @@ async function submitNativeName(page, value) {
         await page.goto(servers.appUrl + '/desktop.html', { waitUntil: 'domcontentloaded' });
         await page.waitForFunction(() => document.querySelectorAll('.desktop-project-card').length === 2);
 
+        await page.setViewportSize({ width: 2560, height: 1440 });
+        const libraryDensity = await page.evaluate(() => {
+            const bookshelf = document.querySelector('.desktop-bookshelf');
+            const card = document.querySelector('.desktop-project-card');
+            const main = document.querySelector('.desktop-main') || document.querySelector('#desktop-root');
+            return {
+                bookshelfWidth: bookshelf ? Math.round(bookshelf.getBoundingClientRect().width) : 0,
+                mainWidth: main ? Math.round(main.getBoundingClientRect().width) : 0,
+                cardWidth: card ? Math.round(card.getBoundingClientRect().width) : 0
+            };
+        });
+        assert.ok(libraryDensity.bookshelfWidth > 1800, `2K bookshelf should use the workspace width, got ${libraryDensity.bookshelfWidth}`);
+        assert.ok(libraryDensity.cardWidth >= 260 && libraryDensity.cardWidth <= 380, `2K library cards should stay compact, got ${libraryDensity.cardWidth}`);
+        await page.setViewportSize({ width: 1366, height: 850 });
+
         await page.evaluate(() => {
             window.__fullscreenClicked = false;
             window.draftHarborDesktop = {

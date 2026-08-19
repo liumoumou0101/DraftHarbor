@@ -14,7 +14,8 @@ const scenarios = [
   { label: '1280x800-150', width: 853, height: 533 },
   { label: '1280x800-200', width: 640, height: 400 },
   { label: '1366x768-100', width: 1366, height: 768 },
-  { label: '1920x1080-100', width: 1920, height: 1080 }
+  { label: '1920x1080-100', width: 1920, height: 1080 },
+  { label: '2560x1440-100', width: 2560, height: 1440 }
 ];
 
 async function importFixture(page, appUrl, fixturePath) {
