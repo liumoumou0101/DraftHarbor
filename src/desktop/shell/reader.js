@@ -235,32 +235,61 @@
         readerState.chapterIndex = Math.max(0, Math.min(total - 1, readerState.chapterIndex));
     }
 
+    function applyReaderThemeSelection(themeId) {
+        const themeApi = window.DraftHarborReaderTheme;
+        let canonicalId = themeId || 'paper';
+        try {
+            if (themeApi && typeof themeApi.resolveReaderThemeId === 'function') canonicalId = themeApi.resolveReaderThemeId(themeId || 'paper');
+        } catch {
+            canonicalId = 'paper';
+        }
+        readerState.theme = themeId || canonicalId;
+        [document.querySelector('[data-reader-theme-panel]'), document.querySelector('[data-reader-shell]'), document.querySelector('[data-view-panel="reader"]')]
+            .filter(Boolean)
+            .forEach((root) => { root.dataset.readerTheme = canonicalId; });
+        return canonicalId;
+    }
+
     function applyReaderSettings(options = {}) {
+        readerState.controlSyncDepth = (readerState.controlSyncDepth || 0) + 1;
+        try {
         const elements = readerElements();
-        if (elements.fontSize) elements.fontSize.value = String(readerState.fontSize);
-        if (elements.lineHeight) elements.lineHeight.value = String(readerState.lineHeight);
-        if (elements.textWidth) elements.textWidth.value = String(readerState.textWidth);
-        if (elements.paragraphSpacing) elements.paragraphSpacing.value = String(readerState.paragraphSpacing);
-        if (elements.fontFamily) elements.fontFamily.value = readerState.fontFamily;
+        if (elements.fontSize && elements.fontSize.value !== String(readerState.fontSize)) elements.fontSize.value = String(readerState.fontSize);
+        if (elements.lineHeight && elements.lineHeight.value !== String(readerState.lineHeight)) elements.lineHeight.value = String(readerState.lineHeight);
+        if (elements.textWidth && elements.textWidth.value !== String(readerState.textWidth)) elements.textWidth.value = String(readerState.textWidth);
+        if (elements.paragraphSpacing && elements.paragraphSpacing.value !== String(readerState.paragraphSpacing)) elements.paragraphSpacing.value = String(readerState.paragraphSpacing);
+        if (elements.fontFamily && elements.fontFamily.value !== String(readerState.fontFamily || '')) elements.fontFamily.value = readerState.fontFamily;
         if (elements.indent) elements.indent.checked = !!readerState.indent;
-        if (elements.theme) elements.theme.value = readerState.theme;
+        if (elements.theme) {
+            const resolved = window.DraftHarborReaderTheme?.resolveReaderThemeId?.(readerState.theme) || readerState.theme;
+            if (resolved && elements.theme.value !== resolved) elements.theme.value = resolved;
+        }
         if (typeof syncReaderSettingsControls === 'function') syncReaderSettingsControls();
         if (elements.themePanel) {
-            elements.themePanel.dataset.readerTheme = readerState.theme;
+            const themeApi = window.DraftHarborReaderTheme;
+            const canonicalId = themeApi && typeof themeApi.resolveReaderThemeId === 'function'
+                ? (() => { try { return themeApi.resolveReaderThemeId(readerState.theme); } catch { return 'paper'; } })()
+                : readerState.theme;
+            elements.themePanel.dataset.readerTheme = canonicalId;
             elements.themePanel.dataset.readerIndentEnabled = readerState.indent ? 'true' : 'false';
             elements.themePanel.dataset.readerMaterial = readerState.paperMaterial || 'flat';
             elements.themePanel.dataset.readerPaperShadow = readerState.paperShadow === false ? 'false' : 'true';
             elements.themePanel.dataset.readerVignette = readerState.paperVignette === false ? 'false' : 'true';
-            const themeApi = window.DraftHarborReaderTheme;
+            const themeRoots = [elements.themePanel, document.querySelector('[data-reader-shell]'), document.querySelector('[data-view-panel="reader"]')].filter(Boolean);
+            themeRoots.forEach((root) => { root.dataset.readerTheme = canonicalId; });
             try {
                 const theme = themeApi && themeApi.createReaderTheme({ themeId: readerState.theme });
                 if (theme && theme.tokens) {
-                    Object.entries(theme.tokens).forEach(([key, value]) => elements.themePanel.style.setProperty(`--reader-${key}`, value));
-                    const effect = String(theme.tokens.effect || '').replace(/^#/, '');
-                    if (/^[0-9a-f]{6}$/i.test(effect)) {
-                        const channels = [0, 2, 4].map((offset) => Number.parseInt(effect.slice(offset, offset + 2), 16));
-                        elements.themePanel.style.setProperty('--reader-effect-rgb', channels.join(', '));
-                    }
+                    themeRoots.forEach((root) => {
+                        Object.entries(theme.tokens).forEach(([key, value]) => root.style.setProperty(`--reader-${key}`, value));
+                        ['accent', 'effect', 'line'].forEach((key) => {
+                            const hex = String(theme.tokens[key] || '').replace(/^#/, '');
+                            if (/^[0-9a-f]{6}$/i.test(hex)) {
+                                const channels = [0, 2, 4].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16));
+                                root.style.setProperty(`--reader-${key}-rgb`, channels.join(', '));
+                            }
+                        });
+                    });
                 }
             } catch (_) {
                 // A user theme without a registered token set falls back to the last safe CSS theme.
@@ -276,6 +305,9 @@
             elements.themePanel.style.setProperty('--reader-text-align', readerState.textAlign || 'start');
         }
         if (options.reflow !== false && readerState.apiMode && typeof scheduleReaderReflow === 'function') scheduleReaderReflow();
+        } finally {
+            readerState.controlSyncDepth = Math.max(0, (readerState.controlSyncDepth || 1) - 1);
+        }
     }
 
     function renderReader() {
@@ -362,3 +394,6 @@
         if (readerState.effectiveLayoutMode === 'flow' && !readerState.anchorLocator) restoreReaderScroll();
         else updateReaderProgress();
     }
+
+    window.applyReaderSettings = applyReaderSettings;
+    window.applyReaderThemeSelection = applyReaderThemeSelection;

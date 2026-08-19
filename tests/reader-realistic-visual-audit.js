@@ -9,9 +9,9 @@ const { realisticReaderMarkdown } = require('./reader-visual-fixture');
 const root = path.resolve(__dirname, '..');
 const reportDir = path.join(root, '.ai_state', 'test_reports', 'reader_realistic_visual_audit');
 const scenarios = [
-  { name: 'dark-double-wide', theme: 'dark', layout: 'double-page', width: 1440, height: 900, chapter: 1 },
+  { name: 'dark-double-wide', theme: 'ink', layout: 'double-page', width: 1440, height: 900, chapter: 1 },
   { name: 'paper-single-laptop', theme: 'paper', layout: 'single-page', width: 1280, height: 720, chapter: 1 },
-  { name: 'sepia-flow-compact', theme: 'sepia', layout: 'flow', width: 960, height: 640, chapter: 0 },
+  { name: 'sepia-flow-compact', theme: 'lamp', layout: 'flow', width: 960, height: 640, chapter: 0 },
   { name: 'paper-auto-narrow', theme: 'paper', layout: 'auto', width: 720, height: 640, chapter: 2 }
 ];
 
@@ -80,7 +80,8 @@ async function selectReaderStudioSection(page, section) {
       await page.waitForTimeout(180);
       const state = await page.evaluate(() => {
         const content = document.querySelector('[data-reader-content]');
-        const style = getComputedStyle(content);
+        const page = document.querySelector('.desktop-reader-page');
+        const style = getComputedStyle(page || content);
         const pages = Array.from(document.querySelectorAll('[data-reader-page]'));
         return {
           color: style.color,

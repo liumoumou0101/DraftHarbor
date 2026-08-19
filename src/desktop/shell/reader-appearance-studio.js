@@ -1,6 +1,7 @@
 (function () {
     const THEME_LABELS = Object.freeze({
-        white: '白纸', paper: '书籍纸', warm: '暖黄', eye: '护眼', ink: '墨灰', oled: 'OLED', dark: '深色（兼容）', sepia: '旧版护眼（兼容）'
+        paper: '书页', lamp: '灯下', ink: '墨夜', oled: '夜黑',
+        white: '书页', warm: '灯下', eye: '书页', dark: '墨夜', sepia: '灯下'
     });
     let bound = false;
 
@@ -20,15 +21,16 @@
     }
 
     function appearanceMutate(mutator, options = {}) {
+        if (readerState.controlSyncDepth) return;
         if (!readerState.appearanceStudioBaseline) appearanceBeginSession();
         const locator = typeof window.captureReaderPositionLocator === 'function' ? window.captureReaderPositionLocator() : null;
         window.stopReaderPageFlip?.();
         mutator();
         readerState.appearanceProfileId = 'custom';
         readerState.anchorLocator = locator || readerState.anchorLocator;
-        if (typeof window.applyReaderSettings === 'function') window.applyReaderSettings({ reflow: options.reflow !== false });
+        if (typeof applyReaderSettings === 'function') applyReaderSettings({ reflow: options.reflow !== false });
+        else if (typeof window.applyReaderSettings === 'function') window.applyReaderSettings({ reflow: options.reflow !== false });
         if (options.reflow !== false && !readerState.apiMode && readerState.document && typeof window.renderReader === 'function') window.renderReader();
-        if (typeof window.syncReaderSettingsControls === 'function') window.syncReaderSettingsControls();
         if (typeof window.saveReaderState === 'function') window.saveReaderState();
         if (typeof window.scheduleReaderPreferenceSave === 'function') window.scheduleReaderPreferenceSave();
         if (options.releaseFocus && options.control === document.activeElement) options.control.blur();
@@ -47,15 +49,42 @@
         });
     }
 
+    function resolvedThemeId() {
+        const resolved = window.DraftHarborReaderTheme?.resolveReaderThemeId?.(readerState.theme);
+        return resolved && THEME_LABELS[resolved] ? resolved : 'paper';
+    }
+
+    function syncChipGroup(selector, current) {
+        document.querySelectorAll(selector).forEach((button) => {
+            const value = button.dataset.readerThemeChip || button.dataset.readerLayoutChip
+                || button.dataset.readerMaterialChip || button.dataset.readerScopeChip
+                || button.dataset.readerTransitionChip;
+            button.setAttribute('aria-pressed', value === current ? 'true' : 'false');
+        });
+    }
+
     function syncQuickAppearance() {
+        const themeId = resolvedThemeId();
         const theme = document.querySelector('[data-reader-quick-theme]');
-        if (theme) theme.value = THEME_LABELS[readerState.theme] ? readerState.theme : 'ink';
+        if (theme && theme.value !== themeId) theme.value = themeId;
         const family = document.querySelector('[data-reader-quick-font-family]');
         if (family) family.value = readerState.fontFamily || 'system';
         const layout = document.querySelector('[data-reader-quick-layout]');
         if (layout) layout.value = readerState.layoutMode || 'double-page';
         const size = document.querySelector('[data-reader-quick-font-size]');
         if (size) size.textContent = `${readerState.fontSize} px`;
+        syncChipGroup('[data-reader-theme-chip]', themeId);
+        syncChipGroup('[data-reader-layout-chip]', readerState.layoutMode || 'double-page');
+        syncChipGroup('[data-reader-transition-chip]', readerState.pageTransition || 'fade');
+        syncChipGroup('[data-reader-material-chip]', readerState.paperMaterial || 'flat');
+        syncChipGroup('[data-reader-scope-chip]', readerState.preferenceScope || 'global');
+    }
+
+    function activateLinkedControl(selector, value) {
+        const control = document.querySelector(selector);
+        if (!control || control.value === value) return;
+        control.value = value;
+        control.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
     async function saveReaderAppearanceProfile() {
@@ -129,13 +158,32 @@
                 tabs[next].click();
             });
         });
-        bindQuickSelect('[data-reader-quick-theme]', (value) => { readerState.theme = value; }, { reflow: false });
+        bindQuickSelect('[data-reader-quick-theme]', (value) => {
+            if (readerState.theme === value) return;
+            if (typeof applyReaderThemeSelection === 'function') applyReaderThemeSelection(value);
+            else readerState.theme = value;
+        }, { reflow: false });
         bindQuickSelect('[data-reader-quick-font-family]', (value) => {
             const control = document.querySelector('[data-reader-quick-font-family]');
             readerState.fontId = window.readerFontIdForSelection?.(control) || value;
             readerState.fontFamily = window.readerFontFamilyForSelection?.(control) || value;
         });
         bindQuickSelect('[data-reader-quick-layout]', (value) => { readerState.layoutMode = value; }, { releaseFocus: true });
+        document.querySelectorAll('[data-reader-theme-chip]').forEach((button) => {
+            button.addEventListener('click', () => activateLinkedControl('[data-reader-quick-theme]', button.dataset.readerThemeChip));
+        });
+        document.querySelectorAll('[data-reader-layout-chip]').forEach((button) => {
+            button.addEventListener('click', () => activateLinkedControl('[data-reader-quick-layout]', button.dataset.readerLayoutChip));
+        });
+        document.querySelectorAll('[data-reader-transition-chip]').forEach((button) => {
+            button.addEventListener('click', () => activateLinkedControl('[data-reader-page-transition]', button.dataset.readerTransitionChip));
+        });
+        document.querySelectorAll('[data-reader-material-chip]').forEach((button) => {
+            button.addEventListener('click', () => activateLinkedControl('[data-reader-paper-material]', button.dataset.readerMaterialChip));
+        });
+        document.querySelectorAll('[data-reader-scope-chip]').forEach((button) => {
+            button.addEventListener('click', () => activateLinkedControl('[data-reader-preference-scope]', button.dataset.readerScopeChip));
+        });
         document.querySelector('[data-reader-font-decrease]')?.addEventListener('click', () => appearanceMutate(() => { readerState.fontSize = Math.max(15, readerState.fontSize - 1); }));
         document.querySelector('[data-reader-font-increase]')?.addEventListener('click', () => appearanceMutate(() => { readerState.fontSize = Math.min(26, readerState.fontSize + 1); }));
         document.querySelector('[data-reader-quick-more]')?.addEventListener('click', () => {
@@ -146,6 +194,11 @@
         document.querySelector('[data-reader-appearance-delete]')?.addEventListener('click', () => deleteReaderAppearanceProfile().catch((error) => appearanceSetStatus(`方案删除失败：${error.message || error}`)));
         document.querySelector('[data-reader-appearance-undo]')?.addEventListener('click', undoReaderAppearanceSession);
         setReaderAppearanceStudioSection('scheme');
+        const previousSync = window.syncReaderSettingsControls;
+        window.syncReaderSettingsControls = function syncReaderSettingsControlsWithChrome() {
+            if (typeof previousSync === 'function') previousSync();
+            syncQuickAppearance();
+        };
         syncQuickAppearance();
     }
 

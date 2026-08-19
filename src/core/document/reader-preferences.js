@@ -10,17 +10,17 @@
     const PROFILE_IDS = Object.freeze(['default', 'paper', 'focus', 'custom']);
     const LAYOUT_MODES = Object.freeze(['flow', 'single-page', 'double-page', 'illustrated', 'auto']);
     const PAGE_TRANSITIONS = Object.freeze(['fade', 'slide', 'cover', 'curl', 'none']);
-    const THEME_IDS = Object.freeze(['white', 'paper', 'warm', 'eye', 'ink', 'oled', 'dark', 'sepia']);
+    const THEME_IDS = Object.freeze(['paper', 'lamp', 'ink', 'oled', 'white', 'warm', 'eye', 'dark', 'sepia']);
     const FONT_IDS = Object.freeze(['builtin:default', 'builtin:serif', 'builtin:sans', 'builtin:kai']);
     const TEXT_ALIGNMENTS = Object.freeze(['start', 'justify']);
     const VISIBILITY_MODES = Object.freeze(['auto', 'visible', 'hidden']);
-    const PAPER_MATERIALS = Object.freeze(['flat', 'soft', 'grain']);
+    const PAPER_MATERIALS = Object.freeze(['flat', 'soft', 'grain', 'fiber', 'aged', 'xuan', 'ruled', 'grid', 'canvas']);
     const STATUS_BAR_FIELDS = Object.freeze(['chapter', 'page', 'percent', 'characters', 'eta']);
 
     const DEFAULT_PREFERENCES = Object.freeze({
         layoutMode: 'double-page',
         pageTransition: 'fade',
-        themeId: 'dark',
+        themeId: 'paper',
         fontId: 'builtin:default',
         fontFamilyId: 'system',
         fontSize: 18,
@@ -63,7 +63,7 @@
         focus: Object.freeze({
             ...DEFAULT_PREFERENCES,
             appearanceProfileId: 'focus',
-            themeId: 'sepia',
+            themeId: 'lamp',
             fontId: 'builtin:default',
             fontFamilyId: 'system',
             fontSize: 20,

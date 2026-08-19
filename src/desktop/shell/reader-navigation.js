@@ -201,8 +201,12 @@
 
     function initializeReaderNavigationDocument() {
         const elements = readerNavigationElements();
-        if (elements.addBookmark) elements.addBookmark.disabled = !readerState.apiMode;
-        if (elements.bookmarkCreate) elements.bookmarkCreate.disabled = !readerState.apiMode;
+        const canBookmark = !!(readerState.currentChapter && (readerState.apiMode || readerState.document));
+        if (elements.addBookmark) {
+            elements.addBookmark.disabled = !canBookmark;
+            elements.addBookmark.title = canBookmark ? '保存当前位置，可在目录里的书签列表跳回' : '打开一本书后可添加书签';
+        }
+        if (elements.bookmarkCreate) elements.bookmarkCreate.disabled = !canBookmark;
         readerState.revisionSnapshotPromise = null;
         readerState.revisionSnapshotKey = '';
         renderReaderBookmarks();

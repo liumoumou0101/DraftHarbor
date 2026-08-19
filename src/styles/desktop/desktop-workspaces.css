@@ -1339,19 +1339,8 @@
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr);
     overflow: hidden;
-    background:
-        radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.035), transparent 34%),
-        #15171c;
-}
-
-.desktop-reader-stage[data-reader-theme="paper"] {
-    background: #f1e6d0;
-    color: #28231d;
-}
-
-.desktop-reader-stage[data-reader-theme="sepia"] {
-    background: #1f2118;
-    color: #e8e0c9;
+    background: var(--reader-environment, #d2c8b8);
+    color: var(--reader-text, #2c2822);
 }
 
 .desktop-reader-header {
@@ -1370,23 +1359,7 @@
     line-height: 1.25;
 }
 
-.desktop-reader-stage[data-reader-theme="paper"] .desktop-reader-header {
-    border-color: rgba(63, 50, 34, 0.16);
-    background: rgba(80, 58, 32, 0.06);
-}
 
-.desktop-reader-stage[data-reader-theme="paper"] .desktop-section-kicker {
-    color: #7f5f30;
-}
-
-.desktop-reader-stage[data-reader-theme="sepia"] .desktop-reader-header {
-    border-color: rgba(226, 211, 172, 0.11);
-    background: rgba(226, 211, 172, 0.045);
-}
-
-.desktop-reader-stage[data-reader-theme="sepia"] .desktop-section-kicker {
-    color: #b9d088;
-}
 
 .desktop-reader-actions {
     display: flex;
@@ -1409,15 +1382,7 @@
     font-size: 12px;
 }
 
-.desktop-reader-stage[data-reader-theme="paper"] .desktop-reader-reading-bar {
-    border-color: rgba(63, 50, 34, 0.13);
-    color: #796b58;
-}
 
-.desktop-reader-stage[data-reader-theme="sepia"] .desktop-reader-reading-bar {
-    border-color: rgba(226, 211, 172, 0.11);
-    color: #9da77b;
-}
 
 .desktop-reader-content {
     overflow: auto;
@@ -1443,19 +1408,7 @@
     text-indent: 0;
 }
 
-.desktop-reader-stage[data-reader-theme="paper"] .desktop-reader-content {
-    color: #2b241b;
-    background:
-        linear-gradient(90deg, rgba(80, 58, 32, 0.045), transparent 16%, transparent 84%, rgba(80, 58, 32, 0.045)),
-        #f6eddb;
-}
 
-.desktop-reader-stage[data-reader-theme="sepia"] .desktop-reader-content {
-    color: #e8e0c9;
-    background:
-        linear-gradient(90deg, rgba(226, 211, 172, 0.035), transparent 16%, transparent 84%, rgba(226, 211, 172, 0.035)),
-        #202116;
-}
 
 .desktop-modal-backdrop {
     position: fixed;

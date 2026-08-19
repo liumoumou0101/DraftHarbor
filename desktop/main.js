@@ -25,11 +25,25 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'draftharbor', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
 ]);
 
+function setFullscreen(window, on) {
+  if (!window || window.isDestroyed()) return false;
+  window.setFullScreen(!!on);
+  return window.isFullScreen();
+}
+
 function toggleFullscreen(window) {
   if (!window || window.isDestroyed()) return false;
-  const nextFullscreen = !window.isFullScreen();
-  window.setFullScreen(nextFullscreen);
-  return nextFullscreen;
+  return setFullscreen(window, !window.isFullScreen());
+}
+
+function bindFullscreenEvents(window) {
+  if (!window || window.isDestroyed()) return;
+  window.on('enter-full-screen', () => {
+    if (!window.isDestroyed()) window.webContents.send('draftharbor:fullscreen-changed', true);
+  });
+  window.on('leave-full-screen', () => {
+    if (!window.isDestroyed()) window.webContents.send('draftharbor:fullscreen-changed', false);
+  });
 }
 
 function serveFile(filePath) {
@@ -80,6 +94,7 @@ function createWindow() {
       event.preventDefault();
     }
   });
+  bindFullscreenEvents(window);
 }
 
 app.whenReady().then(async () => {
@@ -130,6 +145,13 @@ app.whenReady().then(async () => {
 
     ipcMain.handle('draftharbor:toggle-fullscreen', (event) => {
       return toggleFullscreen(BrowserWindow.fromWebContents(event.sender));
+    });
+    ipcMain.handle('draftharbor:set-fullscreen', (event, on) => {
+      return setFullscreen(BrowserWindow.fromWebContents(event.sender), on);
+    });
+    ipcMain.handle('draftharbor:is-fullscreen', (event) => {
+      const current = BrowserWindow.fromWebContents(event.sender);
+      return !!(current && !current.isDestroyed() && current.isFullScreen());
     });
 
     createWindow();

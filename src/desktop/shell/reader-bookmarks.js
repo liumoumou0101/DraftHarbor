@@ -61,7 +61,16 @@
             await persistReaderNavigationState([...readerBookmarkList(), bookmark]);
             readerState.bookmarkResolutions.set(bookmark.bookmarkId, { resolution: 'exact', locator });
             renderReaderBookmarks();
-            readerSetNavigationStatus('bookmark', '书签已保存。');
+            readerSetNavigationStatus('bookmark', '书签已保存。点列表可跳回该位置。');
+            if (typeof selectReaderLeftTab === 'function') selectReaderLeftTab('bookmarks');
+            if (typeof setReaderDrawer === 'function') setReaderDrawer('left');
+            const add = document.querySelector('[data-reader-add-bookmark]');
+            if (add) {
+                add.textContent = '已添加';
+                window.setTimeout(() => {
+                    if (add.textContent === '已添加') add.textContent = '添加书签';
+                }, 1600);
+            }
         } catch (error) {
             readerSetNavigationStatus('bookmark', `书签保存失败：${error.message || error}`);
         }
@@ -110,7 +119,7 @@
         if (!bookmarks.length) {
             const empty = document.createElement('p');
             empty.className = 'desktop-reader-hint';
-            empty.textContent = '还没有书签。';
+            empty.textContent = '还没有书签。点「添加书签」保存当前位置，再点列表即可跳回。';
             container.appendChild(empty);
             return;
         }

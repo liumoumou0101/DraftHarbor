@@ -2,9 +2,16 @@ const assert = require('assert');
 const Theme = require('../src/core/document/reader-theme');
 
 const builtins = Theme.builtInReaderThemes();
-assert.strictEqual(builtins.length, 6);
+assert.strictEqual(builtins.length, 4);
+assert.deepStrictEqual(builtins.map((theme) => theme.themeId), ['paper', 'lamp', 'ink', 'oled']);
 assert.ok(builtins.every((theme) => theme.builtIn));
-assert.ok(Theme.contrastRatio(builtins[0].tokens.text, builtins[0].tokens.page) >= 4.5);
+assert.ok(builtins.every((theme) => Theme.contrastRatio(theme.tokens.text, theme.tokens.page) >= 4.5));
+assert.ok(builtins.every((theme) => Theme.contrastRatio(theme.tokens.accentText, theme.tokens.accent) >= 4.5));
+assert.strictEqual(Theme.resolveReaderThemeId('dark'), 'ink');
+assert.strictEqual(Theme.resolveReaderThemeId('sepia'), 'lamp');
+assert.strictEqual(Theme.resolveReaderThemeId('white'), 'paper');
+assert.strictEqual(Theme.createReaderTheme({ themeId: 'dark' }).canonicalId, 'ink');
+assert.strictEqual(Theme.createReaderTheme({ themeId: 'paper' }).name, '书页');
 
 const custom = Theme.createReaderTheme({
   themeId: 'user:quiet-night',

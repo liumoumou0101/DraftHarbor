@@ -12,14 +12,7 @@
             ? preferencesApi.createReaderPreferencesV2({})
             : schema && typeof schema.createReaderGlobalPreferences === 'function'
                 ? schema.createReaderGlobalPreferences({})
-            : {
-            schemaVersion: 2, layoutMode: 'double-page', pageTransition: 'fade', themeId: 'dark',
-                fontFamilyId: 'system', fontId: 'builtin:default', fontCatalogVersion: 1, fontSize: 18, lineHeight: 1.8, letterSpacing: 0,
-                paragraphSpacing: 1.05, pageMargin: 48, textWidth: 760, textAlign: 'start', indent: true,
-                paperMaterial: 'flat', paperShadow: true, paperVignette: true,
-                reducedMotionOverride: undefined, appearanceProfileId: 'default', statusBarMode: 'auto',
-                statusBarFields: ['chapter', 'page', 'percent'], statusBarAutoHide: true
-            };
+            : { themeId: 'paper' };
     }
 
     function normalizeReaderPreferences(input) {
@@ -155,7 +148,7 @@
         };
         Object.entries(values).forEach(([selector, value]) => {
             const control = document.querySelector(selector);
-            if (control && value !== undefined) control.value = String(value);
+            if (control && value !== undefined && control.value !== String(value)) control.value = String(value);
         });
         const outputValues = {
             'font-size': `${readerState.fontSize} px`,
@@ -178,13 +171,14 @@
         if (statusAutoHide) statusAutoHide.checked = readerState.statusBarAutoHide !== false;
         const quickTheme = document.querySelector('[data-reader-quick-theme]');
         if (quickTheme) {
-            const themeIds = window.DraftHarborReaderTheme && window.DraftHarborReaderTheme.BUILTIN_THEME_IDS || ['white', 'paper', 'warm', 'eye', 'ink', 'oled'];
-            quickTheme.value = themeIds.includes(readerState.theme) ? readerState.theme : 'ink';
+            let next = 'paper';
+            try { next = window.DraftHarborReaderTheme.resolveReaderThemeId(readerState.theme); } catch { next = 'paper'; }
+            if (quickTheme.value !== next) quickTheme.value = next;
         }
         const quickFontFamily = document.querySelector('[data-reader-quick-font-family]');
-        if (quickFontFamily) quickFontFamily.value = readerState.fontFamily;
+        if (quickFontFamily && quickFontFamily.value !== (readerState.fontFamily || 'system')) quickFontFamily.value = readerState.fontFamily || 'system';
         const quickLayout = document.querySelector('[data-reader-quick-layout]');
-        if (quickLayout) quickLayout.value = readerState.layoutMode;
+        if (quickLayout && quickLayout.value !== (readerState.layoutMode || 'double-page')) quickLayout.value = readerState.layoutMode || 'double-page';
         const quickFontSize = document.querySelector('[data-reader-quick-font-size]');
         if (quickFontSize) quickFontSize.textContent = `${readerState.fontSize} px`;
         const scope = document.querySelector('[data-reader-preference-scope]');
@@ -297,13 +291,12 @@
         const locator = typeof captureReaderPositionLocator === 'function' ? captureReaderPositionLocator() : null;
         window.stopReaderPageFlip?.();
         const mutationResult = mutator();
-        if (markCustom && mutationResult !== 'appearance-profile') {
+        if (markCustom && mutationResult !== 'appearance-profile' && mutationResult !== 'noop') {
             readerState.appearanceProfileId = 'custom';
         }
         readerState.anchorLocator = locator || readerState.anchorLocator;
         applyReaderSettings({ reflow });
         if (reflow && !readerState.apiMode && readerState.document && typeof renderReader === 'function') renderReader();
-        syncReaderSettingsControls();
         if (refreshProgress && typeof updateReaderWorkspaceProgress === 'function') updateReaderWorkspaceProgress();
         saveReaderState();
         scheduleReaderPreferenceSave();
@@ -337,6 +330,12 @@
             });
         });
         bindReaderSetting('[data-reader-status-bar-auto-hide]', 'change', (control) => { readerState.statusBarAutoHide = control.checked; }, { reflow: false });
+        bindReaderSetting('select[data-reader-theme]', 'change', (control) => {
+            const next = control.value || 'paper';
+            if (readerState.theme === next) return 'noop';
+            if (typeof applyReaderThemeSelection === 'function') applyReaderThemeSelection(next);
+            else readerState.theme = next;
+        }, { reflow: false });
         bindReaderSetting('[data-reader-paper-material]', 'change', (control) => { readerState.paperMaterial = control.value || 'flat'; }, { reflow: false });
         bindReaderSetting('input[data-reader-paper-shadow]', 'change', (control) => { readerState.paperShadow = control.checked; }, { reflow: false });
         bindReaderSetting('input[data-reader-paper-vignette]', 'change', (control) => { readerState.paperVignette = control.checked; }, { reflow: false });

@@ -4,6 +4,17 @@
     .desktop-reader-library-heading h3 { margin: 0; color: var(--desktop-text); font-size: 20px; }
     .desktop-reader-library-count { color: var(--desktop-faint); font-size: 11px; }
     .desktop-reader-library-controls { display: grid; grid-template-columns: minmax(0, 1fr) 1fr 1fr 1fr auto auto; gap: 6px; }
+    .desktop-reader-drawer-left .desktop-reader-library-toolbar { gap: 8px; margin-top: 0; padding-bottom: 10px; }
+    .desktop-reader-drawer-left .desktop-reader-library-controls {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+    .desktop-reader-drawer-left .desktop-reader-library-controls input { grid-column: 1 / -1; }
+    .desktop-reader-drawer-left .desktop-reader-library-grid,
+    .desktop-reader-drawer-left .desktop-reader-library-grid.is-list { grid-template-columns: minmax(0, 1fr); }
+    .desktop-reader-drawer-left .desktop-reader-import { gap: 6px; }
+    .desktop-reader-drawer-left .desktop-reader-import span { font-size: 12px; }
+    .desktop-reader-drawer-left .desktop-reader-library-section { margin-top: 12px; }
+    .desktop-reader-drawer-left .desktop-reader-library-card-actions { gap: 4px; }
     .desktop-reader-library-controls input,
     .desktop-reader-library-controls select { min-width: 0; min-height: 34px; padding: 6px 8px; border: 1px solid var(--desktop-line-strong); border-radius: 7px; background: rgba(255, 255, 255, 0.045); color: var(--desktop-text); }
     .desktop-reader-library-section { display: grid; gap: 10px; margin-top: 18px; }
@@ -27,7 +38,7 @@
     .desktop-reader-library-card-actions select { max-width: 92px; min-height: 28px; padding: 4px 5px; border: 1px solid var(--desktop-line-strong); border-radius: 7px; background: rgba(255, 255, 255, 0.045); color: var(--desktop-muted); font-size: 11px; }
     .desktop-reader-library-empty { display: grid; gap: 8px; padding: 20px 4px; color: var(--desktop-muted); }
     .desktop-reader-library-empty strong { color: var(--desktop-text); }
-    .desktop-reader-detail-dialog { width: min(620px, calc(100% - 32px)); max-height: min(760px, calc(100% - 32px)); padding: 0; border: 1px solid var(--desktop-line-strong); border-radius: 14px; background: var(--reader-shell-overlay, #171a20); color: var(--desktop-text); box-shadow: 0 24px 90px rgba(0, 0, 0, 0.56); }
+    .desktop-reader-detail-dialog { width: min(620px, calc(100% - 32px)); max-height: min(760px, calc(100% - 32px)); padding: 0; border: 1px solid var(--desktop-line-strong); border-radius: 14px; background: var(--reader-chrome, #e4dccf); color: var(--desktop-text); box-shadow: 0 24px 90px rgba(0, 0, 0, 0.56); }
     .desktop-reader-detail-dialog::backdrop { background: rgba(4, 6, 9, 0.72); backdrop-filter: blur(4px); }
     .desktop-reader-detail-body { display: grid; gap: 14px; max-height: 520px; overflow: auto; padding: 20px; }
     .desktop-reader-detail-facts { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 8px 14px; margin: 0; }
