@@ -41,6 +41,9 @@
                                     <select class="desktop-reader-sr-only" data-reader-quick-layout tabindex="-1" aria-hidden="true">
                                         <option value="flow">连续</option><option value="single-page">单页</option><option value="double-page" selected>双页</option><option value="illustrated">带图</option><option value="auto">自动</option>
                                     </select>
+                                    <div class="desktop-reader-chip-row" data-reader-transition-chips role="radiogroup" aria-label="翻页效果">
+                                        <button type="button" class="desktop-reader-text-chip" data-reader-transition-chip="fade" aria-pressed="true">淡入</button><button type="button" class="desktop-reader-text-chip" data-reader-transition-chip="slide" aria-pressed="false">滑动</button><button type="button" class="desktop-reader-text-chip" data-reader-transition-chip="cover" aria-pressed="false">覆盖</button><button type="button" class="desktop-reader-text-chip" data-reader-transition-chip="curl" aria-pressed="false">仿真</button><button type="button" class="desktop-reader-text-chip" data-reader-transition-chip="none" aria-pressed="false">无</button>
+                                    </div>
                                     <button class="desktop-reader-tool" type="button" data-reader-illustration-add disabled>配图</button>
                                     <input type="file" data-reader-illustration-file accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
                                     <button class="desktop-reader-tool" type="button" data-reader-tts-toggle aria-pressed="false" disabled>朗读</button>
@@ -94,10 +97,7 @@
 
                     <aside class="desktop-reader-drawer desktop-reader-drawer-left" id="reader-left-drawer" data-reader-left-drawer aria-hidden="true" aria-labelledby="reader-navigation-title" inert>
                         <header class="desktop-reader-drawer-header">
-                            <div>
-                                <p class="desktop-section-kicker">Reader</p>
-                                <h2 id="reader-navigation-title">目录</h2>
-                            </div>
+                            <h2 id="reader-navigation-title">目录</h2>
                             <div class="desktop-reader-drawer-header-actions">
                                 <button class="desktop-reader-tool" type="button" data-reader-tab="library" aria-selected="false">书库</button><button class="desktop-reader-tool" type="button" data-reader-left-close>关闭</button>
                             </div>
@@ -111,7 +111,7 @@
                                     <span>导入 txt / md / epub</span>
                                     <input type="file" data-reader-file accept=".txt,.md,.epub,text/plain,text/markdown,application/epub+zip">
                                 </label>
-                                <p class="desktop-reader-hint">文件会先进入导入预览；确认后写入本地书库，可在确认前校正书名与章节。EPUB 只提取章节文本和本地图片说明，不执行脚本、不加载远程资源。</p>
+                                <p class="desktop-reader-hint">确认后再写入本地书库。EPUB 只取章节和本地图片说明。</p>
                                 <div class="desktop-reader-sidebar-group" data-reader-migration hidden>
                                     <p class="desktop-reader-hint" data-reader-migration-message></p>
                                     <div class="desktop-reader-actions" data-reader-migration-actions hidden>
@@ -126,7 +126,7 @@
                             </section>
                             <section data-reader-panel="search" hidden>
                                 <form class="desktop-reader-search-form" data-reader-search-form>
-                                    <label><span>字面搜索</span><input type="search" data-reader-search-input placeholder="搜索当前书籍" autocomplete="off"></label>
+                                    <label><span class="desktop-reader-sr-only">字面搜索</span><input type="search" data-reader-search-input placeholder="搜索当前书籍" autocomplete="off"></label>
                                     <button class="desktop-secondary-action" type="submit" data-reader-search-submit>搜索</button>
                                     <button class="desktop-reader-tool" type="button" data-reader-search-cancel disabled>取消</button>
                                 </form>
@@ -137,7 +137,7 @@
                                 <div class="desktop-reader-bookmark-toolbar">
                                     <button class="desktop-primary-action" type="button" data-reader-bookmark-create disabled>添加当前位置</button>
                                 </div>
-                                <p class="desktop-reader-hint" data-reader-bookmark-status aria-live="polite">书签会保存稳定位置，并提示恢复精确度。</p>
+                                <p class="desktop-reader-hint" data-reader-bookmark-status aria-live="polite">点「添加书签」保存当前位置；点下面的条目即可跳回。</p>
                                 <div class="desktop-reader-bookmarks" data-reader-bookmarks></div>
                             </section>
                             <section data-reader-panel="annotations" hidden>
@@ -192,9 +192,9 @@
                             <p class="desktop-reader-hint">只改变阅读器，不影响软件主题。</p>
                             <p class="desktop-reader-field-label">纸张材质</p>
                             <div class="desktop-reader-material-grid" data-reader-material-chips role="radiogroup" aria-label="纸张材质">
-                                <button type="button" class="desktop-reader-material-chip" data-reader-material-chip="flat" aria-pressed="true"><span data-reader-material="flat"></span>纯色</button><button type="button" class="desktop-reader-material-chip" data-reader-material-chip="soft" aria-pressed="false"><span data-reader-material="soft"></span>柔纸</button><button type="button" class="desktop-reader-material-chip" data-reader-material-chip="grain" aria-pressed="false"><span data-reader-material="grain"></span>细纹</button><button type="button" class="desktop-reader-material-chip" data-reader-material-chip="fiber" aria-pressed="false"><span data-reader-material="fiber"></span>纤维</button><button type="button" class="desktop-reader-material-chip" data-reader-material-chip="aged" aria-pressed="false"><span data-reader-material="aged"></span>旧书</button><button type="button" class="desktop-reader-material-chip" data-reader-material-chip="xuan" aria-pressed="false"><span data-reader-material="xuan"></span>宣纸</button>
+                                <button type="button" class="desktop-reader-material-chip" data-reader-material-chip="flat" aria-pressed="true"><span data-reader-material="flat"></span>纯色</button><button type="button" class="desktop-reader-material-chip" data-reader-material-chip="soft" aria-pressed="false"><span data-reader-material="soft"></span>柔纸</button><button type="button" class="desktop-reader-material-chip" data-reader-material-chip="grain" aria-pressed="false"><span data-reader-material="grain"></span>细纹</button><button type="button" class="desktop-reader-material-chip" data-reader-material-chip="fiber" aria-pressed="false"><span data-reader-material="fiber"></span>纤维</button><button type="button" class="desktop-reader-material-chip" data-reader-material-chip="aged" aria-pressed="false"><span data-reader-material="aged"></span>旧书</button><button type="button" class="desktop-reader-material-chip" data-reader-material-chip="xuan" aria-pressed="false"><span data-reader-material="xuan"></span>宣纸</button><button type="button" class="desktop-reader-material-chip" data-reader-material-chip="ruled" aria-pressed="false"><span data-reader-material="ruled"></span>横线</button><button type="button" class="desktop-reader-material-chip" data-reader-material-chip="grid" aria-pressed="false"><span data-reader-material="grid"></span>方格</button><button type="button" class="desktop-reader-material-chip" data-reader-material-chip="canvas" aria-pressed="false"><span data-reader-material="canvas"></span>布纹</button>
                             </div>
-                            <select class="desktop-reader-sr-only" data-reader-paper-material tabindex="-1" aria-hidden="true"><option value="flat">纯色</option><option value="soft">柔纸</option><option value="grain">细纹</option><option value="fiber">纤维</option><option value="aged">旧书</option><option value="xuan">宣纸</option></select>
+                            <select class="desktop-reader-sr-only" data-reader-paper-material tabindex="-1" aria-hidden="true"><option value="flat">纯色</option><option value="soft">柔纸</option><option value="grain">细纹</option><option value="fiber">纤维</option><option value="aged">旧书</option><option value="xuan">宣纸</option><option value="ruled">横线</option><option value="grid">方格</option><option value="canvas">布纹</option></select>
                             <div class="desktop-reader-chip-row">
                                 <label class="desktop-reader-check"><input type="checkbox" data-reader-paper-shadow checked><span>纸张阴影</span></label>
                                 <label class="desktop-reader-check"><input type="checkbox" data-reader-paper-vignette checked><span>环境晕影</span></label>

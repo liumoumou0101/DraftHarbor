@@ -116,9 +116,7 @@
         const toolbar = readerLibraryElement('div', 'desktop-reader-library-toolbar');
         const heading = readerLibraryElement('div', 'desktop-reader-library-heading');
         heading.append(
-            readerLibraryElement('p', 'desktop-section-kicker', 'Reader Library'),
-            readerLibraryElement('h3', '', '我的书库'),
-            readerLibraryElement('span', 'desktop-reader-library-count', String(documents.length) + ' 本可见书籍')
+            readerLibraryElement('span', 'desktop-reader-library-count', String(documents.length) + ' 本书')
         );
         const controls = readerLibraryElement('div', 'desktop-reader-library-controls');
         const query = document.createElement('input');
@@ -320,7 +318,7 @@
             container.appendChild(continueSection);
         }
         const section = readerLibraryElement('section', 'desktop-reader-library-section');
-        section.appendChild(readerLibraryElement('h4', '', '全部书籍'));
+        if (candidate) section.appendChild(readerLibraryElement('h4', '', '全部书籍'));
         const grid = readerLibraryElement('div', 'desktop-reader-library-grid' + (view.viewMode === 'list' ? ' is-list' : ''));
         documents.forEach((item) => grid.appendChild(renderReaderLibraryCard(item, view)));
         section.appendChild(grid);

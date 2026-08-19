@@ -389,18 +389,18 @@
 
 .desktop-reader-stage[data-reader-material="fiber"] :is(.desktop-reader-content, .desktop-reader-page, .desktop-reader-page-flip-sheet),
 .desktop-reader-material-chip > span[data-reader-material="fiber"] {
-    background-image: repeating-linear-gradient(90deg, transparent, transparent 11px, color-mix(in srgb, var(--reader-effect) 8%, transparent) 12px), repeating-linear-gradient(0deg, transparent, transparent 6px, color-mix(in srgb, var(--reader-text) 4%, transparent) 7px);
+    background-image: repeating-linear-gradient(90deg, transparent, transparent 11px, color-mix(in srgb, var(--reader-effect) 16%, transparent) 12px), repeating-linear-gradient(0deg, transparent, transparent 6px, color-mix(in srgb, var(--reader-text) 8%, transparent) 7px);
 }
 
 .desktop-reader-stage[data-reader-material="aged"] :is(.desktop-reader-content, .desktop-reader-page, .desktop-reader-page-flip-sheet),
 .desktop-reader-material-chip > span[data-reader-material="aged"] {
-    background-image: radial-gradient(circle at 18% 24%, color-mix(in srgb, #8a6230 18%, transparent) 0 1.1px, transparent 2px), radial-gradient(circle at 74% 70%, color-mix(in srgb, #6a4020 14%, transparent) 0 1px, transparent 2px), linear-gradient(180deg, color-mix(in srgb, #c4a06a 12%, transparent), transparent 32%, color-mix(in srgb, var(--reader-effect) 8%, transparent));
+    background-image: radial-gradient(circle at 18% 24%, color-mix(in srgb, #8a6230 28%, transparent) 0 1.4px, transparent 2.2px), radial-gradient(circle at 74% 70%, color-mix(in srgb, #6a4020 22%, transparent) 0 1.2px, transparent 2px), linear-gradient(180deg, color-mix(in srgb, #c4a06a 18%, transparent), transparent 32%, color-mix(in srgb, var(--reader-effect) 12%, transparent));
     background-size: 132px 104px, 168px 142px, 100% 100%;
 }
 
 .desktop-reader-stage[data-reader-material="xuan"] :is(.desktop-reader-content, .desktop-reader-page, .desktop-reader-page-flip-sheet),
 .desktop-reader-material-chip > span[data-reader-material="xuan"] {
-    background-image: radial-gradient(ellipse at 30% 40%, color-mix(in srgb, var(--reader-effect) 9%, transparent) 0 16px, transparent 40px), repeating-linear-gradient(14deg, transparent, transparent 13px, color-mix(in srgb, var(--reader-text) 4%, transparent) 14px);
+    background-image: radial-gradient(ellipse at 30% 40%, color-mix(in srgb, var(--reader-effect) 14%, transparent) 0 16px, transparent 40px), repeating-linear-gradient(14deg, transparent, transparent 13px, color-mix(in srgb, var(--reader-text) 7%, transparent) 14px);
 }
 
 .desktop-reader-stage[data-reader-paper-shadow="false"] .desktop-reader-page {
@@ -499,7 +499,8 @@
 }
 
 @media (max-width: 560px) {
-    .desktop-reader-quick-appearance [data-reader-layout-chips] {
+    .desktop-reader-quick-appearance [data-reader-layout-chips],
+    .desktop-reader-quick-appearance [data-reader-transition-chips] {
         display: none;
     }
 }

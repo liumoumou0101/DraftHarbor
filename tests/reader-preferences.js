@@ -16,6 +16,9 @@ assert.strictEqual(Preferences.createReaderPreferencesV2({ pageTransition: 'cove
 assert.strictEqual(Preferences.createReaderPreferencesV2({ paperMaterial: 'xuan' }).paperMaterial, 'xuan');
 assert.strictEqual(Preferences.createReaderPreferencesV2({ paperMaterial: 'fiber' }).paperMaterial, 'fiber');
 assert.strictEqual(Preferences.createReaderPreferencesV2({ paperMaterial: 'aged' }).paperMaterial, 'aged');
+assert.strictEqual(Preferences.createReaderPreferencesV2({ paperMaterial: 'ruled' }).paperMaterial, 'ruled');
+assert.strictEqual(Preferences.createReaderPreferencesV2({ paperMaterial: 'grid' }).paperMaterial, 'grid');
+assert.strictEqual(Preferences.createReaderPreferencesV2({ paperMaterial: 'canvas' }).paperMaterial, 'canvas');
 assert.strictEqual(Preferences.createReaderPreferencesV2({ themeId: 'user:quiet-night' }).themeId, 'user:quiet-night');
 
 const migrated = Preferences.migrateReaderPreferences({

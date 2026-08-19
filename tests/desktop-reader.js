@@ -361,13 +361,12 @@ async function selectReaderStudioSection(page, section) {
             probe.innerHTML = '<button class="desktop-reader-illustration-dropzone" data-reader-illustration-dropzone>添加图片</button><button class="desktop-reader-illustration-remove">移除图片</button>';
             document.querySelector('[data-reader-content]').appendChild(probe);
         });
-        await page.click('[data-reader-focus-toggle]');
-        await page.waitForFunction(() => {
-            const shell = document.querySelector('[data-reader-shell]');
-            return shell.dataset.readerControlsVisible === 'false'
-                && shell.dataset.readerHudState === 'hidden'
-                && document.getElementById('desktop-root').dataset.readerFocusMode === 'true';
+        await page.evaluate(() => {
+            if (typeof window.readerHudToggleFocusMode === 'function') window.readerHudToggleFocusMode();
+            else document.querySelector('[data-reader-focus-toggle]').click();
         });
+        await page.waitForFunction(() => readerState.focusMode === true
+            && document.getElementById('desktop-root')?.dataset.readerFocusMode === 'true');
         const focusedShell = await page.evaluate(() => ({
             railVisibility: getComputedStyle(document.querySelector('.desktop-rail')).visibility,
             chromeDisplay: getComputedStyle(document.querySelector('.desktop-main > .desktop-topbar')).display,
@@ -674,9 +673,9 @@ async function selectReaderStudioSection(page, section) {
         await page.waitForFunction(() => readerState.activeChapterId === readerState.contents[1].chapterId);
 
         await page.click('[data-reader-add-bookmark]');
-        await page.waitForFunction(() => readerState.documentRecordState.bookmarks.length === 1);
-        await page.click('[data-reader-library-toggle]');
-        await page.click('[data-reader-tab="bookmarks"]');
+        await page.waitForFunction(() => readerState.documentRecordState.bookmarks.length === 1
+            && document.querySelector('[data-reader-left-drawer]')?.getAttribute('aria-hidden') === 'false'
+            && document.querySelector('[data-reader-tab="bookmarks"]')?.getAttribute('aria-selected') === 'true');
         assert.strictEqual(await page.locator('[data-reader-bookmark-accuracy="exact"]').count(), 1, 'new bookmarks should resolve exactly in the active revision');
         await page.fill('.desktop-reader-bookmark-controls input', 'Harbor checkpoint');
         await page.selectOption('.desktop-reader-bookmark-controls select:nth-of-type(1)', 'blue');

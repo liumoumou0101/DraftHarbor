@@ -14,7 +14,7 @@
     const FONT_IDS = Object.freeze(['builtin:default', 'builtin:serif', 'builtin:sans', 'builtin:kai']);
     const TEXT_ALIGNMENTS = Object.freeze(['start', 'justify']);
     const VISIBILITY_MODES = Object.freeze(['auto', 'visible', 'hidden']);
-    const PAPER_MATERIALS = Object.freeze(['flat', 'soft', 'grain', 'fiber', 'aged', 'xuan']);
+    const PAPER_MATERIALS = Object.freeze(['flat', 'soft', 'grain', 'fiber', 'aged', 'xuan', 'ruled', 'grid', 'canvas']);
     const STATUS_BAR_FIELDS = Object.freeze(['chapter', 'page', 'percent', 'characters', 'eta']);
 
     const DEFAULT_PREFERENCES = Object.freeze({

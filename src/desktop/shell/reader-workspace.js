@@ -83,6 +83,8 @@
         document.querySelectorAll('[data-reader-panel]').forEach((panel) => {
             panel.hidden = panel.dataset.readerPanel !== tab;
         });
+        const heading = document.getElementById('reader-navigation-title');
+        if (heading) heading.textContent = ({ library: '书库', contents: '目录', search: '搜索', bookmarks: '书签', annotations: '批注', history: '历史' })[tab] || '目录';
     }
 
     function handleReaderWorkspaceEscape() {
@@ -364,27 +366,19 @@
                 if (readerState.apiMode && typeof scheduleReaderReflow === 'function') scheduleReaderReflow();
             }, 160);
         });
+        function refreshReaderFontFace() {
+            const content = document.querySelector('[data-reader-content]');
+            const actual = typeof readerActualFontFamily === 'function' ? readerActualFontFamily(content) : '';
+            if (actual && actual !== readerState.actualFontFamily) {
+                readerState.actualFontFamily = actual;
+                if (typeof clearReaderLayoutCache === 'function') clearReaderLayoutCache();
+                if (readerState.apiMode && typeof scheduleReaderReflow === 'function') scheduleReaderReflow();
+            }
+            if (typeof syncReaderSettingsControls === 'function') syncReaderSettingsControls();
+        }
         if (document.fonts) {
-            document.fonts.ready.then(() => {
-                const content = document.querySelector('[data-reader-content]');
-                const actual = typeof readerActualFontFamily === 'function' ? readerActualFontFamily(content) : '';
-                if (actual && actual !== readerState.actualFontFamily) {
-                    readerState.actualFontFamily = actual;
-                    if (typeof clearReaderLayoutCache === 'function') clearReaderLayoutCache();
-                    if (readerState.apiMode && typeof scheduleReaderReflow === 'function') scheduleReaderReflow();
-                }
-                if (typeof syncReaderSettingsControls === 'function') syncReaderSettingsControls();
-            });
-            document.fonts.addEventListener?.('loadingdone', () => {
-                const content = document.querySelector('[data-reader-content]');
-                const actual = typeof readerActualFontFamily === 'function' ? readerActualFontFamily(content) : '';
-                if (actual && actual !== readerState.actualFontFamily) {
-                    readerState.actualFontFamily = actual;
-                    if (typeof clearReaderLayoutCache === 'function') clearReaderLayoutCache();
-                    if (readerState.apiMode && typeof scheduleReaderReflow === 'function') scheduleReaderReflow();
-                }
-                if (typeof syncReaderSettingsControls === 'function') syncReaderSettingsControls();
-            });
+            document.fonts.ready.then(refreshReaderFontFace);
+            document.fonts.addEventListener?.('loadingdone', refreshReaderFontFace);
         }
         selectReaderLeftTab(readerState.leftTab);
         window.setReaderDrawer = setReaderDrawer;

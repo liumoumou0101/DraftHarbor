@@ -95,7 +95,7 @@ for (const section of ['scheme', 'paper', 'font', 'typography', 'page', 'motion'
 }
 for (const hook of [
   'data-reader-quick-theme', 'data-reader-font-decrease', 'data-reader-font-increase',
-  'data-reader-quick-font-family', 'data-reader-quick-layout', 'data-reader-quick-more',
+  'data-reader-quick-font-family', 'data-reader-quick-layout', 'data-reader-transition-chip', 'data-reader-quick-more',
   'data-reader-tts-toggle', 'data-reader-tts-stop', 'data-reader-tts-status',
   'data-reader-paper-material', 'data-reader-paper-shadow', 'data-reader-paper-vignette',
   'data-reader-appearance-undo', 'data-reader-appearance-save', 'data-reader-appearance-delete'
@@ -113,6 +113,9 @@ assert.ok(appearanceCss.includes('data-reader-material="grain"'), 'appearance st
 assert.ok(appearanceCss.includes('data-reader-material="fiber"'), 'appearance styles must provide the fiber material');
 assert.ok(appearanceCss.includes('data-reader-material="aged"'), 'appearance styles must provide the aged material');
 assert.ok(appearanceCss.includes('data-reader-material="xuan"'), 'appearance styles must provide the xuan material');
+assert.ok(hudCss.includes('data-reader-material="ruled"'), 'HUD styles must provide the ruled material');
+assert.ok(hudCss.includes('data-reader-material="grid"'), 'HUD styles must provide the grid material');
+assert.ok(hudCss.includes('data-reader-material="canvas"'), 'HUD styles must provide the canvas material');
 assert.ok(html.includes('data-reader-float-hud'), 'reader shell must expose the idle floating HUD');
 assert.ok(html.includes('data-reader-theme-chip'), 'quick appearance must expose theme chips');
 assert.ok(appearanceCss.includes('data-reader-paper-shadow="false"'), 'appearance styles must support disabling paper shadow');

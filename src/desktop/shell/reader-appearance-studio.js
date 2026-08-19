@@ -57,7 +57,8 @@
     function syncChipGroup(selector, current) {
         document.querySelectorAll(selector).forEach((button) => {
             const value = button.dataset.readerThemeChip || button.dataset.readerLayoutChip
-                || button.dataset.readerMaterialChip || button.dataset.readerScopeChip;
+                || button.dataset.readerMaterialChip || button.dataset.readerScopeChip
+                || button.dataset.readerTransitionChip;
             button.setAttribute('aria-pressed', value === current ? 'true' : 'false');
         });
     }
@@ -74,6 +75,7 @@
         if (size) size.textContent = `${readerState.fontSize} px`;
         syncChipGroup('[data-reader-theme-chip]', themeId);
         syncChipGroup('[data-reader-layout-chip]', readerState.layoutMode || 'double-page');
+        syncChipGroup('[data-reader-transition-chip]', readerState.pageTransition || 'fade');
         syncChipGroup('[data-reader-material-chip]', readerState.paperMaterial || 'flat');
         syncChipGroup('[data-reader-scope-chip]', readerState.preferenceScope || 'global');
     }
@@ -172,6 +174,9 @@
         });
         document.querySelectorAll('[data-reader-layout-chip]').forEach((button) => {
             button.addEventListener('click', () => activateLinkedControl('[data-reader-quick-layout]', button.dataset.readerLayoutChip));
+        });
+        document.querySelectorAll('[data-reader-transition-chip]').forEach((button) => {
+            button.addEventListener('click', () => activateLinkedControl('[data-reader-page-transition]', button.dataset.readerTransitionChip));
         });
         document.querySelectorAll('[data-reader-material-chip]').forEach((button) => {
             button.addEventListener('click', () => activateLinkedControl('[data-reader-paper-material]', button.dataset.readerMaterialChip));

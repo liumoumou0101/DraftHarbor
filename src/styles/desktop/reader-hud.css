@@ -162,6 +162,47 @@
 }
 .desktop-reader-drawer-header-actions { display: flex; gap: 6px; }
 .desktop-reader-drawer-right { width: min(400px, calc(100% - 28px)); }
+.desktop-reader-drawer-left { width: min(340px, calc(100% - 28px)); }
+.desktop-reader-drawer-left .desktop-reader-drawer-header {
+    min-height: 52px;
+    padding: 8px 12px;
+}
+.desktop-reader-drawer-left .desktop-reader-drawer-header h2 { font-size: 16px; }
+.desktop-reader-drawer-left .desktop-reader-tabs {
+    gap: 4px;
+    padding: 8px 10px;
+}
+.desktop-reader-drawer-left .desktop-reader-tabs button {
+    min-height: 30px;
+    padding: 4px 2px;
+    font-size: 11px;
+}
+.desktop-reader-drawer-left .desktop-reader-chapters {
+    padding: 0;
+    border-top: 0;
+}
+.desktop-reader-drawer-left .desktop-reader-search-form {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.desktop-reader-drawer-left .desktop-reader-search-form label { grid-column: auto; }
+.desktop-reader-drawer-left .desktop-reader-bookmark-toolbar { margin-bottom: 8px; }
+.desktop-reader-drawer-left .desktop-reader-bookmark-controls {
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+.desktop-reader-drawer-left .desktop-reader-bookmark-controls textarea { min-height: 40px; }
+
+.desktop-reader-stage[data-reader-material="ruled"] :is(.desktop-reader-content, .desktop-reader-page, .desktop-reader-page-flip-sheet),
+.desktop-reader-material-chip > span[data-reader-material="ruled"] {
+    background-image: repeating-linear-gradient(180deg, transparent 0 26px, color-mix(in srgb, var(--reader-effect) 28%, transparent) 26px 27px);
+}
+.desktop-reader-stage[data-reader-material="grid"] :is(.desktop-reader-content, .desktop-reader-page, .desktop-reader-page-flip-sheet),
+.desktop-reader-material-chip > span[data-reader-material="grid"] {
+    background-image: repeating-linear-gradient(0deg, color-mix(in srgb, var(--reader-effect) 18%, transparent) 0 1px, transparent 1px 22px), repeating-linear-gradient(90deg, color-mix(in srgb, var(--reader-effect) 18%, transparent) 0 1px, transparent 1px 22px);
+}
+.desktop-reader-stage[data-reader-material="canvas"] :is(.desktop-reader-content, .desktop-reader-page, .desktop-reader-page-flip-sheet),
+.desktop-reader-material-chip > span[data-reader-material="canvas"] {
+    background-image: repeating-linear-gradient(0deg, color-mix(in srgb, var(--reader-text) 10%, transparent) 0 1px, transparent 1px 4px), repeating-linear-gradient(90deg, color-mix(in srgb, var(--reader-effect) 12%, transparent) 0 1px, transparent 1px 5px);
+}
 
 @media (prefers-reduced-motion: reduce) {
         .desktop-reader-float-hud,
