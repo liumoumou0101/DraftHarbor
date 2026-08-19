@@ -32,10 +32,19 @@
         }
     }
 
+    function nativeGenerationOutputFooterReserve(bodyRect) {
+        const footer = document.querySelector('[data-native-paper-footer]');
+        if (!footer || window.getComputedStyle(footer).display === 'none') return 12;
+        const footerRect = footer.getBoundingClientRect();
+        if (footerRect.height < 1) return 12;
+        return Math.max(12, bodyRect.bottom - footerRect.top + 8);
+    }
+
     function clampNativeGenerationOutputPosition(position, bodyRect, outputRect) {
         const margin = 12;
+        const bottomReserve = nativeGenerationOutputFooterReserve(bodyRect);
         const maxLeft = Math.max(margin, bodyRect.width - outputRect.width - margin);
-        const maxTop = Math.max(margin, bodyRect.height - outputRect.height - margin);
+        const maxTop = Math.max(margin, bodyRect.height - outputRect.height - bottomReserve);
         return {
             left: Math.min(maxLeft, Math.max(margin, Number(position.left) || 0)),
             top: Math.min(maxTop, Math.max(margin, Number(position.top) || 0))
@@ -43,15 +52,10 @@
     }
 
     function defaultNativeGenerationOutputPosition(bodyRect, outputRect) {
-        const editor = document.querySelector('[data-native-scene-editor]');
-        const paperRect = editor && editor.getBoundingClientRect ? editor.getBoundingClientRect() : null;
-        const left = paperRect && paperRect.width
-            ? paperRect.right - bodyRect.left + 16
-            : bodyRect.width - outputRect.width - 16;
-        const top = paperRect && paperRect.height
-            ? paperRect.top - bodyRect.top + 16
-            : 16;
-        return clampNativeGenerationOutputPosition({ left, top }, bodyRect, outputRect);
+        return clampNativeGenerationOutputPosition({
+            left: bodyRect.width - outputRect.width - 12,
+            top: 12
+        }, bodyRect, outputRect);
     }
 
     function syncNativeGenerationOutputPosition(options = {}) {
@@ -206,66 +210,91 @@
         const elements = nativeEditorElements();
         const output = elements.generationOutput;
         const body = elements.editorBody;
-        const handle = elements.generationOutputDragHandle;
-        if (!output || !body || !handle || handle.dataset.nativeGenerationDragBound === 'true') return;
-        handle.dataset.nativeGenerationDragBound = 'true';
+        const labeledHandle = elements.generationOutputDragHandle
+            || (output && output.querySelector('.desktop-native-generation-output-header'));
+        if (!output || !body || output.dataset.nativeGenerationDragBound === 'true') return;
+        output.dataset.nativeGenerationDragBound = 'true';
         let dragState = null;
+
+        const ignoreDragFrom = (target) => !!(target && target.closest && target.closest(
+            'button, a, textarea, input, select, summary, [data-native-generation-result], [data-native-reasoning]'
+        ));
+
+        const applyDragPosition = (left, top) => {
+            const bodyRect = body.getBoundingClientRect();
+            const outputRect = output.getBoundingClientRect();
+            const next = clampNativeGenerationOutputPosition({ left, top }, bodyRect, outputRect);
+            output.style.left = `${Math.round(next.left)}px`;
+            output.style.top = `${Math.round(next.top)}px`;
+            output.style.right = 'auto';
+            output.style.bottom = 'auto';
+            output.style.transform = 'none';
+            return next;
+        };
+
+        const currentOutputOffset = () => {
+            const left = Number.parseFloat(output.style.left);
+            const top = Number.parseFloat(output.style.top);
+            if (Number.isFinite(left) && Number.isFinite(top)) return { left, top };
+            const bodyRect = body.getBoundingClientRect();
+            const outputRect = output.getBoundingClientRect();
+            return {
+                left: outputRect.left - bodyRect.left,
+                top: outputRect.top - bodyRect.top
+            };
+        };
 
         const finishDrag = (event) => {
             if (!dragState) return;
-            const state = dragState;
             dragState = null;
             output.classList.remove('is-generation-output-dragging');
-            handle.setAttribute('aria-grabbed', 'false');
-            if (event && handle.releasePointerCapture && handle.hasPointerCapture && handle.hasPointerCapture(event.pointerId)) {
-                try { handle.releasePointerCapture(event.pointerId); } catch (error) { /* ignore */ }
+            if (labeledHandle) labeledHandle.setAttribute('aria-grabbed', 'false');
+            if (event && output.releasePointerCapture && output.hasPointerCapture && output.hasPointerCapture(event.pointerId)) {
+                try { output.releasePointerCapture(event.pointerId); } catch (error) { /* ignore */ }
             }
-            const bodyRect = body.getBoundingClientRect();
-            const outputRect = output.getBoundingClientRect();
-            const position = clampNativeGenerationOutputPosition(state.position, bodyRect, outputRect);
-            output.style.left = `${Math.round(position.left)}px`;
-            output.style.top = `${Math.round(position.top)}px`;
-            writeNativeGenerationOutputPosition(position);
+            writeNativeGenerationOutputPosition(applyDragPosition(currentOutputOffset().left, currentOutputOffset().top));
         };
 
-        handle.addEventListener('pointerdown', (event) => {
-            if (event.button !== 0 || output.hidden) return;
+        const onPointerMove = (event) => {
+            if (!dragState) return;
+            event.preventDefault();
+            applyDragPosition(
+                dragState.position.left + event.clientX - dragState.clientX,
+                dragState.position.top + event.clientY - dragState.clientY
+            );
+        };
+
+        const onPointerUp = (event) => {
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', onPointerUp);
+            window.removeEventListener('pointercancel', onPointerUp);
+            finishDrag(event);
+        };
+
+        output.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0 || output.hidden || ignoreDragFrom(event.target)) return;
             event.preventDefault();
             syncNativeGenerationOutputPosition();
-            const bodyRect = body.getBoundingClientRect();
-            const outputRect = output.getBoundingClientRect();
-            const left = Number.parseFloat(output.style.left);
-            const top = Number.parseFloat(output.style.top);
             dragState = {
                 clientX: event.clientX,
                 clientY: event.clientY,
-                position: {
-                    left: Number.isFinite(left) ? left : outputRect.left - bodyRect.left,
-                    top: Number.isFinite(top) ? top : outputRect.top - bodyRect.top
-                }
+                position: currentOutputOffset()
             };
             output.classList.add('is-generation-output-dragging');
-            handle.setAttribute('aria-grabbed', 'true');
-            if (handle.setPointerCapture) {
-                try { handle.setPointerCapture(event.pointerId); } catch (error) { /* ignore synthetic pointer events */ }
+            if (labeledHandle) labeledHandle.setAttribute('aria-grabbed', 'true');
+            if (output.setPointerCapture) {
+                try { output.setPointerCapture(event.pointerId); } catch (error) { /* ignore synthetic pointer events */ }
             }
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
+            window.addEventListener('pointercancel', onPointerUp);
         });
 
-        handle.addEventListener('pointermove', (event) => {
-            if (!dragState) return;
-            event.preventDefault();
-            const bodyRect = body.getBoundingClientRect();
-            const outputRect = output.getBoundingClientRect();
-            const next = clampNativeGenerationOutputPosition({
-                left: dragState.position.left + event.clientX - dragState.clientX,
-                top: dragState.position.top + event.clientY - dragState.clientY
-            }, bodyRect, outputRect);
-            output.style.left = `${Math.round(next.left)}px`;
-            output.style.top = `${Math.round(next.top)}px`;
-        });
-        handle.addEventListener('pointerup', finishDrag);
-        handle.addEventListener('pointercancel', finishDrag);
-        handle.addEventListener('dblclick', (event) => {
+        output.addEventListener('pointermove', onPointerMove);
+        output.addEventListener('pointerup', onPointerUp);
+        output.addEventListener('pointercancel', onPointerUp);
+        output.addEventListener('dblclick', (event) => {
+            if (ignoreDragFrom(event.target)) return;
             event.preventDefault();
             if (dragState) finishDrag(event);
             syncNativeGenerationOutputPosition({ reset: true, persist: true });
@@ -349,6 +378,23 @@
             elements.generationOutput.hidden = !showGenerationOutput;
             elements.generationOutput.classList.toggle('is-inline-confirmation', showGenerationOutput && !isPreviewTask);
         }
+        const outputTitle = document.querySelector('[data-native-generation-output-title]');
+        if (outputTitle) {
+            outputTitle.textContent = generation.task === 'regenerate-selection' ? '重生成结果待确认' : '生成结果待确认';
+        }
+        const costNote = document.querySelector('[data-native-generation-cost-note]');
+        if (costNote) {
+            const regenerateChars = typeof nativeRegenerateContextChars === 'function'
+                ? nativeRegenerateContextChars()
+                : Number(nativeEditorState.rewrite.regenerateContextChars) || 8000;
+            const usedLongContext = generation.task === 'regenerate-selection'
+                && nativeEditorState.rewrite.regenerateUseContext !== false
+                && regenerateChars > 0;
+            costNote.hidden = !usedLongContext;
+            costNote.textContent = usedLongContext
+                ? `这次是重生成：会发送选区前后各 ${regenerateChars} 字，输入费用高于改写。`
+                : '';
+        }
         if (elements.generationOutputStatus) {
             if (generation.inProgress) {
                 if (generation.reasoning && !generation.text) {
@@ -365,9 +411,9 @@
                     ? '输出因额度用尽被截断。预览后可保留，或提高最大输出后重试。'
                     : '输出因额度用尽被截断，已写入正文。可撤回后提高最大输出再试。';
             } else if (isPreviewTask) {
-                elements.generationOutputStatus.textContent = '预览结果后点击"保留"替换原文，撤回会保持原文。';
+                elements.generationOutputStatus.textContent = '确认后替换原文，撤回保持原文。';
             } else {
-                elements.generationOutputStatus.textContent = '生成内容已写入正文，确认后保留，撤回可恢复原文。';
+                elements.generationOutputStatus.textContent = '已写入正文，确认后保留，撤回可恢复原文。';
             }
         }
         if (elements.generationResult) {
@@ -527,7 +573,7 @@
                 });
             }
         }
-        if (elements.generationOutput && !elements.generationOutput.hidden) {
+        if (elements.generationOutput && !elements.generationOutput.hidden && !elements.generationOutput.classList.contains('is-generation-output-dragging')) {
             queueNativeGenerationOutputPosition();
         }
         queueNativeGenerationLayer();
@@ -1110,7 +1156,7 @@
             prompt,
             scene,
             startStatus: '改写中...',
-            successStatus: '改写完成 - 预览结果后点击"保留"替代原文',
+            successStatus: '改写完成',
             failurePrefix: '改写失败',
             logLabel: 'Native rewrite failed:'
         });
@@ -1140,7 +1186,7 @@
             prompt,
             scene,
             startStatus: '正在重生成选区...',
-            successStatus: '选区重生成完成 - 预览结果后点击"保留"替代原文',
+            successStatus: '选区重生成完成',
             failurePrefix: '选区重生成失败',
             logLabel: 'Native selection regeneration failed:'
         });
@@ -1287,9 +1333,6 @@
         generation.pendingSceneId = '';
         generation.pendingEditorChanged = false;
         generation.task = '';
-        nativeEditorState.rewrite.originalText = '';
-        nativeEditorState.rewrite.selectionStart = 0;
-        nativeEditorState.rewrite.selectionEnd = 0;
         renderNativeGeneration();
         setNativeSaveStatus('已撤回生成内容', 'info');
     }

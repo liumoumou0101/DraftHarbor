@@ -510,8 +510,11 @@
         const scene = currentNativeScene();
         const text = elements.editor ? String(elements.editor.value || '') : (scene ? nativeSceneContent(scene.id) : '');
         let selected = '';
+        if (typeof restoreNativeRewriteSelection === 'function') restoreNativeRewriteSelection();
         if (elements.editor && elements.editor.selectionStart !== elements.editor.selectionEnd) {
             selected = text.slice(elements.editor.selectionStart, elements.editor.selectionEnd).trim();
+        } else if (nativeEditorState.rewrite && nativeEditorState.rewrite.selectionEnd > nativeEditorState.rewrite.selectionStart) {
+            selected = text.slice(nativeEditorState.rewrite.selectionStart, nativeEditorState.rewrite.selectionEnd).trim();
         }
         const fallback = (scene && scene.summary ? scene.summary : text).trim();
         return {

@@ -119,6 +119,14 @@ assert.ok(desktopMarkup.includes('data-native-paper-footer'), 'desktop markup sh
 assert.ok(desktopMarkup.includes('data-native-copilot-greeting'), 'desktop markup should include the Copilot assistant brief');
 assert.ok(desktopMarkup.includes('data-native-copilot-context-note'), 'desktop markup should include the Copilot context card');
 assert.ok(desktopMarkup.includes('data-native-model-settings'), 'desktop markup should keep model controls in a collapsible settings section');
+assert.ok(desktopHtml.includes('src/styles/desktop/desktop-writer-chrome.css'), 'desktop.html should load writer chrome after finishing');
+assert.ok(desktopHtml.includes('src/desktop/shell/writer-chrome.js'), 'desktop.html should load writer chrome after writer-prompts.js');
+assert.ok(
+  desktopHtml.indexOf('writer-prompts.js') < desktopHtml.indexOf('writer-chrome.js'),
+  'writer-chrome.js must load after writer-prompts.js so it can wrap renderNativeRewrite'
+);
+const writerSidebarResize = fs.readFileSync(path.join(root, 'src/desktop/shell/writer-sidebar-resize.js'), 'utf8');
+assert.ok(writerSidebarResize.includes('NATIVE_ASSISTANT_MIN_HEIGHT = 208'), 'writer dock drag floor should be 208');
 assert.ok(desktopMarkup.includes('data-settings-cat-target="storage"'), 'settings should expose storage and maintenance as a first-class category');
 assert.ok(desktopMarkup.includes('data-settings-section="storage"'), 'settings should include resolved project and backup locations');
 assert.ok(desktopMarkup.includes('desktop-recovery-safe-actions'), 'recovery should present safe restore actions before destructive replacement');

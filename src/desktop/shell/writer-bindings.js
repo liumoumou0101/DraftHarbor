@@ -2,6 +2,8 @@
         const elements = nativeEditorElements();
         if (typeof bindNativeSidebarResize === 'function') bindNativeSidebarResize();
         if (typeof bindNativeGlobalPrompt === 'function') bindNativeGlobalPrompt();
+        if (typeof bindNativeWriterChrome === 'function') bindNativeWriterChrome();
+        if (typeof loadNativeContextBudgets === 'function') loadNativeContextBudgets();
         if (typeof window.bindNativeGenerationOutputDrag === 'function') window.bindNativeGenerationOutputDrag();
         if (typeof window.bindNativeGenerationLayer === 'function') window.bindNativeGenerationLayer();
         if (elements.saveButton) {
@@ -53,16 +55,25 @@
         document.addEventListener('click', (event) => {
             const target = event.target;
             if (!target || !target.closest) return;
-            if (target.closest('[data-native-typography], [data-native-specials], [data-native-toggle-typography], [data-native-toggle-specials]')) return;
+            if (target.closest('[data-native-typography], [data-native-specials], [data-native-toggle-typography], [data-native-toggle-specials], [data-native-more-menu], [data-native-more-tools], [data-native-outline-menu]')) return;
             closeNativeWriterPopovers();
         });
         document.addEventListener('keydown', (event) => {
             if (event.key !== 'Escape') return;
             const elements = nativeEditorElements();
-            const hasOpenPopover = (elements.typography && !elements.typography.hidden) || (elements.specials && !elements.specials.hidden) || (elements.contextMenu && !elements.contextMenu.hidden);
+            const moreMenu = document.querySelector('[data-native-more-menu]');
+            const outlineMenu = document.querySelector('[data-native-outline-menu]');
+            const moreWasOpen = moreMenu && !moreMenu.hidden;
+            const outlineWasOpen = outlineMenu && !outlineMenu.hidden;
+            const hasOpenPopover = (elements.typography && !elements.typography.hidden)
+                || (elements.specials && !elements.specials.hidden)
+                || (elements.contextMenu && !elements.contextMenu.hidden)
+                || moreWasOpen
+                || outlineWasOpen;
             if (!hasOpenPopover) return;
             event.preventDefault();
             closeNativeWriterPopovers();
+            if (moreWasOpen && typeof hideNativeMoreMenu === 'function') hideNativeMoreMenu({ restoreFocus: true });
         });
         [
             ['editorFontSize', 'fontSize'],
@@ -135,7 +146,11 @@
         }
         elements.panelTabs.forEach((tab) => {
             tab.addEventListener('click', () => {
-                nativeEditorState.assistantPanel = tab.dataset.nativePanelTab || 'generate';
+                const panel = tab.dataset.nativePanelTab || 'generate';
+                const group = tab.dataset.nativePanelGroup || 'writing';
+                nativeEditorState.assistantPanel = panel;
+                nativeEditorState.assistantPanelByGroup = nativeEditorState.assistantPanelByGroup || {};
+                nativeEditorState.assistantPanelByGroup[group] = panel;
                 renderNativeEditor();
                 if (nativeEditorState.assistantPanel === 'metadata' && typeof loadSummaryPrompts === 'function') {
                     loadSummaryPrompts();
@@ -150,13 +165,24 @@
         elements.assistantGroupTabs.forEach((tab) => {
             tab.addEventListener('click', () => {
                 const group = tab.dataset.nativeAssistantGroup || 'writing';
-                nativeEditorState.assistantPanel = assistantGroupDefaults[group] || 'generate';
+                const remembered = nativeEditorState.assistantPanelByGroup && nativeEditorState.assistantPanelByGroup[group];
+                nativeEditorState.assistantPanel = remembered || assistantGroupDefaults[group] || 'generate';
                 renderNativeEditor();
                 if (nativeEditorState.assistantPanel === 'metadata' && typeof loadSummaryPrompts === 'function') {
                     loadSummaryPrompts();
                 }
             });
         });
+        const rewriteChip = document.querySelector('[data-native-open-rewrite]');
+        if (rewriteChip) {
+            rewriteChip.addEventListener('click', () => {
+                if (typeof restoreNativeRewriteSelection === 'function') restoreNativeRewriteSelection();
+                nativeEditorState.assistantPanel = 'rewrite';
+                nativeEditorState.assistantPanelByGroup = nativeEditorState.assistantPanelByGroup || {};
+                nativeEditorState.assistantPanelByGroup.writing = 'rewrite';
+                renderNativeEditor();
+            });
+        }
         if (elements.search) {
             elements.search.addEventListener('input', () => {
                 nativeEditorState.searchQuery = elements.search.value;
@@ -341,6 +367,24 @@
         if (elements.regenerateUseContext) {
             elements.regenerateUseContext.addEventListener('change', function () {
                 nativeEditorState.rewrite.regenerateUseContext = elements.regenerateUseContext.checked !== false;
+                if (typeof saveNativeContextBudgets === 'function') saveNativeContextBudgets();
+                renderNativeRewrite();
+            });
+        }
+        const rewriteContextChars = document.querySelector('[data-native-rewrite-context-chars]');
+        if (rewriteContextChars) {
+            rewriteContextChars.addEventListener('change', function () {
+                nativeEditorState.rewrite.rewriteContextChars = Number(rewriteContextChars.value);
+                if (typeof saveNativeContextBudgets === 'function') saveNativeContextBudgets();
+                renderNativeRewrite();
+            });
+        }
+        const regenerateContextChars = document.querySelector('[data-native-regenerate-context-chars]');
+        if (regenerateContextChars) {
+            regenerateContextChars.addEventListener('change', function () {
+                nativeEditorState.rewrite.regenerateContextChars = Number(regenerateContextChars.value);
+                if (typeof saveNativeContextBudgets === 'function') saveNativeContextBudgets();
+                renderNativeRewrite();
             });
         }
         if (elements.writerTemperature) {
@@ -467,9 +511,20 @@
             if (action) {
                 const key = action.dataset.nativeContextAction;
                 closeNativeWriterPopovers();
+                if (typeof restoreNativeRewriteSelection === 'function') restoreNativeRewriteSelection();
                 if (key === 'rewrite-selection') {
                     nativeEditorState.assistantPanel = 'rewrite';
+                    nativeEditorState.assistantPanelByGroup = nativeEditorState.assistantPanelByGroup || {};
+                    nativeEditorState.assistantPanelByGroup.writing = 'rewrite';
+                    nativeEditorState.rewrite.rewriteTask = 'polish';
+                    nativeEditorState.rewrite.preset = 'balanced-polish';
+                    nativeEditorState.rewrite.savedPromptId = '';
+                    nativeEditorState.rewrite.instruction = '';
+                    nativeEditorState.rewrite.instruction = rewriteInstructionText();
+                    if (typeof flushNativeEditorFields === 'function') flushNativeEditorFields();
                     renderNativeEditor();
+                    if (typeof restoreNativeRewriteSelection === 'function') restoreNativeRewriteSelection();
+                    renderNativeRewrite();
                 } else if (key === 'regenerate-selection') {
                     startNativeRegenerateSelection();
                 } else if (key === 'send-to-workshop') {

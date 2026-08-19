@@ -16,6 +16,7 @@ applyDesktopTheme
 applyDesktopThemeFromStorage
 applyNativeAutoReplace
 applyNativeEditorPrefs
+applyNativeWriterChrome
 applyReaderPreferenceModel
 applyReaderSettings
 beginNativeSceneTitleEdit
@@ -32,6 +33,7 @@ bindNativeCompendiumExtraction
 bindNativeEditor
 bindNativeGlobalPrompt
 bindNativeSidebarResize
+bindNativeWriterChrome
 bindNavigation
 bindProjectCreator
 bindProjectEditor
@@ -58,6 +60,8 @@ clearReaderLayoutCache
 clearReaderTransferSelection
 closeNativeWriterPopovers
 closeNativeSummaryDialog
+hideNativeMoreMenu
+hideOutlineContextMenu
 closeProjectCreator
 closeProjectEditor
 compendiumReferencesPromptBlock
@@ -77,6 +81,7 @@ currentNativeChapterByState
 currentNativeScene
 currentProjectId
 currentProjectName
+deleteNativeChapter
 deleteNativeChapter
 deleteNativeScene
 deletePromptTemplate
@@ -118,6 +123,7 @@ initializeReaderWorkspace
 insertNativeSpecialChar
 loadCompendium
 loadExportOptions
+loadNativeContextBudgets
 loadNativeContextPrefs
 loadNativeEditorPrefs
 loadNativeProjectEditor
@@ -196,8 +202,10 @@ readNativeSceneAloud
 recoveryState
 refreshReaderBookmarkResolutions
 rememberReaderScroll
+rememberNativeRewriteSelection
 renameNativeChapter
 renameNativeScene
+reorderNativeChapter
 renderCompendium
 renderCompendiumReferencePicker
 renderContextStrip
@@ -225,11 +233,15 @@ renderWorkflow
 renderWorkflowGraph
 renderWorkshop
 renderWriterModelControl
+restoreNativeRewriteSelection
 replaceNativeText
+nativeRegenerateContextChars
+nativeRewriteContextChars
 rewriteInstructionText
 rewritePromptState
 runtimeProviderConfig
 saveExportOptions
+saveNativeContextBudgets
 saveNativeEditorPrefs
 saveNativeScene
 saveProjectEditor
@@ -260,12 +272,14 @@ settingsWithRuntimeProfiles
 setView
 setWorkflowStatus
 shellUiState
+showNativeMoreMenu
 showNativePromptPreview
 showNativeRewritePreview
 startNativeGeneration
 startNativeRegenerateSelection
 startNativeRewrite
 stopNativeReading
+syncRewriteChip
 summaryPromptState
 switchNativeScene
 syncReaderSettingsControls

@@ -3,6 +3,7 @@
         try {
             const placement = window.localStorage.getItem('draftharbor:nativeAssistantPlacement');
             if (placement === 'bottom' || placement === 'right') nativeEditorState.assistantPlacement = placement;
+            else nativeEditorState.assistantPlacement = window.innerWidth < 1400 ? 'right' : 'bottom';
         } catch (error) { /* ignore */ }
         loadWriterModelOverride();
         loadNativeEditorPrefs();

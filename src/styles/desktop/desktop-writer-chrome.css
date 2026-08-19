@@ -1,0 +1,616 @@
+/* W-02: manuscript-first writer chrome. Loaded after desktop-finishing.css. */
+
+.desktop-app[data-view="writer"] .desktop-context-strip {
+    display: none;
+}
+
+.desktop-app[data-view="writer"] .desktop-main {
+    grid-template-rows: minmax(0, 1fr);
+}
+
+.desktop-app[data-view="writer"] .desktop-view-writer.is-active {
+    grid-row: 1;
+    min-height: 0;
+    height: 100%;
+    box-sizing: border-box;
+    padding-top: 40px;
+}
+
+.desktop-app[data-view="writer"] .desktop-native-writer {
+    min-width: 0;
+    width: 100%;
+    min-height: 0;
+    height: 100%;
+}
+
+[data-desktop-theme="morandi-ink"] .desktop-app[data-view="writer"] .desktop-context-strip,
+[data-desktop-theme="mist-library"] .desktop-app[data-view="writer"] .desktop-context-strip,
+[data-desktop-theme="ash-rose"] .desktop-app[data-view="writer"] .desktop-context-strip {
+    display: none;
+}
+
+[data-desktop-theme="morandi-ink"] .desktop-app[data-view="writer"] .desktop-main,
+[data-desktop-theme="mist-library"] .desktop-app[data-view="writer"] .desktop-main,
+[data-desktop-theme="ash-rose"] .desktop-app[data-view="writer"] .desktop-main {
+    grid-template-rows: minmax(0, 1fr);
+}
+
+[data-desktop-theme="morandi-ink"] .desktop-app[data-view="writer"] .desktop-native-writer,
+[data-desktop-theme="mist-library"] .desktop-app[data-view="writer"] .desktop-native-writer,
+[data-desktop-theme="ash-rose"] .desktop-app[data-view="writer"] .desktop-native-writer {
+    min-width: 0;
+    width: 100%;
+    min-height: 0;
+    height: 100%;
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) {
+    grid-template-rows:
+        minmax(280px, 1fr)
+        minmax(208px, var(--native-assistant-height, clamp(208px, 25vh, 360px)));
+}
+
+/* Hide-outline + bottom must beat the 220px + 1fr template, or the editor
+   auto-places into the leftover outline track and Copilot becomes a min-content strip. */
+.desktop-native-writer.is-assistant-bottom.is-outline-collapsed:not(.is-focus-mode):not(.is-assistant-collapsed) {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.desktop-native-writer.is-assistant-bottom.is-outline-collapsed:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.desktop-native-writer.is-assistant-bottom.is-outline-collapsed:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-assistant {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-paper-heading {
+    display: none;
+}
+
+/* Heading is out of flow, so the 1fr row must be the textarea, not the footer. */
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor-body {
+    grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor-body > textarea {
+    grid-row: 1;
+    min-height: 0;
+    height: 100%;
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-paper-footer {
+    grid-row: 2;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-assistant-header,
+.desktop-native-writer.is-assistant-bottom .desktop-native-copilot-brief,
+.desktop-native-writer.is-assistant-bottom .desktop-native-copilot-context,
+.desktop-native-writer.is-assistant-bottom .desktop-native-copilot-suggestions,
+.desktop-native-writer.is-assistant-bottom .desktop-native-copilot-tasks button span {
+    display: none;
+}
+
+.desktop-native-writer:not(.is-assistant-bottom) .desktop-native-copilot-brief,
+.desktop-native-writer:not(.is-assistant-bottom) .desktop-native-copilot-kicker,
+.desktop-native-writer:not(.is-assistant-bottom) .desktop-native-copilot-suggestions {
+    display: none;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-assistant {
+    grid-template-rows: auto auto minmax(0, 1fr);
+    overflow: hidden;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-assistant-panel {
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 8px 10px;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-assistant-group-tabs {
+    padding: 2px 8px;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-assistant-group-tabs button {
+    min-height: 24px;
+    padding: 2px 8px;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-assistant-tabs {
+    flex-wrap: nowrap;
+    padding: 2px 8px;
+    overflow: hidden;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-assistant-tabs button {
+    min-height: 24px;
+    padding: 2px 8px;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-generation {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-copilot-tasks {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-copilot-tasks button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 32px;
+    padding: 4px 8px;
+}
+
+[data-native-open-rewrite][hidden] {
+    display: none !important;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-copilot-tasks:has([data-native-open-rewrite].is-active-chip) {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-generation-input {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-generation-input textarea {
+    min-height: 52px;
+    max-height: 52px;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-generation-actions {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-generation-advanced summary {
+    min-height: 24px;
+    padding: 4px 8px;
+}
+
+.desktop-native-editor {
+    min-width: 0;
+    position: relative;
+    z-index: 1;
+}
+
+.desktop-native-editor-header,
+[data-desktop-theme="mist-library"] .desktop-native-editor-header,
+[data-desktop-theme="morandi-ink"] .desktop-native-editor-header,
+[data-desktop-theme="ash-rose"] .desktop-native-editor-header {
+    flex-wrap: nowrap;
+    align-items: center;
+    min-height: 36px;
+    max-height: 40px;
+    padding: 4px 12px;
+    overflow: visible;
+    gap: 8px 12px;
+}
+
+.desktop-native-editor-header > div:first-child {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.desktop-native-editor-header > div:first-child .desktop-section-kicker {
+    display: none;
+}
+
+.desktop-native-editor-header h2 {
+    min-width: 0;
+    max-width: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.desktop-native-editor-header .desktop-native-editor-actions {
+    flex-wrap: nowrap;
+    flex: 0 0 auto;
+    gap: 6px;
+}
+
+.desktop-native-core-actions .desktop-native-tool-label,
+.desktop-native-core-actions [data-native-focus-mode] .desktop-native-tool-label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    white-space: nowrap;
+}
+
+.desktop-native-core-actions [data-native-focus-mode] .desktop-native-tool-mark {
+    display: none;
+}
+
+.desktop-native-more-wrap {
+    position: relative;
+}
+
+.desktop-native-more-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 24;
+    display: flex;
+    flex-direction: column;
+    min-width: 188px;
+    padding: 6px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: var(--desktop-panel);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.desktop-native-more-menu[hidden] {
+    display: none !important;
+}
+
+.desktop-native-more-menu .desktop-native-tool-actions,
+.desktop-native-more-menu .desktop-native-layout-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    opacity: 1;
+}
+
+.desktop-native-more-menu .desktop-native-layout-actions {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--desktop-line);
+}
+
+.desktop-native-more-menu .desktop-native-toolbar-button,
+.desktop-native-more-menu .desktop-mini-action {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100%;
+    min-height: 32px;
+    padding: 6px 8px;
+    gap: 8px;
+}
+
+.desktop-native-more-menu .desktop-native-tool-label,
+.desktop-native-more-menu .desktop-native-tool-actions .desktop-native-tool-label,
+.desktop-native-more-menu .desktop-native-layout-actions .desktop-native-tool-label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+.desktop-native-outline {
+    position: relative;
+    min-width: 0;
+}
+
+.desktop-native-outline-actions {
+    grid-template-columns: 1fr 1fr;
+    min-width: 0;
+    gap: 6px;
+    padding: 8px 10px;
+}
+
+.desktop-native-outline-actions button {
+    min-width: 0;
+    padding-inline: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.desktop-native-outline-menu {
+    position: fixed;
+    z-index: 80;
+}
+
+.desktop-native-outline-menu[hidden] {
+    display: none !important;
+}
+
+/* Writer chrome follows app tokens. Paper stays a paper surface. */
+.desktop-native-writer,
+.desktop-native-editor {
+    background: var(--desktop-bg);
+}
+
+.desktop-native-assistant,
+.desktop-native-writer.is-assistant-bottom .desktop-native-assistant {
+    background: var(--desktop-panel);
+}
+
+.desktop-native-prompt-dialog {
+    background: var(--desktop-panel);
+    color: var(--desktop-text);
+    border-color: var(--desktop-line);
+}
+
+.desktop-native-editor-body > textarea,
+[data-desktop-theme="mist-library"] .desktop-native-editor-body > textarea,
+[data-desktop-theme="morandi-ink"] .desktop-native-editor-body > textarea,
+[data-desktop-theme="ash-rose"] .desktop-native-editor-body > textarea {
+    color: var(--desktop-paper-text);
+    background-color: var(--desktop-paper);
+    background-image:
+        url("../../../assets/reader/paper-grain.svg"),
+        linear-gradient(180deg, var(--desktop-paper-soft) 0%, var(--desktop-paper) 100%);
+    background-size: 12px 12px, auto;
+    background-repeat: repeat, no-repeat;
+    box-shadow: var(--desktop-shadow-paper);
+}
+
+.desktop-native-paper-heading,
+.desktop-native-paper-footer,
+[data-desktop-theme="mist-library"] .desktop-native-paper-heading,
+[data-desktop-theme="mist-library"] .desktop-native-paper-footer,
+[data-desktop-theme="morandi-ink"] .desktop-native-paper-heading,
+[data-desktop-theme="morandi-ink"] .desktop-native-paper-footer,
+[data-desktop-theme="ash-rose"] .desktop-native-paper-heading,
+[data-desktop-theme="ash-rose"] .desktop-native-paper-footer {
+    background-color: var(--desktop-paper-soft);
+    background-image: url("../../../assets/reader/paper-grain.svg");
+    background-size: 12px 12px;
+    color: var(--desktop-paper-text);
+    border-color: var(--desktop-paper-line);
+}
+
+.desktop-native-editor-generation-mark {
+    background: color-mix(in srgb, var(--desktop-accent) 26%, var(--desktop-paper));
+    box-shadow: inset 3px 0 var(--desktop-accent);
+    color: var(--desktop-paper-text);
+    -webkit-text-fill-color: var(--desktop-paper-text);
+}
+
+.desktop-native-editor-body .desktop-native-generation-output {
+    isolation: isolate;
+    opacity: 1;
+    background: var(--desktop-panel) !important;
+    background-color: var(--desktop-panel) !important;
+    background-image: none !important;
+    border: 1px solid var(--desktop-line-strong);
+    box-shadow: var(--desktop-shadow-soft);
+    color: var(--desktop-text);
+    color-scheme: inherit;
+}
+
+.desktop-native-editor-body .desktop-native-generation-output-header {
+    background: transparent;
+    border-bottom: 1px solid var(--desktop-line);
+}
+
+.desktop-native-editor-body .desktop-native-generation-output-header strong {
+    color: var(--desktop-text);
+}
+
+.desktop-native-editor-body .desktop-native-generation-output-header span {
+    color: var(--desktop-muted);
+}
+
+.desktop-native-editor-body .desktop-native-generation-result {
+    background: var(--desktop-paper);
+    color: var(--desktop-paper-text);
+    border: 1px solid var(--desktop-paper-line);
+}
+
+.desktop-native-editor-body .desktop-native-generation-actions {
+    border-top: 1px solid var(--desktop-line);
+}
+
+.desktop-native-generation-output-header strong {
+    color: var(--desktop-text);
+}
+
+.desktop-native-generation-output-header span {
+    color: var(--desktop-muted);
+}
+
+.desktop-native-editor-header .desktop-native-editor-actions [data-native-save-status] {
+    max-width: min(220px, 28vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.desktop-native-rewrite {
+    gap: 8px;
+}
+
+.desktop-native-rewrite .desktop-native-task-group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.desktop-native-rewrite .desktop-native-task-group button {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.desktop-native-rewrite-original textarea,
+.desktop-native-writer:not(.is-assistant-bottom) .desktop-native-rewrite-original textarea {
+    min-height: 56px;
+    max-height: 88px;
+}
+
+.desktop-native-rewrite [data-native-rewrite-instruction],
+.desktop-native-writer:not(.is-assistant-bottom) [data-native-rewrite-instruction] {
+    min-height: 64px;
+}
+
+.desktop-native-rewrite-tools {
+    display: grid;
+    gap: 8px;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-rewrite-tools {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.desktop-native-rewrite-budget {
+    display: grid;
+    gap: 6px;
+}
+
+.desktop-native-rewrite-budget.is-compact {
+    grid-template-columns: minmax(0, 1fr) 7.2em;
+    align-items: center;
+}
+
+.desktop-native-rewrite-budget.is-compact small {
+    grid-column: 1 / -1;
+}
+
+.desktop-native-rewrite-budget input[type="number"] {
+    width: 100%;
+    min-height: 32px;
+    padding: 6px 8px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.045);
+    color: var(--desktop-text);
+}
+
+.desktop-native-rewrite-main-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    padding-top: 6px;
+    background: var(--desktop-panel);
+}
+
+.desktop-native-rewrite-regenerate {
+    padding: 8px 10px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--desktop-panel-soft) 70%, transparent);
+}
+
+.desktop-native-rewrite-regenerate summary {
+    cursor: pointer;
+    color: var(--desktop-text);
+    font-size: 12px;
+}
+
+.desktop-native-rewrite-regenerate[open] summary {
+    margin-bottom: 8px;
+}
+
+.desktop-native-rewrite-regenerate .desktop-native-generation-actions {
+    margin-top: 8px;
+}
+
+.desktop-native-rewrite-cost-note,
+.desktop-native-generation-cost-note {
+    margin: 0;
+    color: #c45b52;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.desktop-native-generation-cost-note[hidden] {
+    display: none !important;
+}
+
+.desktop-native-generation-output-header {
+    cursor: grab;
+    touch-action: none;
+}
+
+.desktop-native-generation-output-header::after {
+    content: "";
+    flex: 0 0 12px;
+    align-self: center;
+    height: 10px;
+    background-image: radial-gradient(circle, var(--desktop-muted) 1.1px, transparent 1.25px);
+    background-size: 6px 5px;
+    background-repeat: repeat;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.desktop-native-generation-output.is-generation-output-dragging,
+.desktop-native-generation-output.is-generation-output-dragging .desktop-native-generation-output-header {
+    cursor: grabbing;
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output,
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output {
+    left: auto;
+    right: 12px;
+    top: 12px;
+    width: min(320px, calc(100% - 24px));
+    max-height: min(22vh, 190px);
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output:not(.is-inline-confirmation),
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output:not(.is-inline-confirmation) {
+    left: auto;
+    right: 12px;
+    width: min(420px, calc(52% - 12px), calc(100% - 24px));
+    height: auto;
+    min-height: 0;
+    max-height: min(48vh, calc(100% - 76px));
+    padding: 10px 12px;
+    gap: 8px;
+    overflow: hidden;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output:not(.is-inline-confirmation) .desktop-native-generation-output-header,
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output:not(.is-inline-confirmation) .desktop-native-generation-output-header {
+    align-items: flex-start;
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output:not(.is-inline-confirmation) .desktop-native-generation-output-header strong,
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output:not(.is-inline-confirmation) .desktop-native-generation-output-header strong {
+    font-size: 13px;
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output:not(.is-inline-confirmation) .desktop-native-generation-output-header span,
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output:not(.is-inline-confirmation) .desktop-native-generation-output-header span {
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output:not(.is-inline-confirmation) .desktop-native-generation-result,
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output:not(.is-inline-confirmation) .desktop-native-generation-result {
+    max-height: none;
+    min-height: 3.4em;
+    padding: 10px 12px;
+    font-size: 14px;
+    line-height: 1.72;
+    overflow: auto;
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output:not(.is-inline-confirmation) .desktop-native-generation-actions,
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output:not(.is-inline-confirmation) .desktop-native-generation-actions {
+    gap: 8px;
+    padding: 8px 0 0;
+}
+
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output:not(.is-inline-confirmation) .desktop-native-generation-actions button,
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output:not(.is-inline-confirmation) .desktop-native-generation-actions button {
+    min-height: 30px;
+    padding: 6px 12px;
+    font-size: 12px;
+}

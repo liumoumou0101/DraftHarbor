@@ -190,9 +190,13 @@
         searchMatchIndex: -1,
         searchMatchPositions: [],
         assistantPanel: 'generate',
-        // The writer opens with Copilot as a bottom dock so the main writing
-        // surface keeps its width. A user-selected placement is restored by
-        // shell-bootstrap and can still be toggled from the editor toolbar.
+        assistantPanelByGroup: {
+            writing: 'generate',
+            context: 'characters',
+            document: 'metadata'
+        },
+        // Unset preference: laptops default to a right drawer (full-height
+        // manuscript). Wider screens keep the bottom dock. Saved placement wins.
         assistantPlacement: 'bottom',
         typographyOpen: false,
         editorPrefs: {
@@ -239,7 +243,9 @@
             originalText: '',
             selectionStart: 0,
             selectionEnd: 0,
-            regenerateUseContext: true
+            regenerateUseContext: true,
+            rewriteContextChars: 1200,
+            regenerateContextChars: 8000
         },
         context: {
             compendiumIds: [],
@@ -512,7 +518,7 @@
         const entries = compendiumState.entries || [];
         const autoCount = entries.filter((entry) => !['manual', 'disabled'].includes(contextPolicyMode(entry))).length;
 
-        elements.strip.hidden = !coreViews.has(view);
+        elements.strip.hidden = !coreViews.has(view) || view === 'writer';
         if (elements.projectTitle) elements.projectTitle.textContent = projectId ? currentProjectName() : '未打开项目';
         if (elements.sceneTitle) elements.sceneTitle.textContent = scene ? `场景：${scene.title || '未命名场景'}` : (projectId ? '未选择场景' : '从书库打开项目');
         if (elements.wordCount) elements.wordCount.textContent = scene ? `${String(content || '').length} 字` : '';

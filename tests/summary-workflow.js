@@ -4,6 +4,7 @@ const os = require('os');
 const path = require('path');
 const { chromium } = require('playwright');
 const { startDesktopServers } = require('../desktop/local-server');
+const { openNativePanel } = require('./helpers/native-panel');
 
 function snapshot() {
   return {
@@ -45,7 +46,7 @@ function snapshot() {
 
     await page.click('[data-view-target="writer"]');
     await page.locator('[data-native-scene-id]').first().click();
-    await page.click('[data-native-panel-tab="metadata"]');
+    await openNativePanel(page, 'metadata');
     await page.waitForSelector('[data-native-generate-scene-summary]:not([disabled])');
     await page.waitForFunction(() => Array.from(document.querySelector('[data-native-summary-template]').options).some((option) => option.value === 'default-summary-scene'));
     await page.evaluate(() => {
@@ -66,7 +67,7 @@ function snapshot() {
     await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('已保存'));
 
     await page.locator('[data-native-scene-id]').first().click();
-    await page.click('[data-native-panel-tab="metadata"]');
+    await openNativePanel(page, 'metadata');
     await page.waitForSelector('[data-native-generate-chapter-summary]:not([disabled])');
     await page.click('[data-native-generate-chapter-summary]');
     await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('章节摘要已生成'));
@@ -88,7 +89,7 @@ function snapshot() {
     assert.strictEqual(staleSaved.project.chapters[0].summaryStale, true, 'editing scene content should mark the chapter summary stale');
 
     await page.evaluate(() => { window.__draftHarborGenerationStub = async () => { throw new Error('summary provider failure'); }; });
-    await page.click('[data-native-panel-tab="metadata"]');
+    await openNativePanel(page, 'metadata');
     await page.waitForSelector('[data-native-generate-chapter-summary]:not([disabled])');
     await page.click('[data-native-generate-chapter-summary]');
     await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('summary provider failure'));

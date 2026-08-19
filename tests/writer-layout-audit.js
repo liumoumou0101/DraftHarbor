@@ -5,6 +5,7 @@ const path = require('path');
 const { chromium } = require('playwright');
 const { startDesktopServers } = require('../desktop/local-server');
 const projectService = require('../desktop/services/project-service');
+const { setAssistantPlacement } = require('./helpers/native-panel');
 
 const projectRoot = path.resolve(__dirname, '..');
 const reportDir = path.join(projectRoot, '.ai_state', 'test_reports', 'writer_layout_audit');
@@ -13,7 +14,8 @@ const viewports = [
   { width: 1280, height: 720 },
   { width: 1366, height: 768 },
   { width: 1493, height: 1061 },
-  { width: 1920, height: 1080 }
+  { width: 1920, height: 1080 },
+  { width: 2560, height: 1440 }
 ];
 
 const themes = ['morandi-ink', 'mist-library', 'ash-rose'];
@@ -81,7 +83,7 @@ async function auditCurrentViewport(page, label) {
 
     const groups = [
       ['context strip actions', '.desktop-context-strip button:not([hidden])'],
-      ['editor header actions', '.desktop-native-editor-actions button:not([hidden])'],
+      ['editor header actions', '.desktop-native-core-actions > .desktop-native-toolbar-button:not([hidden]), .desktop-native-more-wrap > [data-native-more-tools]'],
       ['assistant tabs', '.desktop-native-assistant-tabs button:not([hidden])'],
       ['outline actions', '.desktop-native-outline-actions button:not([hidden])'],
       ['rail navigation', '.desktop-nav-item']
@@ -107,7 +109,7 @@ async function auditCurrentViewport(page, label) {
 
     const unclippedSelectors = [
       '.desktop-context-strip button:not([hidden])',
-      '.desktop-native-editor-actions button:not([hidden])',
+      '.desktop-native-core-actions > .desktop-native-toolbar-button:not([hidden]), .desktop-native-more-wrap > [data-native-more-tools]',
       '.desktop-native-assistant-tabs button:not([hidden])',
       '.desktop-native-outline-actions button:not([hidden])'
     ];
@@ -117,6 +119,81 @@ async function auditCurrentViewport(page, label) {
       if (element.scrollWidth > element.clientWidth + tolerance || element.scrollHeight > element.clientHeight + tolerance) {
         issues.push(`${auditLabel}: clipped control text: ${rectOf(element).label}`);
       }
+    }
+
+    const header = document.querySelector('.desktop-native-editor-header');
+    if (header) {
+      const headerHeight = header.getBoundingClientRect().height;
+      if (headerHeight > 42) {
+        issues.push(`${auditLabel}: editor header height ${Math.round(headerHeight)}px > 42px`);
+      }
+    }
+
+    const editor = document.querySelector('[data-native-scene-editor]');
+    const assistant = document.querySelector('.desktop-native-assistant');
+    const generate = document.querySelector('[data-native-generate]');
+    const writer = document.querySelector('[data-native-writer]');
+    if (editor && isVisible(editor)) {
+      const floor = {
+        720: 280,
+        768: 300,
+        1061: 420,
+        1080: 520,
+        1440: 700
+      }[window.innerHeight];
+      if (floor && editor.getBoundingClientRect().height + tolerance < floor) {
+        issues.push(`${auditLabel}: textarea height ${Math.round(editor.getBoundingClientRect().height)}px < ${floor}px`);
+      }
+    }
+    if (assistant && writer && writer.classList.contains('is-assistant-bottom')) {
+      const dockTarget = { 720: 208, 1080: 270, 1440: 360 }[window.innerHeight];
+      if (dockTarget) {
+        const dockHeight = assistant.getBoundingClientRect().height;
+        if (Math.abs(dockHeight - dockTarget) > 2) {
+          issues.push(`${auditLabel}: dock height ${Math.round(dockHeight)}px != ${dockTarget}±2`);
+        }
+      }
+      if (generate && isVisible(generate)) {
+        const dockRect = assistant.getBoundingClientRect();
+        const generateRect = generate.getBoundingClientRect();
+        if (generateRect.bottom > dockRect.bottom + tolerance || generateRect.top < dockRect.top - tolerance) {
+          issues.push(`${auditLabel}: generate button is outside the dock`);
+        }
+      }
+      const visibleTabs = Array.from(document.querySelectorAll('[data-native-panel-tab]')).filter(isVisible);
+      const groups = new Set(visibleTabs.map((tab) => tab.dataset.nativePanelGroup));
+      if (groups.size > 1) {
+        issues.push(`${auditLabel}: visible panel tabs span multiple groups: ${Array.from(groups).join(',')}`);
+      }
+    }
+
+    if (window.innerHeight === 720 && writer) {
+      const writerHeight = writer.getBoundingClientRect().height;
+      if (writerHeight < 640) {
+        issues.push(`${auditLabel}: writer workspace ${Math.round(writerHeight)}px collapsed below 640px`);
+      }
+    }
+
+    const advanced = document.querySelector('[data-native-generation-advanced]');
+    const generatePanel = document.querySelector('[data-native-panel="generate"]');
+    if (advanced && generatePanel && assistant && writer && writer.classList.contains('is-assistant-bottom')) {
+      const wasOpen = advanced.open;
+      advanced.open = true;
+      const dockBefore = assistant.getBoundingClientRect().height;
+      const dockRect = assistant.getBoundingClientRect();
+      const preview = document.querySelector('[data-native-preview-prompt]');
+      const previewRect = preview ? preview.getBoundingClientRect() : null;
+      const previewInDock = previewRect
+        && previewRect.top >= dockRect.top - tolerance
+        && previewRect.bottom <= dockRect.bottom + tolerance;
+      const panelScrolls = generatePanel.scrollHeight > generatePanel.clientHeight + tolerance;
+      if (!previewInDock && !panelScrolls) {
+        issues.push(`${auditLabel}: advanced preview is clipped and the generate panel is not a scroller`);
+      }
+      if (Math.abs(assistant.getBoundingClientRect().height - dockBefore) > tolerance) {
+        issues.push(`${auditLabel}: opening advanced changed dock height`);
+      }
+      advanced.open = wasOpen;
     }
 
     return issues;
@@ -156,19 +233,22 @@ async function auditCurrentViewport(page, label) {
     await openWriterProject(page, servers.appUrl);
 
     const allIssues = [];
-    for (const theme of themes) {
-      await page.evaluate((nextTheme) => {
-        document.documentElement.dataset.desktopTheme = nextTheme;
-        document.querySelector('#desktop-root')?.setAttribute('data-desktop-theme', nextTheme);
-      }, theme);
+    for (const placement of ['bottom', 'right']) {
+      await setAssistantPlacement(page, placement);
+      for (const theme of themes) {
+        await page.evaluate((nextTheme) => {
+          document.documentElement.dataset.desktopTheme = nextTheme;
+          document.querySelector('#desktop-root')?.setAttribute('data-desktop-theme', nextTheme);
+        }, theme);
 
-      for (const viewport of viewports) {
-        await page.setViewportSize(viewport);
-        await page.waitForTimeout(150);
-        const label = `${theme}-${viewport.width}x${viewport.height}`;
-        const screenshotPath = path.join(reportDir, `writer-${label}.png`);
-        await page.screenshot({ path: screenshotPath, fullPage: false });
-        allIssues.push(...await auditCurrentViewport(page, label));
+        for (const viewport of viewports) {
+          await page.setViewportSize(viewport);
+          await page.waitForTimeout(150);
+          const label = `${theme}-${placement}-${viewport.width}x${viewport.height}`;
+          const screenshotPath = path.join(reportDir, `writer-${label}.png`);
+          await page.screenshot({ path: screenshotPath, fullPage: false });
+          allIssues.push(...await auditCurrentViewport(page, label));
+        }
       }
     }
 
