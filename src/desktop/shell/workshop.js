@@ -23,8 +23,74 @@
             toCompendium: document.querySelector('[data-workshop-to-compendium]'),
             toSummary: document.querySelector('[data-workshop-to-summary]'),
             insertDraft: document.querySelector('[data-workshop-insert-draft]'),
-            outputActions: document.querySelector('[data-workshop-output-actions]')
+            outputActions: document.querySelector('[data-workshop-output-actions]'),
+            moreButton: document.querySelector('[data-workshop-more]'),
+            moreMenu: document.querySelector('[data-workshop-more-menu]'),
+            contractPanel: document.querySelector('[data-workshop-contract-panel]'),
+            contractToggle: document.querySelector('[data-workshop-contract-toggle]'),
+            contractClose: document.querySelector('[data-workshop-contract-close]')
         };
+    }
+
+    const WORKSHOP_STARTERS = [
+        '人物卡住了：TA 现在会怎么做？',
+        '这场戏不通，卡在哪里？',
+        '帮我拆下一场：要完成什么、谁在场、怎么收。'
+    ];
+
+    function closeWorkshopMoreMenu() {
+        const { moreButton, moreMenu } = workshopElements();
+        if (moreMenu) moreMenu.hidden = true;
+        if (moreButton) moreButton.setAttribute('aria-expanded', 'false');
+    }
+
+    function toggleWorkshopMoreMenu() {
+        const { moreButton, moreMenu } = workshopElements();
+        if (!moreMenu) return;
+        const nextHidden = !moreMenu.hidden;
+        moreMenu.hidden = nextHidden;
+        if (moreButton) moreButton.setAttribute('aria-expanded', nextHidden ? 'false' : 'true');
+    }
+
+    function closeWorkshopContract() {
+        const { contractPanel } = workshopElements();
+        if (contractPanel) contractPanel.hidden = true;
+    }
+
+    function toggleWorkshopContract() {
+        closeWorkshopMoreMenu();
+        const { contractPanel } = workshopElements();
+        if (!contractPanel || !selectedWorkshopSession()) return;
+        contractPanel.hidden = !contractPanel.hidden;
+    }
+
+    async function applyWorkshopStarter(text) {
+        if (!currentProjectId()) {
+            setView('bookshelf');
+            return;
+        }
+        if (!selectedWorkshopSession()) await createWorkshopSession();
+        workshopState.input = text;
+        renderWorkshop();
+        const { input } = workshopElements();
+        if (input) {
+            input.focus();
+            input.setSelectionRange(input.value.length, input.value.length);
+        }
+    }
+
+    function appendWorkshopStarters(container) {
+        const list = document.createElement('div');
+        list.className = 'desktop-workshop-empty-starters';
+        WORKSHOP_STARTERS.forEach((text) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'desktop-workshop-empty-starter';
+            button.textContent = text;
+            button.addEventListener('click', () => applyWorkshopStarter(text));
+            list.appendChild(button);
+        });
+        container.appendChild(list);
     }
 
     function selectedWorkshopSession() {
@@ -119,6 +185,9 @@
         }
         if (elements.newButton) elements.newButton.disabled = !projectId || workshopState.generating;
         if (elements.deleteButton) elements.deleteButton.disabled = !session || workshopState.generating;
+        if (elements.moreButton) elements.moreButton.disabled = !session;
+        if (elements.contractToggle) elements.contractToggle.disabled = !session;
+        if (!session) closeWorkshopContract();
         if (elements.title) elements.title.textContent = session ? session.title : '选择或新建对话';
         if (elements.contractEnabled) {
             elements.contractEnabled.disabled = !session || workshopState.generating;
@@ -185,54 +254,25 @@
             if (!projectId) {
                 elements.emptyState.hidden = false;
                 elements.emptyContent.replaceChildren();
-                const icon = document.createElement('p');
-                icon.className = 'desktop-workshop-empty-icon';
-                icon.textContent = '\uD83D\uDCAC';
                 const heading = document.createElement('h3');
-                heading.textContent = '创作讨论空间';
+                heading.textContent = '想清楚再写';
                 const desc = document.createElement('p');
-                desc.textContent = '在 Workshop 中与 AI 讨论角色、情节、设定，并将讨论结果转化为资料、摘要或正文。';
+                desc.textContent = '这里用来讨论人物、情节和下一场，不直接往稿纸里写。';
                 const action = document.createElement('button');
                 action.className = 'desktop-primary-action';
                 action.type = 'button';
                 action.textContent = '去书库打开项目';
                 action.addEventListener('click', () => setView('bookshelf'));
-                elements.emptyContent.append(icon, heading, desc, action);
-            } else if (!workshopState.sessions.length) {
+                elements.emptyContent.append(heading, desc, action);
+            } else if (!hasMessages) {
                 elements.emptyState.hidden = false;
                 elements.emptyContent.replaceChildren();
-                const icon = document.createElement('p');
-                icon.className = 'desktop-workshop-empty-icon';
-                icon.textContent = '\u270D\uFE0F';
                 const heading = document.createElement('h3');
-                heading.textContent = '创建第一场讨论';
+                heading.textContent = session ? '问一句' : '先想清楚';
                 const desc = document.createElement('p');
-                desc.textContent = `在《${projectName}》的创作讨论中，与 AI 协作推进故事。`;
-                const action = document.createElement('button');
-                action.className = 'desktop-primary-action';
-                action.type = 'button';
-                action.textContent = '开始新对话';
-                action.addEventListener('click', () => createWorkshopSession());
-                action.disabled = workshopState.generating;
-                elements.emptyContent.append(icon, heading, desc, action);
-            } else if (!session) {
-                elements.emptyState.hidden = false;
-                elements.emptyContent.replaceChildren();
-                const icon = document.createElement('p');
-                icon.className = 'desktop-workshop-empty-icon';
-                icon.textContent = '\uD83D\uDCDD';
-                const heading = document.createElement('h3');
-                heading.textContent = '选择对话';
-                const desc = document.createElement('p');
-                const count = workshopState.sessions.length;
-                desc.textContent = `共有 ${count} 个对话。从左侧列表选择或新建。`;
-                const action = document.createElement('button');
-                action.className = 'desktop-primary-action';
-                action.type = 'button';
-                action.textContent = '新建对话';
-                action.addEventListener('click', () => createWorkshopSession());
-                action.disabled = workshopState.generating;
-                elements.emptyContent.append(icon, heading, desc, action);
+                desc.textContent = '选一个开头，或自己输入。可用 @[资料] 和 #[场景] 带上上下文。';
+                elements.emptyContent.append(heading, desc);
+                appendWorkshopStarters(elements.emptyContent);
             } else {
                 elements.emptyState.hidden = true;
             }
@@ -241,14 +281,7 @@
         if (elements.messages) {
             elements.messages.replaceChildren();
             if (!session || !(session.messages || []).length) {
-                if (elements.emptyState && !elements.emptyState.hidden) {
-                    /* empty state is already shown */
-                } else {
-                    const empty = document.createElement('div');
-                    empty.className = 'desktop-workshop-message';
-                    empty.textContent = '输入一个问题开始讨论。';
-                    elements.messages.appendChild(empty);
-                }
+                /* empty state covers the thread */
             } else {
                 (session.messages || []).forEach((message) => {
                     const item = document.createElement('button');
@@ -363,6 +396,7 @@
         if (index >= 0) workshopState.sessions[index] = saved;
         if (nativeEditorState.snapshot) nativeEditorState.snapshot.workshopSessions = workshopState.sessions;
         setWorkshopStatus(enabled ? '会话指令已启用。' : '会话指令已关闭。', 'ok');
+        closeWorkshopContract();
         renderWorkshop();
     }
 
@@ -376,6 +410,7 @@
         session.messages = [...(session.messages || []), userMessage, assistantMessage];
         session.updatedAt = new Date().toISOString();
         workshopState.input = '';
+        workshopState.selectedAssistantMessageId = assistantMessage.id;
         workshopState.generating = true;
         setWorkshopStatus('生成中...', 'info');
         renderWorkshop();
@@ -454,9 +489,10 @@
         const message = selectedAssistantMessage();
         const projectId = currentProjectId();
         if (!message || !projectId) return;
+        if (!window.confirm('把这条回复保存为资料笔记？')) return;
         const scene = currentNativeScene();
         const sceneTitle = scene && scene.title ? scene.title : '';
-        const title = sceneTitle ? `Workshop 讨论：${sceneTitle}` : `Workshop 讨论 ${new Date().toLocaleDateString('zh-CN')}`;
+        const title = sceneTitle ? `讨论：${sceneTitle}` : `讨论 ${new Date().toLocaleDateString('zh-CN')}`;
         const response = await fetch('/api/compendium', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -486,6 +522,7 @@
         const message = selectedAssistantMessage();
         const scene = currentNativeScene();
         if (!message || !scene) return;
+        if (!window.confirm('用这条回复覆盖当前场景摘要？尚未保存。')) return;
         scene.summary = message.content.slice(0, 600);
         const elements = nativeEditorElements();
         if (elements.summary) elements.summary.value = scene.summary;
@@ -498,6 +535,7 @@
         const message = selectedAssistantMessage();
         const elements = nativeEditorElements();
         if (!message || !elements.editor) return;
+        if (!window.confirm('把这条回复追加到当前场景正文？尚未保存。')) return;
         elements.editor.value = elements.editor.value ? `${elements.editor.value}\n\n${message.content}` : message.content;
         flushNativeEditorFields();
         renderNativeEditor();
@@ -589,7 +627,27 @@
     function bindWorkshop() {
         const elements = workshopElements();
         if (elements.newButton) elements.newButton.addEventListener('click', createWorkshopSession);
-        if (elements.deleteButton) elements.deleteButton.addEventListener('click', deleteWorkshopSession);
+        if (elements.deleteButton) elements.deleteButton.addEventListener('click', () => { closeWorkshopMoreMenu(); deleteWorkshopSession(); });
+        if (elements.moreButton) {
+            elements.moreButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+                toggleWorkshopMoreMenu();
+            });
+        }
+        if (elements.contractToggle) elements.contractToggle.addEventListener('click', toggleWorkshopContract);
+        if (elements.contractClose) elements.contractClose.addEventListener('click', closeWorkshopContract);
+        document.addEventListener('click', (event) => {
+            const wrap = document.querySelector('.desktop-workshop-more-wrap');
+            if (wrap && !wrap.contains(event.target)) {
+                closeWorkshopMoreMenu();
+                closeWorkshopContract();
+            }
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape') return;
+            closeWorkshopMoreMenu();
+            closeWorkshopContract();
+        });
         if (elements.contractSave) elements.contractSave.addEventListener('click', saveWorkshopDirectiveContract);
         if (elements.input) {
             elements.input.addEventListener('input', () => {

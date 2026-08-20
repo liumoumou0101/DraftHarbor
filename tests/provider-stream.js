@@ -303,8 +303,24 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
     assert.ok(modelCatalog.API_COMPATIBLE_PROVIDERS.length >= 5, 'should have API-compatible providers');
     assert.strictEqual(modelCatalog.isApiCompatibleProvider('deepseek'), true);
     assert.strictEqual(modelCatalog.isApiCompatibleProvider('openai'), true);
-    assert.strictEqual(modelCatalog.isApiCompatibleProvider('anthropic'), false, 'anthropic should not be API-compatible');
-    assert.strictEqual(modelCatalog.isApiCompatibleProvider('google'), false, 'google should not be API-compatible');
+    assert.strictEqual(modelCatalog.isApiCompatibleProvider('anthropic'), true, 'anthropic should be API-compatible via Messages');
+    assert.strictEqual(modelCatalog.isApiCompatibleProvider('google'), true, 'google should be API-compatible via OpenAI-compat');
+    assert.strictEqual(modelCatalog.isAnthropicMessagesProvider('anthropic'), true);
+    assert.strictEqual(modelCatalog.getProviderTransport('google'), 'chat-completions');
+    assert.ok(modelCatalog.getProviderMetadata('anthropic').defaultEndpoint.includes('/v1/messages'));
+    assert.ok(modelCatalog.getProviderMetadata('google').defaultEndpoint.includes('generativelanguage.googleapis.com'));
+    assert.ok(modelCatalog.isTypedModelProvider('custom'));
+    assert.ok(modelCatalog.isTypedModelProvider('openai-compatible'));
+    assert.ok(modelCatalog.providerSetupHint('custom', 'api').includes('chat/completions'));
+    const claudeEntry = modelCatalog.getProviderModelEntry('anthropic', 'claude-sonnet-4-6');
+    assert.ok(claudeEntry && modelCatalog.isModelSelectable(claudeEntry), 'Anthropic catalog models should be selectable');
+    const geminiEntry = modelCatalog.getProviderModelEntry('google', 'gemini-2.5-flash');
+    assert.ok(geminiEntry && modelCatalog.isModelSelectable(geminiEntry), 'Gemini catalog models should be selectable');
+    const liveAnthropic = modelCatalog.buildLiveTestRequest({ provider: 'anthropic', apiKey: 'sk-ant-test', model: 'claude-sonnet-4-6' });
+    assert.strictEqual(liveAnthropic.headers['x-api-key'], 'sk-ant-test');
+    assert.ok(!liveAnthropic.headers.Authorization);
+    const liveGoogle = modelCatalog.buildLiveTestRequest({ provider: 'google', apiKey: 'gem-key', model: 'gemini-2.5-flash' });
+    assert.ok(String(liveGoogle.headers.Authorization).startsWith('Bearer '));
     assert.strictEqual(modelCatalog.isThinkingSupported('deepseek', 'deepseek-v4-pro'), true);
     assert.strictEqual(modelCatalog.isThinkingSupported('openai', 'gpt-4o'), false, 'non-deepseek should not support thinking');
     assert.strictEqual(modelCatalog.isApiCompatibleProvider('opencode-zen'), true, 'opencode-zen should be API-compatible');
@@ -362,6 +378,92 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
         assert.strictEqual(zenTokens[1], 'answer');
         assert.strictEqual(zenMeta[1] && zenMeta[1].type, 'content');
         console.log('Provider stream OpenCode Zen thinking test passed.');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+
+    const converted = providerStream.toAnthropicMessages([
+        { role: 'system', content: 'You are a writer.' },
+        { role: 'user', content: 'Hello' },
+        { role: 'user', content: 'Again' },
+        { role: 'assistant', content: 'Hi' }
+    ]);
+    assert.strictEqual(converted.system, 'You are a writer.');
+    assert.strictEqual(converted.messages.length, 2);
+    assert.strictEqual(converted.messages[0].role, 'user');
+    assert.ok(converted.messages[0].content.includes('Hello'));
+    assert.ok(converted.messages[0].content.includes('Again'));
+
+    globalThis.fetch = async (url, init) => {
+        assert.strictEqual(url, 'https://api.anthropic.com/v1/messages');
+        assert.strictEqual(init.headers['x-api-key'], 'sk-ant-test');
+        assert.ok(!init.headers.Authorization);
+        var body = JSON.parse(init.body);
+        assert.strictEqual(body.model, 'claude-sonnet-4-6');
+        assert.ok(body.max_tokens >= 1);
+        assert.strictEqual(body.system, 'Stay literary.');
+        assert.ok(!body.messages.some(function (item) { return item.role === 'system'; }));
+        var encoder = new TextEncoder();
+        var stream = new ReadableStream({
+            start(controller) {
+                controller.enqueue(encoder.encode('event: ping\ndata: {"type":"ping"}\n\n'));
+                controller.enqueue(encoder.encode('data: ' + JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text: 'Harbor' } }) + '\n\n'));
+                controller.enqueue(encoder.encode('data: ' + JSON.stringify({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } }) + '\n\n'));
+                controller.close();
+            }
+        });
+        return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    };
+    try {
+        var anthropicTokens = [];
+        await providerStream.streamGeneration(
+            { messages: [{ role: 'system', content: 'Stay literary.' }, { role: 'user', content: 'Write' }] },
+            function (token) { if (token) anthropicTokens.push(token); },
+            {
+                mode: 'api',
+                provider: 'anthropic',
+                model: 'claude-sonnet-4-6',
+                endpoint: 'https://api.anthropic.com/v1/messages',
+                apiKey: 'sk-ant-test'
+            }
+        );
+        assert.deepStrictEqual(anthropicTokens, ['Harbor']);
+        console.log('Provider stream Anthropic Messages test passed.');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+
+    globalThis.fetch = async (url, init) => {
+        assert.ok(String(url).includes('generativelanguage.googleapis.com'));
+        assert.ok(String(init.headers.Authorization).startsWith('Bearer '));
+        var body = JSON.parse(init.body);
+        assert.strictEqual(body.model, 'gemini-2.5-flash');
+        assert.ok(!body.thinking);
+        var encoder = new TextEncoder();
+        var stream = new ReadableStream({
+            start(controller) {
+                controller.enqueue(encoder.encode('data: ' + JSON.stringify({ choices: [{ delta: { content: 'Gemini' } }] }) + '\n\n'));
+                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                controller.close();
+            }
+        });
+        return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    };
+    try {
+        var geminiTokens = [];
+        await providerStream.streamGeneration(
+            { messages: [{ role: 'user', content: 'Hi' }] },
+            function (token) { if (token) geminiTokens.push(token); },
+            {
+                mode: 'api',
+                provider: 'google',
+                model: 'gemini-2.5-flash',
+                endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+                apiKey: 'gem-key'
+            }
+        );
+        assert.deepStrictEqual(geminiTokens, ['Gemini']);
+        console.log('Provider stream Google OpenAI-compat test passed.');
     } finally {
         globalThis.fetch = originalFetch;
     }

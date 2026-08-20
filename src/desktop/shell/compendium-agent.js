@@ -64,7 +64,10 @@
             const title = document.createElement('strong');
             title.textContent = `${finding.severity === 'high' ? '高' : finding.severity === 'medium' ? '中' : '低'}优先级：${finding.reason}`;
             const related = document.createElement('small');
-            related.textContent = `相关资料：${(finding.entryIds || []).join(', ')}`;
+            related.textContent = `相关资料：${(finding.entryIds || []).map((entryId) => {
+                const relatedEntry = (compendiumState.entries || []).find((item) => item.id === entryId);
+                return relatedEntry && relatedEntry.title ? relatedEntry.title : entryId;
+            }).join('、')}`;
             card.append(title, related);
             const relatedIds = (finding.entryIds || []).filter(Boolean);
             if (relatedIds.length) {
@@ -92,7 +95,7 @@
                 const text = document.createElement('span');
                 const entry = (compendiumState.entries || []).find((item) => item.id === operation.entryId) || {};
                 const diff = Object.keys(operation.patch || {}).map((key) => `${key}: ${JSON.stringify(entry[key] || '')} → ${JSON.stringify(operation.patch[key])}`).join('；');
-                text.textContent = `应用到 ${operation.entryId}：${diff}`;
+                text.textContent = `应用到 ${entry.title || '未命名资料'}：${diff}`;
                 line.append(input, text); card.append(line);
             });
             elements.results.appendChild(card);

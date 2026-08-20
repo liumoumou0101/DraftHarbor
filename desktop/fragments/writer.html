@@ -301,10 +301,15 @@
                                     </summary>
                                     <div class="desktop-native-generation-advanced-body">
                                         <div class="desktop-native-prompt-toolbar">
-                                            <button class="desktop-secondary-action" type="button" data-native-preview-prompt>预览</button>
-                                            <select data-native-prompt-template aria-label="正文提示词模板"></select>
-                                            <button class="desktop-secondary-action" type="button" data-native-manage-prompts>管理</button>
-                                            <button class="desktop-secondary-action" type="button" data-native-manage-global-prompt>指令栈</button>
+                                            <label>
+                                                <span>提示词</span>
+                                                <select data-native-prompt-template aria-label="正文提示词模板"></select>
+                                            </label>
+                                            <div class="desktop-native-prompt-toolbar-actions">
+                                                <button class="desktop-secondary-action" type="button" data-native-preview-prompt>预览</button>
+                                                <button class="desktop-secondary-action" type="button" data-native-manage-prompts>管理</button>
+                                                <button class="desktop-secondary-action" type="button" data-native-manage-global-prompt>指令栈</button>
+                                            </div>
                                         </div>
                                         <div class="desktop-native-insert-options">
                                             <span>写入位置</span>
@@ -314,34 +319,36 @@
                                                 <option value="replace">替换选中文本</option>
                                             </select>
                                         </div>
-                                        <details class="desktop-native-model-settings" data-native-model-settings>
-                                            <summary>
-                                                <span>模型设置</span>
+                                        <section class="desktop-native-model-settings" data-native-model-settings>
+                                            <div class="desktop-native-model-settings-head">
+                                                <strong>模型</strong>
                                                 <small class="desktop-native-model-control-hint" data-native-model-control-hint></small>
-                                            </summary>
+                                            </div>
                                             <div class="desktop-native-model-control" data-native-model-control>
                                                 <div class="desktop-native-model-control-row">
                                                     <label>
-                                                        <span>Provider 配置</span>
+                                                        <span>配置组</span>
                                                         <select data-native-profile-select>
                                                         </select>
                                                     </label>
                                                 </div>
                                                 <div class="desktop-native-model-control-row">
                                                     <label>
-                                                        <span>模型选择</span>
+                                                        <span>模型</span>
                                                         <select data-native-model-select>
                                                         </select>
-                                                    </label>
-                                                    <label class="desktop-native-writer-check">
-                                                        <input type="checkbox" data-native-thinking-toggle>
-                                                        <span>深度思考</span>
                                                     </label>
                                                 </div>
                                                 <div class="desktop-native-model-control-row" data-native-custom-model-group hidden>
                                                     <label>
-                                                        <span>自定义模型 ID</span>
-                                                        <input type="text" data-native-custom-model placeholder="输入模型名称或 ID">
+                                                        <span>手填模型 ID</span>
+                                                        <input type="text" data-native-custom-model placeholder="按服务商文档填写模型名称或 ID">
+                                                    </label>
+                                                </div>
+                                                <div class="desktop-native-model-control-row">
+                                                    <label class="desktop-native-writer-check">
+                                                        <input type="checkbox" data-native-thinking-toggle>
+                                                        <span>深度思考</span>
                                                     </label>
                                                 </div>
                                                 <div class="desktop-native-model-control-row desktop-native-sampling-row">
@@ -354,7 +361,7 @@
                                                         <input type="number" data-native-max-tokens min="1" max="200000" step="100">
                                                     </label>
                                                 </div>
-                                                <div class="desktop-native-model-control-row desktop-native-sampling-row">
+                                                <div class="desktop-native-model-control-row">
                                                     <label class="desktop-native-writer-check">
                                                         <input type="checkbox" data-native-provider-defaults>
                                                         <span>使用服务商默认参数</span>
@@ -362,7 +369,7 @@
                                                     <span class="desktop-native-sampling-hint" data-native-sampling-hint></span>
                                                 </div>
                                             </div>
-                                        </details>
+                                        </section>
                                     </div>
                                 </details>
                             </div>

@@ -1376,14 +1376,14 @@
         if (controller) controller.abort();
     }
 
-    async function openDesktopProject(project) {
+    async function openDesktopProject(project, options) {
         if (project && project.health === 'invalid') {
             setProjectLibraryStatus('这个项目文件暂时无法读取，请先检查磁盘快照。', 'error');
             return;
         }
 
         setProjectLibraryStatus(`正在打开《${project.name || '未命名项目'}》...`, 'info');
-        setView('writer');
+        setView((options && options.view) || 'writer');
 
         const snapshot = await fetchProjectSnapshot(project);
         loadNativeProjectEditor(snapshot, project || {});

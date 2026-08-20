@@ -35,8 +35,79 @@
             body: document.querySelector('[data-compendium-body]'),
             save: document.querySelector('[data-compendium-save]'),
             deleteButton: document.querySelector('[data-compendium-delete]'),
-            aiRewrite: document.querySelector('[data-compendium-ai-rewrite]')
+            aiRewrite: document.querySelector('[data-compendium-ai-rewrite]'),
+            moreButton: document.querySelector('[data-compendium-more]'),
+            moreMenu: document.querySelector('[data-compendium-more-menu]'),
+            saveStatus: document.querySelector('[data-compendium-save-status]'),
+            typeChips: document.querySelector('[data-compendium-type-chips]'),
+            characterDetails: document.querySelector('[data-compendium-character-details]'),
+            policyDetails: document.querySelector('[data-compendium-policy-details]')
         };
+    }
+
+    function confirmAbandonCompendiumEdits() {
+        if (!compendiumState.dirty) return true;
+        if (!window.confirm('资料尚未保存，离开将丢失修改。继续？')) return false;
+        compendiumState.dirty = false;
+        return true;
+    }
+
+    function markCompendiumDirty() {
+        compendiumState.dirty = true;
+        renderCompendiumSaveStatus();
+    }
+
+    function renderCompendiumSaveStatus() {
+        const { saveStatus } = compendiumElements();
+        if (!saveStatus) return;
+        if (!selectedCompendiumEntry()) {
+            saveStatus.textContent = '';
+            saveStatus.dataset.tone = '';
+            return;
+        }
+        saveStatus.textContent = compendiumState.dirty ? '未保存' : '';
+        saveStatus.dataset.tone = compendiumState.dirty ? 'warn' : '';
+    }
+
+    function characterProfileHasContent(profile) {
+        return Object.values(profile || {}).some((value) => String(value || '').trim());
+    }
+
+    function closeCompendiumMoreMenu() {
+        const { moreButton, moreMenu } = compendiumElements();
+        if (moreMenu) moreMenu.hidden = true;
+        if (moreButton) moreButton.setAttribute('aria-expanded', 'false');
+    }
+
+    function toggleCompendiumMoreMenu() {
+        const { moreButton, moreMenu } = compendiumElements();
+        if (!moreMenu) return;
+        const nextHidden = !moreMenu.hidden ? true : false;
+        moreMenu.hidden = nextHidden;
+        if (moreButton) moreButton.setAttribute('aria-expanded', nextHidden ? 'false' : 'true');
+    }
+
+    function setCompendiumTypeFilter(type) {
+        compendiumState.type = type || '';
+        const { typeFilter, typeChips } = compendiumElements();
+        if (typeFilter) typeFilter.value = compendiumState.type;
+        if (typeChips) {
+            typeChips.querySelectorAll('[data-compendium-type-chip]').forEach((chip) => {
+                const active = (chip.dataset.compendiumTypeChip || '') === compendiumState.type;
+                chip.classList.toggle('is-active', active);
+                chip.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+        }
+        renderCompendium();
+        setCompendiumCountStatus();
+    }
+
+    function selectCompendiumEntry(entryId) {
+        if (entryId === compendiumState.selectedId) return;
+        if (!confirmAbandonCompendiumEdits()) return;
+        compendiumState.selectedId = entryId;
+        compendiumState.dirty = false;
+        renderCompendium();
     }
 
     function currentProjectId() {
@@ -164,10 +235,17 @@
         const hasProject = !!projectId;
 
         if (elements.projectLabel) {
-            elements.projectLabel.textContent = hasProject ? `当前项目：${projectName}` : '从书库打开项目后编辑资料。';
+            elements.projectLabel.textContent = hasProject ? projectName : '从书库打开项目后编辑资料。';
         }
         if (elements.search && elements.search.value !== compendiumState.query) elements.search.value = compendiumState.query;
         if (elements.typeFilter && elements.typeFilter.value !== compendiumState.type) elements.typeFilter.value = compendiumState.type;
+        if (elements.typeChips) {
+            elements.typeChips.querySelectorAll('[data-compendium-type-chip]').forEach((chip) => {
+                const active = (chip.dataset.compendiumTypeChip || '') === compendiumState.type;
+                chip.classList.toggle('is-active', active);
+                chip.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+        }
         if (elements.newButton) elements.newButton.disabled = !hasProject || compendiumState.loading;
         if (elements.drawButton) elements.drawButton.disabled = !hasProject || compendiumState.loading;
         if (elements.agentButton) {
@@ -206,19 +284,14 @@
                     const title = document.createElement('strong');
                     title.textContent = entry.title || '未命名资料';
                     const meta = document.createElement('span');
+                    meta.className = 'desktop-compendium-item-meta';
                     meta.textContent = `${typeLabel(entry.type)}${entry.tags && entry.tags.length ? ` / ${entry.tags.slice(0, 3).join(', ')}` : ''}`;
                     const badge = document.createElement('span');
                     badge.className = 'desktop-compendium-injection-badge';
                     badge.dataset.mode = contextPolicyMode(entry);
                     badge.textContent = contextPolicyLabel(entry);
-                    const summary = document.createElement('small');
-                    summary.textContent = entry.summary || String(entry.body || '').slice(0, 80) || '没有摘要';
-                    item.append(title, meta, badge, summary);
-                    item.addEventListener('click', () => {
-                        compendiumState.selectedId = entry.id;
-                        compendiumState.dirty = false;
-                        renderCompendium();
-                    });
+                    item.append(title, badge, meta);
+                    item.addEventListener('click', () => selectCompendiumEntry(entry.id));
                     elements.list.appendChild(item);
                 });
             }
@@ -266,7 +339,10 @@
         if (elements.save) elements.save.disabled = !selected;
         if (elements.deleteButton) elements.deleteButton.disabled = !selected;
         if (elements.aiRewrite) elements.aiRewrite.disabled = !selected;
-        if (selected) {
+        const isCharacter = selected && (selected.type || 'lore') === 'character';
+        if (elements.characterDetails) elements.characterDetails.hidden = !isCharacter;
+        if (elements.character) elements.character.hidden = !isCharacter;
+        if (selected && !compendiumState.dirty) {
             const policy = normalizedContextPolicy(selected);
             const triggers = policy.triggers || {};
             const characterProfile = selected.characterProfile || {};
@@ -282,7 +358,7 @@
             if (elements.triggerTags) elements.triggerTags.checked = triggers.tags !== false;
             if (elements.triggerPov) elements.triggerPov.checked = triggers.pov !== false;
             if (elements.triggerSceneCharacters) elements.triggerSceneCharacters.checked = triggers.sceneCharacters !== false;
-            if (elements.character) elements.character.hidden = (selected.type || 'lore') !== 'character';
+            if (elements.characterDetails) elements.characterDetails.open = isCharacter && characterProfileHasContent(characterProfile);
             if (elements.characterRole) elements.characterRole.value = characterProfile.role || '';
             if (elements.characterGoal) elements.characterGoal.value = characterProfile.goal || '';
             if (elements.characterMotivation) elements.characterMotivation.value = characterProfile.motivation || '';
@@ -292,14 +368,18 @@
             if (elements.characterKnowledge) elements.characterKnowledge.value = characterProfile.knowledge || '';
             if (elements.characterRelationship) elements.characterRelationship.value = characterProfile.relationshipNotes || '';
             if (elements.body) elements.body.value = selected.body || '';
-        } else {
-            if (elements.character) elements.character.hidden = true;
+        } else if (!selected) {
+            if (elements.characterDetails) {
+                elements.characterDetails.hidden = true;
+                elements.characterDetails.open = false;
+            }
             fields.forEach((field) => {
                 if (!field) return;
                 if (field.type === 'checkbox') field.checked = false;
                 else field.value = '';
             });
         }
+        renderCompendiumSaveStatus();
         renderContextStrip();
     }
 
@@ -325,6 +405,7 @@
             if (!compendiumState.entries.some((entry) => entry.id === compendiumState.selectedId)) {
                 compendiumState.selectedId = compendiumState.entries[0] ? compendiumState.entries[0].id : '';
             }
+            compendiumState.dirty = false;
             if (nativeEditorState.snapshot) nativeEditorState.snapshot.compendium = compendiumState.entries;
         } catch (error) {
             console.warn('Failed to load compendium:', error);
@@ -390,6 +471,7 @@
             });
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+            compendiumState.dirty = false;
             await loadCompendium();
             compendiumState.selectedId = result.entry.id;
             renderCompendium();
@@ -402,6 +484,7 @@
     async function createCompendiumEntry(typeOverride) {
         const projectId = currentProjectId();
         if (!projectId) return;
+        if (!confirmAbandonCompendiumEdits()) return;
         const entryType = typeOverride || compendiumState.type || 'lore';
         try {
             const response = await fetch('/api/compendium', {
@@ -459,15 +542,33 @@
         }
         if (elements.typeFilter) {
             elements.typeFilter.addEventListener('change', () => {
-            compendiumState.type = elements.typeFilter.value || '';
-            renderCompendium();
-            setCompendiumCountStatus();
+            setCompendiumTypeFilter(elements.typeFilter.value || '');
         });
         }
+        if (elements.typeChips) {
+            elements.typeChips.addEventListener('click', (event) => {
+                const chip = event.target.closest('[data-compendium-type-chip]');
+                if (!chip) return;
+                setCompendiumTypeFilter(chip.dataset.compendiumTypeChip || '');
+            });
+        }
+        if (elements.moreButton) {
+            elements.moreButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+                toggleCompendiumMoreMenu();
+            });
+        }
+        document.addEventListener('click', (event) => {
+            const wrap = document.querySelector('.desktop-compendium-more-wrap');
+            if (wrap && !wrap.contains(event.target)) closeCompendiumMoreMenu();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') closeCompendiumMoreMenu();
+        });
         if (elements.newButton) elements.newButton.addEventListener('click', createCompendiumEntry);
-        if (elements.drawButton) elements.drawButton.addEventListener('click', openCompendiumDraw);
-        if (elements.agentButton && typeof openCompendiumAgent === 'function') elements.agentButton.addEventListener('click', openCompendiumAgent);
-        if (elements.agentQaButton && typeof openCompendiumAgentQa === 'function') elements.agentQaButton.addEventListener('click', openCompendiumAgentQa);
+        if (elements.drawButton) elements.drawButton.addEventListener('click', () => { closeCompendiumMoreMenu(); openCompendiumDraw(); });
+        if (elements.agentButton && typeof openCompendiumAgent === 'function') elements.agentButton.addEventListener('click', () => { closeCompendiumMoreMenu(); openCompendiumAgent(); });
+        if (elements.agentQaButton && typeof openCompendiumAgentQa === 'function') elements.agentQaButton.addEventListener('click', () => { closeCompendiumMoreMenu(); openCompendiumAgentQa(); });
         if (elements.aiRewrite) elements.aiRewrite.addEventListener('click', openCompendiumRewrite);
         if (elements.form) elements.form.addEventListener('submit', saveCompendiumEntry);
         if (elements.deleteButton) elements.deleteButton.addEventListener('click', deleteCompendiumEntry);
@@ -483,8 +584,8 @@
             ...compendiumCharacterFields(elements)
         ].forEach((field) => {
             if (!field) return;
-            field.addEventListener('input', () => { compendiumState.dirty = true; });
-            field.addEventListener('change', () => { compendiumState.dirty = true; });
+            field.addEventListener('input', markCompendiumDirty);
+            field.addEventListener('change', markCompendiumDirty);
         });
         if (elements.policyMode) {
             elements.policyMode.addEventListener('change', () => {
@@ -498,7 +599,12 @@
         }
         if (elements.entryType) {
             elements.entryType.addEventListener('change', () => {
-                if (elements.character) elements.character.hidden = elements.entryType.value !== 'character';
+                const isCharacter = elements.entryType.value === 'character';
+                if (elements.character) elements.character.hidden = !isCharacter;
+                if (elements.characterDetails) {
+                    elements.characterDetails.hidden = !isCharacter;
+                    if (isCharacter) elements.characterDetails.open = true;
+                }
             });
         }
         renderCompendium();

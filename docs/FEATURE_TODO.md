@@ -6,7 +6,13 @@
 
 状态：`未开始`、`进行中`、`待验收`、`已完成`、`阻塞`。
 
-当前主线（2026-08-19）：写作工作区 UI **W-02 待验收**。书库收口进行中：最近一本钉顶、去掉左栏、维护收入菜单。W-01 提示词装配已收口。设计见 `docs/WRITER_UI_V10_DESIGN.md`。小屏是否单独做紧凑页，等你用过再判断。
+当前主线（2026-08-20）：GitHub 下载者模型适配 **P-01 待验收**。设置页 UI **S-01 待验收**。恢复页 UI **R-01 待验收**。讨论区 UI **D-01 待验收**。资料库 UI **K-01 待验收**。写作工作区 UI **W-02 待验收**。
+
+## 当前阶段：云端模型适配（P-01）
+
+| 编号 | 功能 | 状态 | 依赖 | 完成标准 | 下一步 |
+| --- | --- | --- | --- | --- | --- |
+| P-01 | Anthropic / Gemini 直连 + 自定义 Chat Completions | 待验收 | model-catalog、provider-stream、generation-bridge、设置页 | 写作/配置组/管家都能选 Anthropic、Google Gemini、自定义接口；手填模型 ID 能发出；Anthropic 走 Messages，Gemini 走官方 OpenAI 兼容；空选项不再出现 | 2026-08-20：`node tests/provider-stream.js`、`node tests/generation-bridge.js`、`node tests/model-catalog-service.js`、`node tests/desktop-library.js` 应通过 |
 
 2026-07-28 工作流真实作者复验已启动，计划见 `docs/WORKFLOW_REAL_USER_ACCEPTANCE_PLAN_2026-07-28.md`。本轮使用设置中的真实 DeepSeek API，从真实桌面界面复验从零创作、续写、重写、取消恢复、回退重生成、正文/资料回流和重开恢复；测试项目与生成数据保留到软件功能彻底完成后再统一清理。草稿 PR #5 在 P0/P1 阻断清零前保持 Draft。首次基线已确认工作流独立配置为 `ai工作流 / deepseek-v4-pro`，Flash/Pro 在线 canary 通过。第一轮界面修复已过滤 `backups`、`.removed-projects` 和隐藏保留目录；当前运行与新建表单已分区，选中运行后新建表单默认收起；当前结果与主操作移到步骤列表之前，移除步骤/运行列表嵌套滚动；待审批时不再显示无效生成按钮；蓝图、资料、场景和审查结果增加结构化摘要，内部 Review State、节点 ID 和事件名改为中文，诊断记录默认折叠。
 
@@ -16,12 +22,39 @@
 
 2026-07-24 真实用户路径复验：使用设置中的独立 `ai工作流 / deepseek-v4-pro`，从桌面界面完整跑通续写与无项目“从零构建新作”。续写真实生成 1,863 字符并回流写作区；从零创作完成 Brief、方向、蓝图、7 张资料草稿、单场计划、2,206 字正文、语义审查、写作区与资料库回流。修复续写正文读取错误字段、分析阶段越界续写、方向未落实排除锁、重生成后方向选择失效、对象细纲显示为 `[object Object]`、从零启动误跳空白写作页、运行期深度思考未冻结，以及产物编辑/重写比较被相邻区域遮挡。回流区现明确提示正文与资料卡需分别确认。视觉证据保存在 `.ai_state/workflow-visual-audit-20260724/`；完整 `npm test` 通过。
 
+## 当前阶段：设置页 UI（S-01）
+
+| 编号 | 功能 | 状态 | 依赖 | 完成标准 | 下一步 |
+| --- | --- | --- | --- | --- | --- |
+| S-01 | 设置页分类合并：AI 收成一组，保存按块就位 | 待验收 | 设置壳、desktop-library | 不改 settings API；写作/工作流/管家仍各用各的连接；底栏不再冒充通用保存；去掉英文壳；desktop-library 设置路径通过 | 2026-08-20：`node tests/desktop-library.js`、`node tests/release-config.js` 通过；截图在 `cache/settings-ui-audit/` |
+
+## 当前阶段：恢复页 UI（R-01）
+
+| 编号 | 功能 | 状态 | 依赖 | 完成标准 | 下一步 |
+| --- | --- | --- | --- | --- | --- |
+| R-01 | 恢复页预览优先：去掉英文壳、列表去重、纸面预览 | 待验收 | 恢复壳、desktop-library | 不改备份/恢复 API；列表按项目分组且条目不再重复项目名；筛选 chips；预览用主题纸面；危险操作仍隔离；desktop-library 恢复路径通过 | 2026-08-20：`node tests/desktop-library.js`、`node tests/release-config.js` 通过；截图在 `cache/recovery-ui-audit/` |
+
+## 当前阶段：讨论区 UI（D-01）
+
+| 编号 | 功能 | 状态 | 依赖 | 完成标准 | 下一步 |
+| --- | --- | --- | --- | --- | --- |
+| D-01 | 讨论页对话优先：修好分栏、收起指令与转化 | 待验收 | 讨论壳、desktop-library、workshop-ui | 消息列表占中间 1fr；会话指令不占首屏；转化仅在有助手回复时出现且需确认；空状态三个开头；无 Workshop 英文主标题 | 2026-08-20：`node tests/workshop-service.js`、`node tests/workshop-ui.js` 通过。覆盖空状态三个开头、发送、转化需确认、会话指令、删除 |
+
+## 当前阶段：资料库 UI（K-01）
+
+| 编号 | 功能 | 状态 | 依赖 | 完成标准 | 下一步 |
+| --- | --- | --- | --- | --- | --- |
+| K-01 | 资料页列表优先、正文上屏、切卡不丢稿 | 待验收 | 资料库壳、desktop-library、compendium-layout-audit | 1280×720 列表可见 ≥4 张、正文 ≥180px；1080p 正文 ≥240px；抽卡/体检/问答收进更多；注入策略默认折叠；dirty 切卡/切页需确认；重写弹窗 720p 底栏可见；6 套主题徽章不脏 | 2026-08-20：layout/desktop-library/writer-button-audit 通过。同日补了弹窗与控件手感：抽卡类型 chips、生成按钮为当前主操作、字段勾选做成药丸、输入焦点环、折叠箭头 |
+
+不改资料 schema、注入协议和管家 Agent 权限。新层 `desktop-compendium-chrome.css`。
+
 ## 当前阶段：写作工作区 UI（W-02）
 
 | 编号 | 功能 | 状态 | 依赖 | 完成标准 | 下一步 |
 | --- | --- | --- | --- | --- | --- |
-| W-02 | 稿纸优先：收干净底部 dock、把正文变高 | 待验收 | 写作区壳、layout/button/visual audit | 无保存高度时 1280×720 textarea ≥280、1920×1080 ≥520、2560×1440 ≥700；dock 默认 208/270/360；生成无需滚动；组 tab 过滤二级入口；顶栏单行；目录右键；底部与右侧两种 Copilot 位置都要过审计 | 2026-08-19：桌面主题扩为 6 套（夜写/日写/玫瑰/夜纸/湾暮/素宣）。小屏紧凑页仍等判断 |
+| W-02 | 稿纸优先：收干净底部 dock、把正文变高 | 待验收 | 写作区壳、layout/button/visual audit | 无保存高度时 1280×720 textarea ≥280、1920×1080 ≥520、2560×1440 ≥700；dock 默认 208/270/360；生成无需滚动；组 tab 过滤二级入口；顶栏单行；目录右键；底部与右侧两种 Copilot 位置都要过审计 | 2026-08-20：高级选项改成单列表单：提示词下拉 + 三个动作、去掉嵌套模型手风琴、手填框只在选「手填」时出现。`writer-core.js` 仍不动 |
 | L-01 | 书库收口：最近一本钉顶，去掉左栏维护 | 待验收 | 书库壳、desktop-library | 打开后回到书库钉在第一张并有「最近」；无左栏；导入/刷新在维护菜单；卡片无「打开写作器」 | 2026-08-19：作者确认钉顶与默认布面封面，随 6 套主题一并提交 |
+| L-02 | 启动还原上次模块，需要时连最近项目一起打开 | 待验收 | desktop-state、shell-bootstrap、desktop-library | 上次在写作/资料/讨论/工作流则打开最近一本并停在该模块；书库只钉顶不自动打开；项目缺失或损坏退回书库 | 2026-08-20：`node tests/desktop-library.js` 应覆盖 writer/compendium 还原、书库不自动打开、缺失项目退回书库 |
 
 设计：`docs/WRITER_UI_V10_DESIGN.md`。不改 AI 协议、确认条、镜像层。`writer-core.js` 不动。
 

@@ -23,6 +23,25 @@ function snapshot(id, name, text, exportedAt) {
     };
 }
 
+async function openCompendiumMore(page) {
+    const menu = page.locator('[data-compendium-more-menu]');
+    if (await menu.isVisible()) return;
+    await page.click('[data-compendium-more]');
+    await page.waitForSelector('[data-compendium-more-menu]:not([hidden])');
+}
+
+async function acceptNextConfirm(page) {
+    page.once('dialog', async (dialog) => {
+        await dialog.accept();
+    });
+}
+
+async function openCompendiumPolicyDetails(page) {
+    await page.locator('[data-compendium-policy-details]').evaluate((element) => {
+        element.open = true;
+    });
+}
+
 async function submitNativeName(page, value) {
     await page.waitForFunction(() => {
         const modal = document.querySelector('[data-native-name-modal]');
@@ -280,10 +299,25 @@ async function submitNativeName(page, value) {
         await page.selectOption('[data-compendium-entry-type]', 'character');
         await page.fill('[data-compendium-title]', 'Ada Navigator');
         await page.fill('[data-compendium-summary]', 'A pilot with a careful memory.');
+        await page.fill('[data-compendium-body]', 'Ada remembers every route through the storm belt.');
+        await openCompendiumPolicyDetails(page);
         await page.fill('[data-compendium-tags]', 'pilot, protagonist');
         await page.fill('[data-compendium-aliases]', 'Ada, Navigator');
         await page.check('[data-compendium-always]');
-        await page.fill('[data-compendium-body]', 'Ada remembers every route through the storm belt.');
+        const firstScreen = await page.evaluate(() => {
+            const list = document.querySelector('.desktop-compendium-list');
+            const tools = document.querySelector('.desktop-compendium-tools');
+            const body = document.querySelector('[data-compendium-body]');
+            const listRect = list.getBoundingClientRect();
+            const bodyRect = body.getBoundingClientRect();
+            return {
+                listHeight: Math.round(listRect.height),
+                toolsHeight: Math.round(tools.getBoundingClientRect().height),
+                bodyVisible: bodyRect.top < window.innerHeight - 24 && bodyRect.height >= 160
+            };
+        });
+        assert.ok(firstScreen.listHeight > firstScreen.toolsHeight, `compendium list should outgrow the tool cluster (${firstScreen.listHeight} vs ${firstScreen.toolsHeight})`);
+        assert.ok(firstScreen.bodyVisible, 'compendium body should stay on the first screen');
         await page.locator('[data-compendium-form] button[type="submit"]').click();
         await page.waitForFunction(() => document.querySelector('[data-compendium-status]').textContent.includes('资料已保存'));
         await page.fill('[data-compendium-search]', 'storm belt');
@@ -309,8 +343,21 @@ async function submitNativeName(page, value) {
         await page.click('[data-view-target="settings"]');
         await page.waitForSelector('[data-settings-form]');
         await page.selectOption('[data-settings-mode]', 'api');
+        const writingProviders = await page.locator('[data-settings-provider] option').evaluateAll((opts) => opts.map((option) => option.value));
+        assert.ok(writingProviders.includes('anthropic') && writingProviders.includes('google') && writingProviders.includes('custom'), 'writing provider list should expose Anthropic, Gemini and custom');
+        await page.selectOption('[data-settings-provider]', 'google');
+        await page.waitForFunction(() => (document.querySelector('[data-settings-endpoint]') || {}).value.includes('generativelanguage.googleapis.com'));
+        await page.selectOption('[data-settings-provider]', 'anthropic');
+        await page.waitForFunction(() => (document.querySelector('[data-settings-endpoint]') || {}).value.includes('api.anthropic.com'));
+        await page.selectOption('[data-settings-provider]', 'custom');
+        await page.waitForFunction(() => {
+            const hint = document.querySelector('[data-settings-zen-hint]');
+            const model = document.querySelector('[data-settings-model]');
+            return hint && !hint.hidden && /chat\/completions|Chat Completions|兼容/.test(hint.textContent || '') && model && !model.hidden;
+        });
         await page.selectOption('[data-settings-provider]', 'openai-compatible');
         await page.fill('[data-settings-endpoint]', 'https://example.test/v1/chat/completions');
+        await page.selectOption('[data-settings-model-pick]', '__custom__');
         await page.fill('[data-settings-model]', 'desktop-test-model');
         await page.fill('[data-settings-api-key]', 'desktop-test-key');
         await page.click('[data-settings-cat-target="generation"]');
@@ -318,20 +365,26 @@ async function submitNativeName(page, value) {
         await page.fill('[data-settings-max-tokens]', '444');
         await page.check('[data-settings-global-prompt-enabled]');
         await page.fill('[data-settings-global-prompt]', '全局前缀：始终遵守作品设定。');
-        await page.locator('[data-settings-form] button[type="submit"]').click();
+        await page.click('[data-settings-save-generation]');
         await page.waitForFunction(() => document.querySelector('[data-settings-status]').textContent.includes('设置已保存'));
         const globalPromptSettings = await fetch(`${servers.appUrl}/api/settings`).then((response) => response.json());
         assert.strictEqual(globalPromptSettings.settings.globalPrompt.enabled, true, 'global prompt should persist in desktop settings');
         assert.strictEqual(globalPromptSettings.settings.globalPrompt.content, '全局前缀：始终遵守作品设定。', 'global prompt content should persist in desktop settings');
         await page.click('[data-settings-cat-target="profiles"]');
-        await page.waitForSelector('[data-settings-default-writing-profile]');
-        assert.ok((await page.locator('[data-settings-default-writing-profile]').textContent()).includes('默认写作连接'), 'model configuration should show the default writing connection');
-        await page.click('[data-settings-default-writing-profile] button');
+        await page.waitForSelector('[data-settings-profile-add]');
+        assert.ok(await page.locator('[data-settings-profile-add]').isVisible(), 'profile list should expose create-profile action');
+        await page.click('[data-settings-profile-add]');
+        await page.waitForFunction(() => !document.querySelector('[data-settings-profile-editor]').hidden);
+        const profileProviders = await page.locator('[data-settings-profile-provider] option').evaluateAll((opts) => opts.map((option) => option.value));
+        assert.ok(profileProviders.includes('anthropic') && profileProviders.includes('google') && profileProviders.includes('custom'), 'profile editor should list Anthropic, Gemini and custom');
+        await page.click('[data-settings-profile-cancel]');
+        await page.waitForFunction(() => document.querySelector('[data-settings-profile-editor]').hidden);
+        await page.click('[data-settings-cat-target="profiles"]');
         await page.waitForFunction(() => document.querySelector('[data-settings-section="provider"]').hidden === false);
         await page.click('[data-settings-cat-target="compendium-agent"]');
         await page.selectOption('[data-settings-compendium-agent-api-provider]', 'deepseek');
         await page.fill('[data-settings-compendium-agent-api-endpoint]', 'http://127.0.0.1:1/v1/chat/completions');
-        await page.fill('[data-settings-compendium-agent-api-model]', 'deepseek-v4-flash');
+        await page.selectOption('[data-settings-compendium-agent-model-pick]', 'deepseek-v4-flash');
         await page.fill('[data-settings-compendium-agent-api-key]', 'desktop-agent-key');
         await page.click('[data-settings-compendium-agent-api-save]');
         await page.waitForFunction(() => document.querySelector('[data-settings-status]').textContent.includes('专用 API 已保存并启用'));
@@ -345,6 +398,7 @@ async function submitNativeName(page, value) {
         await page.click('[data-settings-compendium-agent-api-test]');
         await page.waitForFunction(() => document.querySelector('[data-settings-compendium-agent-api-status]').textContent.includes('连接失败'));
         await page.click('[data-view-target="compendium"]');
+        await openCompendiumMore(page);
         await page.waitForSelector('[data-compendium-agent-qa]:not([hidden])');
         await page.click('[data-compendium-agent-qa]');
         await page.waitForSelector('[data-compendium-agent-qa-modal][open]');
@@ -352,6 +406,7 @@ async function submitNativeName(page, value) {
         assert.ok(qaModalWidth <= 620, 'question dialog should use a focused reading width');
         await page.click('[data-compendium-agent-qa-cancel]');
         await page.waitForFunction(() => !document.querySelector('[data-compendium-agent-qa-modal]').open);
+        await openCompendiumMore(page);
         await page.click('[data-compendium-agent]');
         await page.waitForSelector('[data-compendium-agent-modal][open]');
         assert.strictEqual(await page.locator('[data-compendium-agent-result-actions]').isHidden(), true, 'selection actions should stay hidden before a result exists');
@@ -390,6 +445,7 @@ async function submitNativeName(page, value) {
         const rewrittenCompendiumBody = await rewrittenCompendiumResponse.json();
         assert.strictEqual(rewrittenCompendiumBody.entries[0].summary, 'AI refined navigator summary.', 'AI rewrite should update the selected summary field');
         assert.strictEqual(rewrittenCompendiumBody.entries[0].body, 'Ada remembers every route through the storm belt.', 'AI rewrite should preserve unselected card fields');
+        await openCompendiumMore(page);
         await page.click('[data-compendium-draw]');
         await page.waitForFunction(() => document.querySelector('[data-compendium-draw-modal]') && !document.querySelector('[data-compendium-draw-modal]').hidden);
         assert.strictEqual(await page.locator('[data-compendium-draw-draft]').isHidden(), true, 'draw details should stay hidden until a draft is generated');
@@ -418,8 +474,8 @@ async function submitNativeName(page, value) {
         assert.strictEqual(drawnCompendiumBody.entries[0].characterProfile.goal, '找回航图', 'confirmed character draw should save structured character fields');
         await page.click('[data-view-target="writer"]');
         await page.evaluate(() => {
-            const settings = document.querySelector('[data-native-model-settings]');
-            if (settings) settings.open = true;
+            const advanced = document.querySelector('[data-native-generation-advanced]');
+            if (advanced) advanced.open = true;
         });
         await page.waitForSelector('[data-native-temperature]');
         await page.fill('[data-native-temperature]', '0.7');
@@ -475,10 +531,14 @@ async function submitNativeName(page, value) {
         await page.waitForFunction(() => document.querySelector('[data-workshop-messages]').textContent.includes('Workshop answer text.'));
         const workshopPrompt = await page.evaluate(() => window.__lastWorkshopPrompt);
         assert.ok(workshopPrompt.includes('Ada remembers every route'), 'workshop prompt should include referenced compendium context');
+        await page.waitForSelector('[data-workshop-output-actions]:not([hidden])');
+        acceptNextConfirm(page);
         await page.click('[data-workshop-to-compendium]');
         await page.waitForFunction(() => document.querySelector('[data-workshop-status]').textContent.includes('已转为资料条目'));
+        acceptNextConfirm(page);
         await page.click('[data-workshop-to-summary]');
         await page.waitForFunction(() => document.querySelector('[data-workshop-status]').textContent.includes('已写入当前场景摘要'));
+        acceptNextConfirm(page);
         await page.click('[data-workshop-insert-draft]');
         await page.waitForFunction(() => document.querySelector('[data-workshop-status]').textContent.includes('已插入当前正文'));
         await page.click('[data-view-target="writer"]');
@@ -703,17 +763,25 @@ async function submitNativeName(page, value) {
             return strip && strip.hidden;
         });
 
-        // Context strip: visible on compendium and workshop
+        // Context strip: hidden on writer/compendium/workshop, visible on workflow
         await page.click('[data-view-target="compendium"]');
-        await page.waitForSelector('[data-context-strip]:not([hidden])');
+        await page.waitForFunction(function () {
+            var strip = document.querySelector('[data-context-strip]');
+            return strip && strip.hidden;
+        });
         await page.click('[data-view-target="workshop"]');
+        await page.waitForFunction(function () {
+            var strip = document.querySelector('[data-context-strip]');
+            return strip && strip.hidden;
+        });
+        await page.click('[data-view-target="workflow"]');
         await page.waitForSelector('[data-context-strip]:not([hidden])');
-
-        // Context strip: quick action navigation
         await page.click('[data-context-goto-compendium]');
         await page.waitForFunction(function () {
             return document.querySelector('[data-view-panel="compendium"]') && document.querySelector('[data-view-panel="compendium"]').classList.contains('is-active');
         });
+        await page.click('[data-view-target="workflow"]');
+        await page.waitForSelector('[data-context-strip]:not([hidden])');
         await page.click('[data-context-goto-writer]');
         await page.waitForFunction(function () {
             return document.querySelector('[data-view-panel="writer"]') && document.querySelector('[data-view-panel="writer"]').classList.contains('is-active');
@@ -821,12 +889,55 @@ async function submitNativeName(page, value) {
         await page.waitForFunction(function () {
             return document.querySelector('[data-workshop-messages]').textContent.includes('Workshop to compendium conversion result.');
         });
+        await page.waitForSelector('[data-workshop-output-actions]:not([hidden])');
+        acceptNextConfirm(page);
         await page.click('[data-workshop-to-compendium]');
         await page.waitForFunction(function () {
             return document.querySelector('[data-workshop-status]').textContent.includes('已转为资料条目');
         });
         var workshopConvertStatus = await page.locator('[data-workshop-status]').textContent();
         assert.ok(!workshopConvertStatus.includes('Workshop note'), 'workshop conversion should not use generic Workshop note title');
+
+        await page.evaluate(() => {
+            localStorage.setItem('draftharbor:desktop:lastView', 'writer');
+            localStorage.setItem('draftharbor:desktop:lastOpenedProjectId', 'book-1');
+        });
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => document.querySelector('#desktop-root') && document.querySelector('#desktop-root').dataset.view === 'writer');
+        await page.waitForFunction(() => {
+            const title = document.querySelector('[data-native-project-title]');
+            return title && title.textContent.includes('星河长卷');
+        });
+
+        await page.evaluate(() => {
+            localStorage.setItem('draftharbor:desktop:lastView', 'compendium');
+            localStorage.setItem('draftharbor:desktop:lastOpenedProjectId', 'book-1');
+        });
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => document.querySelector('#desktop-root') && document.querySelector('#desktop-root').dataset.view === 'compendium');
+        await page.waitForFunction(() => {
+            const status = document.querySelector('[data-compendium-status]');
+            return status && !status.textContent.includes('未打开项目');
+        });
+
+        await page.evaluate(() => {
+            localStorage.setItem('draftharbor:desktop:lastView', 'bookshelf');
+            localStorage.setItem('draftharbor:desktop:lastOpenedProjectId', 'book-1');
+        });
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => document.querySelector('#desktop-root') && document.querySelector('#desktop-root').dataset.view === 'bookshelf');
+        await page.waitForFunction(() => {
+            const first = document.querySelector('.desktop-project-card');
+            return first && first.classList.contains('is-recent') && first.textContent.includes('星河长卷');
+        });
+        assert.ok(!(await page.locator('[data-native-scene-editor]').inputValue()).includes('alpha beta gamma'), 'bookshelf restore should not auto-open the last manuscript');
+
+        await page.evaluate(() => {
+            localStorage.setItem('draftharbor:desktop:lastView', 'writer');
+            localStorage.setItem('draftharbor:desktop:lastOpenedProjectId', 'missing-project');
+        });
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => document.querySelector('#desktop-root') && document.querySelector('#desktop-root').dataset.view === 'bookshelf');
 
         console.log('Desktop project library test passed.');
     } finally {

@@ -261,8 +261,11 @@
             ? catalog.getProviderModelEntry(provider, requested)
             : getModelCapability(requested);
         const thinkingSupported = !!(entry && entry.thinkingSupported);
+        const fallback = catalog && typeof catalog.getProviderMetadata === 'function'
+            ? (catalog.getProviderMetadata(provider).defaultModelHint || 'gpt-4o-mini')
+            : 'gpt-4o-mini';
         return {
-            model: requested || 'gpt-4o-mini',
+            model: requested || fallback,
             thinking: thinkingSupported && !!config.enableThinking,
             thinkingSupported,
             capability: entry || getModelCapability(requested)
@@ -300,12 +303,16 @@
         const endpoint = resolveChatEndpoint(config);
         if (!endpoint) throw new Error('API endpoint is required.');
         const request = createChatRequest(messages, config);
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
+        const catalog = resolveModelCatalog();
+        const headers = catalog && typeof catalog.providerAuthHeaders === 'function'
+            ? catalog.providerAuthHeaders(config.provider, config.apiKey)
+            : {
                 'Content-Type': 'application/json',
                 ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {})
-            },
+            };
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers,
             body: JSON.stringify(request.body),
             signal: config.signal
         });
@@ -354,6 +361,120 @@
         }, onActivity);
     }
 
+    function toAnthropicMessages(messages) {
+        const systemParts = [];
+        const rest = [];
+        (Array.isArray(messages) ? messages : []).forEach((message) => {
+            const role = message && message.role === 'assistant'
+                ? 'assistant'
+                : (message && message.role === 'system' ? 'system' : 'user');
+            const content = String((message && message.content) || '');
+            if (role === 'system') {
+                if (content.trim()) systemParts.push(content);
+                return;
+            }
+            const last = rest[rest.length - 1];
+            if (last && last.role === role) last.content = `${last.content}\n\n${content}`.trim() || ' ';
+            else rest.push({ role, content: content.trim() || ' ' });
+        });
+        if (!rest.length) rest.push({ role: 'user', content: ' ' });
+        if (rest[0].role !== 'user') rest.unshift({ role: 'user', content: '请开始。' });
+        return { system: systemParts.join('\n\n'), messages: rest };
+    }
+
+    function visitAnthropicEvent(serialized, emit) {
+        if (!serialized || serialized === '[DONE]') return;
+        const payload = JSON.parse(serialized);
+        if (!payload || payload.type === 'ping') return;
+        if (payload.type === 'error') {
+            const detail = String((payload.error && payload.error.message) || 'Anthropic 返回错误。').replace(/\s+/g, ' ').trim().slice(0, 180);
+            throw providerError('provider_error', detail || 'Anthropic 返回错误。');
+        }
+        if (payload.type === 'content_block_delta') {
+            const delta = payload.delta || {};
+            if (delta.type === 'thinking_delta' && delta.thinking) emit(delta.thinking, { type: 'reasoning' });
+            if (delta.type === 'text_delta' && delta.text) emit(delta.text, { type: 'content' });
+            return;
+        }
+        if (payload.type === 'message_delta') {
+            const stop = payload.delta && payload.delta.stop_reason;
+            if (stop) emit('', { type: 'finish', finishReason: stop === 'end_turn' ? 'stop' : stop });
+            if (payload.usage) emit('', { type: 'usage', usage: payload.usage });
+        }
+    }
+
+    async function requestAnthropic(messages, emit, config, onActivity) {
+        const endpoint = resolveChatEndpoint(config) || 'https://api.anthropic.com/v1/messages';
+        if (!endpoint) throw new Error('API endpoint is required.');
+        const catalog = resolveModelCatalog();
+        const fallback = catalog && typeof catalog.getProviderMetadata === 'function'
+            ? (catalog.getProviderMetadata(config.provider).defaultModelHint || 'claude-sonnet-4-6')
+            : 'claude-sonnet-4-6';
+        const converted = toAnthropicMessages(messages);
+        const body = {
+            model: String(config.model || config.aiModel || fallback).trim() || fallback,
+            messages: converted.messages,
+            stream: true,
+            max_tokens: numeric(config.maxTokens, 8000)
+        };
+        if (converted.system) body.system = converted.system;
+        if (!config.useProviderDefaults) {
+            body.temperature = Math.max(0, Math.min(1, numeric(config.temperature, 0.8)));
+        }
+        const headers = catalog && typeof catalog.providerAuthHeaders === 'function'
+            ? catalog.providerAuthHeaders(config.provider, config.apiKey)
+            : {
+                'Content-Type': 'application/json',
+                'x-api-key': String(config.apiKey || ''),
+                'anthropic-version': '2023-06-01'
+            };
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+            signal: config.signal
+        });
+        if (!response.ok) {
+            const retryAfter = response.headers && response.headers.get ? response.headers.get('retry-after') : null;
+            let providerType = '';
+            let detail = '';
+            try {
+                const raw = await response.text();
+                const parsed = raw ? JSON.parse(raw) : null;
+                const err = parsed && parsed.error ? parsed.error : parsed;
+                providerType = String((err && (err.type || err.code)) || '');
+                detail = String((err && err.message) || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+            } catch (_) { /* keep status-only fallback */ }
+            throw providerError(`provider_http_${response.status}`, detail || `AI Provider 返回 HTTP ${response.status}。`, {
+                status: response.status,
+                retryAfter,
+                providerType
+            });
+        }
+        if (typeof onActivity === 'function') onActivity();
+        if (!response.body || typeof response.body.getReader !== 'function') {
+            const payload = await response.json();
+            if (typeof onActivity === 'function') onActivity();
+            const blocks = Array.isArray(payload && payload.content) ? payload.content : [];
+            for (const block of blocks) {
+                if (block && block.type === 'thinking' && block.thinking) emit(block.thinking, { type: 'reasoning' });
+                if (block && block.type === 'text' && block.text) emit(block.text, { type: 'content' });
+            }
+            if (payload && payload.stop_reason) emit('', { type: 'finish', finishReason: payload.stop_reason === 'end_turn' ? 'stop' : payload.stop_reason });
+            if (payload && payload.usage) emit('', { type: 'usage', usage: payload.usage });
+            return;
+        }
+        await consumeEventStream(response, (serialized) => visitAnthropicEvent(serialized, emit), onActivity);
+    }
+
+    function resolveApiTransport(config) {
+        const catalog = resolveModelCatalog();
+        if (catalog && typeof catalog.getProviderTransport === 'function') {
+            return catalog.getProviderTransport(config.provider);
+        }
+        return config.provider === 'anthropic' ? 'anthropic-messages' : 'chat-completions';
+    }
+
     async function streamGeneration(prompt, onToken, config) {
         const settings = config && typeof config === 'object' ? config : {};
         if (typeof runtime.__draftHarborGenerationStub === 'function') {
@@ -377,7 +498,9 @@
                     activeSettings
                 );
                 const chatMessages = prepared.messages;
-                const result = await requestChat(chatMessages, emit, activeSettings, watchdog.touch);
+                const result = resolveApiTransport(activeSettings) === 'anthropic-messages'
+                    ? await requestAnthropic(chatMessages, emit, activeSettings, watchdog.touch)
+                    : await requestChat(chatMessages, emit, activeSettings, watchdog.touch);
                 if (!contentCharacters) throw providerError('provider_empty_response', 'AI Provider 没有返回可用正文。');
                 return result;
             }
@@ -394,5 +517,5 @@
         }
     }
 
-    return Object.freeze({ MODEL_CAPABILITIES, STREAM_TIMEOUT_DEFAULTS, getModelCapability, messagesToChatML, prependGlobalPrompt, prepareDirectiveMessages, streamGeneration });
+    return Object.freeze({ MODEL_CAPABILITIES, STREAM_TIMEOUT_DEFAULTS, getModelCapability, messagesToChatML, prependGlobalPrompt, prepareDirectiveMessages, toAnthropicMessages, streamGeneration });
 });

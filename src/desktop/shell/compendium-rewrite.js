@@ -36,7 +36,11 @@
 
     function renderCompendiumRewriteState() {
         const { generate, apply } = compendiumRewriteElements();
-        if (generate) generate.disabled = compendiumRewriteState.running;
+        if (generate) {
+            generate.disabled = compendiumRewriteState.running;
+            generate.classList.toggle('desktop-primary-action', !compendiumRewriteState.hasPreview);
+            generate.classList.toggle('desktop-secondary-action', compendiumRewriteState.hasPreview);
+        }
         if (apply) apply.disabled = compendiumRewriteState.running || !compendiumRewriteState.hasPreview;
         updateRewriteSelectionSummary();
     }
@@ -85,7 +89,9 @@
         if (elements.preview) elements.preview.value = '';
         compendiumRewriteState.hasPreview = false;
         renderCompendiumRewriteState();
-        setCompendiumRewriteStatus('勾选要补全的字段后生成补丁。可一次处理多个字段，生成后仍可手动修改 JSON。');
+        setCompendiumRewriteStatus('勾选要补全的字段后生成补丁。可一次处理多个字段。');
+        const patchDetails = document.querySelector('[data-compendium-rewrite-patch]');
+        if (patchDetails) patchDetails.open = false;
         if (elements.modal) elements.modal.hidden = false;
     }
 
@@ -125,6 +131,8 @@
         if (elements.preview) elements.preview.value = JSON.stringify(patch, null, 2);
         compendiumRewriteState.hasPreview = Object.keys(patch).length > 0;
         renderCompendiumRewriteState();
+        const patchDetails = document.querySelector('[data-compendium-rewrite-patch]');
+        if (patchDetails) patchDetails.open = compendiumRewriteState.hasPreview;
         if (!compendiumRewriteState.hasPreview) { setCompendiumRewriteStatus('AI 没有返回可应用的补丁，请调整要求后重试。', 'error'); return; }
         setCompendiumRewriteStatus('补丁已生成。确认内容后点击应用。', 'ok');
     }

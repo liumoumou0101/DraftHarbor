@@ -39,6 +39,7 @@ function snapshot() {
     await page.selectOption('[data-settings-mode]', 'api');
     await page.selectOption('[data-settings-provider]', 'openai-compatible');
     await page.fill('[data-settings-endpoint]', 'https://example.test/v1/chat/completions');
+    await page.selectOption('[data-settings-model-pick]', '__custom__');
     await page.fill('[data-settings-model]', 'summary-test-model');
     await page.fill('[data-settings-api-key]', 'summary-test-key');
     await page.locator('[data-settings-form] button[type="submit"]').click();

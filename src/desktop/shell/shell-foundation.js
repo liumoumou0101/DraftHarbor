@@ -35,7 +35,7 @@
         compendium: '资料',
         workshop: '讨论',
         workflow: '工作流',
-        recovery: '恢复中心',
+        recovery: '恢复',
         settings: '设置'
     };
     const projectLibraryState = {
@@ -400,7 +400,7 @@
         loading: false,
         loadPromise: null,
         saving: false,
-        activeSection: 'provider'
+        activeSection: 'profiles'
     };
     const profileEditState = {
         editingId: '',
@@ -459,6 +459,7 @@
         const nextView = state ? state.normalizeView(view) : 'bookshelf';
         const root = document.getElementById('desktop-root');
         if (!root) return;
+        if (root.dataset.view === 'compendium' && nextView !== 'compendium' && typeof confirmAbandonCompendiumEdits === 'function' && !confirmAbandonCompendiumEdits()) return;
 
         if (nextView !== 'reader' && typeof window.readerHudLeaveReader === 'function') window.readerHudLeaveReader();
 
@@ -534,7 +535,7 @@
         const entries = compendiumState.entries || [];
         const autoCount = entries.filter((entry) => !['manual', 'disabled'].includes(contextPolicyMode(entry))).length;
 
-        elements.strip.hidden = !coreViews.has(view) || view === 'writer';
+        elements.strip.hidden = !coreViews.has(view) || view === 'writer' || view === 'compendium' || view === 'workshop';
         if (elements.projectTitle) elements.projectTitle.textContent = projectId ? currentProjectName() : '未打开项目';
         if (elements.sceneTitle) elements.sceneTitle.textContent = scene ? `场景：${scene.title || '未命名场景'}` : (projectId ? '未选择场景' : '从书库打开项目');
         if (elements.wordCount) elements.wordCount.textContent = scene ? `${String(content || '').length} 字` : '';

@@ -8,6 +8,12 @@ const catalogService = require('../desktop/services/model-catalog-service');
 (async () => {
   const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-catalog-'));
 
+  assert.ok(ModelCatalog.isApiCompatibleProvider('anthropic'), 'Anthropic should be callable');
+  assert.ok(ModelCatalog.isApiCompatibleProvider('google'), 'Google Gemini should be callable');
+  assert.ok(ModelCatalog.isTypedModelProvider('custom'), 'custom should always allow typed model IDs');
+  assert.ok(ModelCatalog.getProviderModelEntry('anthropic', 'claude-sonnet-4-6'));
+  assert.ok(ModelCatalog.getProviderModelEntry('google', 'gemini-2.5-flash'));
+
   const builtin = ModelCatalog.getBuiltinProviderModels('opencode-zen');
   const pickle = builtin.find((item) => item.id === 'big-pickle');
   assert.ok(pickle, 'builtin catalog must include big-pickle');
@@ -21,10 +27,9 @@ const catalogService = require('../desktop/services/model-catalog-service');
   const claude = mergedOnline.models.find((item) => item.id === 'claude-opus-4-6');
   assert.strictEqual(flash.availability, 'online');
   assert.strictEqual(vanished.availability, 'offline');
-  assert.strictEqual(fresh.compatibility, 'unreviewed');
-  assert.ok(!ModelCatalog.isModelSelectable(fresh), 'unknown new models must not be callable');
-  assert.strictEqual(claude.compatibility, 'unsupported-transport');
-  assert.ok(!ModelCatalog.isModelSelectable(claude), 'unsupported transport must stay disabled');
+  assert.strictEqual(fresh.compatibility, 'supported');
+  assert.ok(ModelCatalog.isOpencodeGatewayCallable(fresh), 'OpenCode 在线目录新增模型应可经 Chat Completions 调用');
+  assert.ok(ModelCatalog.isModelSelectable(claude), 'OpenCode 套餐内 Claude 应可调用');
   assert.ok(mergedOnline.diff.added >= 1, 'new remote IDs should count as added');
 
   const hidden = ModelCatalog.mergeZenCatalog(builtin, ['big-pickle', 'deepseek-v4-pro'], { hidePrivacyRiskModels: true });

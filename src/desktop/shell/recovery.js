@@ -47,7 +47,30 @@
     }
 
     function recoveryHealthLabel(health) {
-        return health === 'ok' ? '状态正常' : '需要检查';
+        return health === 'ok' ? '正常' : '需检查';
+    }
+
+    function recoveryGroupName(backup) {
+        if (backup.projectName) return backup.projectName;
+        const folder = String(backup.projectId || '').trim() || String(backup.path || '').split(/[\\/]/)[0].trim();
+        if (!folder) return '未命名项目';
+        const named = recoveryState.backups.find((item) => item.projectId === folder && item.projectName);
+        return (named && named.projectName) || folder;
+    }
+
+    function setRecoveryFilter(filter) {
+        recoveryState.filter = filter || 'all';
+        const { filter: filterSelect } = recoveryElements();
+        if (filterSelect) filterSelect.value = recoveryState.filter;
+        const chips = document.querySelector('[data-recovery-filter-chips]');
+        if (chips) {
+            chips.querySelectorAll('[data-recovery-filter-chip]').forEach((chip) => {
+                const active = (chip.dataset.recoveryFilterChip || 'all') === recoveryState.filter;
+                chip.classList.toggle('is-active', active);
+                chip.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+        }
+        renderRecoveryList();
     }
 
     function renderRecoveryList() {
@@ -57,26 +80,38 @@
             const invalidCount = recoveryState.backups.filter((backup) => backup.health !== 'ok').length;
             elements.status.textContent = `${backups.length} / ${recoveryState.backups.length} 个备份${invalidCount ? ` · ${invalidCount} 个异常` : ' · 全部正常'}`;
         }
-        if (elements.location) elements.location.textContent = recoveryState.backupLocation || '默认书库备份目录';
+        if (elements.location) {
+            elements.location.textContent = '本地备份目录';
+            elements.location.title = recoveryState.backupLocation || '默认书库备份目录';
+        }
+        if (elements.search && elements.search.value !== (recoveryState.query || '')) {
+            elements.search.value = recoveryState.query || '';
+        }
         if (!elements.list) return;
         elements.list.replaceChildren();
-        if (recoveryState.backups.length === 0) {
+        if (!backups.length) {
             const empty = document.createElement('div');
             empty.className = 'desktop-recovery-empty';
-            const location = recoveryState.backupLocation || '默认书库备份目录';
-            empty.innerHTML = `<strong>还没有本地备份</strong><span>从书库为作品创建第一个备份。<br>备份位置：${location}</span>`;
+            if (recoveryState.backups.length === 0) {
+                const location = recoveryState.backupLocation || '默认书库备份目录';
+                empty.innerHTML = `<strong>还没有本地备份</strong><span>从书库为作品创建第一个备份。<br>备份位置：${location}</span>`;
+            } else {
+                empty.innerHTML = '<strong>没有匹配的备份</strong><span>试试换个关键词或筛选。</span>';
+            }
             elements.list.appendChild(empty);
             return;
         }
         let lastGroup = '';
         backups
             .sort((a, b) => {
-                const groupCompare = String(a.projectName || a.projectId || '').localeCompare(String(b.projectName || b.projectId || ''), 'zh-CN');
+                const groupCompare = recoveryGroupName(a).localeCompare(recoveryGroupName(b), 'zh-CN');
                 if (groupCompare) return groupCompare;
+                const healthCompare = Number(b.health === 'ok') - Number(a.health === 'ok');
+                if (healthCompare) return healthCompare;
                 return new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime();
             })
             .forEach((backup) => {
-            const group = backup.projectName || backup.projectId || '未命名项目';
+            const group = recoveryGroupName(backup);
             if (group !== lastGroup) {
                 lastGroup = group;
                 const heading = document.createElement('div');
@@ -88,16 +123,23 @@
             item.type = 'button';
             item.className = 'desktop-recovery-item';
             item.classList.toggle('is-active', recoveryState.selected && recoveryState.selected.id === backup.id && recoveryState.selected.projectId === backup.projectId);
-            const title = document.createElement('strong');
-            title.textContent = backup.projectName || backup.projectId || backup.id || '未命名备份';
-            const meta = document.createElement('span');
+            item.classList.toggle('is-invalid', backup.health !== 'ok');
             const created = backup.timestamp ? formatDate(backup.timestamp) : '未知时间';
             const pin = backup.pinned ? ' · 已固定' : '';
-            meta.textContent = `${created} · ${recoveryReasonLabel(backup.reason)} · ${recoveryHealthLabel(backup.health)}${pin}`;
-            const note = document.createElement('span');
-            note.textContent = backup.note || `${backup.sceneCount || 0} 场 · ${formatNumber(backup.wordCount || 0)} 字`;
+            const title = document.createElement('strong');
+            title.textContent = backup.health === 'ok'
+                ? `${recoveryReasonLabel(backup.reason)} · ${created}`
+                : `无法读取 · ${created}`;
+            const meta = document.createElement('span');
+            meta.textContent = `${backup.sceneCount || 0} 场 · ${formatNumber(backup.wordCount || 0)} 字 · ${recoveryHealthLabel(backup.health)}${pin}`;
             item.title = backup.id || '';
-            item.append(title, meta, note);
+            item.append(title, meta);
+            if (backup.note) {
+                const note = document.createElement('span');
+                note.className = 'desktop-recovery-item-note';
+                note.textContent = backup.note;
+                item.append(note);
+            }
             item.addEventListener('click', () => selectRecoveryBackup(backup));
             elements.list.appendChild(item);
         });
@@ -108,7 +150,11 @@
         if (!entries.length) return '这个备份没有正文内容。';
         const [sceneId, text] = entries[0];
         const scene = (backup.scenes || []).find((item) => item.id === sceneId);
-        return `${scene && scene.title ? scene.title : sceneId}\n\n${String(text || '').slice(0, 2400)}`;
+        const heading = scene && scene.title ? scene.title : sceneId;
+        const body = String(text || '').trim();
+        if (!body) return heading;
+        if (body.startsWith(heading)) return body.slice(0, 2400);
+        return `${heading}\n\n${body}`.slice(0, 2400);
     }
 
     function firstBackupSceneId(backup) {
@@ -120,14 +166,17 @@
         const summary = recoveryState.selected;
         const backup = recoveryState.selectedBackup;
         const diff = recoveryState.selectedDiff;
+        if (elements.previewText && elements.previewText.closest('[data-recovery-preview]')) {
+            elements.previewText.closest('[data-recovery-preview]').classList.toggle('is-empty', !summary || !backup);
+        }
         if (!summary || !backup) {
             if (elements.previewTitle) elements.previewTitle.textContent = summary ? (summary.projectName || summary.projectId || '正在读取备份') : '选择一个备份';
             if (elements.previewMeta) {
                 elements.previewMeta.textContent = summary
                     ? '正在读取备份正文与差异...'
                     : recoveryState.backups.length
-                    ? '从左侧备份列表选择后查看内容和恢复选项。'
-                    : '还没有任何项目备份。使用书库中的备份功能创建第一个。';
+                    ? '从左侧选一条备份，先看正文再决定怎么恢复。'
+                    : '还没有本地备份。从书库为作品创建第一个。';
             }
             if (elements.previewHealth) {
                 elements.previewHealth.textContent = summary ? recoveryHealthLabel(summary.health) : '等待选择';
@@ -135,7 +184,11 @@
             }
             if (elements.diff) elements.diff.replaceChildren();
             if (elements.previewText) {
-                elements.previewText.textContent = '';
+                elements.previewText.textContent = summary
+                    ? ''
+                    : recoveryState.backups.length
+                    ? '从左侧选一条备份，先看正文再决定怎么恢复。'
+                    : '还没有本地备份。从书库为作品创建第一个。';
                 elements.previewText.classList.add('desktop-recovery-preview-empty');
             }
             if (elements.restoreScene) elements.restoreScene.disabled = true;
@@ -284,8 +337,15 @@
         }
         if (elements.filter) {
             elements.filter.addEventListener('change', () => {
-                recoveryState.filter = elements.filter.value || 'all';
-                renderRecoveryList();
+                setRecoveryFilter(elements.filter.value || 'all');
+            });
+        }
+        const filterChips = document.querySelector('[data-recovery-filter-chips]');
+        if (filterChips) {
+            filterChips.addEventListener('click', (event) => {
+                const chip = event.target.closest('[data-recovery-filter-chip]');
+                if (!chip) return;
+                setRecoveryFilter(chip.dataset.recoveryFilterChip || 'all');
             });
         }
         if (elements.restoreScene) elements.restoreScene.addEventListener('click', restoreSelectedBackupScene);

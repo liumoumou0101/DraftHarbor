@@ -527,10 +527,10 @@
             if (project) recoveryState.query = project.name || project.id || '';
             setView('recovery');
             await loadRecoveryList();
-            setProjectLibraryStatus('已打开原生恢复中心。', 'ok');
+            setProjectLibraryStatus('已打开恢复页。', 'ok');
         } catch (error) {
             console.warn('Failed to open project backup settings:', error);
-            setProjectLibraryStatus(`打开恢复中心失败：${error.message || error}`, 'error');
+            setProjectLibraryStatus(`打开恢复页失败：${error.message || error}`, 'error');
         }
     }
 

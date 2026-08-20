@@ -142,30 +142,26 @@
         zenModel({
             id: 'gpt-5.4',
             label: 'GPT 5.4',
-            transport: 'responses',
-            compatibility: 'unsupported-transport',
-            pricingClass: 'paid'
+            pricingClass: 'paid',
+            contextNote: '经 OpenCode Chat Completions 转发'
         }),
         zenModel({
             id: 'grok-4.5',
             label: 'Grok 4.5',
-            transport: 'responses',
-            compatibility: 'unsupported-transport',
-            pricingClass: 'paid'
+            pricingClass: 'paid',
+            contextNote: '经 OpenCode Chat Completions 转发'
         }),
         zenModel({
             id: 'claude-opus-4-6',
             label: 'Claude Opus 4.6',
-            transport: 'anthropic-messages',
-            compatibility: 'unsupported-transport',
-            pricingClass: 'paid'
+            pricingClass: 'paid',
+            contextNote: '经 OpenCode Chat Completions 转发'
         }),
         zenModel({
             id: 'gemini-3-pro',
             label: 'Gemini 3 Pro',
-            transport: 'google-generative',
-            compatibility: 'unsupported-transport',
-            pricingClass: 'paid'
+            pricingClass: 'paid',
+            contextNote: '经 OpenCode Chat Completions 转发'
         })
     ]);
 
@@ -193,16 +189,14 @@
         zenModel({
             id: 'gpt-5.6-luna',
             label: 'GPT 5.6 Luna',
-            transport: 'responses',
-            compatibility: 'unsupported-transport',
-            pricingClass: 'paid'
+            pricingClass: 'paid',
+            contextNote: '经 OpenCode Chat Completions 转发'
         }),
         zenModel({
             id: 'grok-4.5',
             label: 'Grok 4.5',
-            transport: 'responses',
-            compatibility: 'unsupported-transport',
-            pricingClass: 'paid'
+            pricingClass: 'paid',
+            contextNote: '经 OpenCode Chat Completions 转发'
         })
     ]);
 
@@ -229,6 +223,19 @@
         'openai-compatible': Object.freeze([
             { id: 'gpt-4o-mini', label: 'GPT-4o Mini (compatible)', transport: 'chat-completions', compatibility: 'supported', thinkingSupported: false }
         ]),
+        anthropic: Object.freeze([
+            { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', transport: 'anthropic-messages', compatibility: 'supported', thinkingSupported: false },
+            { id: 'claude-sonnet-5', label: 'Claude Sonnet 5', transport: 'anthropic-messages', compatibility: 'supported', thinkingSupported: false },
+            { id: 'claude-opus-5', label: 'Claude Opus 5', transport: 'anthropic-messages', compatibility: 'supported', thinkingSupported: false },
+            { id: 'claude-opus-4-6', label: 'Claude Opus 4.6', transport: 'anthropic-messages', compatibility: 'supported', thinkingSupported: false },
+            { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', transport: 'anthropic-messages', compatibility: 'supported', thinkingSupported: false }
+        ]),
+        google: Object.freeze([
+            { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', transport: 'chat-completions', compatibility: 'supported', thinkingSupported: false },
+            { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', transport: 'chat-completions', compatibility: 'supported', thinkingSupported: false },
+            { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', transport: 'chat-completions', compatibility: 'supported', thinkingSupported: false },
+            { id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash', transport: 'chat-completions', compatibility: 'supported', thinkingSupported: false }
+        ]),
         'opencode-zen': ZEN_BUILTIN_MODELS,
         'opencode-go': GO_BUILTIN_MODELS,
         custom: Object.freeze([])
@@ -239,7 +246,15 @@
         openai: { label: 'OpenAI', defaultEndpoint: 'https://api.openai.com/v1/chat/completions', defaultBaseUrl: 'https://api.openai.com/v1', defaultModelHint: 'gpt-4o-mini', modelHint: '模型ID，如 gpt-4o / gpt-4o-mini / gpt-4-turbo' },
         openrouter: { label: 'OpenRouter', defaultEndpoint: 'https://openrouter.ai/api/v1/chat/completions', defaultBaseUrl: 'https://openrouter.ai/api/v1', defaultModelHint: '', modelHint: '完整模型ID，如 openai/gpt-4o / anthropic/claude-sonnet-4-20250514' },
         nanogpt: { label: 'NanoGPT', defaultEndpoint: '', defaultBaseUrl: '', defaultModelHint: '', modelHint: '模型ID，由 NanoGPT 服务端决定' },
-        'openai-compatible': { label: 'OpenAI-compatible', defaultEndpoint: '', defaultBaseUrl: '', defaultModelHint: 'gpt-4o-mini', modelHint: '由兼容 endpoint 决定的模型ID' },
+        'openai-compatible': {
+            label: 'OpenAI 兼容接口',
+            defaultEndpoint: '',
+            defaultBaseUrl: '',
+            defaultModelHint: 'gpt-4o-mini',
+            modelHint: '按该服务商文档填写模型 ID',
+            alwaysTypedModel: true,
+            setupHint: '填写完整 Chat Completions 地址，例如 https://your-host/v1/chat/completions。模型名按该服务商文档手填。'
+        },
         'opencode-zen': {
             label: 'OpenCode Zen',
             defaultEndpoint: ZEN_CHAT_ENDPOINT,
@@ -247,7 +262,8 @@
             defaultModelHint: '',
             modelHint: '选择稿湾已兼容的 Zen Chat Completions 模型',
             endpointReadonly: true,
-            catalogPolicy: 'remote-with-cache'
+            catalogPolicy: 'remote-with-cache',
+            setupHint: 'OpenCode Zen 使用按量地址 https://opencode.ai/zen/v1，无需填写完整 Endpoint。'
         },
         'opencode-go': {
             label: 'OpenCode Go',
@@ -256,17 +272,42 @@
             defaultModelHint: 'glm-5.2',
             modelHint: '选择 Go 月卡已兼容的 Chat Completions 模型',
             endpointReadonly: true,
-            catalogPolicy: 'remote-with-cache'
+            catalogPolicy: 'remote-with-cache',
+            setupHint: 'OpenCode Go 使用月卡地址 https://opencode.ai/zen/go/v1，无需填写完整 Endpoint。'
         },
-        custom: { label: 'Custom', defaultEndpoint: '', defaultBaseUrl: '', defaultModelHint: '', modelHint: '自定义模型ID' },
+        custom: {
+            label: '自定义接口',
+            defaultEndpoint: '',
+            defaultBaseUrl: '',
+            defaultModelHint: '',
+            modelHint: '手填模型 ID',
+            alwaysTypedModel: true,
+            setupHint: '任意 OpenAI 兼容服务。必须填写完整 /chat/completions 地址，并手填模型 ID。'
+        },
         lmstudio: { label: 'LM Studio', defaultEndpoint: 'http://localhost:1234', defaultBaseUrl: 'http://localhost:1234', defaultModelHint: '', modelHint: '' },
         ollama: { label: 'Ollama', defaultEndpoint: 'http://localhost:11434', defaultBaseUrl: 'http://localhost:11434', defaultModelHint: '', modelHint: '' },
-        anthropic: { label: 'Anthropic', defaultEndpoint: '', defaultBaseUrl: '', defaultModelHint: '', modelHint: '' },
-        google: { label: 'Google AI', defaultEndpoint: '', defaultBaseUrl: '', defaultModelHint: '', modelHint: '' }
+        anthropic: {
+            label: 'Anthropic',
+            defaultEndpoint: 'https://api.anthropic.com/v1/messages',
+            defaultBaseUrl: 'https://api.anthropic.com',
+            defaultModelHint: 'claude-sonnet-4-6',
+            modelHint: '模型 ID，如 claude-sonnet-4-6 / claude-opus-5；也可手填最新 ID',
+            transport: 'anthropic-messages',
+            authStyle: 'anthropic-key',
+            setupHint: '直连 Anthropic Messages。默认官方地址已填好，也可手填最新模型 ID。'
+        },
+        google: {
+            label: 'Google Gemini',
+            defaultEndpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+            defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+            defaultModelHint: 'gemini-2.5-flash',
+            modelHint: '模型 ID，如 gemini-2.5-flash / gemini-2.5-pro；也可手填最新 ID',
+            setupHint: '走 Google 官方 OpenAI 兼容接口。默认地址已填好，也可手填最新模型 ID。'
+        }
     });
 
     var API_COMPATIBLE_PROVIDERS = Object.freeze([
-        'deepseek', 'openai', 'openrouter', 'nanogpt', 'openai-compatible', 'opencode-zen', 'opencode-go', 'custom'
+        'deepseek', 'openai', 'openrouter', 'nanogpt', 'openai-compatible', 'opencode-zen', 'opencode-go', 'custom', 'anthropic', 'google'
     ]);
 
     var TRANSPORT_LABELS = Object.freeze({
@@ -310,9 +351,10 @@
     function getProviderModels(provider, options) {
         var catalog = options && options.catalog;
         var hidePrivacyRisk = !!(options && options.hidePrivacyRiskModels);
-        var entries = catalog && Array.isArray(catalog.models)
+        var catalogModels = catalog && Array.isArray(catalog.models)
             ? catalog.models.filter(function (item) { return item && item.id && item.id !== '__custom__'; }).map(cloneModel)
-            : getBuiltinProviderModels(provider);
+            : [];
+        var entries = catalogModels.length ? catalogModels : getBuiltinProviderModels(provider);
         if (hidePrivacyRisk) {
             entries = entries.filter(function (item) { return item.privacyClass !== 'may-train'; });
         }
@@ -334,12 +376,18 @@
         return !!(entry && entry.thinkingSupported);
     }
 
-    function isModelSelectable(entry) {
+    function isModelSelectable(entry, options) {
         if (!entry || entry.id === '__custom__') return false;
+        if (entry.availability === 'offline' || entry.deprecated) return false;
+        if (options && options.gateway === 'opencode') return true;
         if (entry.compatibility !== 'supported') return false;
-        if (entry.transport && entry.transport !== 'chat-completions') return false;
-        if (entry.availability === 'offline' || entry.availability === 'deprecated') return false;
-        return true;
+        var transport = entry.transport || 'chat-completions';
+        return transport === 'chat-completions' || transport === 'anthropic-messages';
+    }
+
+    function isOpencodeGatewayCallable(entry) {
+        if (!entry) return true;
+        return isModelSelectable(entry, { gateway: 'opencode' });
     }
 
     function modelOptionLabel(entry) {
@@ -397,6 +445,60 @@
         return provider === 'opencode-zen' || provider === 'opencode-go';
     }
 
+    function getProviderTransport(provider) {
+        return getProviderMetadata(provider).transport || 'chat-completions';
+    }
+
+    function isAnthropicMessagesProvider(provider) {
+        return getProviderTransport(provider) === 'anthropic-messages';
+    }
+
+    function isTypedModelProvider(provider) {
+        return !!getProviderMetadata(provider).alwaysTypedModel;
+    }
+
+    function providerSetupHint(provider, mode) {
+        if (mode && mode !== 'api') return '';
+        return getProviderMetadata(provider).setupHint || '';
+    }
+
+    function providerAuthHeaders(provider, apiKey) {
+        var headers = { 'Content-Type': 'application/json' };
+        var key = String(apiKey || '');
+        if (isAnthropicMessagesProvider(provider)) {
+            headers['x-api-key'] = key;
+            headers['anthropic-version'] = '2023-06-01';
+            return headers;
+        }
+        if (key) headers.Authorization = 'Bearer ' + key;
+        return headers;
+    }
+
+    function buildLiveTestRequest(config) {
+        var source = config && typeof config === 'object' ? config : {};
+        var provider = String(source.provider || '');
+        var model = defaultTestModel(provider, source.model);
+        var body = isAnthropicMessagesProvider(provider)
+            ? JSON.stringify({
+                model: model,
+                max_tokens: 1,
+                messages: [{ role: 'user', content: 'ping' }],
+                stream: false
+            })
+            : JSON.stringify({
+                model: model,
+                messages: [{ role: 'user', content: 'ping' }],
+                max_tokens: 1,
+                stream: false
+            });
+        return {
+            model: model,
+            endpoint: resolveProviderEndpoint(provider, source.endpoint, source),
+            headers: providerAuthHeaders(provider, source.apiKey),
+            body: body
+        };
+    }
+
     function isOfficialZenUrl(value) {
         try {
             var parsed = new URL(String(value || ''));
@@ -432,6 +534,8 @@
         if (requested && requested !== 'model-check') return requested;
         if (provider === 'opencode-go') return 'glm-5.2';
         if (provider === 'opencode-zen') return 'big-pickle';
+        var hint = getProviderMetadata(provider).defaultModelHint;
+        if (hint) return hint;
         return 'model-check';
     }
 
@@ -482,17 +586,17 @@
             online.forEach(function (rawId) {
                 var id = String(rawId || '').trim();
                 if (!id || seen[id]) return;
-                var transport = inferTransportFromModelId(id);
                 result.push(cloneModel({
                     id: id,
                     label: humanizeModelId(id),
-                    transport: transport === 'unknown' ? 'unknown' : transport,
+                    transport: 'chat-completions',
                     availability: 'online',
-                    compatibility: (transport === 'chat-completions' || transport === 'unknown') ? 'unreviewed' : 'unsupported-transport',
+                    compatibility: 'supported',
                     thinkingSupported: false,
                     pricingClass: 'unknown',
                     privacyClass: 'unknown',
-                    source: 'remote'
+                    source: 'remote',
+                    contextNote: '在线目录新增，经 OpenCode Chat Completions 调用'
                 }));
                 seen[id] = true;
                 added += 1;
@@ -540,12 +644,19 @@
         getProviderMetadata: getProviderMetadata,
         isThinkingSupported: isThinkingSupported,
         isModelSelectable: isModelSelectable,
+        isOpencodeGatewayCallable: isOpencodeGatewayCallable,
         modelOptionLabel: modelOptionLabel,
         modelGroup: modelGroup,
         isKnownDefaultEndpoint: isKnownDefaultEndpoint,
         isKnownDefaultModelHint: isKnownDefaultModelHint,
         isApiCompatibleProvider: isApiCompatibleProvider,
         isOfficialZenUrl: isOfficialZenUrl,
+        getProviderTransport: getProviderTransport,
+        isAnthropicMessagesProvider: isAnthropicMessagesProvider,
+        isTypedModelProvider: isTypedModelProvider,
+        providerSetupHint: providerSetupHint,
+        providerAuthHeaders: providerAuthHeaders,
+        buildLiveTestRequest: buildLiveTestRequest,
         resolveProviderEndpoint: resolveProviderEndpoint,
         mergeZenCatalog: mergeZenCatalog,
         inferTransportFromModelId: inferTransportFromModelId,

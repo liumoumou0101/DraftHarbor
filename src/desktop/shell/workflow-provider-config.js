@@ -62,7 +62,10 @@
                     const option = document.createElement('option');
                     option.value = item.id;
                     option.textContent = catalog.modelOptionLabel ? catalog.modelOptionLabel(item) : (item.label || item.id);
-                    if (catalog.isModelSelectable && !catalog.isModelSelectable(item)) option.disabled = true;
+                    const enabled = catalog.isOpencodeProvider && catalog.isOpencodeProvider(config.provider)
+                        ? catalog.isOpencodeGatewayCallable(item)
+                        : !(catalog.isModelSelectable && !catalog.isModelSelectable(item));
+                    if (!enabled) option.disabled = true;
                     select.appendChild(option);
                 });
             }

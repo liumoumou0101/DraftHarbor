@@ -217,11 +217,11 @@
     function bindProjectLibrary() {
         if (typeof openDesktopProject === 'function' && !openDesktopProject.__remembersLastOpened) {
             const originalOpen = openDesktopProject;
-            openDesktopProject = async function (project) {
+            openDesktopProject = async function (project, options) {
                 if (project && project.id && project.health !== 'invalid' && typeof rememberLastOpenedProject === 'function') {
                     rememberLastOpenedProject(project.id);
                 }
-                return originalOpen(project);
+                return originalOpen(project, options);
             };
             openDesktopProject.__remembersLastOpened = true;
         }
