@@ -96,6 +96,8 @@ const desktopShellDir = path.join(root, 'src/desktop/shell');
 const desktopShellFiles = listFiles(desktopShellDir);
 const desktopShell = desktopShellFiles.map((file) => fs.readFileSync(file, 'utf8')).join('\n');
 assert.ok(desktopShellFiles.length >= 10, 'desktop shell should be separated by product responsibility');
+// Line gates apply to product shell modules. tests/**, audits, and unit
+// fixtures are not the program body and are not counted here.
 assert.ok(desktopShellFiles.every((file) => fs.readFileSync(file, 'utf8').split(/\r?\n/).length <= 1400), 'no desktop shell module should become a replacement monolith');
 assert.ok(!fileExists('src/desktop/desktop-shell.js'), 'the former desktop shell monolith should stay retired');
 assert.ok(
