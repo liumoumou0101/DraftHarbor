@@ -19,6 +19,7 @@ applyNativeEditorPrefs
 applyNativeWriterChrome
 applyReaderPreferenceModel
 applyReaderSettings
+applyReaderThemeSelection
 beginNativeSceneTitleEdit
 beginWorkflowReasoning
 beginWorkflowReasoningBatch
@@ -123,6 +124,7 @@ initializeReaderWorkspace
 insertNativeSpecialChar
 loadCompendium
 loadExportOptions
+loadLastOpenedProjectId
 loadNativeContextBudgets
 loadNativeContextPrefs
 loadNativeEditorPrefs
@@ -187,6 +189,7 @@ projectCreatorElements
 projectEditorElements
 projectLibraryState
 rememberLastOpenedProject
+restoreDesktopSession
 promptState
 queueReaderDocumentStateWrite
 queueReaderPageTurn
@@ -256,6 +259,7 @@ selectedCompendiumEntry
 selectedCompendiumReferenceCards
 selectedWorkflowRun
 selectedPromptTemplate
+selectReaderLeftTab
 selectedSummaryPromptTemplate
 selectedWorkshopSession
 sendNativeSelectionToWorkshop
@@ -271,6 +275,7 @@ setShelfStatus
 settingsState
 settingsWithRuntimeProfiles
 setView
+confirmAbandonCompendiumEdits
 setWorkflowStatus
 shellUiState
 showNativeMoreMenu
@@ -323,6 +328,7 @@ const legacyShellGlobals = Object.fromEntries(
 );
 
 const playwrightPageGlobals = Object.fromEntries([
+    'applyDesktopTheme',
     'captureReaderPositionLocator',
     'loadSummaryPrompts',
     'loadReaderWorkspaceChapter',
@@ -337,6 +343,7 @@ const playwrightPageGlobals = Object.fromEntries([
 
 module.exports = {
     root: true,
+    ignorePatterns: ['cache/', '.ai_state/', 'node_modules/', 'release/', 'dist/'],
     env: {
         es2021: true
     },
@@ -388,7 +395,9 @@ module.exports = {
                 'tests/desktop-reader.js',
                 'tests/reader-layout-audit.js',
                 'tests/reader-realistic-visual-audit.js',
-                'tests/writer-button-audit.js'
+                'tests/writer-button-audit.js',
+                'tests/writer-layout-audit.js',
+                'tests/writer-realistic-visual-audit.js'
             ],
             globals: playwrightPageGlobals
         }

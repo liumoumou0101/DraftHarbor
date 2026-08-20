@@ -163,15 +163,38 @@ function extractErrorMessage(raw) {
 
 function resolveLiveTest(config) {
   const ModelCatalog = require('../../src/core/settings/model-catalog');
+  if (typeof ModelCatalog.buildLiveTestRequest === 'function') {
+    return ModelCatalog.buildLiveTestRequest(config);
+  }
   if (ModelCatalog.isOpencodeProvider(config.provider)) {
     return {
       model: ModelCatalog.defaultTestModel(config.provider, config.model),
-      endpoint: ModelCatalog.resolveProviderEndpoint(config.provider, config.endpoint)
+      endpoint: ModelCatalog.resolveProviderEndpoint(config.provider, config.endpoint),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sanitizeKey(config.apiKey)}`
+      },
+      body: JSON.stringify({
+        model: ModelCatalog.defaultTestModel(config.provider, config.model),
+        messages: [{ role: 'user', content: 'ping' }],
+        max_tokens: 1,
+        stream: false
+      })
     };
   }
   return {
     model: config.model || 'model-check',
-    endpoint: config.endpoint
+    endpoint: config.endpoint,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sanitizeKey(config.apiKey)}`
+    },
+    body: JSON.stringify({
+      model: config.model || 'model-check',
+      messages: [{ role: 'user', content: 'ping' }],
+      max_tokens: 1,
+      stream: false
+    })
   };
 }
 
@@ -234,21 +257,12 @@ async function testProvider(settingsInput, options = {}) {
   }
 
   try {
-    const liveTarget = resolveLiveTest(config);
+    const liveTarget = resolveLiveTest({ ...config, apiKey: sanitizeKey(config.apiKey) });
     const model = liveTarget.model;
-    const body = JSON.stringify({
-      model,
-      messages: [{ role: 'user', content: 'ping' }],
-      max_tokens: 1,
-      stream: false
-    });
     const result = await requestUrl(liveTarget.endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${sanitizeKey(config.apiKey)}`
-      },
-      body,
+      headers: liveTarget.headers,
+      body: liveTarget.body,
       timeoutMs: 15000,
       readBody: true
     });
@@ -302,19 +316,10 @@ async function testProviderProfile(dataRoot, profileId, options = {}) {
   try {
     const liveTarget = resolveLiveTest(config);
     const model = liveTarget.model;
-    const body = JSON.stringify({
-      model,
-      messages: [{ role: 'user', content: 'ping' }],
-      max_tokens: 1,
-      stream: false
-    });
     const result = await requestUrl(liveTarget.endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + config.apiKey
-      },
-      body: body,
+      headers: liveTarget.headers,
+      body: liveTarget.body,
       timeoutMs: 15000,
       readBody: true
     });

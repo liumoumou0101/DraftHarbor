@@ -897,7 +897,7 @@
             elements.profileSelect.replaceChildren();
             const inherit = document.createElement('option');
             inherit.value = 'inherit';
-            inherit.textContent = '继承全局设置';
+            inherit.textContent = '继承写作默认';
             elements.profileSelect.appendChild(inherit);
             profiles.forEach((profile) => {
                 const option = document.createElement('option');
@@ -910,11 +910,6 @@
 
         const canSelectModel = effectiveProfile.mode === 'api' && catalog.isApiCompatibleProvider(effectiveProfile.provider);
         elements.modelControl.classList.toggle('is-disabled', !canSelectModel);
-        if (elements.modelControlHint) {
-            elements.modelControlHint.textContent = canSelectModel
-                ? `${catalog.getProviderMetadata(effectiveProfile.provider).label || effectiveProfile.provider} · 只显示已添加 API 可用的模型`
-                : '当前继承的是本地模型；如需切换云端模型，请先在设置中添加 API 配置组';
-        }
 
         elements.modelSelect.replaceChildren();
         const inheritModel = document.createElement('option');
@@ -939,7 +934,10 @@
                     const option = document.createElement('option');
                     option.value = model.id;
                     option.textContent = catalog.modelOptionLabel ? catalog.modelOptionLabel(model) : (model.label || model.id);
-                    if (catalog.isModelSelectable && !catalog.isModelSelectable(model) && model.id !== '__custom__') option.disabled = true;
+                    const enabled = catalog.isOpencodeProvider && catalog.isOpencodeProvider(effectiveProfile.provider)
+                        ? catalog.isOpencodeGatewayCallable(model)
+                        : !(catalog.isModelSelectable && !catalog.isModelSelectable(model) && model.id !== '__custom__');
+                    if (!enabled) option.disabled = true;
                     group.appendChild(option);
                 });
                 elements.modelSelect.appendChild(group);
@@ -947,7 +945,7 @@
             models.filter((model) => model.id === '__custom__').forEach((model) => {
                 const option = document.createElement('option');
                 option.value = model.id;
-                option.textContent = model.label || model.id;
+                option.textContent = '手填模型 ID';
                 elements.modelSelect.appendChild(option);
             });
         }
@@ -968,6 +966,16 @@
         }
 
         const selectedModel = writerSelectedModelId(effectiveProfile);
+        if (elements.modelControlHint) {
+            const providerLabel = catalog.getProviderMetadata(effectiveProfile.provider).label || effectiveProfile.provider;
+            const entry = selectedModel && catalog.getProviderModelEntry
+                ? catalog.getProviderModelEntry(effectiveProfile.provider, selectedModel)
+                : null;
+            const modelLabel = (entry && entry.label) || selectedModel;
+            elements.modelControlHint.textContent = canSelectModel
+                ? (modelLabel ? `${providerLabel} · ${modelLabel}` : providerLabel)
+                : '当前是本地模型。换云端请到设置改写作连接，或选一个配置组';
+        }
         const thinkingAllowed = canSelectModel && catalog.isThinkingSupported(effectiveProfile.provider, selectedModel);
         if (elements.thinkingToggle) {
             elements.thinkingToggle.disabled = !thinkingAllowed;

@@ -59,7 +59,9 @@
         openai: 'https://api.openai.com/v1/chat/completions',
         openrouter: 'https://openrouter.ai/api/v1/chat/completions',
         'opencode-zen': 'https://opencode.ai/zen/v1/chat/completions',
-        'opencode-go': 'https://opencode.ai/zen/go/v1/chat/completions'
+        'opencode-go': 'https://opencode.ai/zen/go/v1/chat/completions',
+        anthropic: 'https://api.anthropic.com/v1/messages',
+        google: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
     });
     const PROVIDER_DEFAULT_BASE_URLS = Object.freeze({
         'opencode-zen': 'https://opencode.ai/zen/v1',
@@ -67,7 +69,9 @@
     });
     const PROVIDER_DEFAULT_MODELS = Object.freeze({
         deepseek: 'deepseek-v4-pro',
-        openai: 'gpt-4o-mini'
+        openai: 'gpt-4o-mini',
+        anthropic: 'claude-sonnet-4-6',
+        google: 'gemini-2.5-flash'
     });
     function getProviderMetadata(provider) {
         ensureModelCatalog();
@@ -136,7 +140,7 @@
         if (ModelCatalog && typeof ModelCatalog.isApiCompatibleProvider === 'function') {
             return ModelCatalog.isApiCompatibleProvider(provider);
         }
-        return ['deepseek','openai','openrouter','opencode-zen','opencode-go','nanogpt','openai-compatible','custom'].indexOf(provider) >= 0;
+        return ['deepseek','openai','openrouter','opencode-zen','opencode-go','nanogpt','openai-compatible','custom','anthropic','google'].indexOf(provider) >= 0;
     }
 
     function cleanString(value, fallback = '') {
@@ -184,7 +188,7 @@
         const shouldUseProviderDefaultEndpoint = mode === 'api'
             && !!PROVIDER_DEFAULT_ENDPOINTS[provider]
             && (!endpointInput || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(endpointInput));
-        const defaultModel = provider === 'deepseek' ? 'deepseek-v4-pro' : '';
+        const defaultModel = providerDefaultModel(provider);
         const defaultBaseUrl = providerDefaultBaseUrl(provider);
         const isOpencode = provider === 'opencode-zen' || provider === 'opencode-go';
         const endpoint = isOpencode

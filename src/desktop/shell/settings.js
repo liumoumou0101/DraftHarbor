@@ -6,6 +6,9 @@
             provider: document.querySelector('[data-settings-provider]'),
             endpoint: document.querySelector('[data-settings-endpoint]'),
             model: document.querySelector('[data-settings-model]'),
+            modelPick: document.querySelector('[data-settings-model-pick]'),
+            profileModelPick: document.querySelector('[data-settings-profile-model-pick]'),
+            agentModelPick: document.querySelector('[data-settings-compendium-agent-model-pick]'),
             apiKey: document.querySelector('[data-settings-api-key]'),
             temperature: document.querySelector('[data-settings-temperature]'),
             maxTokens: document.querySelector('[data-settings-max-tokens]'),
@@ -24,6 +27,7 @@
             compendiumAgentApiTest: document.querySelector('[data-settings-compendium-agent-api-test]'),
             compendiumAgentApiStatus: document.querySelector('[data-settings-compendium-agent-api-status]'),
             test: document.querySelector('[data-settings-test]'),
+            writeTestStatus: document.querySelector('[data-settings-write-test-status]'),
             refresh: document.querySelector('[data-settings-refresh]'),
             zenHint: document.querySelector('[data-settings-zen-hint]'),
             catalogPanel: document.querySelector('[data-settings-catalog-panel]'),
@@ -98,6 +102,13 @@
         status.dataset.tone = tone;
     }
 
+    function setWritingTestStatus(message, tone = 'info') {
+        const status = settingsElements().writeTestStatus;
+        if (!status) return;
+        status.textContent = message || '';
+        status.dataset.tone = tone;
+    }
+
     function setCompendiumAgentApiStatus(message, tone = 'info') {
         const status = settingsElements().compendiumAgentApiStatus;
         if (!status) return;
@@ -130,12 +141,15 @@
             elements.endpoint.readOnly = isOpencode && provider.mode === 'api';
         }
         if (elements.zenHint) {
-            elements.zenHint.hidden = !(isOpencode && provider.mode === 'api');
-            if (isOpencode && opencodeMeta) {
-                elements.zenHint.textContent = provider.provider === 'opencode-go'
-                    ? 'OpenCode Go 使用月卡地址 https://opencode.ai/zen/go/v1，无需填写完整 Endpoint。'
-                    : 'OpenCode Zen 使用按量地址 https://opencode.ai/zen/v1，无需填写完整 Endpoint。';
-            }
+            const hint = catalog.providerSetupHint
+                ? catalog.providerSetupHint(provider.provider, provider.mode)
+                : ((isOpencode && provider.mode === 'api')
+                    ? (provider.provider === 'opencode-go'
+                        ? 'OpenCode Go 使用月卡地址 https://opencode.ai/zen/go/v1，无需填写完整 Endpoint。'
+                        : 'OpenCode Zen 使用按量地址 https://opencode.ai/zen/v1，无需填写完整 Endpoint。')
+                    : '');
+            elements.zenHint.hidden = !hint;
+            if (hint) elements.zenHint.textContent = hint;
         }
         if (elements.catalogPanel) elements.catalogPanel.hidden = !(isOpencode && provider.mode === 'api');
         if (elements.hidePrivacyModels) {
@@ -155,28 +169,16 @@
         if (elements.globalPromptEnabled) elements.globalPromptEnabled.checked = !!(settings.globalPrompt && settings.globalPrompt.enabled);
         if (elements.globalPrompt) elements.globalPrompt.value = settings.globalPrompt && settings.globalPrompt.content || '';
         if (elements.compendiumAgentMaxCards) elements.compendiumAgentMaxCards.value = agent.maxCardsPerRun || 30;
-        if (elements.workflowProfile) {
-            elements.workflowProfile.replaceChildren();
-            const inherit = document.createElement('option'); inherit.value = 'inherit'; inherit.textContent = '继承默认写作连接（全局）'; elements.workflowProfile.appendChild(inherit);
-            (settings.providerProfiles || []).filter((profile) => modelCatalog().isApiCompatibleProvider(profile.provider)).forEach((profile) => {
-                const option = document.createElement('option'); option.value = profile.id; option.textContent = `${profile.name || profile.provider} · ${profile.model || '默认模型'}${profile.hasApiKey ? '' : ' · 缺少密钥'}`; elements.workflowProfile.appendChild(option);
-            });
-            elements.workflowProfile.value = workflow.providerProfileId || 'inherit';
-        }
-        if (elements.compendiumAgentProfile) {
-            elements.compendiumAgentProfile.replaceChildren();
-            const empty = document.createElement('option'); empty.value = ''; empty.textContent = '请选择专用 API 配置组'; elements.compendiumAgentProfile.appendChild(empty);
-            (settings.providerProfiles || []).filter((profile) => modelCatalog().isApiCompatibleProvider(profile.provider)).forEach((profile) => {
-                const option = document.createElement('option'); option.value = profile.id; option.textContent = `${profile.name || profile.provider} · ${profile.model || '默认模型'}${profile.hasApiKey ? '' : ' · 缺少密钥'}`; elements.compendiumAgentProfile.appendChild(option);
-            });
-            elements.compendiumAgentProfile.value = agent.providerProfileId || '';
-        }
+        fillSettingsProfileSelects();
+        if (elements.workflowProfile) elements.workflowProfile.value = workflow.providerProfileId || 'inherit';
+        if (elements.compendiumAgentProfile) elements.compendiumAgentProfile.value = agent.providerProfileId || '';
         document.querySelectorAll('[data-settings-cat-target="compendium-agent"], [data-settings-section="compendium-agent"]').forEach((element) => {
             element.hidden = !agentAvailable;
         });
 
         const isBusy = settingsState.loading || settingsState.saving;
-        [elements.mode, elements.provider, elements.endpoint, elements.model, elements.apiKey, elements.temperature, elements.maxTokens, elements.providerDefaults, elements.globalPromptEnabled, elements.globalPrompt, elements.workflowProfile, elements.compendiumAgentEnabled, elements.compendiumAgentProfile, elements.compendiumAgentMaxCards, elements.compendiumAgentApiProvider, elements.compendiumAgentApiEndpoint, elements.compendiumAgentApiModel, elements.compendiumAgentApiKey, elements.compendiumAgentApiSave, elements.compendiumAgentApiTest, elements.test, elements.refresh, elements.theme, elements.themeSave].forEach((field) => {
+        const saveGeneration = document.querySelector('[data-settings-save-generation]');
+        [elements.mode, elements.provider, elements.endpoint, elements.model, elements.apiKey, elements.temperature, elements.maxTokens, elements.providerDefaults, elements.globalPromptEnabled, elements.globalPrompt, elements.workflowProfile, elements.compendiumAgentEnabled, elements.compendiumAgentProfile, elements.compendiumAgentMaxCards, elements.compendiumAgentApiProvider, elements.compendiumAgentApiEndpoint, elements.compendiumAgentApiModel, elements.compendiumAgentApiKey, elements.compendiumAgentApiSave, elements.compendiumAgentApiTest, elements.test, elements.refresh, elements.theme, elements.themeSave, saveGeneration].forEach((field) => {
             if (field) field.disabled = isBusy || (field === elements.apiKey && provider.mode === 'local');
         });
         renderCompendiumAgentApiEditor();
@@ -187,21 +189,65 @@
         setSettingsCategory(settingsState.activeSection);
     }
 
+    function isSettingsAiSection(target) {
+        return target === 'provider' || target === 'profiles' || target === 'workflow' || target === 'compendium-agent';
+    }
+
+    function settingsHeadingCopy(target) {
+        const titles = {
+            provider: ['配置组', '上面是写作默认，下面是可选用的接口档案。'],
+            profiles: ['配置组', '上面是写作默认，下面是可选用的接口档案。'],
+            workflow: ['工作流', '可继承写作默认，或改用下面某个档案。'],
+            'compendium-agent': ['资料库管家', '管家不继承写作模型，也不能读取正文。'],
+            generation: ['生成参数', '只影响写作任务的温度、长度和全局指令。'],
+            appearance: ['外观', '点选即预览并保存到本机。'],
+            tts: ['朗读', '使用 Windows 本机语音，改动立即保存。'],
+            storage: ['存储与维护', '作品和备份都留在本机。']
+        };
+        return titles[target] || titles.provider;
+    }
+
     function setSettingsCategory(target) {
         const allowed = new Set(['provider', 'profiles', 'generation', 'workflow', 'appearance', 'tts', 'storage']);
         if (compendiumAgentFeatureAvailable()) allowed.add('compendium-agent');
-        const next = allowed.has(target) ? target : 'provider';
+        const next = allowed.has(target) ? target : 'profiles';
+        const changed = settingsState.activeSection !== next;
         settingsState.activeSection = next;
+        const connectionsPage = next === 'provider' || next === 'profiles';
+        const navTarget = connectionsPage ? 'profiles' : next;
+        const aiPage = isSettingsAiSection(next);
         document.querySelectorAll('[data-settings-cat-target]').forEach((button) => {
-            const active = button.dataset.settingsCatTarget === next;
-            button.classList.toggle('is-active', active);
+            const active = button.dataset.settingsCatTarget === navTarget;
+            button.classList.remove('is-active');
             button.setAttribute('aria-selected', String(active));
+            if (active) button.classList.add('is-active');
+            else if (document.activeElement === button) button.blur();
         });
+        const aiGroup = document.querySelector('[data-settings-ai-group]');
+        if (aiGroup) {
+            aiGroup.classList.remove('is-active');
+            if (aiPage) aiGroup.classList.add('is-active');
+        }
         document.querySelectorAll('[data-settings-section]').forEach((section) => {
-            section.hidden = section.dataset.settingsSection !== next;
+            const id = section.dataset.settingsSection;
+            if (id === 'compendium-agent' && !compendiumAgentFeatureAvailable()) {
+                section.hidden = true;
+                return;
+            }
+            section.hidden = connectionsPage ? (id !== 'provider' && id !== 'profiles') : id !== next;
         });
         const globalActions = document.querySelector('.desktop-settings-global-actions');
-        if (globalActions) globalActions.hidden = next === 'compendium-agent';
+        if (globalActions) globalActions.hidden = true;
+        const heading = document.querySelector('[data-settings-heading]');
+        const note = document.querySelector('[data-settings-heading-note]');
+        const copy = settingsHeadingCopy(next);
+        if (heading) heading.textContent = copy[0];
+        if (note) note.textContent = copy[1];
+        if (next === 'workflow' || next === 'compendium-agent' || connectionsPage) fillSettingsProfileSelects();
+        const focused = document.querySelector(`[data-settings-section="${connectionsPage ? 'provider' : next}"]`);
+        if (changed && focused && typeof focused.scrollIntoView === 'function') {
+            focused.scrollIntoView({ block: 'start' });
+        }
     }
 
     function settingsProviderLabel(provider) {
@@ -224,10 +270,10 @@
         };
         const summaries = {
             provider: `${provider.mode === 'api' ? '云端' : '本地'} · ${settingsProviderLabel(provider.provider)}`,
-            profiles: `${provider.mode === 'api' ? '默认连接' : '本地默认'}${profiles.length ? ` · ${profiles.length} 个独立档案` : ''}`,
+            profiles: `${provider.mode === 'api' ? settingsProviderLabel(provider.provider) : '本地'}${profiles.length ? ` · ${profiles.length} 个档案` : ''}`,
             generation: defaults.useProviderDefaults ? '跟随模型默认值' : `${defaults.temperature ?? 0.8} · ${formatNumber(defaults.maxTokens || 8000)} tokens`,
             workflow: (settings.workflowGeneration || {}).providerProfileId && (settings.workflowGeneration || {}).providerProfileId !== 'inherit'
-                ? '专用配置组已选择' : '继承默认写作连接',
+                ? '已选用配置组' : '继承写作默认',
             'compendium-agent': settings.compendiumAgent && settings.compendiumAgent.enabled ? (settings.compendiumAgent.providerProfileId ? '专用配置组已选择' : '请选择配置组') : '未启用',
             appearance: themeLabels[(settings.appearance || {}).theme] || '墨灰书房',
             tts: settingsElements().ttsVoice && settingsElements().ttsVoice.value ? '已选择本机声音' : '本机语音',
@@ -291,8 +337,12 @@
             isKnownDefaultEndpoint: function () { return false; },
             isKnownDefaultModelHint: function () { return false; },
             isApiCompatibleProvider: function (provider) {
-                return ['deepseek', 'openai', 'openrouter', 'opencode-zen', 'opencode-go', 'nanogpt', 'openai-compatible', 'custom'].indexOf(provider) >= 0;
-            }
+                return ['deepseek', 'openai', 'openrouter', 'opencode-zen', 'opencode-go', 'nanogpt', 'openai-compatible', 'custom', 'anthropic', 'google'].indexOf(provider) >= 0;
+            },
+            isTypedModelProvider: function (provider) {
+                return provider === 'custom' || provider === 'openai-compatible';
+            },
+            providerSetupHint: function () { return ''; }
         };
     }
 
@@ -305,28 +355,146 @@
         return provider ? null : (settingsState.modelCatalog || null);
     }
 
-    function renderSettingsModelOptions(provider) {
-        const list = settingsElements().modelOptions;
-        if (!list) return;
-        list.replaceChildren();
+    function catalogModelsForProvider(provider) {
         const catalog = modelCatalog();
         const hidePrivacy = !!(normalizeDesktopSettings(settingsState.settings || {}).modelCatalogPreferences || {}).hidePrivacyRiskModels;
-        catalog.getProviderModels(provider, {
+        return catalog.getProviderModels(provider, {
             catalog: (provider === 'opencode-zen' || provider === 'opencode-go') ? currentModelCatalog(provider) : null,
             hidePrivacyRiskModels: hidePrivacy
-        }).forEach((item) => {
-            if (!item || item.id === '__custom__') return;
-            const option = document.createElement('option');
-            option.value = item.id;
-            option.textContent = catalog.modelOptionLabel ? catalog.modelOptionLabel(item) : (item.label || item.id);
-            list.appendChild(option);
+        }).filter((item) => item && item.id && item.id !== '__custom__');
+    }
+
+    function fillModelCatalogSelect(select, provider, currentValue) {
+        if (!select) return 0;
+        const catalog = modelCatalog();
+        const models = catalogModelsForProvider(provider);
+        const current = String(currentValue || '').trim();
+        select.replaceChildren();
+        const prompt = document.createElement('option');
+        prompt.value = '';
+        prompt.textContent = models.length ? '从目录选择模型' : '当前服务商无目录，请手填模型名';
+        select.appendChild(prompt);
+        const groups = { free: '免费已兼容', paid: '付费已兼容', other: '其他已兼容', pending: '协议未接入', offline: '已下线' };
+        Object.keys(groups).forEach((key) => {
+            const items = models.filter((item) => (catalog.modelGroup ? catalog.modelGroup(item) : 'other') === key);
+            if (!items.length) return;
+            const group = document.createElement('optgroup');
+            group.label = groups[key];
+            items.forEach((item) => {
+                const option = document.createElement('option');
+                option.value = item.id;
+                option.textContent = catalog.modelOptionLabel ? catalog.modelOptionLabel(item) : (item.label || item.id);
+                const enabled = catalog.isOpencodeProvider && catalog.isOpencodeProvider(provider)
+                    ? catalog.isOpencodeGatewayCallable(item)
+                    : !(catalog.isModelSelectable && !catalog.isModelSelectable(item));
+                if (!enabled) option.disabled = true;
+                group.appendChild(option);
+            });
+            select.appendChild(group);
+        });
+        const custom = document.createElement('option');
+        custom.value = '__custom__';
+        custom.textContent = '手填模型 ID';
+        select.appendChild(custom);
+        const match = models.some((item) => item.id === current);
+        select.value = match ? current : (current ? '__custom__' : '');
+        if (select.value !== (match ? current : (current ? '__custom__' : ''))) select.value = '';
+        return models.length;
+    }
+
+    function renderSettingsModelOptions(provider) {
+        const elements = settingsElements();
+        const models = catalogModelsForProvider(provider);
+        if (elements.modelOptions) {
+            elements.modelOptions.replaceChildren();
+            models.forEach((item) => {
+                const option = document.createElement('option');
+                option.value = item.id;
+                option.textContent = modelCatalog().modelOptionLabel ? modelCatalog().modelOptionLabel(item) : (item.label || item.id);
+                elements.modelOptions.appendChild(option);
+            });
+        }
+        fillModelCatalogSelect(elements.modelPick, provider, elements.model ? elements.model.value : '');
+        if (elements.model && elements.modelPick) {
+            elements.model.hidden = shouldHideModelInput(provider, elements.modelPick);
+        }
+    }
+
+    function shouldHideModelInput(provider, pick) {
+        const catalog = modelCatalog();
+        if (catalog.isOpencodeProvider && catalog.isOpencodeProvider(provider)) return false;
+        if (catalog.isTypedModelProvider && catalog.isTypedModelProvider(provider)) return false;
+        const picked = pick && pick.value;
+        return !!(picked && picked !== '__custom__');
+    }
+
+    function selectedModelFromPick(pick, input) {
+        if (pick && pick.value && pick.value !== '__custom__') return pick.value.trim();
+        return input ? String(input.value || '').trim() : '';
+    }
+
+    function profileOptionLabel(profile) {
+        const name = profile.name || profile.provider || '配置组';
+        const provider = settingsProviderLabel(profile.provider);
+        const model = profile.model || '默认模型';
+        const key = profile.hasApiKey ? '' : ' · 缺少密钥';
+        return `${name} · ${provider} · ${model}${key}`;
+    }
+
+    function fillSettingsProfileSelects() {
+        const elements = settingsElements();
+        const settings = normalizeDesktopSettings(settingsState.settings || {});
+        const profiles = (settings.providerProfiles || []).filter((profile) => modelCatalog().isApiCompatibleProvider(profile.provider));
+        if (elements.workflowProfile) {
+            const current = elements.workflowProfile.value || (settings.workflowGeneration || {}).providerProfileId || 'inherit';
+            elements.workflowProfile.replaceChildren();
+            const inherit = document.createElement('option');
+            inherit.value = 'inherit';
+            inherit.textContent = '继承默认写作连接（全局）';
+            elements.workflowProfile.appendChild(inherit);
+            profiles.forEach((profile) => {
+                const option = document.createElement('option');
+                option.value = profile.id;
+                option.textContent = profileOptionLabel(profile);
+                elements.workflowProfile.appendChild(option);
+            });
+            elements.workflowProfile.value = current;
+            if (!elements.workflowProfile.value) elements.workflowProfile.value = 'inherit';
+        }
+        if (elements.compendiumAgentProfile) {
+            const current = elements.compendiumAgentProfile.value || ((settings.compendiumAgent || {}).providerProfileId || '');
+            elements.compendiumAgentProfile.replaceChildren();
+            const empty = document.createElement('option');
+            empty.value = '';
+            empty.textContent = '请选择专用 API 配置组';
+            elements.compendiumAgentProfile.appendChild(empty);
+            profiles.forEach((profile) => {
+                const option = document.createElement('option');
+                option.value = profile.id;
+                option.textContent = profileOptionLabel(profile);
+                elements.compendiumAgentProfile.appendChild(option);
+            });
+            elements.compendiumAgentProfile.value = current;
+            if (!elements.compendiumAgentProfile.value) elements.compendiumAgentProfile.value = '';
+        }
+    }
+
+    function captureProfileEditorDraft() {
+        if (!profileEditState.editingProfile) return;
+        const elements = settingsElements();
+        profileEditState.editingProfile = Object.assign({}, profileEditState.editingProfile, {
+            name: elements.profileName ? elements.profileName.value.trim() : profileEditState.editingProfile.name,
+            provider: elements.profileProvider ? elements.profileProvider.value : profileEditState.editingProfile.provider,
+            endpoint: elements.profileEndpoint ? elements.profileEndpoint.value.trim() : profileEditState.editingProfile.endpoint,
+            model: selectedModelFromPick(elements.profileModelPick, elements.profileModel) || profileEditState.editingProfile.model
         });
     }
 
     function renderSettingsCatalogStatus() {
         const status = settingsElements().catalogStatus;
         if (!status) return;
-        const catalog = currentModelCatalog();
+        const provider = settingsElements().provider ? settingsElements().provider.value : '';
+        const catalog = currentModelCatalog(provider) || currentModelCatalog();
         if (!catalog) {
             status.textContent = '模型目录使用安装包内置清单。';
             return;
@@ -414,48 +582,20 @@
         };
     }
 
-    function renderSettingsProfiles() {
+    function renderSettingsProfiles(options = {}) {
         const elements = settingsElements();
         if (!elements.profilesList) return;
         const settings = normalizeDesktopSettings(settingsState.settings);
         const profiles = settings.providerProfiles || [];
+        if (!options.skipDraftCapture && elements.profileEditor && !elements.profileEditor.hidden && profileEditState.editingProfile) {
+            captureProfileEditorDraft();
+        }
+        if (elements.profileEditor && elements.profilesList.contains(elements.profileEditor)) {
+            elements.profilesList.after(elements.profileEditor);
+        }
         elements.profilesList.replaceChildren();
-        const defaultProvider = settings.providerSettings || {};
-        const defaultItem = document.createElement('div');
-        defaultItem.className = 'desktop-settings-profile-item';
-        defaultItem.dataset.settingsDefaultWritingProfile = 'true';
-        const defaultInfo = document.createElement('div');
-        defaultInfo.className = 'desktop-settings-profile-info';
-        const defaultName = document.createElement('strong');
-        defaultName.textContent = '默认写作连接';
-        const defaultMeta = document.createElement('span');
-        let defaultEndpoint = defaultProvider.endpoint || '未设置接口地址';
-        try { defaultEndpoint = defaultProvider.endpoint ? new URL(defaultProvider.endpoint).host : defaultEndpoint; } catch (error) { /* keep original */ }
-        defaultMeta.textContent = `${defaultProvider.mode === 'api' ? settingsProviderLabel(defaultProvider.provider) : '本地模型'} · ${defaultProvider.model || '默认模型'} · ${defaultEndpoint}`;
-        const defaultBadges = document.createElement('div');
-        defaultBadges.className = 'desktop-settings-profile-badges';
-        const defaultBadge = document.createElement('span');
-        const defaultReady = defaultProvider.mode === 'local' || !!defaultProvider.hasApiKey;
-        defaultBadge.dataset.tone = defaultReady ? 'ok' : 'warn';
-        defaultBadge.textContent = defaultReady ? (defaultProvider.mode === 'local' ? '本地连接' : '密钥已保存') : '缺少密钥';
-        const defaultUseBadge = document.createElement('span');
-        defaultUseBadge.dataset.tone = 'info';
-        defaultUseBadge.textContent = '写作默认';
-        defaultBadges.append(defaultBadge, defaultUseBadge);
-        defaultInfo.append(defaultName, defaultMeta, defaultBadges);
-        const defaultActions = document.createElement('div');
-        defaultActions.className = 'desktop-settings-profile-actions';
-        const defaultEdit = document.createElement('button');
-        defaultEdit.type = 'button';
-        defaultEdit.className = 'desktop-secondary-action';
-        defaultEdit.textContent = '编辑默认连接';
-        defaultEdit.addEventListener('click', () => {
-            setSettingsCategory('provider');
-            setSettingsStatus('正在编辑默认写作连接', 'info');
-        });
-        defaultActions.appendChild(defaultEdit);
-        defaultItem.append(defaultInfo, defaultActions);
-        elements.profilesList.appendChild(defaultItem);
+        const workflowId = ((settings.workflowGeneration || {}).providerProfileId || '');
+        const agentId = ((settings.compendiumAgent || {}).providerProfileId || '');
         if (!profiles.length) {
             const empty = document.createElement('div');
             empty.className = 'desktop-settings-profile-empty';
@@ -465,6 +605,7 @@
             profiles.forEach((profile) => {
                 const item = document.createElement('div');
                 item.className = 'desktop-settings-profile-item';
+                item.dataset.profileId = profile.id || '';
                 const info = document.createElement('div');
                 info.className = 'desktop-settings-profile-info';
                 const name = document.createElement('strong');
@@ -481,8 +622,20 @@
                 const compatible = modelCatalog().isApiCompatibleProvider(profile.provider);
                 const useBadge = document.createElement('span');
                 useBadge.dataset.tone = compatible && profile.hasApiKey ? 'ok' : 'info';
-                useBadge.textContent = compatible && profile.hasApiKey ? '可用于写作' : '暂不可用于写作';
+                useBadge.textContent = compatible && profile.hasApiKey ? '可被选用' : '暂不可用';
                 badges.append(keyBadge, useBadge);
+                if (profile.id && profile.id === workflowId) {
+                    const used = document.createElement('span');
+                    used.dataset.tone = 'ok';
+                    used.textContent = '工作流在用';
+                    badges.appendChild(used);
+                }
+                if (profile.id && profile.id === agentId) {
+                    const used = document.createElement('span');
+                    used.dataset.tone = 'ok';
+                    used.textContent = '管家在用';
+                    badges.appendChild(used);
+                }
                 info.append(name, meta, badges);
                 const testState = profileTestState[profile.id];
                 if (testState) {
@@ -517,11 +670,26 @@
             if (elements.profileProvider) elements.profileProvider.value = profile.provider || 'deepseek';
             if (elements.profileEndpoint) elements.profileEndpoint.value = profile.endpoint || '';
             if (elements.profileModel) elements.profileModel.value = profile.model || '';
+            fillModelCatalogSelect(elements.profileModelPick, profile.provider || 'deepseek', profile.model || '');
+            if (elements.profileModel && elements.profileModelPick) {
+                elements.profileModel.hidden = shouldHideModelInput(profile.provider || 'deepseek', elements.profileModelPick);
+            }
             if (elements.profileApiKey) {
                 elements.profileApiKey.value = '';
                 elements.profileApiKey.placeholder = profile.hasApiKey ? '已保存密钥，留空表示保持现有密钥' : 'API Key';
             }
             if (elements.profileDelete) elements.profileDelete.hidden = !profileEditState.editingId;
+            const row = profileEditState.editingId
+                ? Array.from(elements.profilesList.querySelectorAll('[data-profile-id]')).find((el) => el.dataset.profileId === profileEditState.editingId)
+                : null;
+            if (row) {
+                row.classList.add('is-editing');
+                row.after(elements.profileEditor);
+            } else {
+                elements.profilesList.prepend(elements.profileEditor);
+            }
+        } else if (elements.profileEditor && elements.profilesList) {
+            elements.profilesList.after(elements.profileEditor);
         }
         renderSettingsCategorySummaries();
     }
@@ -550,6 +718,10 @@
         elements.compendiumAgentApiProvider.value = provider;
         if (elements.compendiumAgentApiEndpoint) elements.compendiumAgentApiEndpoint.value = (profile && profile.endpoint) || defaults.endpoint;
         if (elements.compendiumAgentApiModel) elements.compendiumAgentApiModel.value = (profile && profile.model) || (provider === 'deepseek' ? 'deepseek-v4-flash' : defaults.model);
+        fillModelCatalogSelect(elements.agentModelPick, provider, elements.compendiumAgentApiModel ? elements.compendiumAgentApiModel.value : '');
+        if (elements.compendiumAgentApiModel && elements.agentModelPick) {
+            elements.compendiumAgentApiModel.hidden = shouldHideModelInput(provider, elements.agentModelPick);
+        }
         if (elements.compendiumAgentApiKey) {
             elements.compendiumAgentApiKey.value = '';
             elements.compendiumAgentApiKey.placeholder = profile && profile.hasApiKey ? '密钥已保存，留空表示保持不变' : 'API Key';
@@ -562,7 +734,7 @@
         const existing = selectedCompendiumAgentProfile();
         const provider = elements.compendiumAgentApiProvider ? elements.compendiumAgentApiProvider.value : 'deepseek';
         const endpoint = elements.compendiumAgentApiEndpoint ? elements.compendiumAgentApiEndpoint.value.trim() : '';
-        const model = elements.compendiumAgentApiModel ? elements.compendiumAgentApiModel.value.trim() : '';
+        const model = selectedModelFromPick(elements.agentModelPick, elements.compendiumAgentApiModel);
         const apiKey = elements.compendiumAgentApiKey ? elements.compendiumAgentApiKey.value.trim() : '';
         if (!endpoint) throw new Error('请填写 API Endpoint');
         if (!model) throw new Error('请填写模型名称');
@@ -626,7 +798,7 @@
             model: (profile && profile.model) || defaults.model,
             hasApiKey: !!(profile && profile.hasApiKey)
         };
-        renderSettingsProfiles();
+        renderSettingsProfiles({ skipDraftCapture: true });
     }
 
     function closeProviderProfileEditor() {
@@ -642,7 +814,7 @@
             name: elements.profileName ? elements.profileName.value.trim() : '',
             provider: elements.profileProvider ? elements.profileProvider.value : 'deepseek',
             endpoint: elements.profileEndpoint ? elements.profileEndpoint.value.trim() : '',
-            model: elements.profileModel ? elements.profileModel.value.trim() : '',
+            model: selectedModelFromPick(elements.profileModelPick, elements.profileModel),
             apiKey: elements.profileApiKey ? elements.profileApiKey.value : ''
         };
         const response = await fetch('/api/settings/provider-profiles', {
@@ -655,6 +827,7 @@
         settingsState.settings = normalizeDesktopSettings(result.settings || {});
         settingsState.runtimeProviderProfiles = result.runtimeProviderProfiles || null;
         closeProviderProfileEditor();
+        fillSettingsProfileSelects();
         setSettingsStatus('配置组已保存', 'ok');
         renderWriterModelControl();
     }
@@ -760,7 +933,7 @@
         const current = normalizeDesktopSettings(settingsState.settings);
         const mode = elements.mode ? elements.mode.value : 'local';
         const endpoint = elements.endpoint ? elements.endpoint.value.trim() : '';
-        const model = elements.model ? elements.model.value.trim() : '';
+        const model = selectedModelFromPick(elements.modelPick, elements.model);
         var theme = normalizeDesktopTheme(elements.theme ? elements.theme.value : 'morandi-ink');
         return {
             providerSettings: {
@@ -803,26 +976,32 @@
         };
     }
 
-    function refreshSettingsProviderDefaults() {
+    function refreshSettingsProviderDefaults(options = {}) {
         const elements = settingsElements();
         if (!elements.mode || !elements.provider || !elements.endpoint || !elements.model) return;
         const mode = elements.mode.value;
         const provider = elements.provider.value;
+        const catalog = modelCatalog();
+        const meta = catalog.getProviderMetadata(provider) || {};
         const endpoint = elements.endpoint.value.trim();
         const endpointLooksLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(endpoint);
-        if (mode === 'api' && provider === 'deepseek' && (!endpoint || endpointLooksLocal)) {
-            elements.endpoint.value = 'https://api.deepseek.com/chat/completions';
-        }
-        if (mode === 'api' && provider === 'deepseek' && !elements.model.value.trim()) {
-            elements.model.value = 'deepseek-v4-pro';
-        }
-        if (mode === 'api' && (provider === 'opencode-zen' || provider === 'opencode-go')) {
-            const meta = modelCatalog().getProviderMetadata(provider);
-            elements.endpoint.value = (meta && meta.defaultBaseUrl) || (provider === 'opencode-go' ? 'https://opencode.ai/zen/go/v1' : 'https://opencode.ai/zen/v1');
+        const known = catalog.isKnownDefaultEndpoint && catalog.isKnownDefaultEndpoint(endpoint);
+        if (mode === 'api' && meta.endpointReadonly) {
+            elements.endpoint.value = meta.defaultBaseUrl || meta.defaultEndpoint || '';
             elements.endpoint.readOnly = true;
-        } else if (elements.endpoint) {
+        } else {
             elements.endpoint.readOnly = false;
+            if (mode === 'api' && (!endpoint || endpointLooksLocal || (options.providerChanged && known))) {
+                elements.endpoint.value = meta.defaultEndpoint || '';
+            }
         }
+        if (options.providerChanged && mode === 'api') {
+            const fallback = meta.defaultModelHint || (catalog.defaultTestModel && catalog.defaultTestModel(provider, '')) || '';
+            if (fallback) elements.model.value = fallback;
+        } else if (mode === 'api' && meta.defaultModelHint && !elements.model.value.trim()) {
+            elements.model.value = meta.defaultModelHint;
+        }
+        renderSettingsModelOptions(provider);
     }
 
     async function loadSettings() {
@@ -934,12 +1113,13 @@
     }
 
     async function testSettingsProvider() {
-        setSettingsStatus('正在检查配置...', 'info');
+        setSettingsStatus('正在检查写作连接...', 'info');
+        setWritingTestStatus('正在向当前表单里的服务商发测试请求…', 'info');
         try {
             const response = await fetch('/api/settings/test-provider', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ live: true })
+                body: JSON.stringify({ live: true, settings: collectSettingsForm() })
             });
             const result = await response.json().catch(() => ({}));
             if (!response.ok) {
@@ -956,18 +1136,25 @@
                 ? `配置格式可用${who}`
                 : (detail.statusCode ? `连接可用${who} · HTTP ${detail.statusCode}` : `连接可用${who}`);
             setSettingsStatus(checked, 'ok');
+            setWritingTestStatus(checked, 'ok');
             const providerSelect = settingsElements().provider;
             if (providerSelect && (providerSelect.value === 'opencode-zen' || providerSelect.value === 'opencode-go')) {
                 try { await refreshSettingsModelCatalog(); } catch (_catalogError) { /* keep connection result */ }
             }
         } catch (error) {
-            setSettingsStatus(`检查失败：${error.message || error}`, 'error');
+            const raw = String(error.message || error);
+            const friendly = /api key is required/i.test(raw) ? '请先填写密钥，或先保存写作连接再测试。' : raw;
+            const message = `检查失败：${friendly}`;
+            setSettingsStatus(message, 'error');
+            setWritingTestStatus(message, 'error');
         }
     }
 
     function bindSettings() {
         const elements = settingsElements();
         if (elements.form) elements.form.addEventListener('submit', saveSettings);
+        const saveGeneration = document.querySelector('[data-settings-save-generation]');
+        if (saveGeneration) saveGeneration.addEventListener('click', () => saveSettings());
         if (elements.test) elements.test.addEventListener('click', testSettingsProvider);
         if (elements.refresh) elements.refresh.addEventListener('click', loadSettings);
         if (elements.refreshCatalog) {
@@ -988,15 +1175,29 @@
             if (!field) return;
             field.addEventListener('change', () => {
                 const current = normalizeDesktopSettings(settingsState.settings);
+                const previousProvider = (current.providerSettings || {}).provider;
                 const patch = collectSettingsForm();
                 settingsState.settings = normalizeDesktopSettings({
                     ...current,
                     ...patch
                 });
                 renderSettingsForm();
-                refreshSettingsProviderDefaults();
+                refreshSettingsProviderDefaults({
+                    providerChanged: field === elements.provider && elements.provider.value !== previousProvider
+                });
             });
         });
+        if (elements.modelPick) {
+            elements.modelPick.addEventListener('change', () => {
+                if (!elements.model) return;
+                if (elements.modelPick.value && elements.modelPick.value !== '__custom__') {
+                    elements.model.value = elements.modelPick.value;
+                } else if (elements.modelPick.value === '__custom__') {
+                    elements.model.focus();
+                }
+                elements.model.hidden = shouldHideModelInput(elements.provider ? elements.provider.value : '', elements.modelPick);
+            });
+        }
         if (elements.ttsVoice) {
             elements.ttsVoice.addEventListener('change', function () {
                 saveTtsVoicePref(elements.ttsVoice.value);
@@ -1031,9 +1232,15 @@
                 });
                 applyDesktopTheme(theme);
                 renderSettingsAppearance();
+                saveSettings();
             });
         }
         if (elements.themeSave) elements.themeSave.addEventListener('click', saveSettings);
+        if (elements.workflowProfile) {
+            elements.workflowProfile.addEventListener('change', () => {
+                saveSettings();
+            });
+        }
         if (elements.profileAdd) elements.profileAdd.addEventListener('click', () => openProviderProfileEditor(null));
         if (elements.profileCancel) elements.profileCancel.addEventListener('click', closeProviderProfileEditor);
         if (elements.profileSave) {
@@ -1061,17 +1268,45 @@
                 if (elements.profileEndpoint && (!elements.profileEndpoint.value.trim() || modelCatalog().isKnownDefaultEndpoint(elements.profileEndpoint.value.trim()))) {
                     elements.profileEndpoint.value = defaults.endpoint;
                 }
-                if (elements.profileModel && (!elements.profileModel.value.trim() || modelCatalog().isKnownDefaultModelHint(elements.profileModel.value.trim()))) {
-                    elements.profileModel.value = defaults.model;
+                if (elements.profileModel) {
+                    if (!elements.profileModel.value.trim() || modelCatalog().isKnownDefaultModelHint(elements.profileModel.value.trim())) {
+                        elements.profileModel.value = defaults.model;
+                    }
+                    fillModelCatalogSelect(elements.profileModelPick, provider, elements.profileModel.value);
+                    elements.profileModel.hidden = shouldHideModelInput(provider, elements.profileModelPick);
                 }
+            });
+        }
+        if (elements.profileModelPick) {
+            elements.profileModelPick.addEventListener('change', () => {
+                if (!elements.profileModel) return;
+                if (elements.profileModelPick.value && elements.profileModelPick.value !== '__custom__') {
+                    elements.profileModel.value = elements.profileModelPick.value;
+                }
+                elements.profileModel.hidden = shouldHideModelInput(elements.profileProvider ? elements.profileProvider.value : '', elements.profileModelPick);
+                captureProfileEditorDraft();
             });
         }
         if (elements.compendiumAgentProfile) elements.compendiumAgentProfile.addEventListener('change', renderCompendiumAgentApiEditor);
         if (elements.compendiumAgentApiProvider) {
             elements.compendiumAgentApiProvider.addEventListener('change', () => {
-                const defaults = profileDefaults(elements.compendiumAgentApiProvider.value || 'deepseek');
+                const provider = elements.compendiumAgentApiProvider.value || 'deepseek';
+                const defaults = profileDefaults(provider);
                 if (elements.compendiumAgentApiEndpoint) elements.compendiumAgentApiEndpoint.value = defaults.endpoint;
-                if (elements.compendiumAgentApiModel) elements.compendiumAgentApiModel.value = elements.compendiumAgentApiProvider.value === 'deepseek' ? 'deepseek-v4-flash' : defaults.model;
+                if (elements.compendiumAgentApiModel) {
+                    elements.compendiumAgentApiModel.value = provider === 'deepseek' ? 'deepseek-v4-flash' : defaults.model;
+                    fillModelCatalogSelect(elements.agentModelPick, provider, elements.compendiumAgentApiModel.value);
+                    elements.compendiumAgentApiModel.hidden = shouldHideModelInput(provider, elements.agentModelPick);
+                }
+            });
+        }
+        if (elements.agentModelPick) {
+            elements.agentModelPick.addEventListener('change', () => {
+                if (!elements.compendiumAgentApiModel) return;
+                if (elements.agentModelPick.value && elements.agentModelPick.value !== '__custom__') {
+                    elements.compendiumAgentApiModel.value = elements.agentModelPick.value;
+                }
+                elements.compendiumAgentApiModel.hidden = shouldHideModelInput(elements.compendiumAgentApiProvider ? elements.compendiumAgentApiProvider.value : '', elements.agentModelPick);
             });
         }
         if (elements.compendiumAgentApiSave) {
@@ -1108,6 +1343,7 @@
                 if (elements.theme) elements.theme.value = theme;
                 applyDesktopTheme(theme);
                 renderSettingsAppearance();
+                saveSettings();
             });
         });
         if (window.speechSynthesis) {

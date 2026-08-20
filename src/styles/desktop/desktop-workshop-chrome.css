@@ -1,0 +1,323 @@
+/* Workshop chrome: conversation-first. Loaded after finishing. */
+
+.desktop-app[data-view="workshop"] .desktop-context-strip {
+    display: none;
+}
+
+.desktop-app[data-view="workshop"] .desktop-main {
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+:root[data-desktop-theme] .desktop-app[data-view="workshop"] .desktop-context-strip {
+    display: none;
+}
+
+:root[data-desktop-theme] .desktop-app[data-view="workshop"] .desktop-main {
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+.desktop-workshop-view.is-active {
+    display: grid;
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+    min-height: 0;
+    height: 100%;
+}
+
+.desktop-workshop-view .desktop-workshop-sidebar {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 10px;
+    min-height: 0;
+    padding: 14px 12px 12px;
+    border-right: 1px solid var(--desktop-line);
+    background: var(--desktop-panel);
+}
+
+.desktop-workshop-sidebar-head {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    padding: 0 4px;
+}
+
+.desktop-workshop-sidebar-head [data-workshop-project-label] {
+    margin: 0;
+    color: var(--desktop-text);
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.4;
+}
+
+.desktop-workshop-status,
+.desktop-workshop-view .desktop-workshop-status {
+    margin: 0;
+    color: var(--desktop-muted);
+    font-size: 12px;
+}
+
+.desktop-workshop-status[data-tone="ok"] {
+    color: var(--desktop-accent);
+}
+
+.desktop-workshop-status[data-tone="error"] {
+    color: var(--desktop-danger);
+}
+
+.desktop-workshop-view .desktop-workshop-project-summary {
+    display: none;
+}
+
+.desktop-workshop-view [data-workshop-new] {
+    min-height: 34px;
+}
+
+.desktop-workshop-view .desktop-workshop-session {
+    margin-bottom: 4px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.desktop-workshop-view .desktop-workshop-session:hover {
+    background: var(--desktop-surface-raised);
+}
+
+.desktop-workshop-view .desktop-workshop-session.is-active {
+    border-color: rgba(var(--desktop-accent-rgb), 0.34);
+    background: var(--desktop-accent-soft);
+}
+
+.desktop-workshop-chat {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    min-width: 0;
+    min-height: 0;
+    position: relative;
+    background: var(--desktop-bg);
+}
+
+.desktop-workshop-chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 56px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--desktop-line);
+    background: var(--desktop-panel-soft);
+}
+
+.desktop-workshop-chat-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.desktop-workshop-chat-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.desktop-workshop-chat-actions .desktop-secondary-action:disabled,
+.desktop-workshop-chat-actions select:disabled {
+    opacity: 0.45;
+}
+
+.desktop-workshop-view .desktop-workshop-template {
+    color: var(--desktop-muted);
+}
+
+.desktop-workshop-view .desktop-workshop-template select {
+    min-width: 120px;
+    height: 30px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: var(--desktop-surface);
+    color: var(--desktop-text);
+}
+
+.desktop-workshop-more-wrap {
+    position: relative;
+}
+
+.desktop-workshop-more-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 24;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 148px;
+    padding: 6px;
+    border: 1px solid var(--desktop-line-strong);
+    border-radius: 10px;
+    background: var(--desktop-panel);
+    box-shadow: var(--desktop-shadow-soft);
+}
+
+.desktop-workshop-more-menu[hidden] {
+    display: none !important;
+}
+
+.desktop-workshop-more-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 32px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--desktop-text);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.desktop-workshop-more-item:hover,
+.desktop-workshop-more-item:focus-visible {
+    background: var(--desktop-accent-soft);
+    outline: none;
+}
+
+.desktop-workshop-more-item:disabled {
+    color: var(--desktop-faint);
+    cursor: default;
+}
+
+.desktop-workshop-contract-popover {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 23;
+    display: grid;
+    gap: 8px;
+    width: min(360px, calc(100% - 32px));
+    padding: 12px;
+    border: 1px solid var(--desktop-line-strong);
+    border-radius: 10px;
+    background: var(--desktop-panel);
+    box-shadow: var(--desktop-shadow-soft);
+}
+
+.desktop-workshop-contract-popover[hidden] {
+    display: none !important;
+}
+
+.desktop-workshop-contract-label {
+    margin: 0;
+    color: var(--desktop-text);
+    font-size: 13px;
+    font-weight: 650;
+}
+
+.desktop-workshop-contract-popover textarea {
+    width: 100%;
+    min-height: 72px;
+    padding: 8px 10px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: var(--desktop-surface);
+    color: var(--desktop-text);
+    resize: vertical;
+}
+
+.desktop-workshop-contract-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.desktop-workshop-thread {
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.desktop-workshop-view .desktop-workshop-messages {
+    height: 100%;
+    min-height: 0;
+}
+
+.desktop-workshop-view .desktop-workshop-empty-state {
+    position: absolute;
+    inset: 0;
+    min-height: 0;
+    background: var(--desktop-bg);
+}
+
+.desktop-workshop-empty-starters {
+    display: grid;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.desktop-workshop-empty-starter {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: var(--desktop-surface);
+    color: var(--desktop-text);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.desktop-workshop-empty-starter:hover {
+    border-color: rgba(var(--desktop-accent-rgb), 0.42);
+    background: var(--desktop-accent-soft);
+}
+
+.desktop-workshop-convert-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-top: 1px solid var(--desktop-line);
+    background: var(--desktop-panel-soft);
+}
+
+.desktop-workshop-convert-bar[hidden] {
+    display: none !important;
+}
+
+.desktop-workshop-convert-bar-label {
+    color: var(--desktop-muted);
+    font-size: 12px;
+}
+
+.desktop-workshop-view .desktop-workshop-convert-action {
+    flex-direction: row;
+    align-items: center;
+    min-height: 30px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+}
+
+.desktop-workshop-view .desktop-workshop-convert-action:hover:not(:disabled) {
+    transform: none;
+}
+
+.desktop-workshop-view .desktop-workshop-composer {
+    padding: 10px 16px 14px;
+    background: var(--desktop-panel);
+}
+
+.desktop-workshop-view .desktop-workshop-input-row textarea {
+    min-height: 64px;
+    background: var(--desktop-surface);
+}
+
+.desktop-workshop-view .desktop-workshop-message[data-role="user"] .desktop-workshop-message-avatar {
+    color: var(--desktop-text);
+}
+
+.desktop-workshop-view .desktop-workshop-empty-icon {
+    display: none;
+}

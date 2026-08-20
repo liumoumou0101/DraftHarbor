@@ -61,6 +61,8 @@ function publicProviderError(error) {
   const rawMessage = sanitizeMessage(error && error.message);
   const code = (error && error.code) || (classified && classified.code) || 'provider_error';
   const named = {
+    unsupported_provider: '当前服务商尚未适配云端生成。请改用 OpenAI 兼容接口或自定义接口。',
+    api_endpoint_required: '请先填写完整接口地址。自定义接口需要 Chat Completions 路径。',
     unsupported_transport: '该模型协议尚未适配，不能发起生成。',
     model_unavailable: '当前模型不可用，请重新选择。',
     model_offline: '当前模型已下线，请重新选择。',
@@ -252,17 +254,26 @@ function assertCloudRequestAllowed(resolved, payload = {}) {
     throw providerError('local_generation_not_bridged', '本地模型请继续使用本地生成路径。');
   }
   if (!SettingsSchema.isApiCompatibleProvider(config.provider)) {
-    throw providerError('unsupported_provider', '当前 Provider 尚未适配云端生成。');
+    throw providerError('unsupported_provider', '当前服务商尚未适配云端生成。请改用 OpenAI 兼容接口或自定义接口。');
+  }
+  if (!String(config.endpoint || '').trim()) {
+    throw providerError('api_endpoint_required', '请先填写完整接口地址。自定义接口需要 Chat Completions 路径。');
   }
   if (!config.apiKey) throw providerError('api_key_required', '请先保存 API Key。');
   if (ModelCatalog.isOpencodeProvider(config.provider) && !ModelCatalog.isOfficialZenUrl(config.endpoint)) {
     throw providerError('invalid_endpoint', 'OpenCode 只能使用官方地址。');
   }
   if (ModelCatalog.isOpencodeProvider(config.provider)) {
-    if (!entry || !ModelCatalog.isModelSelectable(entry)) {
-      throw providerError(entry && entry.availability === 'offline' ? 'model_offline' : 'model_unavailable', '当前模型不可用，请重新选择。');
+    if (!String(config.model || '').trim()) {
+      throw providerError('model_unavailable', '请先填写或选择模型。');
+    }
+    if (entry && !ModelCatalog.isOpencodeGatewayCallable(entry)) {
+      throw providerError(entry.availability === 'offline' ? 'model_offline' : 'model_unavailable', '当前模型已下线，请重新选择或手填其他模型 ID。');
     }
   } else {
+    if (!String(config.model || '').trim()) {
+      throw providerError('model_unavailable', '请先填写或选择模型。');
+    }
     if (entry && !ModelCatalog.isModelSelectable(entry) && entry.availability === 'offline') {
       throw providerError('model_offline', '当前模型已下线，请重新选择。');
     }

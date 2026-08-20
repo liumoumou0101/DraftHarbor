@@ -1,0 +1,336 @@
+/* Settings chrome: grouped AI, per-block save. Loaded after finishing. */
+
+.desktop-app[data-view="settings"] .desktop-context-strip {
+    display: none;
+}
+
+.desktop-app[data-view="settings"] .desktop-main {
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+:root[data-desktop-theme] .desktop-app[data-view="settings"] .desktop-context-strip {
+    display: none;
+}
+
+:root[data-desktop-theme] .desktop-app[data-view="settings"] .desktop-main {
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+.desktop-settings-view,
+.desktop-settings-view.is-active {
+    display: none;
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: var(--desktop-bg);
+}
+
+.desktop-settings-view.is-active {
+    display: grid;
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0;
+    min-height: 0;
+    height: 100%;
+}
+
+.desktop-settings-view .desktop-settings-categories {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+    position: static;
+    width: auto;
+    max-width: none;
+    min-height: 0;
+    margin: 0;
+    padding: 14px 12px 12px;
+    border: 0;
+    border-right: 1px solid var(--desktop-line);
+    border-radius: 0;
+    background: var(--desktop-panel);
+    overflow: auto;
+    backdrop-filter: none;
+}
+
+.desktop-settings-sidebar-head {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 0 4px 8px;
+}
+
+.desktop-settings-sidebar-head strong {
+    color: var(--desktop-text);
+    font-size: 13px;
+    font-weight: 650;
+}
+
+.desktop-settings-view .desktop-settings-status {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--desktop-muted);
+    font-size: 11px;
+    line-height: 1.4;
+    text-align: left;
+}
+
+.desktop-settings-cat-group {
+    display: grid;
+    gap: 4px;
+    margin-bottom: 4px;
+    padding: 8px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 10px;
+    background: var(--desktop-surface);
+}
+
+.desktop-settings-cat-group.is-active {
+    border-color: rgba(var(--desktop-accent-rgb), 0.34);
+}
+
+.desktop-settings-cat-alias {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+}
+
+.desktop-settings-cat-group-label {
+    margin: 0 2px;
+    color: var(--desktop-text);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.desktop-settings-cat-group-hint {
+    margin: 0 2px 4px;
+    color: var(--desktop-faint);
+    font-size: 10px;
+    line-height: 1.4;
+}
+
+.desktop-settings-view .desktop-settings-cat-item {
+    display: grid;
+    gap: 2px;
+    width: 100%;
+    min-height: 44px;
+    padding: 7px 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--desktop-muted);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.desktop-settings-view .desktop-settings-cat-item:hover {
+    background: var(--desktop-surface-raised);
+    color: var(--desktop-text);
+}
+
+.desktop-settings-view .desktop-settings-cat-item:focus:not(.is-active) {
+    outline: none;
+    background: transparent;
+    border-color: transparent;
+    color: var(--desktop-muted);
+}
+
+.desktop-settings-view .desktop-settings-cat-item:focus-visible.is-active {
+    outline: 2px solid var(--desktop-focus-ring);
+    outline-offset: 1px;
+}
+
+.desktop-settings-view .desktop-settings-cat-item.is-active {
+    border-color: rgba(var(--desktop-accent-rgb), 0.34);
+    background: var(--desktop-accent-soft);
+    color: var(--desktop-text);
+}
+
+.desktop-settings-view .desktop-settings-cat-item strong {
+    color: inherit;
+    font-size: 13px;
+    font-weight: 650;
+}
+
+.desktop-settings-view .desktop-settings-cat-item span {
+    overflow: hidden;
+    color: var(--desktop-faint);
+    font-size: 11px;
+    font-weight: 400;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.desktop-settings-view .desktop-settings-cat-item.is-active span {
+    color: var(--desktop-muted);
+}
+
+.desktop-settings-main {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-width: 0;
+    min-height: 0;
+    background: var(--desktop-bg);
+}
+
+.desktop-settings-main-head {
+    display: grid;
+    gap: 2px;
+    padding: 14px 20px 10px;
+    border-bottom: 1px solid var(--desktop-line);
+    background: var(--desktop-panel);
+}
+
+.desktop-settings-main-head strong {
+    color: var(--desktop-text);
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.desktop-settings-main-head span {
+    color: var(--desktop-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.desktop-settings-view .desktop-settings-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    max-width: none;
+    min-height: 0;
+    margin: 0;
+    padding: 16px 20px 24px;
+    overflow: auto;
+}
+
+.desktop-settings-view .desktop-settings-section {
+    flex: 0 0 auto;
+    min-height: 0;
+    height: auto;
+    scroll-margin-top: 12px;
+    padding: 16px 18px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 10px;
+    background: var(--desktop-panel);
+    overflow: visible;
+}
+
+.desktop-settings-view .desktop-settings-section-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--desktop-line);
+}
+
+.desktop-settings-view .desktop-settings-section-heading h3 {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    color: var(--desktop-text);
+    font-size: 16px;
+}
+
+.desktop-settings-view .desktop-settings-section-heading > span {
+    color: var(--desktop-muted);
+    font-size: 11px;
+}
+
+.desktop-settings-view .desktop-settings-desc {
+    margin: 0;
+    color: var(--desktop-muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.desktop-settings-view .desktop-settings-section label span {
+    color: var(--desktop-muted);
+}
+
+.desktop-settings-view .desktop-settings-section input,
+.desktop-settings-view .desktop-settings-section select,
+.desktop-settings-view .desktop-settings-section textarea {
+    background: var(--desktop-surface);
+    color: var(--desktop-text);
+}
+
+.desktop-settings-view .desktop-settings-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.desktop-settings-view [data-settings-model-pick],
+.desktop-settings-view [data-settings-profile-model-pick],
+.desktop-settings-view [data-settings-compendium-agent-model-pick] {
+    width: 100%;
+    min-height: 36px;
+}
+
+.desktop-settings-catalog-panel {
+    padding: 8px 10px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: var(--desktop-surface);
+}
+
+.desktop-settings-catalog-panel summary {
+    cursor: pointer;
+    color: var(--desktop-muted);
+    font-size: 12px;
+}
+
+.desktop-settings-view .desktop-settings-profile-item.is-editing {
+    border-color: rgba(var(--desktop-accent-rgb), 0.34);
+    background: var(--desktop-accent-soft);
+}
+
+.desktop-settings-view .desktop-settings-profiles-list > .desktop-settings-profile-editor {
+    margin: -6px 0 8px;
+}
+
+.desktop-settings-view [data-settings-write-test-status][data-tone="ok"],
+.desktop-settings-view [data-settings-compendium-agent-api-status][data-tone="ok"] {
+    color: var(--desktop-accent);
+}
+
+.desktop-settings-view [data-settings-write-test-status][data-tone="error"],
+.desktop-settings-view [data-settings-compendium-agent-api-status][data-tone="error"] {
+    color: var(--desktop-danger);
+}
+
+.desktop-settings-view .desktop-theme-label {
+    color: var(--desktop-text);
+}
+
+.desktop-settings-view [data-settings-theme] {
+    display: none !important;
+}
+
+@media (max-width: 900px) {
+    .desktop-settings-view.is-active {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(0, 1fr);
+        overflow: auto;
+    }
+
+    .desktop-settings-view .desktop-settings-categories {
+        border-right: 0;
+        border-bottom: 1px solid var(--desktop-line);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .desktop-settings-sidebar-head,
+    .desktop-settings-cat-group {
+        grid-column: 1 / -1;
+    }
+}

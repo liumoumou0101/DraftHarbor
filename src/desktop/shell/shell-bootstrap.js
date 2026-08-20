@@ -32,11 +32,33 @@
         if (typeof bindReaderWriterTransfer === 'function') bindReaderWriterTransfer();
         if (typeof bindReaderCompendiumTransfer === 'function') bindReaderCompendiumTransfer();
         if (typeof bindReaderWorkflowTransfer === 'function') bindReaderWorkflowTransfer();
+    }
+
+    async function restoreDesktopSession() {
         const state = getState();
-        setView(state ? state.loadInitialView() : 'bookshelf');
-        loadProjectLibrary();
+        const lastView = state ? state.loadInitialView() : 'bookshelf';
+        const needsProject = state && typeof state.viewNeedsProject === 'function'
+            ? state.viewNeedsProject(lastView)
+            : (lastView === 'writer' || lastView === 'compendium' || lastView === 'workshop' || lastView === 'workflow');
+        await loadProjectLibrary();
         loadRecoveryList();
         loadSettings();
+        if (needsProject) {
+            const lastId = typeof loadLastOpenedProjectId === 'function' ? loadLastOpenedProjectId() : '';
+            const project = (projectLibraryState.projects || []).find((item) => item && item.id === lastId);
+            if (project && project.health !== 'invalid' && typeof openDesktopProject === 'function') {
+                try {
+                    await openDesktopProject(project, { view: lastView });
+                    renderContextStrip();
+                    return;
+                } catch (error) {
+                    console.warn('Failed to restore last project:', error);
+                }
+            }
+            setView('bookshelf');
+        } else {
+            setView(lastView);
+        }
         renderCompendium();
         renderWorkshop();
         renderWorkflow();
@@ -46,6 +68,7 @@
     async function startDesktopShell() {
         if (window.DraftHarborFragmentsReady) await window.DraftHarborFragmentsReady;
         init();
+        await restoreDesktopSession();
     }
 
     if (document.readyState === 'loading') {

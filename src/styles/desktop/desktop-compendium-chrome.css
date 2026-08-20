@@ -1,0 +1,854 @@
+/* Compendium chrome: list-first sidebar, paper-first editor. Loaded after finishing. */
+
+.desktop-app[data-view="compendium"] .desktop-context-strip {
+    display: none;
+}
+
+.desktop-app[data-view="compendium"] .desktop-main {
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+:root[data-desktop-theme] .desktop-app[data-view="compendium"] .desktop-context-strip {
+    display: none;
+}
+
+:root[data-desktop-theme] .desktop-app[data-view="compendium"] .desktop-main {
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+.desktop-compendium-view.is-active {
+    display: grid;
+    grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+    min-height: 0;
+    height: 100%;
+}
+
+@media (min-width: 1600px) {
+    .desktop-compendium-view.is-active {
+        grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+    }
+}
+
+.desktop-compendium-view .desktop-compendium-sidebar {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 10px;
+    min-height: 0;
+    padding: 14px 12px 12px;
+    border-right: 1px solid var(--desktop-line);
+    background: var(--desktop-panel);
+}
+
+.desktop-compendium-sidebar-head {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    padding: 0 4px;
+}
+
+.desktop-compendium-sidebar-head [data-compendium-project-label] {
+    margin: 0;
+    color: var(--desktop-text);
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.4;
+}
+
+.desktop-compendium-view .desktop-compendium-status {
+    margin: 0;
+    color: var(--desktop-muted);
+    font-size: 12px;
+}
+
+.desktop-compendium-view .desktop-compendium-tools {
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: var(--desktop-surface);
+}
+
+.desktop-compendium-type-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.desktop-compendium-type-chips button {
+    min-height: 26px;
+    padding: 2px 8px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--desktop-muted);
+    font-size: 12px;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.desktop-compendium-type-chips button:hover {
+    background: var(--desktop-surface-raised);
+    color: var(--desktop-text);
+}
+
+.desktop-compendium-type-chips button.is-active {
+    border-color: rgba(var(--desktop-accent-rgb), 0.42);
+    background: var(--desktop-accent-soft);
+    color: var(--desktop-text);
+    font-weight: 650;
+}
+
+.desktop-compendium-type-chips button:focus-visible {
+    outline: 2px solid var(--desktop-focus-ring);
+    outline-offset: 1px;
+}
+
+.desktop-compendium-tool-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.desktop-compendium-tool-row [data-compendium-new] {
+    flex: 1;
+    min-height: 34px;
+}
+
+.desktop-compendium-more-wrap {
+    position: relative;
+}
+
+.desktop-compendium-more-wrap [data-compendium-more] {
+    min-height: 34px;
+    padding: 0 12px;
+}
+
+.desktop-compendium-more-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 24;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 156px;
+    padding: 6px;
+    border: 1px solid var(--desktop-line-strong);
+    border-radius: 10px;
+    background: var(--desktop-panel);
+    box-shadow: var(--desktop-shadow-soft);
+}
+
+.desktop-compendium-more-menu[hidden] {
+    display: none !important;
+}
+
+.desktop-compendium-more-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 32px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--desktop-text);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.desktop-compendium-more-item:hover,
+.desktop-compendium-more-item:focus-visible {
+    background: var(--desktop-accent-soft);
+    outline: none;
+}
+
+.desktop-compendium-more-item:disabled {
+    color: var(--desktop-faint);
+    cursor: default;
+}
+
+.desktop-compendium-view .desktop-compendium-list {
+    min-height: 0;
+    overflow: auto;
+    padding-right: 2px;
+}
+
+.desktop-compendium-view .desktop-compendium-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 8px;
+    width: 100%;
+    margin-bottom: 4px;
+    padding: 8px 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--desktop-text);
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.desktop-compendium-view .desktop-compendium-item:hover {
+    background: var(--desktop-surface-raised);
+}
+
+.desktop-compendium-view .desktop-compendium-item.is-active {
+    border-color: rgba(var(--desktop-accent-rgb), 0.34);
+    background: var(--desktop-accent-soft);
+}
+
+.desktop-compendium-view .desktop-compendium-item:focus-visible {
+    outline: 2px solid var(--desktop-focus-ring);
+    outline-offset: -1px;
+}
+
+.desktop-compendium-view .desktop-compendium-list > div.desktop-compendium-item {
+    cursor: default;
+    color: var(--desktop-muted);
+}
+
+.desktop-compendium-view .desktop-compendium-item strong {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--desktop-text);
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.desktop-compendium-view .desktop-compendium-item-meta {
+    grid-column: 1 / -1;
+    overflow: hidden;
+    color: var(--desktop-muted);
+    font-size: 11px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.desktop-compendium-view .desktop-compendium-item .desktop-compendium-injection-badge {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    margin: 0;
+    padding: 1px 6px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 999px;
+    background: var(--desktop-surface);
+    color: var(--desktop-faint);
+    font-size: 10px;
+    font-weight: 650;
+    line-height: 1.45;
+    white-space: nowrap;
+}
+
+.desktop-compendium-view .desktop-compendium-injection-badge[data-mode="always"] {
+    border-color: rgba(var(--desktop-accent-rgb), 0.48);
+    background: var(--desktop-accent-soft);
+    color: var(--desktop-text);
+}
+
+.desktop-compendium-view .desktop-compendium-injection-badge[data-mode="mention"],
+.desktop-compendium-view .desktop-compendium-injection-badge[data-mode="auto"] {
+    border-color: rgba(var(--desktop-accent-rgb), 0.28);
+    background: var(--desktop-accent-soft);
+    color: var(--desktop-muted);
+}
+
+.desktop-compendium-view .desktop-compendium-editor {
+    min-width: 0;
+    min-height: 0;
+    background: var(--desktop-bg);
+}
+
+.desktop-compendium-view .desktop-compendium-editor-header {
+    min-height: 56px;
+    padding: 10px 20px;
+    background: var(--desktop-panel-soft);
+}
+
+.desktop-compendium-view .desktop-compendium-editor-header .desktop-native-editor-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.desktop-compendium-view .desktop-compendium-editor-header .desktop-secondary-action,
+.desktop-compendium-view .desktop-compendium-editor-header .desktop-primary-action {
+    min-height: 30px;
+    padding: 4px 11px;
+    border-radius: 8px;
+    box-shadow: none;
+    font-size: 12px;
+}
+
+.desktop-compendium-view .desktop-compendium-editor-header .desktop-secondary-action {
+    border-color: transparent;
+    background: transparent;
+    color: var(--desktop-muted);
+}
+
+.desktop-compendium-view .desktop-compendium-editor-header .desktop-secondary-action:hover {
+    background: var(--desktop-accent-soft);
+    color: var(--desktop-text);
+}
+
+.desktop-compendium-view .desktop-compendium-editor-header .desktop-primary-action:disabled {
+    opacity: 0.42;
+    box-shadow: none;
+}
+
+.desktop-compendium-view .desktop-compendium-editor-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.desktop-compendium-save-status {
+    margin: 2px 0 0;
+    color: var(--desktop-muted);
+    font-size: 12px;
+}
+
+.desktop-compendium-save-status[data-tone="warn"] {
+    color: var(--desktop-warning);
+}
+
+.desktop-compendium-view .desktop-compendium-form-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(180px, 1fr) auto auto;
+    gap: 12px;
+    max-width: 960px;
+    min-height: 0;
+    padding: 16px 20px 20px;
+    overflow: auto;
+}
+
+.desktop-compendium-identity {
+    display: grid;
+    grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+    gap: 12px;
+}
+
+.desktop-compendium-body-field {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 180px;
+}
+
+.desktop-compendium-view .desktop-compendium-form-grid textarea[data-compendium-body] {
+    min-height: 180px;
+    height: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--desktop-paper-line);
+    border-radius: 8px;
+    background: var(--desktop-paper);
+    color: var(--desktop-paper-text);
+    resize: vertical;
+    font: 15px/1.7 "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+}
+
+.desktop-compendium-character-details,
+.desktop-compendium-more-fields {
+    grid-column: 1 / -1;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: var(--desktop-surface);
+}
+
+.desktop-compendium-character-details[hidden] {
+    display: none;
+}
+
+.desktop-compendium-character-details > summary,
+.desktop-compendium-more-fields > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    color: var(--desktop-text);
+    font-size: 13px;
+    font-weight: 650;
+    cursor: pointer;
+    list-style: none;
+    transition: background 0.14s ease;
+}
+
+.desktop-compendium-character-details > summary::-webkit-details-marker,
+.desktop-compendium-more-fields > summary::-webkit-details-marker {
+    display: none;
+}
+
+.desktop-compendium-character-details > summary::before,
+.desktop-compendium-more-fields > summary::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid var(--desktop-faint);
+    border-bottom: 1.5px solid var(--desktop-faint);
+    transform: rotate(-45deg);
+    transition: transform 0.16s ease;
+}
+
+.desktop-compendium-character-details[open] > summary::before,
+.desktop-compendium-more-fields[open] > summary::before {
+    transform: rotate(45deg);
+}
+
+.desktop-compendium-character-details > summary:hover,
+.desktop-compendium-more-fields > summary:hover {
+    background: var(--desktop-surface-raised);
+}
+
+.desktop-compendium-more-fields > label,
+.desktop-compendium-more-fields > .desktop-settings-check {
+    margin: 0 12px 10px;
+}
+
+.desktop-compendium-view .desktop-compendium-policy,
+.desktop-compendium-view .desktop-compendium-character {
+    margin: 0 12px 12px;
+    border-color: var(--desktop-line);
+    background: transparent;
+}
+
+.desktop-compendium-view .desktop-compendium-character {
+    grid-template-columns: 1fr 1fr;
+}
+
+.desktop-compendium-view .desktop-compendium-character legend {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+}
+
+.desktop-compendium-view .desktop-compendium-empty-content h3 {
+    color: var(--desktop-text);
+}
+
+.desktop-compendium-view .desktop-compendium-empty-content p {
+    color: var(--desktop-muted);
+}
+
+.desktop-modal.desktop-compendium-rewrite-modal,
+.desktop-modal.desktop-compendium-draw-modal {
+    display: flex;
+    flex-direction: column;
+    width: min(760px, calc(100vw - 40px));
+    max-height: min(860px, calc(100vh - 56px));
+    padding: 0;
+    overflow: hidden;
+    color: var(--desktop-text);
+}
+
+.desktop-compendium-rewrite-modal .desktop-modal-header,
+.desktop-compendium-draw-modal .desktop-modal-header {
+    flex: 0 0 auto;
+    padding: 18px 24px 12px;
+}
+
+.desktop-compendium-modal-body {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    flex: 1;
+    min-height: 0;
+    padding: 0 24px 12px;
+    overflow: auto;
+}
+
+.desktop-compendium-rewrite-modal .desktop-modal-actions,
+.desktop-compendium-draw-modal .desktop-modal-actions {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 12px 24px 18px;
+    border-top: 1px solid var(--desktop-line);
+    background: var(--desktop-panel);
+}
+
+.desktop-compendium-patch-details {
+    border: 1px solid var(--desktop-line);
+    border-radius: 10px;
+}
+
+.desktop-compendium-patch-details > summary {
+    padding: 10px 12px;
+    color: var(--desktop-text);
+    font-size: 13px;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.desktop-compendium-patch-details textarea {
+    display: block;
+    width: calc(100% - 24px);
+    margin: 0 12px 12px;
+}
+
+.desktop-compendium-view .desktop-compendium-tools input[type="search"],
+.desktop-compendium-view .desktop-compendium-form-grid input:not([type="checkbox"]):not([type="range"]),
+.desktop-compendium-view .desktop-compendium-form-grid select,
+.desktop-compendium-view .desktop-compendium-form-grid textarea:not([data-compendium-body]) {
+    border-color: var(--desktop-line);
+    border-radius: 8px;
+    background: var(--desktop-surface);
+    color: var(--desktop-text);
+    transition: border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
+}
+
+.desktop-compendium-view .desktop-compendium-form-grid select,
+.desktop-compendium-agent-modal select,
+.desktop-compendium-draw-modal select:not([hidden]) {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 28px;
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--desktop-faint) 50%),
+        linear-gradient(135deg, var(--desktop-faint) 50%, transparent 50%);
+    background-position: calc(100% - 16px) calc(50% - 1px), calc(100% - 11px) calc(50% - 1px);
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+}
+
+.desktop-compendium-view .desktop-compendium-tools input[type="search"]:hover,
+.desktop-compendium-view .desktop-compendium-form-grid input:not([type="checkbox"]):not([type="range"]):hover,
+.desktop-compendium-view .desktop-compendium-form-grid select:hover,
+.desktop-compendium-view .desktop-compendium-form-grid textarea:hover {
+    border-color: var(--desktop-line-strong);
+}
+
+.desktop-compendium-view .desktop-compendium-tools input[type="search"]:focus-visible,
+.desktop-compendium-view .desktop-compendium-form-grid input:focus-visible,
+.desktop-compendium-view .desktop-compendium-form-grid select:focus-visible,
+.desktop-compendium-view .desktop-compendium-form-grid textarea:focus-visible {
+    border-color: rgba(var(--desktop-accent-rgb), 0.62);
+    box-shadow: 0 0 0 3px var(--desktop-focus-ring);
+    outline: none;
+}
+
+.desktop-compendium-view .desktop-compendium-form-grid textarea[data-compendium-body] {
+    transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.desktop-compendium-view .desktop-compendium-form-grid textarea[data-compendium-body]:focus-visible {
+    border-color: rgba(var(--desktop-accent-rgb), 0.45);
+    box-shadow: 0 0 0 3px var(--desktop-focus-ring);
+    outline: none;
+}
+
+.desktop-compendium-view .desktop-compendium-character label input {
+    min-height: 34px;
+    padding: 6px 9px;
+    border-radius: 7px;
+    background: var(--desktop-surface);
+    transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.desktop-compendium-view .desktop-compendium-character label input:focus-visible {
+    border-color: rgba(var(--desktop-accent-rgb), 0.62);
+    box-shadow: 0 0 0 3px var(--desktop-focus-ring);
+}
+
+.desktop-compendium-view .desktop-compendium-triggers label {
+    border-radius: 999px;
+    transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.desktop-compendium-view .desktop-compendium-status[data-tone="error"] {
+    color: var(--desktop-danger);
+}
+
+.desktop-modal.desktop-compendium-rewrite-modal,
+.desktop-modal.desktop-compendium-draw-modal,
+.desktop-modal.desktop-compendium-agent-modal,
+.desktop-modal.desktop-compendium-agent-qa-modal {
+    border: 1px solid var(--desktop-line-strong);
+    border-radius: 16px;
+    background: var(--desktop-panel);
+    box-shadow: var(--desktop-shadow);
+}
+
+.desktop-compendium-rewrite-modal .desktop-modal-header h2,
+.desktop-compendium-draw-modal .desktop-modal-header h2,
+.desktop-compendium-agent-form .desktop-modal-header h2 {
+    font-size: 20px;
+    font-weight: 720;
+}
+
+.desktop-compendium-rewrite-modal .desktop-section-kicker,
+.desktop-compendium-draw-modal .desktop-section-kicker,
+.desktop-compendium-agent-form .desktop-section-kicker {
+    letter-spacing: 0.04em;
+    text-transform: none;
+}
+
+.desktop-compendium-rewrite-modal .desktop-icon-action,
+.desktop-compendium-draw-modal .desktop-icon-action {
+    width: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0;
+    border-radius: 999px;
+    color: var(--desktop-muted);
+}
+
+.desktop-compendium-rewrite-modal .desktop-icon-action:hover,
+.desktop-compendium-draw-modal .desktop-icon-action:hover {
+    background: var(--desktop-accent-soft);
+    color: var(--desktop-text);
+}
+
+.desktop-compendium-draw-types {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.desktop-compendium-draw-types button {
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--desktop-muted);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.desktop-compendium-draw-types button:hover {
+    border-color: var(--desktop-line-strong);
+    color: var(--desktop-text);
+}
+
+.desktop-compendium-draw-types button.is-active {
+    border-color: rgba(var(--desktop-accent-rgb), 0.5);
+    background: var(--desktop-accent-soft);
+    color: var(--desktop-text);
+    font-weight: 650;
+}
+
+.desktop-compendium-draw-instruction,
+.desktop-compendium-draw-config textarea {
+    min-height: 72px;
+}
+
+.desktop-compendium-draw-modal .desktop-form-grid {
+    margin-top: 0;
+}
+
+.desktop-compendium-draw-modal.has-draft .desktop-compendium-draw-intro,
+.desktop-compendium-draw-modal.has-draft .desktop-compendium-reference-picker {
+    display: none;
+}
+
+.desktop-compendium-draw-modal.has-draft .desktop-compendium-draw-config {
+    margin-top: 0;
+}
+
+.desktop-compendium-draw-modal .desktop-compendium-draw-draft {
+    margin-top: 0;
+    padding-top: 4px;
+    border-top: 0;
+}
+
+.desktop-compendium-draw-locks > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.desktop-compendium-draw-locks label {
+    flex: 0 0 auto;
+    min-width: 0;
+    padding: 0 12px;
+}
+
+.desktop-compendium-draw-character input,
+.desktop-compendium-draw-character textarea,
+.desktop-compendium-extract-character input,
+.desktop-compendium-extract-character textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 2.8em;
+    padding: 8px 10px;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: var(--desktop-surface);
+    color: var(--desktop-text);
+    font: inherit;
+    line-height: 1.5;
+    field-sizing: content;
+    resize: none;
+    overflow: hidden;
+}
+
+.desktop-compendium-draw-character textarea:focus-visible,
+.desktop-compendium-extract-character textarea:focus-visible {
+    border-color: rgba(var(--desktop-accent-rgb), 0.62);
+    box-shadow: 0 0 0 3px var(--desktop-focus-ring);
+    outline: none;
+}
+
+.desktop-compendium-rewrite-field-grid label,
+.desktop-compendium-draw-locks label {
+    justify-content: center;
+    border-radius: 999px;
+    transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.desktop-compendium-rewrite-field-grid input,
+.desktop-compendium-draw-locks input,
+.desktop-compendium-view .desktop-compendium-triggers input,
+.desktop-compendium-view .desktop-settings-check input {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 14px;
+    min-width: 14px;
+    height: 14px;
+    min-height: 14px;
+    margin: 0;
+    border: 1px solid var(--desktop-line-strong);
+    border-radius: 4px;
+    background: var(--desktop-surface);
+    cursor: pointer;
+}
+
+.desktop-compendium-rewrite-field-grid input:checked,
+.desktop-compendium-draw-locks input:checked,
+.desktop-compendium-view .desktop-compendium-triggers input:checked,
+.desktop-compendium-view .desktop-settings-check input:checked {
+    border-color: var(--desktop-accent);
+    background-color: var(--desktop-accent);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%23fff' stroke-width='2' d='M2.4 6.2l2.4 2.4 4.8-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 10px 10px;
+}
+
+.desktop-compendium-rewrite-field-grid label:hover,
+.desktop-compendium-draw-locks label:hover {
+    border-color: var(--desktop-line-strong);
+    color: var(--desktop-text);
+}
+
+.desktop-compendium-rewrite-field-grid label:has(input:checked),
+.desktop-compendium-draw-locks label:has(input:checked) {
+    border-color: rgba(var(--desktop-accent-rgb), 0.5);
+    background: var(--desktop-accent-soft);
+    color: var(--desktop-text);
+    font-weight: 650;
+}
+
+.desktop-compendium-reference-picker {
+    border-radius: 10px;
+    background: var(--desktop-surface);
+}
+
+.desktop-compendium-reference-picker summary {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    list-style: none;
+}
+
+.desktop-compendium-reference-picker summary small {
+    margin-left: auto;
+}
+
+.desktop-compendium-reference-picker summary::-webkit-details-marker {
+    display: none;
+}
+
+.desktop-compendium-patch-details > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    list-style: none;
+}
+
+.desktop-compendium-patch-details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.desktop-compendium-patch-details > summary::before,
+.desktop-compendium-reference-picker summary::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid var(--desktop-faint);
+    border-bottom: 1.5px solid var(--desktop-faint);
+    transform: rotate(-45deg);
+    transition: transform 0.16s ease;
+}
+
+.desktop-compendium-patch-details[open] > summary::before,
+.desktop-compendium-reference-picker[open] > summary::before {
+    transform: rotate(45deg);
+}
+
+.desktop-compendium-draw-modal .desktop-primary-action:disabled,
+.desktop-compendium-rewrite-modal .desktop-primary-action:disabled {
+    opacity: 0.4;
+    box-shadow: none;
+}
+
+.desktop-compendium-agent-modal,
+.desktop-compendium-agent-qa-modal {
+    padding: 0;
+    overflow: hidden;
+}
+
+.desktop-compendium-agent-form {
+    gap: 14px;
+    padding: 20px 24px 22px;
+}
+
+.desktop-compendium-agent-question textarea,
+.desktop-compendium-agent-scope select {
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: var(--desktop-surface);
+    color: var(--desktop-text);
+    transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.desktop-compendium-agent-question textarea:focus-visible,
+.desktop-compendium-agent-scope select:focus-visible {
+    border-color: rgba(var(--desktop-accent-rgb), 0.62);
+    box-shadow: 0 0 0 3px var(--desktop-focus-ring);
+    outline: none;
+}
+
+.desktop-compendium-agent-modal::backdrop,
+.desktop-compendium-agent-qa-modal::backdrop {
+    background: rgba(4, 6, 9, 0.56);
+    backdrop-filter: blur(8px);
+}
+
+.desktop-compendium-view .desktop-primary-action:focus-visible,
+.desktop-compendium-view .desktop-secondary-action:focus-visible,
+.desktop-compendium-rewrite-modal .desktop-primary-action:focus-visible,
+.desktop-compendium-rewrite-modal .desktop-secondary-action:focus-visible,
+.desktop-compendium-draw-modal .desktop-primary-action:focus-visible,
+.desktop-compendium-draw-modal .desktop-secondary-action:focus-visible {
+    outline: 2px solid var(--desktop-focus-ring);
+    outline-offset: 2px;
+}
+
+@media (max-height: 820px) {
+    .desktop-compendium-view .desktop-compendium-form-grid {
+        grid-template-rows: auto auto minmax(180px, 1fr) auto auto;
+    }
+}

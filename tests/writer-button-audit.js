@@ -625,12 +625,12 @@ async function openNativeModelSettings(page) {
 
     // Configure provider to DeepSeek via settings so model control is enabled
     await page.click('[data-view-target="settings"]');
-    await page.click('[data-settings-cat-target="provider"]');
+    await page.click('[data-settings-cat-target="profiles"]');
     await page.waitForSelector('[data-settings-mode]');
     await page.selectOption('[data-settings-mode]', 'api');
     await page.selectOption('[data-settings-provider]', 'deepseek');
     await page.fill('[data-settings-endpoint]', 'https://api.deepseek.com/chat/completions');
-    await page.fill('[data-settings-model]', 'deepseek-v4-pro');
+    await page.selectOption('[data-settings-model-pick]', 'deepseek-v4-pro');
     await page.fill('[data-settings-api-key]', 'writer-audit-test-key');
     await page.click('[data-settings-form] button[type="submit"]');
     await page.waitForFunction(() => {
@@ -1357,7 +1357,7 @@ async function openNativeModelSettings(page) {
     await page.fill('[data-settings-profile-name]', 'Writer Audit DeepSeek');
     await page.selectOption('[data-settings-profile-provider]', 'deepseek');
     await page.fill('[data-settings-profile-endpoint]', 'https://api.deepseek.com/chat/completions');
-    await page.fill('[data-settings-profile-model]', 'deepseek-v4-pro');
+    await page.selectOption('[data-settings-profile-model-pick]', 'deepseek-v4-pro');
     await page.fill('[data-settings-profile-api-key]', 'writer-audit-ds-key');
     await page.click('[data-settings-profile-save]');
     await page.waitForFunction(() => document.querySelector('[data-settings-profile-editor]').hidden);
@@ -1368,7 +1368,7 @@ async function openNativeModelSettings(page) {
     await page.fill('[data-settings-profile-name]', 'Writer Audit OpenAI');
     await page.selectOption('[data-settings-profile-provider]', 'openai');
     await page.fill('[data-settings-profile-endpoint]', 'https://api.openai.com/v1/chat/completions');
-    await page.fill('[data-settings-profile-model]', 'gpt-4o-mini');
+    await page.selectOption('[data-settings-profile-model-pick]', 'gpt-4o-mini');
     await page.fill('[data-settings-profile-api-key]', 'writer-audit-oa-key');
     await page.click('[data-settings-profile-save]');
     await page.waitForFunction(() => document.querySelector('[data-settings-profile-editor]').hidden);
@@ -1422,6 +1422,16 @@ async function openNativeModelSettings(page) {
     assert.ok(dsModelOptions.some(function (o) { return o.text.includes('DeepSeek V4 Pro'); }), 'model select should include DeepSeek V4 Pro');
     assert.ok(dsModelOptions.some(function (o) { return o.text.includes('DeepSeek V4 Flash'); }), 'model select should include DeepSeek V4 Flash');
     assert.ok(dsModelOptions.some(function (o) { return o.value === '__custom__'; }), 'model select should have custom option');
+    assert.ok(await page.locator('[data-native-custom-model-group]').isHidden(), 'custom model field should stay hidden until 手填 is selected');
+    assert.ok(!(await page.locator('[data-native-model-control-hint]').textContent() || '').includes('Chat Completions'), 'model hint should not dump protocol text');
+
+    await page.selectOption('[data-native-model-select]', '__custom__');
+    await page.waitForFunction(() => {
+      var group = document.querySelector('[data-native-custom-model-group]');
+      return group && !group.hidden;
+    });
+    await page.selectOption('[data-native-model-select]', 'deepseek-v4-pro');
+    await page.waitForFunction(() => document.querySelector('[data-native-custom-model-group]').hidden);
 
     // Thinking toggle should be enabled for DeepSeek model
     await page.selectOption('[data-native-model-select]', 'deepseek-v4-pro');
@@ -1765,6 +1775,10 @@ async function openNativeModelSettings(page) {
     // and collectCompendiumForm must derive alwaysInContext from mode.
     // Navigate to compendium view
     await page.click('[data-view-target="compendium"]');
+    await page.waitForSelector('[data-compendium-policy-details]');
+    await page.locator('[data-compendium-policy-details]').evaluate(function (element) {
+      element.open = true;
+    });
     await page.waitForSelector('[data-compendium-policy-mode]');
 
     // Read initial mode and checkbox state from the auto-selected entry

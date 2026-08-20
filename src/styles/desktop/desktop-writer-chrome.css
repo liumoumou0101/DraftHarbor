@@ -1074,3 +1074,156 @@
         gap: 20px;
     }
 }
+
+.desktop-native-generation-advanced-body,
+.desktop-native-writer.is-assistant-bottom .desktop-native-generation-advanced-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-generation-advanced-body > .desktop-native-insert-options,
+.desktop-native-writer.is-assistant-bottom .desktop-native-generation-advanced-body > .desktop-native-model-settings {
+    grid-column: 1;
+}
+
+.desktop-native-prompt-toolbar,
+.desktop-native-assistant .desktop-native-prompt-toolbar,
+.desktop-native-writer.is-assistant-bottom .desktop-native-prompt-toolbar,
+.desktop-native-generation-advanced-body .desktop-native-prompt-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+}
+
+.desktop-native-prompt-toolbar label {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    color: var(--desktop-muted);
+    font-size: 11px;
+}
+
+.desktop-native-prompt-toolbar select {
+    width: 100%;
+    min-height: 34px;
+}
+
+.desktop-native-prompt-toolbar-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.desktop-native-prompt-toolbar-actions button {
+    width: 100%;
+    min-height: 32px;
+    padding: 4px 8px;
+}
+
+.desktop-native-generation-advanced-body .desktop-native-insert-options,
+.desktop-native-writer.is-assistant-bottom .desktop-native-insert-options {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
+    gap: 5px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.desktop-native-insert-options > span {
+    color: var(--desktop-muted);
+    font-size: 11px;
+}
+
+.desktop-native-model-settings {
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+}
+
+.desktop-native-model-settings-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+}
+
+.desktop-native-model-settings-head strong {
+    flex: 0 0 auto;
+    color: var(--desktop-text);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.desktop-native-model-settings-head .desktop-native-model-control-hint,
+.desktop-native-model-control-hint {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--desktop-faint);
+    font-size: 11px;
+    font-weight: 500;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.desktop-native-model-settings .desktop-native-model-control {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.desktop-native-model-control-row,
+.desktop-native-model-control-row + .desktop-native-model-control-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    margin-top: 0;
+}
+
+.desktop-native-model-control-row.desktop-native-sampling-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.desktop-native-model-control-row label {
+    min-width: 0;
+}
+
+.desktop-native-model-control-row select,
+.desktop-native-model-control-row input[type="text"],
+.desktop-native-model-control-row input[type="number"] {
+    width: 100%;
+    min-height: 34px;
+}
+
+.desktop-native-model-control-row .desktop-native-writer-check,
+.desktop-native-model-control-row label.desktop-native-writer-check {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    padding: 2px 0;
+}
+
+.desktop-native-model-control-row .desktop-native-writer-check input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto;
+    margin: 0;
+    accent-color: var(--desktop-accent);
+}
+
+[data-native-custom-model-group][hidden] {
+    display: none !important;
+}
+
+.desktop-native-sampling-hint {
+    min-width: 0;
+}

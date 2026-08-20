@@ -123,6 +123,18 @@ assert.ok(desktopMarkup.includes('data-native-copilot-greeting'), 'desktop marku
 assert.ok(desktopMarkup.includes('data-native-copilot-context-note'), 'desktop markup should include the Copilot context card');
 assert.ok(desktopMarkup.includes('data-native-model-settings'), 'desktop markup should keep model controls in a collapsible settings section');
 assert.ok(desktopHtml.includes('src/styles/desktop/desktop-writer-chrome.css'), 'desktop.html should load writer chrome after finishing');
+assert.ok(desktopHtml.includes('src/styles/desktop/desktop-compendium-chrome.css'), 'desktop.html should load compendium chrome after writer chrome');
+assert.ok(desktopHtml.includes('src/styles/desktop/desktop-workshop-chrome.css'), 'desktop.html should load workshop chrome after compendium chrome');
+assert.ok(desktopHtml.includes('src/styles/desktop/desktop-recovery-chrome.css'), 'desktop.html should load recovery chrome after workshop chrome');
+assert.ok(desktopHtml.includes('src/styles/desktop/desktop-settings-chrome.css'), 'desktop.html should load settings chrome after recovery chrome');
+assert.ok(
+  desktopHtml.indexOf('desktop-writer-chrome.css') < desktopHtml.indexOf('desktop-compendium-chrome.css'),
+  'compendium chrome must load after writer chrome'
+);
+assert.ok(
+  desktopHtml.indexOf('desktop-compendium-chrome.css') < desktopHtml.indexOf('desktop-workshop-chrome.css'),
+  'workshop chrome must load after compendium chrome'
+);
 assert.ok(desktopHtml.includes('src/desktop/shell/writer-chrome.js'), 'desktop.html should load writer chrome after writer-prompts.js');
 assert.ok(
   desktopHtml.indexOf('writer-prompts.js') < desktopHtml.indexOf('writer-chrome.js'),

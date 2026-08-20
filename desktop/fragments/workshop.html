@@ -1,9 +1,8 @@
             <section class="desktop-view desktop-workshop-view" data-view-panel="workshop">
                 <aside class="desktop-workshop-sidebar">
-                    <div>
-                        <p class="desktop-section-kicker">Workshop</p>
-                        <h2>讨论</h2>
+                    <div class="desktop-workshop-sidebar-head">
                         <p data-workshop-project-label>从书库打开项目后开始讨论。</p>
+                        <p class="desktop-workshop-status" data-workshop-status>未打开项目</p>
                     </div>
                     <div class="desktop-workshop-project-summary" data-workshop-project-summary hidden>
                         <p class="desktop-workshop-project-summary-label">作品</p>
@@ -11,62 +10,56 @@
                         <p data-workshop-project-stats></p>
                     </div>
                     <button class="desktop-primary-action" type="button" data-workshop-new>新对话</button>
-                    <div class="desktop-compendium-status" data-workshop-status>未打开项目</div>
                     <div class="desktop-workshop-session-list" data-workshop-session-list></div>
                 </aside>
                 <section class="desktop-workshop-chat">
-                    <header class="desktop-compendium-editor-header">
+                    <header class="desktop-workshop-chat-header">
                         <div>
-                            <p class="desktop-section-kicker">讨论</p>
                             <h2 data-workshop-title>选择或新建对话</h2>
                         </div>
-                        <div class="desktop-native-editor-actions">
-                            <button class="desktop-secondary-action" type="button" data-workshop-delete disabled>删除对话</button>
+                        <div class="desktop-workshop-chat-actions">
+                            <label class="desktop-workshop-template">
+                                <span>角度</span>
+                                <select data-workshop-template aria-label="讨论角度"></select>
+                            </label>
+                            <div class="desktop-workshop-more-wrap">
+                                <button class="desktop-secondary-action" type="button" data-workshop-more aria-haspopup="menu" aria-expanded="false">更多</button>
+                                <div class="desktop-workshop-more-menu" data-workshop-more-menu hidden role="menu">
+                                    <button class="desktop-workshop-more-item" type="button" data-workshop-contract-toggle role="menuitem">会话指令</button>
+                                    <button class="desktop-workshop-more-item" type="button" data-workshop-delete role="menuitem" disabled>删除对话</button>
+                                </div>
+                                <div class="desktop-workshop-contract-popover" data-workshop-contract-panel hidden>
+                                    <p class="desktop-workshop-contract-label">本会话指令</p>
+                                    <label class="desktop-native-writer-check">
+                                        <input type="checkbox" data-workshop-contract-enabled>
+                                        <span>启用</span>
+                                    </label>
+                                    <textarea data-workshop-contract-content rows="3" placeholder="只用于这次讨论，例如讨论边界、角色口吻或本轮目标。"></textarea>
+                                    <div class="desktop-workshop-contract-actions">
+                                        <button class="desktop-secondary-action" type="button" data-workshop-contract-close>收起</button>
+                                        <button class="desktop-primary-action" type="button" data-workshop-contract-save>保存</button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </header>
-                    <div class="desktop-workshop-output-panel">
-                        <label class="desktop-native-writer-check">
-                            <input type="checkbox" data-workshop-contract-enabled>
-                            <span>启用本会话指令</span>
-                        </label>
-                        <textarea data-workshop-contract-content rows="2" placeholder="只用于本次 Workshop 对话，例如讨论边界、角色口吻或本轮目标。"></textarea>
-                        <button class="desktop-secondary-action" type="button" data-workshop-contract-save>保存会话指令</button>
-                    </div>
-                    <div class="desktop-workshop-messages" data-workshop-messages></div>
-                    <div class="desktop-workshop-empty-state" data-workshop-empty hidden>
-                        <div class="desktop-workshop-empty-content" data-workshop-empty-content></div>
-                    </div>
-                    <div class="desktop-workshop-output-panel" data-workshop-output-actions hidden>
-                        <p class="desktop-workshop-output-panel-label">输出转化</p>
-                        <div class="desktop-workshop-output-actions-inner">
-                            <button class="desktop-workshop-convert-action" type="button" data-workshop-to-compendium disabled>
-                                <span class="desktop-workshop-convert-icon">&#128196;</span>
-                                <span class="desktop-workshop-convert-label">转为资料</span>
-                                <span class="desktop-workshop-convert-hint">保存到资料库</span>
-                            </button>
-                            <button class="desktop-workshop-convert-action" type="button" data-workshop-to-summary disabled>
-                                <span class="desktop-workshop-convert-icon">&#128278;</span>
-                                <span class="desktop-workshop-convert-label">转为场景摘要</span>
-                                <span class="desktop-workshop-convert-hint">写入当前场景摘要</span>
-                            </button>
-                            <button class="desktop-workshop-convert-action" type="button" data-workshop-insert-draft disabled>
-                                <span class="desktop-workshop-convert-icon">&#128221;</span>
-                                <span class="desktop-workshop-convert-label">插入正文</span>
-                                <span class="desktop-workshop-convert-hint">追加到当前场景</span>
-                            </button>
+                    <div class="desktop-workshop-thread">
+                        <div class="desktop-workshop-messages" data-workshop-messages></div>
+                        <div class="desktop-workshop-empty-state" data-workshop-empty hidden>
+                            <div class="desktop-workshop-empty-content" data-workshop-empty-content></div>
                         </div>
                     </div>
+                    <div class="desktop-workshop-convert-bar" data-workshop-output-actions hidden>
+                        <span class="desktop-workshop-convert-bar-label">将这条回复</span>
+                        <button class="desktop-workshop-convert-action" type="button" data-workshop-to-compendium disabled>转资料</button>
+                        <button class="desktop-workshop-convert-action" type="button" data-workshop-to-summary disabled>作摘要</button>
+                        <button class="desktop-workshop-convert-action" type="button" data-workshop-insert-draft disabled>插入正文</button>
+                    </div>
                     <div class="desktop-workshop-composer">
-                        <label class="desktop-workshop-template">
-                            <span>讨论角度</span>
-                            <select data-workshop-template aria-label="讨论角度"></select>
-                        </label>
                         <div class="desktop-workshop-input-row">
-                            <textarea data-workshop-input placeholder="输入想讨论的问题。可用 @[资料标题] 或 #[场景标题] 引用上下文。"></textarea>
+                            <textarea data-workshop-input placeholder="想清楚再写。可用 @[资料] 或 #[场景] 引用上下文。"></textarea>
                             <button class="desktop-primary-action" type="button" data-workshop-send>发送</button>
                         </div>
                     </div>
-                    </div>
                 </section>
             </section>
-

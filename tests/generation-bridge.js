@@ -83,18 +83,86 @@ async function readSse(response) {
     const unknown = generationBridge.resolveGenerationRequest(await settingsService.readSettings(dataRoot), {
       model: 'totally-unknown-model-id'
     });
-    assert.throws(
-      () => generationBridge.assertCloudRequestAllowed(unknown, { model: 'totally-unknown-model-id' }),
-      (error) => error && (error.code === 'model_unavailable' || error.code === 'model_offline')
-    );
+    const allowedUnknown = generationBridge.assertCloudRequestAllowed(unknown, { model: 'totally-unknown-model-id' });
+    assert.strictEqual(allowedUnknown.model, 'totally-unknown-model-id', 'OpenCode 应允许手填模型 ID');
 
     const claude = generationBridge.resolveGenerationRequest(await settingsService.readSettings(dataRoot), {
       model: 'claude-opus-4-6'
     });
+    const allowedClaude = generationBridge.assertCloudRequestAllowed(claude, { model: 'claude-opus-4-6' });
+    assert.strictEqual(allowedClaude.model, 'claude-opus-4-6', 'OpenCode 套餐内 Claude 应可经 Chat Completions 调用');
+
+    await settingsService.writeSettings(dataRoot, {
+      providerSettings: {
+        mode: 'api',
+        provider: 'anthropic',
+        apiKey: 'sk-ant-disk',
+        model: 'claude-sonnet-4-6'
+      }
+    });
+    const anthropicResolved = generationBridge.resolveGenerationRequest(await settingsService.readSettings(dataRoot), {
+      model: 'claude-sonnet-4-6'
+    });
+    const allowedAnthropic = generationBridge.assertCloudRequestAllowed(anthropicResolved, { model: 'claude-sonnet-4-6' });
+    assert.strictEqual(allowedAnthropic.provider, 'anthropic');
+    assert.ok(String(allowedAnthropic.endpoint).includes('/v1/messages'));
+
+    await settingsService.writeSettings(dataRoot, {
+      providerSettings: {
+        mode: 'api',
+        provider: 'google',
+        apiKey: 'gem-disk',
+        model: 'gemini-2.5-flash'
+      }
+    });
+    const googleResolved = generationBridge.resolveGenerationRequest(await settingsService.readSettings(dataRoot), {
+      model: 'gemini-2.5-flash'
+    });
+    const allowedGoogle = generationBridge.assertCloudRequestAllowed(googleResolved, { model: 'gemini-2.5-flash' });
+    assert.strictEqual(allowedGoogle.provider, 'google');
+    assert.ok(String(allowedGoogle.endpoint).includes('generativelanguage.googleapis.com'));
+
+    await settingsService.writeSettings(dataRoot, {
+      providerSettings: {
+        mode: 'api',
+        provider: 'custom',
+        endpoint: 'https://gateway.example/v1/chat/completions',
+        apiKey: 'custom-disk',
+        model: 'vendor-special-model'
+      }
+    });
+    const customResolved = generationBridge.resolveGenerationRequest(await settingsService.readSettings(dataRoot), {
+      model: 'vendor-special-model'
+    });
+    const allowedCustom = generationBridge.assertCloudRequestAllowed(customResolved, { model: 'vendor-special-model' });
+    assert.strictEqual(allowedCustom.provider, 'custom');
+    assert.strictEqual(allowedCustom.model, 'vendor-special-model');
+
+    await settingsService.writeSettings(dataRoot, {
+      providerSettings: {
+        mode: 'api',
+        provider: 'custom',
+        endpoint: '',
+        apiKey: 'custom-disk',
+        model: 'vendor-special-model'
+      }
+    });
+    const missingEndpoint = generationBridge.resolveGenerationRequest(await settingsService.readSettings(dataRoot), {
+      model: 'vendor-special-model'
+    });
     assert.throws(
-      () => generationBridge.assertCloudRequestAllowed(claude, { model: 'claude-opus-4-6' }),
-      (error) => error && (error.code === 'unsupported_transport' || error.code === 'model_unavailable')
+      () => generationBridge.assertCloudRequestAllowed(missingEndpoint, { model: 'vendor-special-model' }),
+      (error) => error && error.code === 'api_endpoint_required'
     );
+
+    await settingsService.writeSettings(dataRoot, {
+      providerSettings: {
+        mode: 'api',
+        provider: 'opencode-zen',
+        apiKey: 'zen-secret-key-should-not-leak',
+        model: 'deepseek-v4-flash'
+      }
+    });
 
     const privacy = generationBridge.resolveGenerationRequest(await settingsService.readSettings(dataRoot), {
       model: 'big-pickle'
@@ -196,7 +264,8 @@ async function readSse(response) {
       })
     });
     const unknownEvents = await readSse(unknownRes);
-    assert.ok(unknownEvents.some((event) => event.type === 'error' && event.error && event.error.code === 'model_unavailable'), 'unknown OpenCode models must be rejected by the backend');
+    assert.ok(!unknownEvents.some((event) => event.type === 'error' && event.error && event.error.code === 'model_unavailable'), 'OpenCode 应允许手填模型 ID');
+    assert.ok(unknownEvents.some((event) => event.type === 'done' || event.type === 'token' || event.type === 'content'), 'hand-typed OpenCode models should reach the generator');
 
     const beforeHijack = seen.length;
     await settingsService.writeSettings(dataRoot, {

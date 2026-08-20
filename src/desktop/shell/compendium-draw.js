@@ -6,7 +6,28 @@
     function setCompendiumDrawStatus(message, tone = 'info') { const { status } = compendiumDrawElements(); if (status) { status.textContent = message || ''; status.dataset.tone = tone; } }
     function drawCharacterProfile(elements) { return { role: elements.characterRole ? elements.characterRole.value.trim() : '', goal: elements.characterGoal ? elements.characterGoal.value.trim() : '', motivation: elements.characterMotivation ? elements.characterMotivation.value.trim() : '', conflict: elements.characterConflict ? elements.characterConflict.value.trim() : '', voice: elements.characterVoice ? elements.characterVoice.value.trim() : '', currentState: elements.characterCurrentState ? elements.characterCurrentState.value.trim() : '', knowledge: elements.characterKnowledge ? elements.characterKnowledge.value.trim() : '', relationshipNotes: elements.characterRelationship ? elements.characterRelationship.value.trim() : '' }; }
     function setDrawCharacterProfile(elements, profile = {}) { const fields = [['characterRole', 'role'], ['characterGoal', 'goal'], ['characterMotivation', 'motivation'], ['characterConflict', 'conflict'], ['characterVoice', 'voice'], ['characterCurrentState', 'currentState'], ['characterKnowledge', 'knowledge'], ['characterRelationship', 'relationshipNotes']]; fields.forEach(([elementName, fieldName]) => { if (elements[elementName]) elements[elementName].value = profile[fieldName] || ''; }); }
-    function renderCompendiumDrawState() { const elements = compendiumDrawElements(); const isCharacter = elements.type && elements.type.value === 'character'; if (elements.draft) elements.draft.hidden = !compendiumDrawState.hasDraft; if (elements.character) elements.character.hidden = !compendiumDrawState.hasDraft || !isCharacter; if (elements.characterLock) elements.characterLock.hidden = !compendiumDrawState.hasDraft || !isCharacter; if (elements.generate) elements.generate.textContent = compendiumDrawState.hasDraft ? '重新抽卡' : '生成草稿'; if (elements.save) elements.save.disabled = !compendiumDrawState.hasDraft || compendiumDrawState.running; }
+    function syncDrawTypeChips(type) {
+        document.querySelectorAll('[data-compendium-draw-type-chip]').forEach((chip) => {
+            const active = chip.dataset.compendiumDrawTypeChip === type;
+            chip.classList.toggle('is-active', active);
+            chip.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+    }
+    function renderCompendiumDrawState() {
+        const elements = compendiumDrawElements();
+        const isCharacter = elements.type && elements.type.value === 'character';
+        if (elements.form) elements.form.classList.toggle('has-draft', compendiumDrawState.hasDraft);
+        if (elements.draft) elements.draft.hidden = !compendiumDrawState.hasDraft;
+        if (elements.character) elements.character.hidden = !compendiumDrawState.hasDraft || !isCharacter;
+        if (elements.characterLock) elements.characterLock.hidden = !compendiumDrawState.hasDraft || !isCharacter;
+        if (elements.generate) {
+            elements.generate.textContent = compendiumDrawState.hasDraft ? '重新抽卡' : '生成草稿';
+            elements.generate.classList.toggle('desktop-primary-action', !compendiumDrawState.hasDraft);
+            elements.generate.classList.toggle('desktop-secondary-action', compendiumDrawState.hasDraft);
+        }
+        if (elements.save) elements.save.disabled = !compendiumDrawState.hasDraft || compendiumDrawState.running;
+        if (elements.type) syncDrawTypeChips(elements.type.value);
+    }
     function closeCompendiumDraw() { const { modal } = compendiumDrawElements(); if (modal) modal.hidden = true; compendiumDrawState.running = false; compendiumDrawState.hasDraft = false; }
     function openCompendiumDraw() {
         if (!currentProjectId()) return;
@@ -45,7 +66,10 @@
         compendiumDrawState.running = false; if (elements.generate) elements.generate.disabled = false;
         if (!result.ok) { setCompendiumDrawStatus(`抽取失败：${result.error.message}`, 'error'); return; }
         const draft = { ...(result.output[0] || {}), ...locked };
-        if (elements.type && draft.type) elements.type.value = draft.type;
+        if (elements.type && draft.type) {
+            elements.type.value = draft.type;
+            syncDrawTypeChips(draft.type);
+        }
         if (elements.title) elements.title.value = draft.title || '';
         if (elements.tags) elements.tags.value = Array.isArray(draft.tags) ? draft.tags.join(', ') : '';
         if (elements.summary) elements.summary.value = draft.summary || '';
@@ -68,4 +92,20 @@
             await loadCompendium(); compendiumState.selectedId = result.entry.id; closeCompendiumDraw(); setView('compendium'); renderCompendium(); setCompendiumStatus(`已保存抽卡资料：${result.entry.title}`, 'ok');
         } catch (error) { setCompendiumDrawStatus(`保存失败：${error.message || error}`, 'error'); }
     }
-    function bindCompendiumDraw() { const elements = compendiumDrawElements(); if (elements.generate) elements.generate.addEventListener('click', generateCompendiumDraw); if (elements.form) elements.form.addEventListener('submit', saveCompendiumDraw); elements.cancel.forEach((button) => button.addEventListener('click', closeCompendiumDraw)); }
+    function bindCompendiumDraw() {
+        const elements = compendiumDrawElements();
+        const typeChips = document.querySelector('[data-compendium-draw-types]');
+        if (elements.generate) elements.generate.addEventListener('click', generateCompendiumDraw);
+        if (elements.form) elements.form.addEventListener('submit', saveCompendiumDraw);
+        elements.cancel.forEach((button) => button.addEventListener('click', closeCompendiumDraw));
+        if (typeChips) {
+            typeChips.addEventListener('click', (event) => {
+                const chip = event.target.closest('[data-compendium-draw-type-chip]');
+                if (!chip || compendiumDrawState.running) return;
+                const nextType = chip.dataset.compendiumDrawTypeChip;
+                if (elements.type) elements.type.value = nextType;
+                syncDrawTypeChips(nextType);
+                renderCompendiumDrawState();
+            });
+        }
+    }

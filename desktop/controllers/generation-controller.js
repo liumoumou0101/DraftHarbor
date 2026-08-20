@@ -118,7 +118,16 @@ function createGenerationController({ settingsService, readSettings, readJsonPay
       }
       if (request.method === 'POST' && route === '/api/settings/test-provider') {
         const payload = await readJsonPayload(request).catch(() => ({}));
-        const settings = payload.settings || await readSettings(dataRoot);
+        const stored = await readSettings(dataRoot);
+        const incoming = payload.settings;
+        const incomingKey = incoming && incoming.providerSettings && String(incoming.providerSettings.apiKey || '').trim();
+        const settings = incoming
+          ? Object.assign({}, stored, incoming, {
+              providerSettings: Object.assign({}, stored.providerSettings || {}, incoming.providerSettings || {}, {
+                apiKey: incomingKey || ((stored.providerSettings && stored.providerSettings.apiKey) || '')
+              })
+            })
+          : stored;
         const live = payload.live !== false;
         const result = await settingsService.testProvider(settings, { live });
         jsonResponse(response, 200, { ok: result.ok, result });

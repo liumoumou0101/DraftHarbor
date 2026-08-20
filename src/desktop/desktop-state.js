@@ -2,6 +2,7 @@
     const STORAGE_KEY = 'draftharbor:desktop:lastView';
     const DEFAULT_VIEW = 'bookshelf';
     const VALID_VIEWS = new Set(['bookshelf', 'writer', 'reader', 'compendium', 'workshop', 'workflow', 'recovery', 'settings']);
+    const PROJECT_VIEWS = new Set(['writer', 'compendium', 'workshop', 'workflow']);
 
     function normalizeView(view) {
         return VALID_VIEWS.has(view) ? view : DEFAULT_VIEW;
@@ -23,11 +24,16 @@
         }
     }
 
+    function viewNeedsProject(view) {
+        return PROJECT_VIEWS.has(normalizeView(view));
+    }
+
     window.DraftHarborDesktopState = {
         defaultView: DEFAULT_VIEW,
         views: Array.from(VALID_VIEWS),
         normalizeView,
         loadInitialView,
-        saveView
+        saveView,
+        viewNeedsProject
     };
 })();

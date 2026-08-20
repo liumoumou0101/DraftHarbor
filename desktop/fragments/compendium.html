@@ -12,7 +12,7 @@
                 </section>
                 <dialog class="desktop-reader-compendium-dialog" data-reader-compendium-dialog aria-labelledby="reader-compendium-title">
                     <header class="desktop-reader-compendium-header">
-                        <div><p class="desktop-section-kicker">Reader Extraction</p><h2 id="reader-compendium-title">从阅读快照提取资料卡</h2></div>
+                        <div><p class="desktop-section-kicker">阅读提取</p><h2 id="reader-compendium-title">从阅读快照提取资料卡</h2></div>
                         <button class="desktop-icon-button" type="button" data-reader-compendium-close aria-label="关闭">×</button>
                     </header>
                     <div class="desktop-reader-compendium-body">
@@ -28,14 +28,23 @@
                     </footer>
                 </dialog>
                 <aside class="desktop-compendium-sidebar">
-                    <div>
-                        <p class="desktop-section-kicker">Knowledge Base</p>
-                        <h2>资料库</h2>
+                    <div class="desktop-compendium-sidebar-head">
                         <p data-compendium-project-label>从书库打开项目后编辑资料。</p>
+                        <p class="desktop-compendium-status" data-compendium-status>未打开项目</p>
                     </div>
                     <div class="desktop-compendium-tools">
                         <input type="search" data-compendium-search placeholder="搜索标题、标签、正文">
-                        <select data-compendium-type>
+                        <div class="desktop-compendium-type-chips" data-compendium-type-chips role="tablist" aria-label="资料类型">
+                            <button type="button" class="is-active" data-compendium-type-chip="" role="tab" aria-selected="true">全部</button>
+                            <button type="button" data-compendium-type-chip="character" role="tab" aria-selected="false">角色</button>
+                            <button type="button" data-compendium-type-chip="location" role="tab" aria-selected="false">地点</button>
+                            <button type="button" data-compendium-type-chip="organization" role="tab" aria-selected="false">组织</button>
+                            <button type="button" data-compendium-type-chip="item" role="tab" aria-selected="false">物品</button>
+                            <button type="button" data-compendium-type-chip="lore" role="tab" aria-selected="false">设定</button>
+                            <button type="button" data-compendium-type-chip="timeline" role="tab" aria-selected="false">时间线</button>
+                            <button type="button" data-compendium-type-chip="note" role="tab" aria-selected="false">笔记</button>
+                        </div>
+                        <select data-compendium-type hidden>
                             <option value="">全部类型</option>
                             <option value="character">角色</option>
                             <option value="location">地点</option>
@@ -45,18 +54,23 @@
                             <option value="timeline">时间线</option>
                             <option value="note">笔记</option>
                         </select>
-                        <button class="desktop-secondary-action" type="button" data-compendium-draw>抽卡</button>
-                        <button class="desktop-secondary-action" type="button" data-compendium-agent>资料体检</button>
-                        <button class="desktop-secondary-action" type="button" data-compendium-agent-qa>资料问答</button>
-                        <button class="desktop-primary-action" type="button" data-compendium-new>新资料</button>
+                        <div class="desktop-compendium-tool-row">
+                            <button class="desktop-primary-action" type="button" data-compendium-new>新资料</button>
+                            <div class="desktop-compendium-more-wrap">
+                                <button class="desktop-secondary-action" type="button" data-compendium-more aria-haspopup="menu" aria-expanded="false">更多</button>
+                                <div class="desktop-compendium-more-menu" data-compendium-more-menu hidden role="menu">
+                                    <button class="desktop-compendium-more-item" type="button" data-compendium-draw role="menuitem">抽卡</button>
+                                    <button class="desktop-compendium-more-item" type="button" data-compendium-agent role="menuitem">资料体检</button>
+                                    <button class="desktop-compendium-more-item" type="button" data-compendium-agent-qa role="menuitem">资料问答</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="desktop-compendium-status" data-compendium-status>未打开项目</div>
                     <div class="desktop-compendium-list" data-compendium-list></div>
                 </aside>
                 <section class="desktop-compendium-editor">
                     <div class="desktop-compendium-editor-empty" data-compendium-editor-empty>
                         <div class="desktop-compendium-empty-content">
-                            <p class="desktop-compendium-empty-icon">&#128214;</p>
                             <h3 data-compendium-empty-title>选择资料条目</h3>
                             <p data-compendium-empty-desc>从左侧列表中选择资料卡进行编辑，或新建资料。</p>
                         </div>
@@ -64,8 +78,8 @@
                     <form data-compendium-form hidden>
                         <header class="desktop-compendium-editor-header">
                             <div>
-                                <p class="desktop-section-kicker">资料编辑</p>
                                 <h2 data-compendium-editor-title>选择资料条目</h2>
+                                <p class="desktop-compendium-save-status" data-compendium-save-status></p>
                             </div>
                             <div class="desktop-native-editor-actions">
                                 <button class="desktop-secondary-action" type="button" data-compendium-ai-rewrite disabled>AI 重写</button>
@@ -74,114 +88,120 @@
                             </div>
                         </header>
                         <div class="desktop-compendium-form-grid">
-                            <p class="desktop-compendium-section-heading">资料内容</p>
-                            <label>
-                                <span>类型</span>
-                                <select data-compendium-entry-type disabled>
-                                    <option value="character">角色</option>
-                                    <option value="location">地点</option>
-                                    <option value="organization">组织</option>
-                                    <option value="item">物品</option>
-                                    <option value="lore">设定</option>
-                                    <option value="timeline">时间线</option>
-                                    <option value="note">笔记</option>
-                                </select>
-                            </label>
-                            <label>
-                                <span>标题</span>
-                                <input type="text" data-compendium-title maxlength="160" disabled>
-                            </label>
+                            <div class="desktop-compendium-identity">
+                                <label>
+                                    <span>类型</span>
+                                    <select data-compendium-entry-type disabled>
+                                        <option value="character">角色</option>
+                                        <option value="location">地点</option>
+                                        <option value="organization">组织</option>
+                                        <option value="item">物品</option>
+                                        <option value="lore">设定</option>
+                                        <option value="timeline">时间线</option>
+                                        <option value="note">笔记</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    <span>标题</span>
+                                    <input type="text" data-compendium-title maxlength="160" disabled>
+                                </label>
+                            </div>
                             <label class="desktop-form-wide">
                                 <span>摘要</span>
                                 <input type="text" data-compendium-summary maxlength="300" disabled>
                             </label>
-                            <label>
-                                <span>标签</span>
-                                <input type="text" data-compendium-tags placeholder="逗号分隔" disabled>
-                            </label>
-                            <label>
-                                <span>别名</span>
-                                <input type="text" data-compendium-aliases placeholder="逗号分隔" disabled>
-                            </label>
-                            <p class="desktop-compendium-section-heading">写作上下文 · 注入策略</p>
-                            <label class="desktop-settings-check">
-                                <input type="checkbox" data-compendium-always disabled>
-                                <span>默认加入生成上下文</span>
-                            </label>
-                            <fieldset class="desktop-compendium-policy" data-compendium-policy>
-                                <legend>注入策略</legend>
-                                <label>
-                                    <span>模式</span>
-                                    <select data-compendium-policy-mode disabled>
-                                        <option value="disabled">不自动注入</option>
-                                        <option value="manual">仅手动/明确提及</option>
-                                        <option value="mention">提及时注入</option>
-                                        <option value="auto">条件自动注入</option>
-                                        <option value="always">总是注入</option>
-                                    </select>
-                                </label>
-                                <div class="desktop-compendium-triggers">
-                                    <label class="desktop-settings-check">
-                                        <input type="checkbox" data-compendium-trigger-title disabled>
-                                        <span>标题</span>
-                                    </label>
-                                    <label class="desktop-settings-check">
-                                        <input type="checkbox" data-compendium-trigger-aliases disabled>
-                                        <span>别名</span>
-                                    </label>
-                                    <label class="desktop-settings-check">
-                                        <input type="checkbox" data-compendium-trigger-tags disabled>
-                                        <span>标签</span>
-                                    </label>
-                                    <label class="desktop-settings-check">
-                                        <input type="checkbox" data-compendium-trigger-pov disabled>
-                                        <span>POV 人物匹配</span>
-                                    </label>
-                                    <label class="desktop-settings-check">
-                                        <input type="checkbox" data-compendium-trigger-scene-characters disabled>
-                                        <span>场景人物匹配</span>
-                                    </label>
-                                </div>
-                            </fieldset>
-                            <fieldset class="desktop-compendium-character" data-compendium-character hidden>
-                                <legend>人物约束</legend>
-                                <label>
-                                    <span>角色定位</span>
-                                    <input type="text" data-compendium-character-role maxlength="200" disabled>
-                                </label>
-                                <label>
-                                    <span>目标</span>
-                                    <input type="text" data-compendium-character-goal maxlength="200" disabled>
-                                </label>
-                                <label>
-                                    <span>动机</span>
-                                    <input type="text" data-compendium-character-motivation maxlength="200" disabled>
-                                </label>
-                                <label>
-                                    <span>冲突</span>
-                                    <input type="text" data-compendium-character-conflict maxlength="200" disabled>
-                                </label>
-                                <label>
-                                    <span>语气/声音</span>
-                                    <input type="text" data-compendium-character-voice maxlength="200" disabled>
-                                </label>
-                                <label>
-                                    <span>当前状态</span>
-                                    <input type="text" data-compendium-character-current-state maxlength="300" disabled>
-                                </label>
-                                <label>
-                                    <span>已知信息</span>
-                                    <input type="text" data-compendium-character-knowledge maxlength="300" disabled>
-                                </label>
-                                <label>
-                                    <span>关系备注</span>
-                                    <input type="text" data-compendium-character-relationship maxlength="300" disabled>
-                                </label>
-                            </fieldset>
-                            <label class="desktop-form-wide">
+                            <label class="desktop-form-wide desktop-compendium-body-field">
                                 <span>正文</span>
                                 <textarea data-compendium-body spellcheck="false" disabled></textarea>
                             </label>
+                            <details class="desktop-compendium-character-details" data-compendium-character-details hidden>
+                                <summary>人物约束</summary>
+                                <fieldset class="desktop-compendium-character" data-compendium-character>
+                                    <legend>人物约束</legend>
+                                    <label>
+                                        <span>角色定位</span>
+                                        <input type="text" data-compendium-character-role maxlength="200" disabled>
+                                    </label>
+                                    <label>
+                                        <span>目标</span>
+                                        <input type="text" data-compendium-character-goal maxlength="200" disabled>
+                                    </label>
+                                    <label>
+                                        <span>动机</span>
+                                        <input type="text" data-compendium-character-motivation maxlength="200" disabled>
+                                    </label>
+                                    <label>
+                                        <span>冲突</span>
+                                        <input type="text" data-compendium-character-conflict maxlength="200" disabled>
+                                    </label>
+                                    <label>
+                                        <span>语气/声音</span>
+                                        <input type="text" data-compendium-character-voice maxlength="200" disabled>
+                                    </label>
+                                    <label>
+                                        <span>当前状态</span>
+                                        <input type="text" data-compendium-character-current-state maxlength="300" disabled>
+                                    </label>
+                                    <label>
+                                        <span>已知信息</span>
+                                        <input type="text" data-compendium-character-knowledge maxlength="300" disabled>
+                                    </label>
+                                    <label>
+                                        <span>关系备注</span>
+                                        <input type="text" data-compendium-character-relationship maxlength="300" disabled>
+                                    </label>
+                                </fieldset>
+                            </details>
+                            <details class="desktop-compendium-more-fields" data-compendium-policy-details>
+                                <summary>标签、别名与注入策略</summary>
+                                <label>
+                                    <span>标签</span>
+                                    <input type="text" data-compendium-tags placeholder="逗号分隔" disabled>
+                                </label>
+                                <label>
+                                    <span>别名</span>
+                                    <input type="text" data-compendium-aliases placeholder="逗号分隔" disabled>
+                                </label>
+                                <label class="desktop-settings-check">
+                                    <input type="checkbox" data-compendium-always disabled>
+                                    <span>总是加入生成上下文</span>
+                                </label>
+                                <fieldset class="desktop-compendium-policy" data-compendium-policy>
+                                    <legend>注入策略</legend>
+                                    <label>
+                                        <span>模式</span>
+                                        <select data-compendium-policy-mode disabled>
+                                            <option value="disabled">不自动注入</option>
+                                            <option value="manual">仅手动/明确提及</option>
+                                            <option value="mention">提及时注入</option>
+                                            <option value="auto">条件自动注入</option>
+                                            <option value="always">总是注入</option>
+                                        </select>
+                                    </label>
+                                    <div class="desktop-compendium-triggers">
+                                        <label class="desktop-settings-check">
+                                            <input type="checkbox" data-compendium-trigger-title disabled>
+                                            <span>标题</span>
+                                        </label>
+                                        <label class="desktop-settings-check">
+                                            <input type="checkbox" data-compendium-trigger-aliases disabled>
+                                            <span>别名</span>
+                                        </label>
+                                        <label class="desktop-settings-check">
+                                            <input type="checkbox" data-compendium-trigger-tags disabled>
+                                            <span>标签</span>
+                                        </label>
+                                        <label class="desktop-settings-check">
+                                            <input type="checkbox" data-compendium-trigger-pov disabled>
+                                            <span>POV 人物匹配</span>
+                                        </label>
+                                        <label class="desktop-settings-check">
+                                            <input type="checkbox" data-compendium-trigger-scene-characters disabled>
+                                            <span>场景人物匹配</span>
+                                        </label>
+                                    </div>
+                                </fieldset>
+                            </details>
                         </div>
                     </form>
                 </section>
@@ -190,7 +210,7 @@
             <dialog class="desktop-modal desktop-compendium-agent-modal" data-compendium-agent-modal>
                 <form method="dialog" class="desktop-modal-card desktop-compendium-agent-form" data-compendium-agent-form>
                     <header class="desktop-modal-header">
-                        <div><p class="desktop-section-kicker">Compendium Agent</p><h2>资料库体检</h2></div>
+                        <div><p class="desktop-section-kicker">资料管家</p><h2>资料库体检</h2></div>
                         <button class="desktop-secondary-action" type="button" data-compendium-agent-cancel>关闭</button>
                     </header>
                     <p class="desktop-compendium-agent-intro">只分析当前项目资料卡，不读取小说正文。修改建议会先预览，确认后才写入并创建备份。</p>
@@ -206,7 +226,7 @@
             <dialog class="desktop-modal desktop-compendium-agent-qa-modal" data-compendium-agent-qa-modal>
                 <form method="dialog" class="desktop-modal-card desktop-compendium-agent-form">
                     <header class="desktop-modal-header">
-                        <div><p class="desktop-section-kicker">Compendium Agent</p><h2>资料库问答</h2></div>
+                        <div><p class="desktop-section-kicker">资料管家</p><h2>资料库问答</h2></div>
                         <button class="desktop-secondary-action" type="button" data-compendium-agent-qa-cancel>关闭</button>
                     </header>
                     <p class="desktop-compendium-agent-intro">先检索本地资料卡，再基于命中资料回答。不会读取小说正文，也不会改动资料。</p>
