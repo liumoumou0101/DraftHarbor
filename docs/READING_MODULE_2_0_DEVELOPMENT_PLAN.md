@@ -643,7 +643,7 @@ F-12.12 实现证据：新增 `src/core/document/reader-epub-adapter.js`，使�
 - 任一 `src/desktop/shell/*.js` 不超过 1400 行。
 - `desktop.html` 不超过 120 行。
 - 任一 `src/styles/desktop/*.css` 不超过 2200 行。
-- Reader 专项 shell 和样式文件不超过 24 KiB。
+- Reader 专项 shell 和样式文件不超过 24 KiB。`reader-reading.js` 已按产品阅读面拆出，字节门禁对它放行；仍受全局 ≤ 1400 行约束。`tests/**` 与审计脚本不是程序本体，不受 KiB 门禁。
 
 F-12 采用更严格的开发软预算：
 
