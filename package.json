@@ -1,6 +1,6 @@
 {
     "name": "draftharbor-desktop",
-    "version": "1.2.3",
+    "version": "1.2.4",
     "private": true,
     "description": "稿湾：桌面优先、本地优先的 AI 长篇创作工作台。",
     "author": "DraftHarbor contributors",
@@ -75,6 +75,7 @@
                 "portable"
             ]
         },
+        "publish": "never",
         "nsis": {
             "oneClick": false,
             "allowToChangeInstallationDirectory": true,
