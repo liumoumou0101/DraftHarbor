@@ -84,20 +84,6 @@
     white-space: nowrap;
 }
 
-.desktop-reader-content.is-reader-transitioning[data-reader-transition="fade"] { animation: reader-page-fade 180ms ease-out both; }
-.desktop-reader-content.is-reader-transitioning[data-reader-transition="slide"][data-reader-direction="next"] { animation: reader-page-slide-next 220ms cubic-bezier(0.22, 0.72, 0.25, 1) both; }
-.desktop-reader-content.is-reader-transitioning[data-reader-transition="slide"][data-reader-direction="previous"] { animation: reader-page-slide-previous 220ms cubic-bezier(0.22, 0.72, 0.25, 1) both; }
-.desktop-reader-content.is-reader-transitioning[data-reader-transition="cover"][data-reader-direction="next"] { animation: reader-page-cover-next 240ms cubic-bezier(0.22, 0.72, 0.25, 1) both; }
-.desktop-reader-content.is-reader-transitioning[data-reader-transition="cover"][data-reader-direction="previous"] { animation: reader-page-cover-previous 240ms cubic-bezier(0.22, 0.72, 0.25, 1) both; }
-.desktop-reader-content.is-reader-transitioning[data-reader-transition="curl"][data-reader-direction="next"] {
-    transform-style: preserve-3d;
-    animation: reader-page-flow-curl-next 640ms cubic-bezier(0.2, 0.72, 0.2, 1) both;
-}
-.desktop-reader-content.is-reader-transitioning[data-reader-transition="curl"][data-reader-direction="previous"] {
-    transform-style: preserve-3d;
-    animation: reader-page-flow-curl-previous 640ms cubic-bezier(0.2, 0.72, 0.2, 1) both;
-}
-
 .desktop-reader-page-flip-host {
     position: absolute;
     z-index: 4;
@@ -138,9 +124,6 @@
     background: var(--reader-page, #f1eadb);
 }
 
-/* Position the paper itself around the live spread's spine instead of covering
-   the animation with a high-z-index center mask. The individual translate
-   property composes with StPageFlip's inline transform without changing width. */
 .desktop-reader-page-flip-host[data-reader-page-flip-spread="double"] .desktop-reader-page-flip-sheet.--simple.--left {
     translate: calc(var(--reader-page-flip-spine-gap, 28px) / -2) 0;
 }
@@ -168,21 +151,17 @@
 }
 
 .desktop-reader-page-transition-layer {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-    isolation: isolate;
+    position: absolute; z-index: 3; width: auto; height: auto; min-height: 0;
+    overflow: hidden; isolation: isolate; contain: paint; pointer-events: none;
 }
 
+.desktop-reader-content.is-reader-deck-transition-active { position: relative; }
+.desktop-reader-content.is-reader-deck-transition-active > .desktop-reader-page-deck { visibility: hidden; }
+
 .desktop-reader-page-transition-layer > .desktop-reader-page-deck {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    height: 100%;
-    pointer-events: none;
-    will-change: transform, opacity, filter;
+    position: absolute; inset: 0; z-index: 1; height: 100%;
+    background: var(--reader-environment, var(--reader-shell-surface, #d2c8b8));
+    pointer-events: none; backface-visibility: hidden; will-change: transform, opacity;
 }
 
 .desktop-reader-page-transition-layer > .desktop-reader-page-deck > .desktop-reader-page {
@@ -191,13 +170,44 @@
 
 .desktop-reader-page-transition-layer > .desktop-reader-page-deck.is-reader-transitioning-in {
     z-index: 2;
-    pointer-events: auto;
+    pointer-events: none;
+}
+
+/* In a two-page spread, the paper slots and their center gutter are the book
+   frame. Slide and cover move snapshots inside those slots, never the spine. */
+.desktop-reader-page-transition-layer.is-reader-transitioning > .desktop-reader-page-deck.is-reader-spine-locked {
+    animation: none !important;
+    transform: none !important;
+    background: transparent;
+    will-change: auto;
+}
+
+.desktop-reader-transition-page-slot {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 4px;
+}
+
+.desktop-reader-transition-page-slot > .desktop-reader-page {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.is-reader-spine-locked > .desktop-reader-transition-page-slot > .desktop-reader-page {
+    animation: var(--reader-spread-page-motion);
+    will-change: transform;
 }
 
 .desktop-reader-page-transition-layer.is-reader-transitioning[data-reader-transition="fade"] > .desktop-reader-page-deck.is-reader-transitioning-out {
+    z-index: 3;
     animation: reader-page-fade-out 220ms ease-out both;
 }
 .desktop-reader-page-transition-layer.is-reader-transitioning[data-reader-transition="fade"] > .desktop-reader-page-deck.is-reader-transitioning-in {
+    z-index: 2;
     animation: reader-page-fade-in 220ms ease-out both;
 }
 
@@ -264,17 +274,15 @@
     animation: reader-page-curl-in-previous 640ms cubic-bezier(0.2, 0.72, 0.2, 1) both;
 }
 
-@keyframes reader-page-fade-out { from { opacity: 1; } to { opacity: 0.12; } }
-@keyframes reader-page-fade-in { from { opacity: 0.12; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes reader-page-slide-out-next { from { opacity: 1; transform: translateX(0); } to { opacity: 0.12; transform: translateX(-38px); } }
-@keyframes reader-page-slide-in-next { from { opacity: 0.2; transform: translateX(38px); } to { opacity: 1; transform: translateX(0); } }
-@keyframes reader-page-slide-out-previous { from { opacity: 1; transform: translateX(0); } to { opacity: 0.12; transform: translateX(38px); } }
-@keyframes reader-page-slide-in-previous { from { opacity: 0.2; transform: translateX(-38px); } to { opacity: 1; transform: translateX(0); } }
-@keyframes reader-page-cover-next { from { opacity: 0.94; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
-@keyframes reader-page-cover-previous { from { opacity: 0.94; transform: translateX(-100%); } to { opacity: 1; transform: translateX(0); } }
-@keyframes reader-page-cover-out { from { opacity: 1; } to { opacity: 0.9; } }
-@keyframes reader-page-cover-in-next { from { opacity: 0.94; transform: translateX(100%); box-shadow: -34px 0 46px rgba(0, 0, 0, 0.24); } to { opacity: 1; transform: translateX(0); box-shadow: 0 22px 58px rgba(0, 0, 0, 0.2); } }
-@keyframes reader-page-cover-in-previous { from { opacity: 0.94; transform: translateX(-100%); box-shadow: 34px 0 46px rgba(0, 0, 0, 0.24); } to { opacity: 1; transform: translateX(0); box-shadow: 0 22px 58px rgba(0, 0, 0, 0.2); } }
+@keyframes reader-page-fade-out { 0% { opacity: 1; visibility: visible; } 46% { opacity: 0; visibility: visible; } 46.01%, 100% { opacity: 0; visibility: hidden; } }
+@keyframes reader-page-fade-in { 0%, 52% { opacity: 0; visibility: hidden; } 52.01% { opacity: 0; visibility: visible; } 100% { opacity: 1; visibility: visible; } }
+@keyframes reader-page-slide-out-next { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+@keyframes reader-page-slide-in-next { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes reader-page-slide-out-previous { from { transform: translateX(0); } to { transform: translateX(100%); } }
+@keyframes reader-page-slide-in-previous { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes reader-page-cover-out { from, to { opacity: 1; } }
+@keyframes reader-page-cover-in-next { from { transform: translateX(100%); box-shadow: -34px 0 46px rgba(0, 0, 0, 0.24); } to { transform: translateX(0); box-shadow: 0 22px 58px rgba(0, 0, 0, 0.2); } }
+@keyframes reader-page-cover-in-previous { from { transform: translateX(-100%); box-shadow: 34px 0 46px rgba(0, 0, 0, 0.24); } to { transform: translateX(0); box-shadow: 0 22px 58px rgba(0, 0, 0, 0.2); } }
 @keyframes reader-page-curl-out-next {
     0% { opacity: 1; transform: rotateY(0deg) translateX(0) scale(1); filter: brightness(1); }
     58% { opacity: 0.94; transform: rotateY(-7deg) translateX(-2.5%) scale(0.998); filter: brightness(0.92); }

@@ -8,6 +8,10 @@
     const LAYOUT_MODES = Object.freeze(['flow', 'single-page', 'double-page', 'illustrated', 'auto']);
     const BREAK_AFTER = Object.freeze(' \t\r\n.,!?;:，。！？；：、，。！？；：、)）】》」』”’〕〉》〉》.!?'.split(''));
     const BREAK_BEFORE = Object.freeze('([{（【《「『“‘'.split(''));
+    const GRAPHEME_SEGMENTER = typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
+        ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+        : null;
+    const GRAPHEME_BOUNDARY_CACHE = new Map();
 
     function finiteNumber(value, fallback, minimum, maximum) {
         const number = Number(value);
@@ -21,7 +25,11 @@
 
     function effectiveLayoutMode(requestedMode, viewportWidth, options = {}) {
         const requested = cleanMode(requestedMode);
-        if (requested === 'flow' || requested === 'single-page') return requested;
+        if (requested === 'flow') return requested;
+        const viewportHeight = Number(options.viewportHeight);
+        const minimumPageHeight = finiteNumber(options.minimumPageHeight, 240, 120, 720);
+        if (Number.isFinite(viewportHeight) && viewportHeight < minimumPageHeight) return 'flow';
+        if (requested === 'single-page') return requested;
         const minimumPageWidth = finiteNumber(options.minimumPageWidth, 360, 240, 720);
         const minimumForcedPageWidth = finiteNumber(options.minimumForcedPageWidth, 220, 160, 480);
         const gap = finiteNumber(options.gap, 28, 0, 96);
@@ -89,6 +97,19 @@
         );
     }
 
+    function graphemeBoundaries(text) {
+        if (!GRAPHEME_SEGMENTER) return null;
+        const cached = GRAPHEME_BOUNDARY_CACHE.get(text);
+        if (cached) return cached;
+        const boundaries = Array.from(GRAPHEME_SEGMENTER.segment(text), (item) => item.index);
+        if (boundaries[boundaries.length - 1] !== text.length) boundaries.push(text.length);
+        GRAPHEME_BOUNDARY_CACHE.set(text, boundaries);
+        while (GRAPHEME_BOUNDARY_CACHE.size > 16) {
+            GRAPHEME_BOUNDARY_CACHE.delete(GRAPHEME_BOUNDARY_CACHE.keys().next().value);
+        }
+        return boundaries;
+    }
+
     function safeEndOffset(text, candidate, start) {
         let offset = Math.max(start + 1, Math.min(text.length, candidate));
         if (offset < text.length && text.charCodeAt(offset) >= 0xDC00 && text.charCodeAt(offset) <= 0xDFFF) offset -= 1;
@@ -97,11 +118,29 @@
         return Math.max(start + 1, Math.min(text.length, offset));
     }
 
+    function safeBackwardEndOffset(text, candidate, start, boundaries) {
+        let offset = Math.max(start + 1, Math.min(text.length, candidate));
+        if (boundaries && offset < text.length) {
+            let low = 0;
+            let high = boundaries.length - 1;
+            while (low < high) {
+                const middle = Math.ceil((low + high) / 2);
+                if (boundaries[middle] <= offset) low = middle;
+                else high = middle - 1;
+            }
+            if (boundaries[low] < offset) offset = boundaries[low] > start ? boundaries[low] : boundaries[low + 1];
+        }
+        if (offset < text.length && text.charCodeAt(offset) >= 0xDC00 && text.charCodeAt(offset) <= 0xDFFF) offset -= 1;
+        while (offset > start && isCombiningMarkAt(text, offset)) offset -= 1;
+        return Math.max(start + 1, Math.min(text.length, offset));
+    }
+
     function isNaturalBreak(text, offset, start) {
         if (offset <= start || offset >= text.length) return offset > start;
         const before = text[offset - 1];
         const after = text[offset];
-        if (BREAK_BEFORE.includes(after) || isCombiningMarkAt(text, offset)) return false;
+        if (BREAK_BEFORE.includes(after) || isClosingPunctuation(after) || isCombiningMarkAt(text, offset)) return false;
+        if (/\s/u.test(after)) return false;
         if (BREAK_AFTER.includes(before)) return true;
         if (/\s/u.test(before)) return true;
         if (/\p{Script=Han}/u.test(before) && !isClosingPunctuation(after)) return true;
@@ -121,6 +160,19 @@
         const upper = Math.min(text.length, hard + window);
         for (let offset = hard + 1; offset <= upper; offset += 1) {
             if (isNaturalBreak(text, offset, start)) return safeEndOffset(text, offset, start);
+        }
+        return hard;
+    }
+
+    function fittedBreakOffset(text, maximum, start, options = {}) {
+        const boundaries = graphemeBoundaries(text);
+        const hard = safeBackwardEndOffset(text, maximum, start, boundaries);
+        if (hard >= text.length || options.keepWords === false && options.keepPunctuation === false) return hard;
+        const window = Math.max(8, Math.floor(finiteNumber(options.breakWindow, 48, 8, 160)));
+        const lower = Math.max(start + 1, hard - window);
+        for (let offset = hard; offset >= lower; offset -= 1) {
+            const safe = safeBackwardEndOffset(text, offset, start, boundaries);
+            if (safe <= hard && isNaturalBreak(text, safe, start)) return safe;
         }
         return hard;
     }
@@ -160,7 +212,7 @@
                 let candidate = startOffset + remaining;
                 const tail = text.length - candidate;
                 if (tail > 0 && tail < minimumTail && candidate - startOffset > minimumTail) candidate = text.length - minimumTail;
-                const endOffset = preferredBreakOffset(text, candidate, startOffset, breakOptions);
+                const endOffset = fittedBreakOffset(text, candidate, startOffset, breakOptions);
                 page.segments.push({ blockId, blockIndex, type, startOffset, endOffset });
                 page.weight += endOffset - startOffset;
                 startOffset = endOffset;
@@ -206,7 +258,7 @@
 
     function layoutCacheKey(input = {}) {
         const normalized = {
-            layoutVersion: 4,
+            layoutVersion: 5,
             revisionId: String(input.revisionId || ''),
             chapterId: String(input.chapterId || ''),
             requestedMode: cleanMode(input.requestedMode),
@@ -240,6 +292,7 @@
         locatorPositionForPage,
         flowWindowForAnchor,
         preferredBreakOffset,
+        fittedBreakOffset,
         layoutCacheKey
     };
 });

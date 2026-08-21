@@ -822,8 +822,40 @@ async function selectReaderStudioSection(page, section) {
         await page.waitForFunction(() => readerState.reducedMotionOverride === false && readerEffectiveTransition() === 'slide');
         const motionKey = await page.evaluate(() => readerState.pageIndex < readerState.pages.length - 1 ? 'ArrowRight' : 'ArrowLeft');
         await page.keyboard.press(motionKey);
-        await page.waitForFunction(() => getComputedStyle(document.querySelector('.desktop-reader-page-deck')).animationName.includes('slide'));
-        await page.waitForTimeout(300);
+        await page.waitForFunction(() => {
+            const snapshot = document.querySelector('.desktop-reader-page-transition-layer .is-reader-transitioning-in');
+            return !!snapshot && getComputedStyle(snapshot).animationName.includes('slide');
+        });
+        const snapshotTransition = await page.evaluate(() => {
+            const content = document.querySelector('[data-reader-content]');
+            const live = content.querySelector(':scope > .desktop-reader-page-deck');
+            window.__readerTransitionLiveDeck = live;
+            const layer = content.querySelector(':scope > .desktop-reader-page-transition-layer');
+            return {
+                liveMounted: !!live,
+                liveVisibility: getComputedStyle(live).visibility,
+                snapshotCount: layer?.querySelectorAll(':scope > .desktop-reader-page-deck').length || 0,
+                layerHiddenFromAccessibility: layer?.getAttribute('aria-hidden'),
+                active: content.classList.contains('is-reader-deck-transition-active')
+            };
+        });
+        assert.deepStrictEqual(snapshotTransition, {
+            liveMounted: true,
+            liveVisibility: 'hidden',
+            snapshotCount: 2,
+            layerHiddenFromAccessibility: 'true',
+            active: true
+        }, 'built-in transitions must keep the authoritative destination mounted behind two primed snapshots');
+        await page.waitForFunction(() => !document.querySelector('.desktop-reader-page-transition-layer'));
+        assert.deepStrictEqual(await page.evaluate(() => {
+            const content = document.querySelector('[data-reader-content]');
+            const live = content.querySelector(':scope > .desktop-reader-page-deck');
+            return {
+                active: content.classList.contains('is-reader-deck-transition-active'),
+                visibility: getComputedStyle(live).visibility,
+                sameDeck: window.__readerTransitionLiveDeck === live
+            };
+        }), { active: false, visibility: 'visible', sameDeck: true }, 'built-in transition cleanup must reveal the existing authoritative deck without replacing it');
 
         await page.click('[data-reader-settings-toggle]');
         await selectReaderStudioSection(page, 'motion');

@@ -81,7 +81,8 @@
         const floatProgress = floatHud.querySelector('[data-reader-float-progress]');
         if (floatTitle && title) floatTitle.textContent = title.textContent;
         if (floatProgress && progress) floatProgress.textContent = progress.textContent;
-        floatHud.setAttribute('aria-hidden', state === 'idle' ? 'false' : 'true');
+        const hidden = state === 'idle' ? 'false' : 'true';
+        if (floatHud.getAttribute('aria-hidden') !== hidden) floatHud.setAttribute('aria-hidden', hidden);
     }
 
     function readerHudTransition(event, context = readerHudContext()) {

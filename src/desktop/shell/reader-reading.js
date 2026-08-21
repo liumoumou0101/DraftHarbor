@@ -6,6 +6,7 @@
     let readerPageFitAttempts = 0;
     let readerPageFitBaseKey = '';
     let readerPageFitFrame = 0;
+    let readerDeckTransitionSession = null;
 
     function createReaderBlockNode(block, startOffset = 0, endOffset) {
         const heading = block.type === 'heading' || block.type === 'scene-title';
@@ -77,6 +78,8 @@
         const width = content ? content.clientWidth : 900;
         const height = content ? content.clientHeight : 700;
         const effective = window.DraftHarborReaderLayout.effectiveLayoutMode(readerState.layoutMode, width, {
+            viewportHeight: height,
+            minimumPageHeight: 240,
             minimumPageWidth: 360,
             minimumForcedPageWidth: 220,
             gap: readerState.bookSpine || 28
@@ -209,6 +212,205 @@
         return pageNode;
     }
 
+    function createReaderPaginationProbe(metrics) {
+        const stage = document.querySelector('[data-reader-theme-panel]');
+        const host = document.createElement('div');
+        host.className = 'desktop-reader-content desktop-reader-pagination-probe';
+        host.dataset.readerLayout = metrics.effective;
+        host.setAttribute('aria-hidden', 'true');
+        Object.assign(host.style, {
+            position: 'fixed',
+            left: '-100000px',
+            top: '0',
+            zIndex: '-1',
+            width: `${metrics.width}px`,
+            height: `${metrics.height}px`,
+            visibility: 'hidden',
+            pointerEvents: 'none',
+            contain: 'strict'
+        });
+        const deck = document.createElement('div');
+        deck.className = 'desktop-reader-page-deck';
+        deck.dataset.readerSpread = metrics.effective === 'double-page' ? 'double' : 'single';
+        const pageNode = document.createElement('section');
+        pageNode.className = 'desktop-reader-page';
+        deck.appendChild(pageNode);
+        host.appendChild(deck);
+        (stage || document.body).appendChild(host);
+        return { host, pageNode };
+    }
+
+    function readerProbeTextFits(pageNode, node, text, startOffset, length) {
+        node.textContent = text.slice(startOffset, startOffset + length);
+        return pageNode.scrollHeight <= pageNode.clientHeight + 1
+            && pageNode.scrollWidth <= pageNode.clientWidth + 1;
+    }
+
+    function readerFittingTextLength(pageNode, node, text, startOffset, estimatedCapacity) {
+        const remaining = text.length - startOffset;
+        if (remaining <= 0) return 0;
+        let low = 0;
+        let high = Math.min(remaining, Math.max(64, Math.ceil(estimatedCapacity * 1.35)));
+        if (readerProbeTextFits(pageNode, node, text, startOffset, high)) {
+            low = high;
+            while (low < remaining) {
+                high = Math.min(remaining, Math.max(low + 1, low * 2));
+                if (!readerProbeTextFits(pageNode, node, text, startOffset, high)) break;
+                low = high;
+            }
+            if (low === remaining) return low;
+        }
+        while (low + 1 < high) {
+            const middle = Math.floor((low + high) / 2);
+            if (readerProbeTextFits(pageNode, node, text, startOffset, middle)) low = middle;
+            else high = middle;
+        }
+        node.textContent = text.slice(startOffset, startOffset + low);
+        return low;
+    }
+
+    function readerRenderedLineCount(node) {
+        const textNode = node && node.firstChild;
+        if (!textNode || !textNode.nodeValue) return 0;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const tops = new Set(Array.from(range.getClientRects())
+            .filter((rect) => rect.height > 0.5 && rect.width >= 0)
+            .map((rect) => Math.round(rect.top * 2)));
+        return tops.size;
+    }
+
+    function readerLastLineStart(node) {
+        const textNode = node && node.firstChild;
+        const length = textNode && textNode.nodeValue ? textNode.nodeValue.length : 0;
+        if (length < 2) return 0;
+        const range = document.createRange();
+        const characterTop = (offset) => {
+            range.setStart(textNode, Math.max(0, offset));
+            range.setEnd(textNode, Math.min(length, offset + 1));
+            return range.getBoundingClientRect().top;
+        };
+        const lastTop = characterTop(length - 1);
+        let low = 0;
+        let high = length - 1;
+        while (low < high) {
+            const middle = Math.floor((low + high) / 2);
+            if (characterTop(middle) >= lastTop - 0.5) high = middle;
+            else low = middle + 1;
+        }
+        return low;
+    }
+
+    function buildMeasuredReaderPages(metrics, estimatedCapacity) {
+        if (!document.createRange || !metrics.content) return null;
+        const chapter = readerState.currentChapter || {};
+        const blocks = Array.isArray(chapter.blocks) ? chapter.blocks : [];
+        const probe = createReaderPaginationProbe(metrics);
+        const tailProbe = createReaderPaginationProbe(metrics);
+        const pages = [];
+        let page = { pageIndex: 0, weight: 0, segments: [] };
+
+        const commitPage = () => {
+            if (page.segments.length || !pages.length) pages.push(page);
+            page = { pageIndex: pages.length, weight: 0, segments: [] };
+            probe.pageNode.replaceChildren();
+        };
+        const appendSegment = (block, blockIndex, type, startOffset, endOffset, node) => {
+            node.dataset.readerStartOffset = String(startOffset);
+            node.dataset.readerEndOffset = String(endOffset);
+            page.segments.push({ blockId: block.blockId, blockIndex, type, startOffset, endOffset });
+            page.weight += endOffset - startOffset;
+        };
+        const moveTrailingHeading = () => {
+            const segment = page.segments[page.segments.length - 1];
+            if (!segment || !['heading', 'scene-title'].includes(segment.type) || page.segments.length < 2) return null;
+            page.segments.pop();
+            page.weight -= segment.endOffset - segment.startOffset;
+            probe.pageNode.lastElementChild?.remove();
+            commitPage();
+            const block = blocks[segment.blockIndex];
+            const node = createReaderBlockNode(block, segment.startOffset, segment.endOffset);
+            probe.pageNode.appendChild(node);
+            appendSegment(block, segment.blockIndex, segment.type, segment.startOffset, segment.endOffset, node);
+            return segment;
+        };
+
+        try {
+            blocks.forEach((block, blockIndex) => {
+                const text = String(block && block.text || '');
+                const type = String(block && block.type || 'paragraph');
+                const normalizedBlock = { ...block, blockId: String(block && block.blockId || `block-${blockIndex + 1}`), type, text };
+                if (!text.length) {
+                    let node = createReaderBlockNode(normalizedBlock, 0, 0);
+                    probe.pageNode.appendChild(node);
+                    if (!readerProbeTextFits(probe.pageNode, node, '', 0, 0) && page.segments.length) {
+                        node.remove();
+                        commitPage();
+                        node = createReaderBlockNode(normalizedBlock, 0, 0);
+                        probe.pageNode.appendChild(node);
+                    }
+                    appendSegment(normalizedBlock, blockIndex, type, 0, 0, node);
+                    return;
+                }
+                let startOffset = 0;
+                while (startOffset < text.length) {
+                    const node = createReaderBlockNode(normalizedBlock, startOffset, startOffset);
+                    probe.pageNode.appendChild(node);
+                    let fittingLength = readerFittingTextLength(probe.pageNode, node, text, startOffset, estimatedCapacity);
+                    if (!fittingLength && page.segments.length) {
+                        node.remove();
+                        if (!moveTrailingHeading()) commitPage();
+                        continue;
+                    }
+                    if (!fittingLength) fittingLength = 1;
+                    let endOffset = window.DraftHarborReaderLayout.fittedBreakOffset(
+                        text,
+                        startOffset + fittingLength,
+                        startOffset,
+                        { breakWindow: Math.min(160, Math.max(16, Math.floor(estimatedCapacity * 0.12))) }
+                    );
+                    node.textContent = text.slice(startOffset, endOffset);
+                    const split = endOffset < text.length;
+                    const lineCount = readerRenderedLineCount(node);
+                    if (split && page.segments.length && lineCount < Math.max(1, readerState.orphanLines || 2)) {
+                        node.remove();
+                        if (!moveTrailingHeading()) commitPage();
+                        continue;
+                    }
+                    if (split && text.length - endOffset <= estimatedCapacity * 2) {
+                        const tailNode = createReaderBlockNode(normalizedBlock, endOffset, text.length);
+                        tailProbe.pageNode.replaceChildren(tailNode);
+                        let tailLines = readerRenderedLineCount(tailNode);
+                        let currentLines = lineCount;
+                        let widowAttempts = 0;
+                        while (tailLines < Math.max(1, readerState.widowLines || 2)
+                            && currentLines > Math.max(1, readerState.orphanLines || 2)
+                            && widowAttempts < 8) {
+                            widowAttempts += 1;
+                            const lineStart = readerLastLineStart(node);
+                            if (lineStart <= 0) break;
+                            endOffset = window.DraftHarborReaderLayout.fittedBreakOffset(
+                                text, startOffset + lineStart, startOffset, { breakWindow: 48 }
+                            );
+                            node.textContent = text.slice(startOffset, endOffset);
+                            tailNode.textContent = text.slice(endOffset);
+                            currentLines = readerRenderedLineCount(node);
+                            tailLines = readerRenderedLineCount(tailNode);
+                        }
+                    }
+                    appendSegment(normalizedBlock, blockIndex, type, startOffset, endOffset, node);
+                    startOffset = endOffset;
+                    if (startOffset < text.length) commitPage();
+                }
+            });
+            if (page.segments.length || !pages.length) commitPage();
+            return pages;
+        } finally {
+            probe.host.remove();
+            tailProbe.host.remove();
+        }
+    }
+
     function updateReaderPageControls() {
         const paged = readerState.effectiveLayoutMode !== 'flow';
         const controls = document.querySelector('[data-reader-page-controls]');
@@ -233,7 +435,7 @@
     }
 
     function readerVisiblePagesOverflow() {
-        return Array.from(document.querySelectorAll('.desktop-reader-page-deck > [data-reader-page]')).some((node) => (
+        return Array.from(document.querySelectorAll('[data-reader-content] > .desktop-reader-page-deck > [data-reader-page]')).some((node) => (
             node.scrollHeight > node.clientHeight + 2
         ));
     }
@@ -255,6 +457,7 @@
     }
 
     function renderReaderPages(locator) {
+        stopReaderDeckTransition();
         const metrics = readerLayoutMetrics();
         const content = metrics.content;
         const baseKey = readerLayoutKey(metrics);
@@ -263,7 +466,7 @@
             readerPageFitScale = 1;
             readerPageFitAttempts = 0;
         }
-        const key = `${baseKey}|fit:${readerPageFitScale}`;
+        const key = `${baseKey}|measured:1|fit:${readerPageFitScale}`;
         let pages = readerState.layoutCache.get(key);
         if (!validReaderPages(pages)) {
             readerState.layoutCache.delete(key);
@@ -281,7 +484,12 @@
                 pageMargin: readerState.pageMargin || 48
             });
             const capacity = Math.max(64, Math.floor(estimated * readerPageFitScale));
-            pages = window.DraftHarborReaderLayout.buildReaderPages(readerState.currentChapter, { capacity });
+            pages = buildMeasuredReaderPages(metrics, capacity)
+                || window.DraftHarborReaderLayout.buildReaderPages(readerState.currentChapter, {
+                    capacity,
+                    orphanLines: readerState.orphanLines || 2,
+                    widowLines: readerState.widowLines || 2
+                });
             cacheReaderPages(key, pages);
         }
         readerState.pages = pages;
@@ -312,6 +520,7 @@
     function renderReaderReading(options = {}) {
         if (!readerState.currentChapter || !window.DraftHarborReaderLayout) return;
         window.stopReaderPageFlip?.();
+        stopReaderDeckTransition();
         const metrics = readerLayoutMetrics();
         if (!metrics.content) return;
         const requestedLocator = options.locator || readerState.anchorLocator
@@ -404,6 +613,29 @@
         return true;
     }
 
+    function stopReaderDeckTransition() {
+        readerDeckTransitionSession?.finish();
+    }
+
+    function lockReaderTransitionSpine(deck, transition, direction, phase) {
+        if (!deck || deck.dataset.readerSpread !== 'double' || !['slide', 'cover'].includes(transition)) return;
+        deck.classList.add('is-reader-spine-locked');
+        const motionName = transition === 'slide'
+            ? `reader-page-slide-${phase}-${direction}`
+            : phase === 'in' ? `reader-page-cover-in-${direction}` : '';
+        if (motionName) {
+            const duration = transition === 'slide' ? 260 : 300;
+            deck.style.setProperty('--reader-spread-page-motion', `${motionName} ${duration}ms cubic-bezier(0.22, 0.72, 0.25, 1) both`);
+        }
+        Array.from(deck.children).forEach((pageNode) => {
+            if (!pageNode.classList.contains('desktop-reader-page')) return;
+            const slot = document.createElement('div');
+            slot.className = 'desktop-reader-transition-page-slot';
+            pageNode.replaceWith(slot);
+            slot.appendChild(pageNode);
+        });
+    }
+
     function animateReaderPageTurn(direction, context = {}) {
         const content = document.querySelector('[data-reader-content]');
         const transitionApi = window.DraftHarborReaderTransition;
@@ -416,6 +648,7 @@
         const transition = adapter.transition;
         const outgoingDeck = context.outgoingDeck;
         const incomingDeck = context.incomingDeck;
+        stopReaderDeckTransition();
         if (!content || transition === 'none') return;
 
         if (transition === 'curl' && typeof window.startReaderPageFlip === 'function' && window.startReaderPageFlip({
@@ -432,6 +665,10 @@
         layer.className = 'desktop-reader-page-transition-layer';
         layer.dataset.readerTransition = transition;
         layer.dataset.readerDirection = direction < 0 ? 'previous' : 'next';
+        layer.setAttribute('aria-hidden', 'true');
+        layer.inert = true;
+        const contentStyle = window.getComputedStyle(content);
+        layer.style.inset = `${contentStyle.paddingTop} ${contentStyle.paddingRight} ${contentStyle.paddingBottom} ${contentStyle.paddingLeft}`;
 
         outgoingDeck.classList.remove('is-reader-transitioning', 'is-reader-transitioning-in', 'is-reader-transitioning-out');
         outgoingDeck.classList.add('is-reader-transitioning-out');
@@ -440,23 +677,40 @@
         outgoingDeck.setAttribute('aria-hidden', 'true');
         outgoingDeck.inert = true;
 
-        incomingDeck.classList.add('is-reader-transitioning-in');
-        incomingDeck.dataset.readerTransition = transition;
-        incomingDeck.dataset.readerDirection = layer.dataset.readerDirection;
-        layer.append(outgoingDeck, incomingDeck);
-        content.replaceChildren(layer);
+        const animatedIncomingDeck = incomingDeck.cloneNode(true);
+        animatedIncomingDeck.classList.add('is-reader-transitioning-in');
+        animatedIncomingDeck.dataset.readerTransition = transition;
+        animatedIncomingDeck.dataset.readerDirection = layer.dataset.readerDirection;
+        lockReaderTransitionSpine(outgoingDeck, transition, layer.dataset.readerDirection, 'out');
+        lockReaderTransitionSpine(animatedIncomingDeck, transition, layer.dataset.readerDirection, 'in');
+        layer.append(outgoingDeck, animatedIncomingDeck);
+        content.appendChild(layer);
 
+        const animatedIncomingTarget = animatedIncomingDeck.querySelector('.desktop-reader-transition-page-slot > .desktop-reader-page')
+            || animatedIncomingDeck;
+
+        let timer;
         let finished = false;
         const finish = () => {
             if (finished) return;
             finished = true;
-            incomingDeck.classList.remove('is-reader-transitioning-in', 'is-reader-transitioning');
-            if (layer.isConnected) layer.replaceWith(incomingDeck);
+            window.clearTimeout(timer);
+            layer.remove();
+            if (readerDeckTransitionSession?.finish === finish) {
+                content.classList.remove('is-reader-deck-transition-active');
+                readerDeckTransitionSession = null;
+            }
         };
-        incomingDeck.addEventListener('animationend', finish, { once: true });
-        window.requestAnimationFrame(() => {
-            if (!layer.isConnected) return;
-            layer.classList.add('is-reader-transitioning');
-            window.setTimeout(finish, Math.max(320, Number(adapter.durationMs) + 100));
+        readerDeckTransitionSession = { finish };
+        animatedIncomingTarget.addEventListener('animationend', (event) => {
+            if (event.target === animatedIncomingTarget) finish();
         });
+
+        // Match the curl adapter's double-buffer sequence: lay out the complete
+        // snapshots, prime their animation state, then hide the authoritative deck.
+        layer.getBoundingClientRect();
+        layer.classList.add('is-reader-transitioning');
+        window.getComputedStyle(animatedIncomingTarget).transform;
+        content.classList.add('is-reader-deck-transition-active');
+        timer = window.setTimeout(finish, Math.max(360, Number(adapter.durationMs) + 140));
     }
