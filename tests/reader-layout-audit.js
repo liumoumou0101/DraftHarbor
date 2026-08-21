@@ -115,6 +115,14 @@ async function selectReaderStudioSection(page, section) {
     const issues = [];
     for (const scenario of scenarios) {
       await page.setViewportSize({ width: scenario.width, height: scenario.height });
+      // Reader resize handling intentionally debounces repagination. Audit the
+      // settled layout rather than the old page snapshot during that interval.
+      await page.waitForTimeout(700);
+      await page.evaluate(() => {
+        readerState.hudMode = 'visible';
+        window.readerHudShow?.();
+      });
+      await page.waitForTimeout(220);
       await page.waitForFunction(() => {
         const content = document.querySelector('[data-reader-content]');
         return !!content && ['flow', 'single-page', 'double-page', 'illustrated'].includes(content.dataset.readerLayout);

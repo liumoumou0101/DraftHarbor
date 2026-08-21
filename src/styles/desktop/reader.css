@@ -10,6 +10,9 @@
         color: var(--reader-text, #2c2822);
     }
 
+    .desktop-app[data-view="reader"] { overflow: hidden; }
+    .desktop-app[data-view="reader"] > .desktop-rail { min-height: 0; overflow-y: auto; }
+
     .desktop-app[data-view="reader"] .desktop-main {
         grid-template-rows: auto minmax(0, 1fr);
     }

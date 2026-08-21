@@ -1,6 +1,6 @@
 {
     "name": "draftharbor-desktop",
-    "version": "1.2.4",
+    "version": "1.2.5",
     "private": true,
     "description": "稿湾：桌面优先、本地优先的 AI 长篇创作工作台。",
     "author": "DraftHarbor contributors",
@@ -17,7 +17,7 @@
     "scripts": {
         "desktop": "electron .",
         "pack": "electron-builder --dir",
-        "dist": "electron-builder",
+        "dist": "electron-builder --publish never",
         "packaged-smoke": "node tests/packaged-smoke.js",
         "installed-smoke": "node tests/installed-smoke.js",
         "smoke": "node tests/smoke.js",
@@ -75,7 +75,6 @@
                 "portable"
             ]
         },
-        "publish": "never",
         "nsis": {
             "oneClick": false,
             "allowToChangeInstallationDirectory": true,
