@@ -59,9 +59,11 @@ function bindReaderTouchZone(control, delta) {
         const inputType = control.dataset.readerInputType || 'pointer';
         if (control.dataset.readerSelectionSuppressed === 'true' || readerHasTextSelection() || !readerCanPageTurn(inputType)) {
             control.dataset.readerSelectionSuppressed = 'false';
+            if (event.detail > 0) control.blur();
             event.preventDefault();
             return;
         }
         queueReaderPageTurn(delta, { source: inputType });
+        if (event.detail > 0) control.blur();
     });
 }

@@ -290,6 +290,7 @@
     function updateReaderSetting(mutator, { markCustom = true, reflow = true, refreshProgress = false, releaseFocus = false, control = null } = {}) {
         const locator = typeof captureReaderPositionLocator === 'function' ? captureReaderPositionLocator() : null;
         window.stopReaderPageFlip?.();
+        window.stopReaderDeckTransition?.();
         const mutationResult = mutator();
         if (markCustom && mutationResult !== 'appearance-profile' && mutationResult !== 'noop') {
             readerState.appearanceProfileId = 'custom';

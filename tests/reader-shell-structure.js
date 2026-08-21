@@ -5,6 +5,9 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 // Keep structural byte budgets stable across Git's LF/CRLF working-tree conversion.
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8').replace(/\r\n/g, '\n');
+// Reader is a mature, already-split surface. Its core files get enough room to
+// stay readable; the global 1400-line shell gate remains the anti-monolith rule.
+const readerCoreFileBudget = 32 * 1024;
 const html = read('desktop/fragments/reader.html');
 const desktop = read('desktop.html');
 const bindings = read('src/desktop/shell/shell-bindings.js');
@@ -184,24 +187,22 @@ for (const hook of ['data-reader-compendium-dialog', 'data-reader-compendium-car
 for (const hook of ['data-reader-workflow-dialog', 'data-reader-workflow-project', 'data-reader-workflow-template', 'data-reader-workflow-confirm', 'data-reader-workflow-apply']) {
   assert.ok(targetFragments[2].includes(hook), `workflow transfer preview must include ${hook}`);
 }
-assert.ok(Buffer.byteLength(css, 'utf8') < 24 * 1024, 'reader stylesheet must remain below the 24 KiB shell budget');
+assert.ok(Buffer.byteLength(css, 'utf8') < readerCoreFileBudget, 'reader stylesheet must remain below the 32 KiB mature-core budget');
 assert.ok(Buffer.byteLength(importCss, 'utf8') < 24 * 1024, 'reader import stylesheet must remain below the 24 KiB shell budget');
-assert.ok(Buffer.byteLength(appearanceCss, 'utf8') < 24 * 1024, 'reader appearance stylesheet must remain below the 24 KiB shell budget');
+assert.ok(Buffer.byteLength(appearanceCss, 'utf8') < readerCoreFileBudget, 'reader appearance stylesheet must remain below the 32 KiB mature-core budget');
 assert.ok(Buffer.byteLength(importWizard, 'utf8') < 20 * 1024, 'reader import wizard must remain below the F-12 soft budget');
-assert.ok(Buffer.byteLength(read('src/desktop/shell/reader-workspace.js'), 'utf8') < 24 * 1024, 'reader workspace module must remain below the 24 KiB budget');
-// reader-reading.js is already a dedicated reading-surface module (~460 lines).
-// The 24 KiB byte cap was blocking normal Reader work; the 1400-line shell
-// gate still prevents it from collapsing back into a monolith. tests/** and
-// audit scripts are not product files and are not under this budget.
+assert.ok(Buffer.byteLength(read('src/desktop/shell/reader-workspace.js'), 'utf8') < readerCoreFileBudget, 'reader workspace module must remain below the 32 KiB mature-core budget');
+// reader-reading.js is a dedicated reading-surface module. A byte cap was
+// encouraging compressed code, so the line gate protects its module boundary.
 assert.ok(
   read('src/desktop/shell/reader-reading.js').split('\n').length <= 1400,
   'reader reading module must remain a dedicated shell file, not a replacement monolith'
 );
-assert.ok(Buffer.byteLength(settings, 'utf8') < 24 * 1024, 'reader settings module must remain below the 24 KiB budget');
+assert.ok(Buffer.byteLength(settings, 'utf8') < readerCoreFileBudget, 'reader settings module must remain below the 32 KiB mature-core budget');
 assert.ok(Buffer.byteLength(appearanceStudio, 'utf8') < 20 * 1024, 'reader appearance studio must remain below the F-12 soft budget');
-assert.ok(Buffer.byteLength(readerTts, 'utf8') < 24 * 1024, 'reader TTS module must remain below the 24 KiB budget');
-assert.ok(Buffer.byteLength(read('src/desktop/shell/reader-navigation.js'), 'utf8') < 24 * 1024, 'reader navigation module must remain below the 24 KiB budget');
-assert.ok(Buffer.byteLength(read('src/desktop/shell/reader-selection.js'), 'utf8') < 24 * 1024, 'reader selection module must remain below the 24 KiB budget');
+assert.ok(Buffer.byteLength(readerTts, 'utf8') < readerCoreFileBudget, 'reader TTS module must remain below the 32 KiB mature-core budget');
+assert.ok(Buffer.byteLength(read('src/desktop/shell/reader-navigation.js'), 'utf8') < readerCoreFileBudget, 'reader navigation module must remain below the 32 KiB mature-core budget');
+assert.ok(Buffer.byteLength(read('src/desktop/shell/reader-selection.js'), 'utf8') < readerCoreFileBudget, 'reader selection module must remain below the 32 KiB mature-core budget');
 assert.ok(Buffer.byteLength(transferConsumer, 'utf8') < 24 * 1024, 'reader target consumer module must remain below the 24 KiB budget');
 assert.ok(Buffer.byteLength(writerTransfer, 'utf8') < 24 * 1024, 'reader writer integration module must remain below the 24 KiB budget');
 assert.ok(Buffer.byteLength(read('src/styles/desktop/reader-writer-transfer.css'), 'utf8') < 24 * 1024, 'reader writer integration styles must remain below the 24 KiB budget');

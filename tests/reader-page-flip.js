@@ -20,6 +20,8 @@ assert.ok(adapter.indexOf("content.classList.add('is-reader-page-flip-active')")
 assert.ok(adapter.includes('pageFlip?.destroy()'), 'adapter must destroy each temporary PageFlip instance');
 assert.ok(adapter.includes('global.stopReaderPageFlip'), 'Reader settings and reflows must be able to cancel an active PageFlip session');
 assert.ok(reading.includes("transition === 'curl'") && reading.includes('window.startReaderPageFlip'), 'Reader must limit the adapter to curl transitions');
+assert.ok(reading.includes("incomingDeck.cloneNode(true)"), 'built-in transitions must animate a snapshot instead of the authoritative destination deck');
+assert.ok(reading.indexOf('layer.getBoundingClientRect()') < reading.indexOf("content.classList.add('is-reader-deck-transition-active')"), 'built-in transitions must prime the snapshot before hiding the authoritative deck');
 assert.ok(!Object.prototype.hasOwnProperty.call(packageJson.dependencies, 'page-flip'), 'vendored browser code must not pull the oversized npm package into production');
 assert.ok(Buffer.byteLength(adapter, 'utf8') < 12 * 1024, 'page-flip adapter must remain independently bounded');
 

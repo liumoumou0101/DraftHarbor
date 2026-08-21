@@ -10,6 +10,8 @@ assert.strictEqual(Layout.effectiveLayoutMode('illustrated', 920), 'illustrated'
 assert.strictEqual(Layout.effectiveLayoutMode('illustrated', 420), 'single-page');
 assert.strictEqual(Layout.effectiveLayoutMode('auto', 920), 'double-page');
 assert.strictEqual(Layout.effectiveLayoutMode('auto', 700), 'single-page');
+assert.strictEqual(Layout.effectiveLayoutMode('single-page', 920, { viewportHeight: 180 }), 'flow');
+assert.strictEqual(Layout.effectiveLayoutMode('double-page', 920, { viewportHeight: 180 }), 'flow');
 
 const laptopSpread = Layout.pagedGeometry({
   viewportWidth: 1280, viewportHeight: 720, effectiveMode: 'double-page', gap: 28
@@ -90,6 +92,14 @@ assert.ok(qualitySegments.every((segment) => {
 }), 'pagination must not split an emoji surrogate pair');
 assert.ok(qualitySegments.slice(1).every((segment) => !'，。！？；：、)]）】》」』”’'.includes(qualityText[segment.startOffset])), 'pages must not start with closing punctuation');
 assert.ok(Layout.preferredBreakOffset('alpha beta gamma', 8, 0) <= 6, 'English words should prefer a natural whitespace break');
+assert.ok(Layout.fittedBreakOffset('alpha beta gamma', 8, 0) <= 6, 'measured pagination must never extend beyond the fitted English line');
+assert.ok(Layout.fittedBreakOffset('你好，世界', 2, 0) <= 2, 'measured pagination must never exceed the browser-fitted offset');
+assert.ok(!'，。！？；：、)]）】》」』”’'.includes('你好，世界'[Layout.fittedBreakOffset('你好，世界', 2, 0)]), 'measured pages must not begin with closing punctuation');
+const familyEmoji = '甲👨‍👩‍👧‍👦乙'.repeat(24);
+const familyPages = Layout.buildReaderPages({ blocks: [{ blockId: 'family', type: 'paragraph', text: familyEmoji }] }, { capacity: 64 });
+const familySegments = familyPages.flatMap((page) => page.segments);
+assert.strictEqual(familySegments.map((segment) => familyEmoji.slice(segment.startOffset, segment.endOffset)).join(''), familyEmoji, 'grapheme-aware pagination must preserve joined emoji');
+assert.ok(familySegments.slice(1).every((segment) => !['\u200d', '\ufe0f'].includes(familyEmoji[segment.startOffset])), 'pages must not begin inside a joined emoji grapheme');
 
 const millionChapter = { blocks: Array.from({ length: 1000 }, (_, index) => ({ blockId: `b${index}`, type: 'paragraph', text: '字'.repeat(1000) })) };
 const startedAt = Date.now();

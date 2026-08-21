@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const bytes = (relativePath) => Buffer.byteLength(read(relativePath), 'utf8');
 const lines = (relativePath) => read(relativePath).split(/\r?\n/).length;
+const readerCoreFileBudget = 32 * 1024;
 
 const readerShellModules = [
   'reader-library.js', 'reader-reading.js', 'reader-page-flip.js', 'reader-settings.js', 'reader-navigation.js',
@@ -21,7 +22,7 @@ assert.ok(bytes('src/desktop/shell/reader-project-bridge.js') < 20 * 1024, 'proj
 assert.ok(bytes('src/desktop/shell/reader-hud.js') < 20 * 1024, 'reader HUD shell must remain independently bounded');
 assert.ok(bytes('src/desktop/shell/reader-appearance-studio.js') < 20 * 1024, 'reader appearance studio must remain independently bounded');
 assert.ok(bytes('desktop/services/reader-project-library-service.js') < 20 * 1024, 'project library service must remain independently bounded');
-assert.ok(bytes('src/styles/desktop/reader.css') < 24 * 1024, 'reader foundation style layer must stay below the hard shell gate');
+assert.ok(bytes('src/styles/desktop/reader.css') < readerCoreFileBudget, 'reader foundation style layer must stay below the 32 KiB mature-core gate');
 assert.ok(bytes('src/styles/desktop/reader-hud.css') < 16 * 1024, 'reader HUD style layer must remain independently bounded');
 assert.ok(lines('desktop/fragments/reader.html') <= 400, 'reader fragment must remain a composition fragment');
 

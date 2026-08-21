@@ -25,6 +25,7 @@
         if (!readerState.appearanceStudioBaseline) appearanceBeginSession();
         const locator = typeof window.captureReaderPositionLocator === 'function' ? window.captureReaderPositionLocator() : null;
         window.stopReaderPageFlip?.();
+        window.stopReaderDeckTransition?.();
         mutator();
         readerState.appearanceProfileId = 'custom';
         readerState.anchorLocator = locator || readerState.anchorLocator;
@@ -176,7 +177,12 @@
             button.addEventListener('click', () => activateLinkedControl('[data-reader-quick-layout]', button.dataset.readerLayoutChip));
         });
         document.querySelectorAll('[data-reader-transition-chip]').forEach((button) => {
-            button.addEventListener('click', () => activateLinkedControl('[data-reader-page-transition]', button.dataset.readerTransitionChip));
+            button.addEventListener('click', () => {
+                activateLinkedControl('[data-reader-page-transition]', button.dataset.readerTransitionChip);
+                /* Keep the quick chip from swallowing the very next keyboard
+                   or edge-click page turn as an active chrome control. */
+                button.blur();
+            });
         });
         document.querySelectorAll('[data-reader-material-chip]').forEach((button) => {
             button.addEventListener('click', () => activateLinkedControl('[data-reader-paper-material]', button.dataset.readerMaterialChip));
