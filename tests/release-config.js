@@ -31,6 +31,8 @@ assert.ok(String(pkg.scripts.unit || '').includes('tests/protocol-handler.js'), 
 
 assert.ok(pkg.build, 'electron-builder config should exist');
 assert.strictEqual(pkg.build.asar, true, 'production packages should keep application sources in an ASAR archive');
+assert.strictEqual(pkg.build.publish, undefined, 'build config must not declare "never" as a fake publish provider');
+assert.ok(String(pkg.scripts.dist || '').includes('--publish never'), 'dist must build locally without publishing before validation');
 
 const files = pkg.build.files || [];
 for (const required of ['desktop/**/*', 'src/**/*', 'desktop.html', 'package.json']) {

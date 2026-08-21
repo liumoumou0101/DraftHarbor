@@ -12,10 +12,10 @@
 
 最新稳定版可从 [GitHub Releases](https://github.com/liumoumou0101/DraftHarbor/releases/latest) 下载：
 
-- `DraftHarbor Setup 1.2.4.exe`：Windows 安装版。
-- `DraftHarbor 1.2.4.exe`：免安装便携版。
+- `DraftHarbor Setup 1.2.5.exe`：Windows 安装版。
+- `DraftHarbor 1.2.5.exe`：免安装便携版。
 
-`v1.2.4` 收口设置与各模块 UI、补齐 Anthropic / Gemini / 自定义接口、启动还原上次项目，并保留 1.2.3 的 OpenCode 与篇幅控制。
+`v1.2.5` 完善阅读器分页：按实际稿纸测量铺页、保护自然断行，并消除翻页闪烁与双页书脊位移。
 
 ## 项目起源
 
