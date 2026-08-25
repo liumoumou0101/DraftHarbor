@@ -254,7 +254,11 @@
         if (elements.beatInput) {
             elements.beatInput.addEventListener('input', () => {
                 nativeEditorState.generation.beat = elements.beatInput.value;
+                if (typeof autosizeNativeBeatInput === 'function') autosizeNativeBeatInput();
                 renderNativeGeneration();
+            });
+            window.addEventListener('resize', () => {
+                if (typeof autosizeNativeBeatInput === 'function') autosizeNativeBeatInput();
             });
         }
         if (elements.modelSelect) {

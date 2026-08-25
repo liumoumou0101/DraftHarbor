@@ -290,6 +290,88 @@
         window.addEventListener('resize', () => {
             if (!dragState) syncNativeGenerationOutputPosition({ persist: true });
         });
+        if (elements.reasoning && elements.reasoning.dataset.nativeReasoningToggleBound !== 'true') {
+            elements.reasoning.dataset.nativeReasoningToggleBound = 'true';
+            elements.reasoning.addEventListener('toggle', () => {
+                const generation = nativeEditorState.generation;
+                generation.reasoningUserCollapsed = !elements.reasoning.open;
+                syncNativeReasoningBubbleLayout();
+            });
+        }
+    }
+
+    function nativeWriterThinkingActive() {
+        if (writerModelOverride.model === 'inherit') {
+            const globalConfig = runtimeProviderConfig();
+            if (globalConfig && globalConfig.enableThinking) return true;
+        }
+        return !!writerModelOverride.thinking;
+    }
+
+    function resetNativeGenerationStreamFlags(generation) {
+        generation.reasoning = '';
+        generation.finishReason = '';
+        generation.interruptReason = '';
+        generation.reasoningUserCollapsed = false;
+    }
+
+    function nativeReasoningPhase(generation, thinkingActive) {
+        if (generation.interruptReason === 'cancelled') return 'cancelled';
+        if (generation.interruptReason === 'failed') return 'failed';
+        if (generation.interruptReason === 'empty') return 'empty';
+        if (generation.inProgress && thinkingActive && !generation.reasoning) return 'waiting';
+        if (generation.inProgress && generation.reasoning && !generation.text) return 'thinking';
+        if (generation.inProgress && generation.text) return 'answer';
+        if (generation.finishReason === 'length') return 'truncated';
+        if (generation.reasoning) return 'complete';
+        return 'idle';
+    }
+
+    function nativeReasoningSummaryLabel(phase, charCount) {
+        const count = charCount > 0 ? ` · ${charCount} 字` : '';
+        if (phase === 'waiting') return `推理/思考 · 等待思考流${count}`;
+        if (phase === 'thinking') return `推理/思考 · 进行中${count}`;
+        if (phase === 'answer') return `推理/思考 · 已完成，正在生成正文${count}`;
+        if (phase === 'complete') return `推理/思考 · 已完成${count}`;
+        if (phase === 'cancelled') return `推理/思考 · 已中断（已取消）${count}`;
+        if (phase === 'failed') return `推理/思考 · 已中断（失败）${count}`;
+        if (phase === 'empty') return `推理/思考 · 已中断（无正文）${count}`;
+        if (phase === 'truncated') return `推理/思考 · 额度用尽，可能不完整${count}`;
+        return charCount > 0 ? `推理/思考${count}` : '推理/思考';
+    }
+
+    function nativeReasoningDisplayText(generation, phase, thinkingActive) {
+        let text = generation.reasoning || '';
+        if (!text && generation.inProgress && thinkingActive) text = '等待思考流...';
+        if (phase === 'cancelled') return `${text}\n\n—— 思考已中断：生成已取消 ——`;
+        if (phase === 'failed') return `${text}\n\n—— 思考已中断：生成失败 ——`;
+        if (phase === 'empty') return `${text}\n\n—— 思考已结束，但没有返回正文 ——`;
+        if (phase === 'truncated') return `${text}\n\n—— 输出因额度用尽被截断，思考过程可能不完整 ——`;
+        return text;
+    }
+
+    function syncNativeReasoningBubbleLayout() {
+        const elements = nativeEditorElements();
+        const output = elements.generationOutput;
+        const details = elements.reasoning;
+        if (output) {
+            output.classList.toggle('is-reasoning-expanded', !!(details && !details.hidden && details.open));
+            output.classList.toggle('is-reasoning-interrupted', ['cancelled', 'failed', 'empty'].includes(output.dataset.reasoningPhase));
+        }
+        if (output && !output.hidden && !output.classList.contains('is-generation-output-dragging')) {
+            queueNativeGenerationOutputPosition();
+        }
+    }
+
+    function autosizeNativeBeatInput() {
+        const input = nativeEditorElements().beatInput;
+        if (!input) return;
+        const minHeight = 72;
+        const maxHeight = Math.max(minHeight, Math.min(280, Math.floor(window.innerHeight * 0.36)));
+        input.style.height = 'auto';
+        const next = Math.max(minHeight, Math.min(maxHeight, input.scrollHeight));
+        input.style.height = `${next}px`;
+        input.style.overflowY = input.scrollHeight > maxHeight + 1 ? 'auto' : 'hidden';
     }
 
     function renderNativeGeneration() {
@@ -348,6 +430,7 @@
                 'summary': '无需输入，直接生成场景摘要'
             };
             elements.beatInput.placeholder = placeholders[generation.genTask] || '输入这一段要发生什么，或写下续写方向（可选）';
+            autosizeNativeBeatInput();
         }
         const isBeat = generation.genTask === 'beat';
         const canGenerate = !!scene && !generation.inProgress && (isBeat ? !!generation.beat.trim() : true);
@@ -360,15 +443,22 @@
             elements.cancelGeneration.hidden = !generation.inProgress;
             elements.cancelGeneration.disabled = !generation.inProgress;
         }
-        const showGenerationOutput = !!generation.text || generation.inProgress;
+        const thinkingActive = nativeWriterThinkingActive();
+        const reasoningPhase = nativeReasoningPhase(generation, thinkingActive);
+        const showGenerationOutput = !!generation.text || generation.inProgress || !!generation.reasoning;
         if (elements.editorBody) elements.editorBody.classList.toggle('has-generation-output', showGenerationOutput);
         if (elements.generationOutput) {
             elements.generationOutput.hidden = !showGenerationOutput;
             elements.generationOutput.classList.toggle('is-inline-confirmation', showGenerationOutput && !isPreviewTask);
+            elements.generationOutput.dataset.reasoningPhase = reasoningPhase;
         }
         const outputTitle = document.querySelector('[data-native-generation-output-title]');
         if (outputTitle) {
-            outputTitle.textContent = generation.task === 'regenerate-selection' ? '重生成结果待确认' : '生成结果待确认';
+            if (!generation.text && (generation.interruptReason === 'cancelled' || generation.interruptReason === 'failed' || generation.interruptReason === 'empty')) {
+                outputTitle.textContent = '思考已中断';
+            } else {
+                outputTitle.textContent = generation.task === 'regenerate-selection' ? '重生成结果待确认' : '生成结果待确认';
+            }
         }
         const costNote = document.querySelector('[data-native-generation-cost-note]');
         if (costNote) {
@@ -386,14 +476,22 @@
         if (elements.generationOutputStatus) {
             if (generation.inProgress) {
                 if (generation.reasoning && !generation.text) {
-                    elements.generationOutputStatus.textContent = '正在思考...';
-                } else if (generation.inProgress && generation.text && !isPreviewTask) {
+                    elements.generationOutputStatus.textContent = '正在思考，可滚动查看完整思考过程。';
+                } else if (generation.text && !isPreviewTask) {
                     elements.generationOutputStatus.textContent = '正在正文中生成，确认后保留，撤回会恢复原文。';
-                } else if (generation.inProgress && generation.text) {
+                } else if (generation.text) {
                     elements.generationOutputStatus.textContent = '正在生成预览...';
+                } else if (thinkingActive) {
+                    elements.generationOutputStatus.textContent = '正在思考...';
                 } else {
                     elements.generationOutputStatus.textContent = '正在生成，完成后可保留、重试或撤回。';
                 }
+            } else if (!generation.text && generation.interruptReason === 'cancelled') {
+                elements.generationOutputStatus.textContent = '思考已中断：生成已取消。可滚动查看完整思考过程。';
+            } else if (!generation.text && generation.interruptReason === 'empty') {
+                elements.generationOutputStatus.textContent = '思考已结束，但没有返回正文。可滚动查看完整思考过程。';
+            } else if (!generation.text && generation.interruptReason) {
+                elements.generationOutputStatus.textContent = '思考已中断：生成失败。可滚动查看完整思考过程。';
             } else if (generation.finishReason === 'length') {
                 elements.generationOutputStatus.textContent = isPreviewTask
                     ? '输出因额度用尽被截断。预览后可保留，或提高最大输出后重试。'
@@ -409,35 +507,37 @@
             elements.generationResult.textContent = generation.text || (generation.inProgress && isPreviewTask ? '生成中...' : '');
         }
         if (elements.reasoning) {
-            var effectiveThinking = writerModelOverride.thinking;
-            if (writerModelOverride.model === 'inherit') {
-                const globalConfig = runtimeProviderConfig();
-                effectiveThinking = !!(globalConfig && globalConfig.enableThinking);
+            const showReasoning = (thinkingActive && generation.inProgress) || !!generation.reasoning;
+            elements.reasoning.hidden = !showReasoning;
+            elements.reasoning.dataset.phase = reasoningPhase;
+            if (showReasoning && generation.interruptReason) {
+                elements.reasoning.open = true;
+                generation.reasoningUserCollapsed = false;
+            } else if (showReasoning && generation.inProgress && !generation.reasoningUserCollapsed) {
+                elements.reasoning.open = true;
             }
-            elements.reasoning.hidden = !(effectiveThinking && generation.inProgress) && !generation.reasoning;
+            if (elements.reasoningSummary) {
+                elements.reasoningSummary.textContent = nativeReasoningSummaryLabel(reasoningPhase, (generation.reasoning || '').length);
+            }
         }
         if (elements.reasoningText) {
-            if (generation.reasoning) {
-                elements.reasoningText.textContent = generation.reasoning;
-            } else if (generation.inProgress && writerModelOverride.thinking) {
-                elements.reasoningText.textContent = '等待思考流...';
-            } else if (generation.inProgress && writerModelOverride.model === 'inherit') {
-                const globalConfig = runtimeProviderConfig();
-                if (globalConfig && globalConfig.enableThinking) {
-                    elements.reasoningText.textContent = '等待思考流...';
-                } else {
-                    elements.reasoningText.textContent = '';
-                }
-            } else {
-                elements.reasoningText.textContent = '';
+            const followThreshold = 48;
+            const shouldFollow = elements.reasoningText.scrollHeight - elements.reasoningText.scrollTop - elements.reasoningText.clientHeight < followThreshold;
+            elements.reasoningText.textContent = nativeReasoningDisplayText(generation, reasoningPhase, thinkingActive);
+            if (elements.reasoning && !elements.reasoning.hidden && elements.reasoning.open && (shouldFollow || generation.interruptReason)) {
+                elements.reasoningText.scrollTop = elements.reasoningText.scrollHeight;
             }
         }
+        syncNativeReasoningBubbleLayout();
         if (elements.acceptGeneration) elements.acceptGeneration.disabled = !generation.text || generation.inProgress;
         if (elements.retryGeneration) {
             const needsBeat = generation.genTask === 'beat';
             elements.retryGeneration.disabled = generation.inProgress || (needsBeat && !generation.beat.trim());
         }
-        if (elements.discardGeneration) elements.discardGeneration.disabled = generation.inProgress || !generation.text;
+        if (elements.discardGeneration) {
+            elements.discardGeneration.disabled = generation.inProgress || (!generation.text && !generation.reasoning);
+            elements.discardGeneration.textContent = !generation.text && generation.reasoning ? '关闭' : '撤回';
+        }
         if (elements.insertMode) elements.insertMode.disabled = generation.inProgress || !generation.text;
         if (elements.lengthHint) {
             const hint = generation.lengthHint || 'natural';
@@ -633,7 +733,7 @@
         if (generation.inProgress) return;
         if (generation.text && generation.inlineBaseText) restorePendingInlineGeneration();
         generation.text = '';
-        generation.reasoning = '';
+        resetNativeGenerationStreamFlags(generation);
         generation.record = null;
         generation.prompt = null;
         generation.beat = record.beat || '';
@@ -924,8 +1024,7 @@
         const generation = nativeEditorState.generation;
         if (generation.text && generation.inlineBaseText) restorePendingInlineGeneration();
         generation.text = '';
-        generation.reasoning = '';
-        generation.finishReason = '';
+        resetNativeGenerationStreamFlags(generation);
         generation.prompt = prompt;
         generation.record = null;
         if (!prepareInlineGeneration('fiction-prose', prompt)) return { ok: false, reason: 'no-editor' };
@@ -951,6 +1050,7 @@
                 renderNativeGeneration();
             }, { ...nativeGenerationConfig(generation.abortController && generation.abortController.signal), taskKind: 'writer-prose' });
             if (!generation.text.trim()) {
+                generation.interruptReason = generation.reasoning ? 'empty' : 'failed';
                 throw new Error('AI provider returned an empty response.');
             }
 
@@ -987,6 +1087,7 @@
             return { ok: true, record };
         } catch (error) {
             if (error && error.name === 'AbortError') {
+                generation.interruptReason = 'cancelled';
                 setNativeSaveStatus('生成已取消', 'info');
             } else {
                 console.error('Native generation failed:', error);
@@ -994,6 +1095,7 @@
                     ? window.DraftHarborGenerationResult.normalizeGenerationError(error)
                     : { message: error && error.message ? error.message : String(error) };
                 failureMessage = normalized.message;
+                if (!generation.interruptReason) generation.interruptReason = 'failed';
                 setNativeSaveStatus(`生成失败：${normalized.message}`, 'error');
             }
         } finally {
@@ -1047,8 +1149,7 @@
         generation.task = options.action;
         generation.beat = prompt.instruction;
         generation.text = '';
-        generation.reasoning = '';
-        generation.finishReason = '';
+        resetNativeGenerationStreamFlags(generation);
         generation.prompt = prompt;
         generation.record = null;
         generation.aiTaskRecord = null;
@@ -1095,7 +1196,9 @@
             if (!result.ok) {
                 console.error(options.logLabel, result.error);
                 const message = result.error && result.error.message ? result.error.message : 'AI 任务执行失败';
-                setNativeSaveStatus(`${options.failurePrefix}：${message}`, 'error');
+                generation.interruptReason = result.status === 'cancelled' ? 'cancelled' : 'failed';
+                if (result.status === 'cancelled') setNativeSaveStatus('生成已取消', 'info');
+                else setNativeSaveStatus(`${options.failurePrefix}：${message}`, 'error');
                 return { ok: false, reason: result.status || 'failed', message };
             }
 
@@ -1297,7 +1400,7 @@
         elements.editor.selectionEnd = elements.editor.selectionStart;
         generation.lastAcceptedSceneId = scene.id;
         generation.text = '';
-        generation.reasoning = '';
+        resetNativeGenerationStreamFlags(generation);
         generation.inlineBaseText = '';
         generation.pendingSceneId = '';
         generation.pendingEditorChanged = false;
@@ -1316,7 +1419,7 @@
             markNativeDirty('已撤回生成内容，未保存');
         }
         generation.text = '';
-        generation.reasoning = '';
+        resetNativeGenerationStreamFlags(generation);
         generation.inlineBaseText = '';
         generation.pendingSceneId = '';
         generation.pendingEditorChanged = false;
@@ -1355,7 +1458,7 @@
         }
         generation.lastAcceptedSceneId = scene.id;
         generation.text = '';
-        generation.reasoning = '';
+        resetNativeGenerationStreamFlags(generation);
         generation.inlineBaseText = '';
         generation.pendingSceneId = '';
         generation.pendingEditorChanged = false;

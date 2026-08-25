@@ -192,6 +192,30 @@ async function openNativeModelSettings(page) {
     await page.waitForFunction(() => Number.parseFloat(document.querySelector('[data-native-writer]').style.getPropertyValue('--native-assistant-height')) > 0);
     assert.ok(Number(await page.evaluate(() => localStorage.getItem('draftharbor:nativeAssistantHeight'))) > 0, 'bottom assistant height should persist locally');
 
+    const beatHeights = await page.evaluate(() => {
+      const input = document.querySelector('[data-native-beat-input]');
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      const empty = input.getBoundingClientRect().height;
+      input.value = Array.from({ length: 8 }, (_, index) => `续写方向第 ${index + 1} 行，需要输入框跟着变高。`).join('\n');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      const long = input.getBoundingClientRect().height;
+      const size = {
+        empty,
+        long,
+        clientHeight: input.clientHeight,
+        scrollHeight: input.scrollHeight,
+        maxHeight: window.getComputedStyle(input).maxHeight
+      };
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return size;
+    });
+    assert.ok(beatHeights.empty >= 70, `continuation prompt should be taller than the old 52px cap, got ${beatHeights.empty}`);
+    assert.ok(beatHeights.long > beatHeights.empty + 36, `continuation prompt should grow with longer text, empty ${beatHeights.empty} long ${beatHeights.long}`);
+    assert.ok(beatHeights.scrollHeight <= beatHeights.clientHeight + 2, 'grown continuation prompt should show its text instead of staying clipped');
+    assert.notStrictEqual(beatHeights.maxHeight, '52px', 'continuation prompt must not keep the 52px max-height lock');
+
     await page.evaluate(() => {
       const advanced = document.querySelector('[data-native-generation-advanced]');
       if (advanced) advanced.open = true;
@@ -921,6 +945,152 @@ async function openNativeModelSettings(page) {
     await page.click('[data-native-cancel-generation]');
     await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('生成已取消'));
     assert.strictEqual(await page.locator('[data-native-scene-editor]').inputValue(), editorBeforeCancellation, 'cancelling before content arrives should preserve the editor');
+
+    await page.fill('[data-native-beat-input]', 'Long reasoning visibility audit.');
+    await page.evaluate(() => {
+      window.__draftHarborGenerationStub = async (prompt, onToken, config) => new Promise((resolve, reject) => {
+        const body = Array.from({ length: 80 }, (_, index) => `思考段落 ${index + 1}：用来确认长思考可以完整滚动查看。`).join('\n');
+        onToken(`THINK-START-VISIBLE\n${body}\nTHINK-END-VISIBLE`, { type: 'reasoning' });
+        const signal = config && config.signal;
+        const abort = () => {
+          const error = new Error('The operation was aborted');
+          error.name = 'AbortError';
+          reject(error);
+        };
+        if (!signal) {
+          reject(new Error('Long reasoning audit requires an AbortSignal.'));
+          return;
+        }
+        if (signal.aborted) abort();
+        else signal.addEventListener('abort', abort, { once: true });
+      });
+    });
+    await page.click('[data-native-generate]');
+    try {
+      await page.waitForFunction(() => {
+        const output = document.querySelector('[data-native-generation-output]');
+        const pre = document.querySelector('[data-native-reasoning-text]');
+        const details = document.querySelector('[data-native-reasoning]');
+        const footer = document.querySelector('[data-native-paper-footer]');
+        if (!output || !pre || !details || !footer) return false;
+        if (output.hidden || details.hidden || !details.open) return false;
+        if (!pre.textContent.includes('THINK-END-VISIBLE')) return false;
+        if (!output.classList.contains('is-reasoning-expanded')) return false;
+        if (pre.scrollHeight <= pre.clientHeight + 8) return false;
+        return output.getBoundingClientRect().bottom <= footer.getBoundingClientRect().top + 1;
+      });
+    } catch (error) {
+      const diag = await page.evaluate(() => {
+        const output = document.querySelector('[data-native-generation-output]');
+        const pre = document.querySelector('[data-native-reasoning-text]');
+        const details = document.querySelector('[data-native-reasoning]');
+        const footer = document.querySelector('[data-native-paper-footer]');
+        const outputRect = output ? output.getBoundingClientRect() : null;
+        const preRect = pre ? pre.getBoundingClientRect() : null;
+        const footerRect = footer ? footer.getBoundingClientRect() : null;
+        return {
+          generateDisabled: document.querySelector('[data-native-generate]') && document.querySelector('[data-native-generate]').disabled,
+          saveStatus: document.querySelector('[data-native-save-status]') && document.querySelector('[data-native-save-status]').textContent,
+          outputHidden: output ? output.hidden : 'missing',
+          detailsHidden: details ? details.hidden : 'missing',
+          detailsOpen: details ? details.open : null,
+          phase: output ? output.dataset.reasoningPhase : null,
+          expanded: output ? output.classList.contains('is-reasoning-expanded') : false,
+          classes: output ? output.className : '',
+          summary: document.querySelector('[data-native-reasoning-summary]') && document.querySelector('[data-native-reasoning-summary]').textContent,
+          textHead: pre ? pre.textContent.slice(0, 80) : '',
+          textTail: pre ? pre.textContent.slice(-80) : '',
+          textLen: pre ? pre.textContent.length : 0,
+          preScrollHeight: pre ? pre.scrollHeight : 0,
+          preClientHeight: pre ? pre.clientHeight : 0,
+          outputHeight: outputRect ? outputRect.height : 0,
+          outputBottom: outputRect ? outputRect.bottom : 0,
+          preBottom: preRect ? preRect.bottom : 0,
+          footerTop: footerRect ? footerRect.top : 0
+        };
+      });
+      throw new Error(`${error.message}\nReasoning bubble diag: ${JSON.stringify(diag, null, 2)}`);
+    }
+    const reasoningLayout = await page.evaluate(() => {
+      const output = document.querySelector('[data-native-generation-output]');
+      const details = document.querySelector('[data-native-reasoning]');
+      const pre = document.querySelector('[data-native-reasoning-text]');
+      const footer = document.querySelector('[data-native-paper-footer]');
+      const outputRect = output.getBoundingClientRect();
+      const preRect = pre.getBoundingClientRect();
+      const footerRect = footer.getBoundingClientRect();
+      return {
+        hidden: output.hidden,
+        detailsOpen: details.open,
+        text: pre.textContent,
+        summary: document.querySelector('[data-native-reasoning-summary]').textContent,
+        phase: output.dataset.reasoningPhase,
+        preScrolls: pre.scrollHeight > pre.clientHeight + 8,
+        preClipped: preRect.bottom > outputRect.bottom + 1,
+        outputBottom: outputRect.bottom,
+        footerTop: footerRect.top,
+        expanded: output.classList.contains('is-reasoning-expanded')
+      };
+    });
+    assert.strictEqual(reasoningLayout.hidden, false, 'long reasoning should keep the generation bubble visible');
+    assert.ok(reasoningLayout.detailsOpen, 'thinking details should auto-open while reasoning streams');
+    assert.ok(reasoningLayout.text.includes('THINK-START-VISIBLE'), 'reasoning bubble should keep the start of a long thinking stream');
+    assert.ok(reasoningLayout.text.includes('THINK-END-VISIBLE'), 'reasoning bubble should keep the end of a long thinking stream');
+    assert.ok(reasoningLayout.preScrolls, 'long thinking text should scroll inside the bubble instead of being clipped');
+    assert.ok(!reasoningLayout.preClipped, 'the thinking pre should stay inside the generation bubble');
+    assert.ok(reasoningLayout.expanded, 'opening a long thinking stream should expand the generation bubble');
+    assert.ok(reasoningLayout.outputBottom <= reasoningLayout.footerTop + 1, 'expanded thinking bubble should stay above the paper footer');
+    await page.click('[data-native-cancel-generation]');
+    await page.waitForFunction(() => {
+      const output = document.querySelector('[data-native-generation-output]');
+      const pre = document.querySelector('[data-native-reasoning-text]');
+      return output && !output.hidden
+        && output.dataset.reasoningPhase === 'cancelled'
+        && pre && pre.textContent.includes('思考已中断：生成已取消');
+    });
+    const interrupted = await page.evaluate(() => ({
+      title: document.querySelector('[data-native-generation-output-title]').textContent,
+      status: document.querySelector('[data-native-generation-output-status]').textContent,
+      summary: document.querySelector('[data-native-reasoning-summary]').textContent,
+      discard: document.querySelector('[data-native-discard-generation]').textContent
+    }));
+    assert.strictEqual(interrupted.title, '思考已中断');
+    assert.ok(interrupted.status.includes('已取消'), 'interrupted thinking should say the stream was cancelled');
+    assert.ok(interrupted.summary.includes('已中断'), 'thinking summary should show the interrupted state');
+    assert.strictEqual(interrupted.discard, '关闭');
+    await page.click('[data-native-discard-generation]');
+    await page.waitForFunction(() => document.querySelector('[data-native-generation-output]').hidden);
+
+    const editorBeforeMiniMax = await page.locator('[data-native-scene-editor]').inputValue();
+    await page.fill('[data-native-beat-input]', 'MiniMax think leak audit.');
+    await page.evaluate(() => {
+      window.__draftHarborGenerationStub = async (prompt, onToken) => {
+        onToken('<thi');
+        onToken('nk>先想怎么写雨夜，这段不能进正文。');
+        onToken('</think>她把门关上，雨还在下。');
+      };
+    });
+    await page.click('[data-native-generate]');
+    await page.waitForFunction(() => document.querySelector('[data-native-scene-editor]').value.includes('她把门关上，雨还在下。'));
+    const miniMaxLeak = await page.evaluate(() => ({
+      editor: document.querySelector('[data-native-scene-editor]').value,
+      reasoning: document.querySelector('[data-native-reasoning-text]').textContent,
+      detailsHidden: document.querySelector('[data-native-reasoning]').hidden
+    }));
+    assert.ok(miniMaxLeak.editor.includes('她把门关上，雨还在下。'), 'MiniMax story text should land in the manuscript');
+    assert.ok(!miniMaxLeak.editor.includes('先想怎么写雨夜'), 'MiniMax <think> text must not leak into the manuscript');
+    assert.ok(!miniMaxLeak.editor.includes('<think'), 'MiniMax think tags must not leak into the manuscript');
+    assert.ok(miniMaxLeak.reasoning.includes('先想怎么写雨夜，这段不能进正文。'), 'MiniMax think text should appear in the reasoning bubble');
+    assert.strictEqual(miniMaxLeak.detailsHidden, false, 'MiniMax inline thinking should still open the reasoning bubble');
+    assert.ok(miniMaxLeak.editor.startsWith(editorBeforeMiniMax) || miniMaxLeak.editor.includes(editorBeforeMiniMax), 'MiniMax generation should keep the original scene text');
+    await page.click('[data-native-discard-generation]');
+    await page.waitForFunction(() => document.querySelector('[data-native-generation-output]').hidden);
+    await page.evaluate(() => {
+      const snapshot = nativeEditorState.snapshot;
+      if (snapshot && Array.isArray(snapshot.promptHistory)) {
+        snapshot.promptHistory = snapshot.promptHistory.filter((item) => item.beat !== 'MiniMax think leak audit.');
+      }
+    });
 
     await page.fill('[data-native-beat-input]', 'Empty response contract audit.');
     await page.evaluate(() => {

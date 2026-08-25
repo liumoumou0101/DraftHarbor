@@ -468,6 +468,82 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
         globalThis.fetch = originalFetch;
     }
 
+    assert.strictEqual(typeof providerStream.createInlineThinkSplitter, 'function', 'think splitter should be exported');
+    (function () {
+        const tokens = [];
+        const types = [];
+        const splitter = providerStream.createInlineThinkSplitter((token, meta) => {
+            tokens.push(token);
+            types.push(meta && meta.type);
+        });
+        splitter.push('<thi');
+        splitter.push('nk>先想结尾');
+        splitter.push('再写动作</think>\n她把门关上。');
+        splitter.push(' 雨还在下。');
+        splitter.finish();
+        const reasoning = tokens.filter((_, index) => types[index] === 'reasoning').join('');
+        const content = tokens.filter((_, index) => types[index] === 'content').join('');
+        assert.strictEqual(reasoning, '先想结尾再写动作');
+        assert.strictEqual(content, '\n她把门关上。 雨还在下。');
+        assert.ok(!content.includes('先想'), 'MiniMax think blocks must not leak into content');
+    })();
+    (function () {
+        const tokens = [];
+        const types = [];
+        const splitter = providerStream.createInlineThinkSplitter((token, meta) => {
+            tokens.push(token);
+            types.push(meta && meta.type);
+        });
+        splitter.push('温度低于 3 度，a < b 时她仍出门。');
+        splitter.finish();
+        assert.deepStrictEqual(types, ['content']);
+        assert.strictEqual(tokens.join(''), '温度低于 3 度，a < b 时她仍出门。');
+    })();
+
+    globalThis.fetch = async (url, init) => {
+        var body = JSON.parse(init.body);
+        assert.strictEqual(body.model, 'minimax-m3');
+        assert.ok(!body.thinking, 'MiniMax should not receive a thinking control field');
+        var encoder = new TextEncoder();
+        var stream = new ReadableStream({
+            start(controller) {
+                controller.enqueue(encoder.encode('data: ' + JSON.stringify({ choices: [{ delta: { content: '<think>只在心里盘算。' } }] }) + '\n\n'));
+                controller.enqueue(encoder.encode('data: ' + JSON.stringify({ choices: [{ delta: { content: '</think>门口的灯灭了。' } }] }) + '\n\n'));
+                controller.enqueue(encoder.encode('data: ' + JSON.stringify({ choices: [{ finish_reason: 'stop' }] }) + '\n\n'));
+                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                controller.close();
+            }
+        });
+        return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    };
+    try {
+        var miniTokens = [];
+        var miniMeta = [];
+        await providerStream.streamGeneration(
+            { messages: [{ role: 'user', content: 'Continue' }] },
+            function (token, meta) {
+                if (token) {
+                    miniTokens.push(token);
+                    miniMeta.push(meta && meta.type);
+                }
+            },
+            {
+                mode: 'api',
+                provider: 'openai-compatible',
+                model: 'minimax-m3',
+                endpoint: 'https://example.test/v1/chat/completions',
+                apiKey: 'test-key'
+            }
+        );
+        var miniReasoning = miniTokens.filter((_, index) => miniMeta[index] === 'reasoning').join('');
+        var miniContent = miniTokens.filter((_, index) => miniMeta[index] === 'content').join('');
+        assert.strictEqual(miniReasoning, '只在心里盘算。');
+        assert.strictEqual(miniContent, '门口的灯灭了。');
+        console.log('Provider stream MiniMax inline think test passed.');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+
     console.log('Provider stream tests passed.');
 })().catch((error) => {
     console.error('Provider stream tests failed:', error && error.stack ? error.stack : error);

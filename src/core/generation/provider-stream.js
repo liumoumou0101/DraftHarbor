@@ -27,6 +27,87 @@
         maxDurationMs: 0
     });
 
+    const INLINE_THINK_OPEN = /<(think|thinking|analysis)(?:\s[^>]*)?>/i;
+    const INLINE_THINK_CLOSE = /<\/(think|thinking|analysis)>/i;
+
+    function incompleteInlineTagIndex(text) {
+        const index = String(text || '').lastIndexOf('<');
+        if (index < 0) return -1;
+        if (text.indexOf('>', index) !== -1) return -1;
+        const tail = text.slice(index);
+        return /^<\/?[a-zA-Z][a-zA-Z0-9-]*(\s[^>]*)?$/.test(tail) || /^<\/?[a-zA-Z]*$/.test(tail) ? index : -1;
+    }
+
+    function createInlineThinkSplitter(emit) {
+        let hold = '';
+        let inThink = false;
+        const deliver = typeof emit === 'function' ? emit : function () {};
+
+        function emitChunk(text, type) {
+            if (!text) return;
+            deliver(text, { type });
+        }
+
+        function processHold() {
+            while (hold) {
+                if (!inThink) {
+                    const open = hold.match(INLINE_THINK_OPEN);
+                    if (!open) {
+                        const keepFrom = incompleteInlineTagIndex(hold);
+                        if (keepFrom === 0) return;
+                        if (keepFrom > 0) {
+                            emitChunk(hold.slice(0, keepFrom), 'content');
+                            hold = hold.slice(keepFrom);
+                            return;
+                        }
+                        emitChunk(hold, 'content');
+                        hold = '';
+                        return;
+                    }
+                    if (open.index > 0) emitChunk(hold.slice(0, open.index), 'content');
+                    hold = hold.slice(open.index + open[0].length);
+                    inThink = true;
+                    continue;
+                }
+                const close = hold.match(INLINE_THINK_CLOSE);
+                if (!close) {
+                    const keepFrom = incompleteInlineTagIndex(hold);
+                    if (keepFrom === 0) return;
+                    if (keepFrom > 0) {
+                        emitChunk(hold.slice(0, keepFrom), 'reasoning');
+                        hold = hold.slice(keepFrom);
+                        return;
+                    }
+                    emitChunk(hold, 'reasoning');
+                    hold = '';
+                    return;
+                }
+                if (close.index > 0) emitChunk(hold.slice(0, close.index), 'reasoning');
+                hold = hold.slice(close.index + close[0].length);
+                inThink = false;
+            }
+        }
+
+        function finish() {
+            if (hold) emitChunk(hold, inThink ? 'reasoning' : 'content');
+            hold = '';
+            inThink = false;
+        }
+
+        function push(token, meta) {
+            const type = meta && meta.type ? meta.type : 'content';
+            if (type !== 'content') {
+                if (type === 'finish' || type === 'usage') finish();
+                deliver(token, meta || { type });
+                return;
+            }
+            hold += String(token || '');
+            processHold();
+        }
+
+        return { push, finish };
+    }
+
     function getModelCapability(modelId) {
         return MODEL_CAPABILITIES[String(modelId || '')] || null;
     }
@@ -477,16 +558,24 @@
 
     async function streamGeneration(prompt, onToken, config) {
         const settings = config && typeof config === 'object' ? config : {};
+        const deliver = typeof onToken === 'function' ? onToken : function () {};
+        let contentCharacters = 0;
+        const splitter = createInlineThinkSplitter((token, meta) => {
+            if (!meta || meta.type === 'content') contentCharacters += String(token || '').length;
+            deliver(token, meta);
+        });
         if (typeof runtime.__draftHarborGenerationStub === 'function') {
-            return runtime.__draftHarborGenerationStub(prompt, onToken, settings);
+            try {
+                return await runtime.__draftHarborGenerationStub(prompt, splitter.push, settings);
+            } finally {
+                splitter.finish();
+            }
         }
         const watchdog = createActivityWatchdog(settings);
         const activeSettings = { ...settings, signal: watchdog.signal };
-        let contentCharacters = 0;
         const emit = (token, meta) => {
             watchdog.touch();
-            if (!meta || meta.type === 'content') contentCharacters += String(token || '').length;
-            if (typeof onToken === 'function') onToken(token, meta);
+            splitter.push(token, meta);
         };
         const messages = prompt && Array.isArray(prompt.messages) ? prompt.messages : null;
         const mode = activeSettings.mode || activeSettings.aiMode || 'local';
@@ -501,6 +590,7 @@
                 const result = resolveApiTransport(activeSettings) === 'anthropic-messages'
                     ? await requestAnthropic(chatMessages, emit, activeSettings, watchdog.touch)
                     : await requestChat(chatMessages, emit, activeSettings, watchdog.touch);
+                splitter.finish();
                 if (!contentCharacters) throw providerError('provider_empty_response', 'AI Provider 没有返回可用正文。');
                 return result;
             }
@@ -508,14 +598,26 @@
                 ? messagesToChatML(prepareDirectiveMessages(messages, prompt, activeSettings).messages)
                 : String(prompt && typeof prompt.asString === 'function' ? prompt.asString() : prompt || '');
             const result = await requestLocal(serialized, emit, activeSettings, watchdog.touch);
+            splitter.finish();
             if (!contentCharacters) throw providerError('provider_empty_response', '本地生成服务没有返回可用正文。');
             return result;
         } catch (error) {
+            splitter.finish();
             throw watchdog.error() || error;
         } finally {
             watchdog.finish();
         }
     }
 
-    return Object.freeze({ MODEL_CAPABILITIES, STREAM_TIMEOUT_DEFAULTS, getModelCapability, messagesToChatML, prependGlobalPrompt, prepareDirectiveMessages, toAnthropicMessages, streamGeneration });
+    return Object.freeze({
+        MODEL_CAPABILITIES,
+        STREAM_TIMEOUT_DEFAULTS,
+        getModelCapability,
+        messagesToChatML,
+        prependGlobalPrompt,
+        prepareDirectiveMessages,
+        toAnthropicMessages,
+        createInlineThinkSplitter,
+        streamGeneration
+    });
 });

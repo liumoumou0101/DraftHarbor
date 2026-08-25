@@ -109,6 +109,7 @@
             generationOutputDragHandle: document.querySelector('[data-native-generation-drag-handle]'),
             generationResult: document.querySelector('[data-native-generation-result]'),
             reasoning: document.querySelector('[data-native-reasoning]'),
+            reasoningSummary: document.querySelector('[data-native-reasoning-summary]'),
             reasoningText: document.querySelector('[data-native-reasoning-text]'),
             acceptGeneration: document.querySelector('[data-native-accept-generation]'),
             retryGeneration: document.querySelector('[data-native-retry-generation]'),
@@ -894,7 +895,7 @@
         nativeEditorState.isSaving = false;
         nativeEditorState.generation = {
             beat: '', lengthHint: (nativeEditorState.generation && nativeEditorState.generation.lengthHint) || 'natural',
-            text: '', reasoning: '', finishReason: '',
+            text: '', reasoning: '', finishReason: '', interruptReason: '', reasoningUserCollapsed: false,
             prompt: null,
             record: null,
             aiTaskRecord: null,

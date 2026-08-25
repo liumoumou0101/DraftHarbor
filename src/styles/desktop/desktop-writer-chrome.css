@@ -246,9 +246,15 @@
     gap: 6px;
 }
 
-.desktop-native-writer.is-assistant-bottom .desktop-native-generation-input textarea {
-    min-height: 52px;
-    max-height: 52px;
+.desktop-native-writer.is-assistant-bottom .desktop-native-generation-input textarea,
+.desktop-native-writer .desktop-native-generation-input textarea,
+.desktop-native-assistant .desktop-native-generation-input textarea {
+    min-height: 72px;
+    max-height: min(36vh, 280px);
+    height: auto;
+    field-sizing: content;
+    overflow-y: auto;
+    resize: none;
 }
 
 .desktop-native-writer.is-assistant-bottom .desktop-native-generation-actions {
@@ -688,6 +694,77 @@
     min-height: 30px;
     padding: 6px 12px;
     font-size: 12px;
+}
+
+.desktop-native-generation-output [data-native-reasoning] {
+    min-width: 0;
+    min-height: 0;
+}
+
+.desktop-native-generation-output [data-native-reasoning] summary {
+    cursor: pointer;
+    color: var(--desktop-text);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.desktop-native-generation-output [data-native-reasoning][open]:not([hidden]) {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
+    overflow: hidden;
+}
+
+.desktop-native-generation-output [data-native-reasoning] pre {
+    margin: 8px 0 0;
+    padding: 8px 10px;
+    min-height: 72px;
+    max-height: min(28vh, 240px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    border: 1px solid var(--desktop-line);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--desktop-panel-soft) 78%, #000 22%);
+    color: var(--desktop-text);
+    font: 12px/1.65 var(--desktop-font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+}
+
+.desktop-native-editor-body .desktop-native-generation-output.is-reasoning-expanded,
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output.is-reasoning-expanded,
+.desktop-native-writer:not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output.is-inline-confirmation.is-reasoning-expanded,
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output.is-reasoning-expanded,
+.desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed) .desktop-native-editor-body .desktop-native-generation-output.is-inline-confirmation.is-reasoning-expanded {
+    width: min(520px, calc(100% - 24px));
+    height: auto;
+    max-height: min(48vh, calc(100% - 76px));
+    overflow: hidden;
+}
+
+.desktop-native-generation-output.is-reasoning-expanded [data-native-reasoning][open]:not([hidden]) {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.desktop-native-generation-output.is-reasoning-expanded [data-native-reasoning] pre {
+    max-height: min(28vh, 240px);
+}
+
+.desktop-native-generation-output.is-reasoning-interrupted {
+    border-color: color-mix(in srgb, #ef6b73 58%, var(--desktop-line));
+}
+
+.desktop-native-generation-output[data-reasoning-phase="thinking"] [data-native-reasoning-summary],
+.desktop-native-generation-output[data-reasoning-phase="waiting"] [data-native-reasoning-summary] {
+    color: var(--desktop-accent);
+}
+
+.desktop-native-generation-output[data-reasoning-phase="cancelled"] [data-native-reasoning-summary],
+.desktop-native-generation-output[data-reasoning-phase="failed"] [data-native-reasoning-summary],
+.desktop-native-generation-output[data-reasoning-phase="empty"] [data-native-reasoning-summary] {
+    color: #ef6b73;
 }
 
 :root[data-desktop-theme] .desktop-brand-mark {

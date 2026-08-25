@@ -218,6 +218,13 @@ renderNativeCharacters
 renderNativeContext
 renderNativeEditor
 renderNativeGeneration
+autosizeNativeBeatInput
+nativeWriterThinkingActive
+resetNativeGenerationStreamFlags
+nativeReasoningPhase
+nativeReasoningSummaryLabel
+nativeReasoningDisplayText
+syncNativeReasoningBubbleLayout
 renderNativeRewrite
 renderProjectLibrary
 renderPromptManager
