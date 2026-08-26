@@ -2081,21 +2081,24 @@
    displays keep a meaningful writing surface. */
 .desktop-native-writer.is-assistant-bottom .desktop-native-assistant-resizer {
     display: block;
-    top: -6px;
+    top: -8px;
     right: 0;
     bottom: auto;
     left: 0;
     width: auto;
-    height: 12px;
+    height: 16px;
     cursor: row-resize;
+    z-index: 3;
 }
 
 .desktop-native-writer.is-assistant-bottom .desktop-native-assistant-resizer::after {
-    top: 5px;
+    top: 6px;
     left: 50%;
-    width: 48px;
-    height: 2px;
+    width: 96px;
+    height: 4px;
+    border-radius: 999px;
     transform: translateX(-50%);
+    background: color-mix(in srgb, var(--desktop-accent) 42%, var(--desktop-muted));
 }
 
 .desktop-native-writer.is-bottom-resizing {

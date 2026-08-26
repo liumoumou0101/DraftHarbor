@@ -219,6 +219,7 @@ renderNativeContext
 renderNativeEditor
 renderNativeGeneration
 autosizeNativeBeatInput
+syncNativeComposerExpansion
 nativeWriterThinkingActive
 resetNativeGenerationStreamFlags
 nativeReasoningPhase

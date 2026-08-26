@@ -325,7 +325,37 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
     assert.strictEqual(modelCatalog.isThinkingSupported('openai', 'gpt-4o'), false, 'non-deepseek should not support thinking');
     assert.strictEqual(modelCatalog.isApiCompatibleProvider('opencode-zen'), true, 'opencode-zen should be API-compatible');
     assert.strictEqual(modelCatalog.isThinkingSupported('opencode-zen', 'deepseek-v4-pro'), true, 'Zen DeepSeek should support thinking');
-    assert.strictEqual(modelCatalog.isThinkingSupported('opencode-zen', 'minimax-m3'), false, 'unknown Zen thinking should stay off');
+    assert.strictEqual(modelCatalog.getThinkingControl('opencode-zen', 'deepseek-v4-pro'), 'toggle');
+    assert.strictEqual(modelCatalog.getThinkingControl('opencode-zen', 'minimax-m3'), 'toggle-adaptive', 'MiniMax M3 thinking is adaptive/disabled');
+    assert.strictEqual(modelCatalog.isThinkingSupported('opencode-zen', 'minimax-m3'), true, 'MiniMax M3 thinking can be toggled');
+    assert.strictEqual(modelCatalog.getThinkingControl('opencode-zen', 'minimax-m2.7'), 'always-on');
+    assert.strictEqual(modelCatalog.isThinkingAlwaysOn('opencode-go', 'kimi-k2.7-code'), true);
+    assert.strictEqual(modelCatalog.isThinkingAlwaysOn('opencode-go', 'kimi-k3'), true);
+    assert.strictEqual(modelCatalog.isThinkingAlwaysOn('opencode-go', 'glm-5.3'), true);
+    assert.strictEqual(modelCatalog.getThinkingControl('opencode-go', 'kimi-k2.6'), 'toggle');
+    assert.strictEqual(modelCatalog.getThinkingControl('opencode-go', 'glm-5.2'), 'toggle');
+    assert.strictEqual(modelCatalog.thinkingWillRun('opencode-go', 'kimi-k2.7-code', false), true, 'always-on models think even when the toggle is off');
+    assert.strictEqual(modelCatalog.thinkingWillRun('opencode-zen', 'minimax-m3', false), false);
+    assert.deepStrictEqual(modelCatalog.thinkingRequestPayload('toggle', true), { type: 'enabled' });
+    assert.deepStrictEqual(modelCatalog.thinkingRequestPayload('toggle-adaptive', true), { type: 'adaptive' });
+    assert.deepStrictEqual(modelCatalog.thinkingRequestPayload('toggle-adaptive', false), { type: 'disabled' });
+    assert.strictEqual(modelCatalog.thinkingRequestPayload('always-on', false), null);
+    assert.strictEqual(modelCatalog.getThinkingControl('openai', 'gpt-4o'), 'none');
+    assert.strictEqual(modelCatalog.inferThinkingControl('openai-compatible/minimax-m3'), 'toggle-adaptive');
+    assert.strictEqual(modelCatalog.getThinkingControl('opencode-go', 'longcat-2.0'), 'always-on');
+    assert.strictEqual(modelCatalog.getThinkingControl('opencode-go', 'qwen3.6-plus'), 'always-on');
+    assert.strictEqual(modelCatalog.inferOpencodeTransport('qwen3.6-plus'), 'chat-completions');
+    assert.strictEqual(modelCatalog.inferOpencodeTransport('gpt-5.6-luna'), 'responses');
+    assert.ok(modelCatalog.isOpencodeGatewayCallable(modelCatalog.getProviderModelEntry('opencode-go', 'longcat-2.0')));
+    assert.ok(modelCatalog.isOpencodeGatewayCallable(modelCatalog.getProviderModelEntry('opencode-go', 'gpt-5.6-luna')));
+    assert.ok(modelCatalog.isOpencodeGatewayCallable(modelCatalog.getProviderModelEntry('opencode-go', 'grok-4.6')));
+    assert.ok(modelCatalog.isOpencodeGatewayCallable(modelCatalog.getProviderModelEntry('opencode-go', 'muse-spark-1.2-contributor')));
+    assert.strictEqual(modelCatalog.getThinkingControl('opencode-go', 'muse-spark-1.2-contributor'), 'always-on');
+    assert.strictEqual(modelCatalog.getThinkingControl('opencode-go', 'gpt-5.6-luna'), 'responses-effort');
+    assert.strictEqual(modelCatalog.resolveProviderEndpoint('opencode-go', '', { model: 'gpt-5.6-luna' }), modelCatalog.GO_RESPONSES_ENDPOINT);
+    assert.strictEqual(modelCatalog.resolveProviderEndpoint('opencode-go', '', { model: 'glm-5.2' }), modelCatalog.GO_CHAT_ENDPOINT);
+    assert.deepStrictEqual(modelCatalog.thinkingRequestPayload('responses-effort', false), { effort: 'none' });
+    assert.strictEqual(modelCatalog.thinkingRequestPayload('responses-effort', true), null);
     var pickle = modelCatalog.getProviderModelEntry('opencode-zen', 'big-pickle');
     assert.ok(pickle, 'big-pickle should exist without a -free suffix');
     assert.strictEqual(pickle.pricingClass, 'free');
@@ -500,22 +530,60 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
         assert.strictEqual(tokens.join(''), '温度低于 3 度，a < b 时她仍出门。');
     })();
 
-    globalThis.fetch = async (url, init) => {
-        var body = JSON.parse(init.body);
+    function mockChatStream(inspect, chunks) {
+        return async (url, init) => {
+            var body = JSON.parse(init.body);
+            inspect(body, url);
+            var encoder = new TextEncoder();
+            var stream = new ReadableStream({
+                start(controller) {
+                    (chunks || [
+                        { choices: [{ delta: { content: 'ok' } }] },
+                        { choices: [{ finish_reason: 'stop' }] }
+                    ]).forEach((chunk) => {
+                        controller.enqueue(encoder.encode('data: ' + JSON.stringify(chunk) + '\n\n'));
+                    });
+                    controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                    controller.close();
+                }
+            });
+            return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+        };
+    }
+
+    async function pingChat(config, inspect, chunks) {
+        globalThis.fetch = mockChatStream(inspect, chunks);
+        try {
+            var tokens = [];
+            var types = [];
+            await providerStream.streamGeneration(
+                { messages: [{ role: 'user', content: 'Continue' }] },
+                function (token, meta) {
+                    if (token) {
+                        tokens.push(token);
+                        types.push(meta && meta.type);
+                    }
+                },
+                Object.assign({
+                    mode: 'api',
+                    endpoint: 'https://example.test/v1/chat/completions',
+                    apiKey: 'test-key'
+                }, config)
+            );
+            return { tokens: tokens, types: types };
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    }
+
+    globalThis.fetch = mockChatStream(function (body) {
         assert.strictEqual(body.model, 'minimax-m3');
-        assert.ok(!body.thinking, 'MiniMax should not receive a thinking control field');
-        var encoder = new TextEncoder();
-        var stream = new ReadableStream({
-            start(controller) {
-                controller.enqueue(encoder.encode('data: ' + JSON.stringify({ choices: [{ delta: { content: '<think>只在心里盘算。' } }] }) + '\n\n'));
-                controller.enqueue(encoder.encode('data: ' + JSON.stringify({ choices: [{ delta: { content: '</think>门口的灯灭了。' } }] }) + '\n\n'));
-                controller.enqueue(encoder.encode('data: ' + JSON.stringify({ choices: [{ finish_reason: 'stop' }] }) + '\n\n'));
-                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-                controller.close();
-            }
-        });
-        return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
-    };
+        assert.strictEqual(body.thinking && body.thinking.type, 'disabled', 'MiniMax M3 off should send thinking.disabled');
+    }, [
+        { choices: [{ delta: { content: '<think>只在心里盘算。' } }] },
+        { choices: [{ delta: { content: '</think>门口的灯灭了。' } }] },
+        { choices: [{ finish_reason: 'stop' }] }
+    ]);
     try {
         var miniTokens = [];
         var miniMeta = [];
@@ -540,6 +608,87 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
         assert.strictEqual(miniReasoning, '只在心里盘算。');
         assert.strictEqual(miniContent, '门口的灯灭了。');
         console.log('Provider stream MiniMax inline think test passed.');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+
+    await pingChat({ provider: 'opencode-go', model: 'minimax-m3', enableThinking: true }, function (body) {
+        assert.strictEqual(body.thinking && body.thinking.type, 'adaptive', 'MiniMax M3 on should send thinking.adaptive, not enabled');
+        assert.ok(!Object.prototype.hasOwnProperty.call(body, 'temperature'), 'thinking MiniMax should not send temperature');
+    });
+    await pingChat({ provider: 'opencode-go', model: 'kimi-k2.6', enableThinking: true }, function (body) {
+        assert.strictEqual(body.thinking && body.thinking.type, 'enabled');
+    });
+    await pingChat({ provider: 'opencode-go', model: 'kimi-k2.6', enableThinking: false }, function (body) {
+        assert.strictEqual(body.thinking && body.thinking.type, 'disabled');
+        assert.strictEqual(body.temperature, 0.8, 'non-thinking Kimi should still send temperature');
+    });
+    await pingChat({ provider: 'opencode-go', model: 'kimi-k2.7-code', enableThinking: false }, function (body) {
+        assert.ok(!body.thinking, 'Kimi K2.7 Code must not receive thinking.disabled');
+        assert.ok(!Object.prototype.hasOwnProperty.call(body, 'temperature'), 'always-on thinking should still drop temperature');
+    });
+    await pingChat({ provider: 'opencode-go', model: 'glm-5.3', enableThinking: false }, function (body) {
+        assert.ok(!body.thinking, 'GLM 5.3 must not receive a thinking control field');
+    });
+    await pingChat({ provider: 'opencode-zen', model: 'minimax-m2.7', enableThinking: true }, function (body) {
+        assert.ok(!body.thinking, 'MiniMax M2.x must not receive a thinking control field');
+    });
+    console.log('Provider stream thinkingControl mapping tests passed.');
+
+    var responsesConverted = providerStream.toResponsesInput([
+        { role: 'system', content: 'Keep answers short.' },
+        { role: 'user', content: 'Hi' }
+    ]);
+    assert.strictEqual(responsesConverted.instructions, 'Keep answers short.');
+    assert.strictEqual(responsesConverted.input[0].role, 'user');
+
+    globalThis.fetch = async (url, init) => {
+        assert.strictEqual(url, 'https://opencode.ai/zen/go/v1/responses');
+        var body = JSON.parse(init.body);
+        assert.strictEqual(body.model, 'gpt-5.6-luna');
+        assert.ok(Array.isArray(body.input), 'Responses request should use input, not messages');
+        assert.ok(!Object.prototype.hasOwnProperty.call(body, 'messages'));
+        assert.ok(!Object.prototype.hasOwnProperty.call(body, 'thinking'));
+        assert.strictEqual(body.reasoning.effort, 'none');
+        assert.ok(!Object.prototype.hasOwnProperty.call(body, 'temperature'), 'GPT Responses should not send temperature');
+        var encoder = new TextEncoder();
+        var stream = new ReadableStream({
+            start(controller) {
+                controller.enqueue(encoder.encode('event: response.reasoning_summary_text.delta\ndata: ' + JSON.stringify({ type: 'response.reasoning_summary_text.delta', delta: 'add first' }) + '\n\n'));
+                controller.enqueue(encoder.encode('data: ' + JSON.stringify({ type: 'response.output_text.delta', delta: '323' }) + '\n\n'));
+                controller.enqueue(encoder.encode('data: ' + JSON.stringify({ type: 'response.completed', response: { usage: { input_tokens: 8, output_tokens: 2, total_tokens: 10 } } }) + '\n\n'));
+                controller.close();
+            }
+        });
+        return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    };
+    try {
+        var respTokens = [];
+        var respMeta = [];
+        await providerStream.streamGeneration(
+            { messages: [{ role: 'user', content: 'Compute 17*19' }] },
+            function (token, meta) {
+                if (token) {
+                    respTokens.push(token);
+                    respMeta.push(meta && meta.type);
+                } else if (meta) {
+                    respMeta.push(meta.type);
+                }
+            },
+            {
+                mode: 'api',
+                provider: 'opencode-go',
+                model: 'gpt-5.6-luna',
+                enableThinking: false,
+                endpoint: 'https://evil.example/v1/chat/completions',
+                apiKey: 'go-key'
+            }
+        );
+        assert.strictEqual(respTokens[0], 'add first');
+        assert.strictEqual(respMeta[0], 'reasoning');
+        assert.strictEqual(respTokens[1], '323');
+        assert.strictEqual(respMeta[1], 'content');
+        console.log('Provider stream OpenCode Responses test passed.');
     } finally {
         globalThis.fetch = originalFetch;
     }

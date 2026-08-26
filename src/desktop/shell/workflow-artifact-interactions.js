@@ -177,10 +177,25 @@
         thinkingLabel.className = 'desktop-workflow-toggle';
         const thinking = document.createElement('input');
         thinking.type = 'checkbox';
-        thinking.checked = workflowState.artifactRewriteThinking !== false;
         thinking.dataset.workflowArtifactRewriteThinking = '';
+        const rewritePolicy = workflowGenerationPolicy();
+        const rewriteSnapshot = (rewritePolicy && rewritePolicy.snapshot) || {};
+        const rewriteModel = (workflowState.artifactRewriteModel && workflowState.artifactRewriteModel !== 'inherit')
+            ? workflowState.artifactRewriteModel
+            : (rewriteSnapshot.model || '');
+        const rewriteCatalog = typeof modelCatalog === 'function' ? modelCatalog() : (window.DraftHarborModelCatalog || {});
+        const rewriteAlwaysOn = rewriteCatalog.isThinkingAlwaysOn
+            ? rewriteCatalog.isThinkingAlwaysOn(rewriteSnapshot.provider, rewriteModel)
+            : false;
+        thinking.checked = rewriteAlwaysOn || workflowState.artifactRewriteThinking !== false;
+        thinking.disabled = rewriteAlwaysOn;
         thinking.addEventListener('change', () => { workflowState.artifactRewriteThinking = thinking.checked; });
         thinkingLabel.append(thinking, document.createTextNode('深度思考'));
+        if (rewriteAlwaysOn) {
+            const hint = document.createElement('small');
+            hint.textContent = '该模型思考无法关闭';
+            thinkingLabel.appendChild(hint);
+        }
         aiControls.append(modelLabel, thinkingLabel);
         const rewriteButton = document.createElement('button');
         rewriteButton.type = 'button';

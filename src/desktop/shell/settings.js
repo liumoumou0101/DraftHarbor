@@ -334,6 +334,10 @@
             getProviderModels: function () { return [{ id: '__custom__', label: '自定义模型...' }]; },
             getProviderMetadata: function (provider) { return { label: provider, defaultEndpoint: '', defaultModelHint: '' }; },
             isThinkingSupported: function () { return false; },
+            getThinkingControl: function () { return 'none'; },
+            isThinkingAlwaysOn: function () { return false; },
+            thinkingWillRun: function (provider, model, requested) { return !!requested; },
+            thinkingRequestPayload: function () { return null; },
             isKnownDefaultEndpoint: function () { return false; },
             isKnownDefaultModelHint: function () { return false; },
             isApiCompatibleProvider: function (provider) {

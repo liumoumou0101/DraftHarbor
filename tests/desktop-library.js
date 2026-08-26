@@ -4,7 +4,7 @@ const os = require('os');
 const path = require('path');
 const { chromium } = require('playwright');
 const { startDesktopServers } = require('../desktop/local-server');
-const { openNativePanel, openGenerationAdvanced, clickMoreAction } = require('./helpers/native-panel');
+const { openNativePanel, openGenerationAdvanced, closeGenerationAdvanced, clickMoreAction } = require('./helpers/native-panel');
 
 function snapshot(id, name, text, exportedAt) {
     return {
@@ -328,10 +328,7 @@ async function submitNativeName(page, value) {
         assert.strictEqual(compendiumApiBody.entries[0].title, 'Ada Navigator', 'native compendium UI should save entries');
         await page.click('[data-view-target="writer"]');
         await openNativePanel(page, 'generate');
-        await page.evaluate(() => {
-            const advanced = document.querySelector('[data-native-generation-advanced]');
-            if (advanced) advanced.open = true;
-        });
+        await openGenerationAdvanced(page);
         await page.click('[data-native-manage-prompts]');
         await page.fill('[data-prompt-manager-title]', 'Test Prose Prompt');
         await page.fill('[data-prompt-manager-system]', 'Write with luminous restraint.');
@@ -340,6 +337,7 @@ async function submitNativeName(page, value) {
         await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('提示词已保存'));
         await page.locator('[data-prompt-manager-close]').click();
         await page.waitForFunction(() => Array.from(document.querySelectorAll('[data-native-prompt-template] option')).some((option) => option.textContent.includes('Test Prose Prompt')));
+        await closeGenerationAdvanced(page);
         await page.click('[data-view-target="settings"]');
         await page.waitForSelector('[data-settings-form]');
         await page.selectOption('[data-settings-mode]', 'api');
@@ -473,10 +471,8 @@ async function submitNativeName(page, value) {
         assert.strictEqual(drawnCompendiumBody.entries[0].summary, 'Second draw.', 'confirmed draw should save rerolled unlocked fields');
         assert.strictEqual(drawnCompendiumBody.entries[0].characterProfile.goal, '找回航图', 'confirmed character draw should save structured character fields');
         await page.click('[data-view-target="writer"]');
-        await page.evaluate(() => {
-            const advanced = document.querySelector('[data-native-generation-advanced]');
-            if (advanced) advanced.open = true;
-        });
+        await openNativePanel(page, 'generate');
+        await openGenerationAdvanced(page);
         await page.waitForSelector('[data-native-temperature]');
         await page.fill('[data-native-temperature]', '0.7');
         await page.locator('[data-native-temperature]').dispatchEvent('change');
@@ -484,6 +480,7 @@ async function submitNativeName(page, value) {
         await page.fill('[data-native-max-tokens]', '1800');
         await page.locator('[data-native-max-tokens]').dispatchEvent('change');
         await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('生成参数已更新'));
+        await closeGenerationAdvanced(page);
         await page.evaluate(() => {
             window.__nativeGenerationCalls = 0;
             window.__draftHarborGenerationStub = async (prompt, onToken, config) => {
@@ -499,7 +496,6 @@ async function submitNativeName(page, value) {
         await page.waitForFunction(() => window.DraftHarborProviderStream && typeof window.DraftHarborProviderStream.streamGeneration === 'function');
         await page.fill('[data-native-beat-input]', '让主角发现一封旧信。');
         await page.waitForFunction(() => !document.querySelector('[data-native-generate]').disabled);
-        await openGenerationAdvanced(page);
         await page.click('[data-native-preview-prompt]');
         await page.waitForFunction(() => document.querySelector('[data-native-prompt-preview]').textContent.includes('BEAT TO EXPAND'));
         const previewText = await page.locator('[data-native-prompt-preview]').innerText();
@@ -568,7 +564,9 @@ async function submitNativeName(page, value) {
         assert.strictEqual(generationConfig.temperature, 0.7, 'native generation should use writer quick temperature');
         assert.strictEqual(generationConfig.maxTokens, 1800, 'native generation should use writer quick max tokens');
         await page.waitForFunction(() => document.querySelector('[data-native-generation-result]').textContent.includes('Generated native prose.'));
+        await openGenerationAdvanced(page);
         await page.selectOption('[data-native-generation-insert-mode]', 'append');
+        await closeGenerationAdvanced(page);
         await page.click('[data-native-accept-generation]');
         await page.waitForFunction(() => document.querySelector('[data-native-scene-editor]').value.includes('Generated native prose.'));
         await page.click('[data-native-save-scene]');

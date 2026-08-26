@@ -209,7 +209,7 @@
                         </div>
                     </main>
                     <aside class="desktop-native-assistant">
-                        <div class="desktop-native-sidebar-resizer desktop-native-assistant-resizer" data-native-resize-assistant role="separator" aria-orientation="vertical" aria-label="调整辅助栏宽度" tabindex="0"></div>
+                        <div class="desktop-native-sidebar-resizer desktop-native-assistant-resizer" data-native-resize-assistant role="separator" aria-orientation="vertical" aria-label="拖动调整辅助栏大小，双击恢复默认" title="拖动调整高度，双击恢复默认" tabindex="0"></div>
                         <div class="desktop-native-assistant-header">
                             <span class="desktop-native-assistant-header-label">Copilot</span>
                             <span class="desktop-native-assistant-header-desc">AI / 资料 / 元数据 / 历史</span>
@@ -279,9 +279,14 @@
                                     <button type="button" data-native-copilot-suggestion="提高这一场的紧张感，让人物目标、阻碍和风险更清楚。">提高张力</button>
                                     <button type="button" data-native-copilot-suggestion="检查当前场景是否贴合前文连续性，并续写一段自然过渡。">贴合上下文</button>
                                 </div>
-                                <div class="desktop-native-generation-input">
-                                    <textarea data-native-beat-input rows="3" placeholder="输入这一段要发生什么，或写下续写方向"></textarea>
-                                    <div class="desktop-native-generation-actions">
+                                <div class="desktop-native-composer desktop-native-generation-input" data-native-composer="generate">
+                                    <textarea data-native-beat-input rows="5" aria-label="续写方向" placeholder="输入这一段要发生什么，或写下续写方向"></textarea>
+                                    <button class="desktop-native-composer-model" type="button" data-native-composer-model data-native-open-writer-settings title="打开写作设置">未选择模型</button>
+                                    <div class="desktop-native-composer-footer desktop-native-generation-actions">
+                                        <label class="desktop-native-writer-check desktop-native-composer-thinking" data-native-composer-thinking hidden>
+                                            <input type="checkbox" data-native-thinking-toggle>
+                                            <span>深度思考</span>
+                                        </label>
                                         <label class="desktop-native-length-hint">
                                             <span>篇幅</span>
                                             <select data-native-length-hint aria-label="本拍篇幅">
@@ -290,98 +295,16 @@
                                                 <option value="expanded">稍展开</option>
                                             </select>
                                         </label>
+                                        <button class="desktop-secondary-action" type="button" data-native-open-writer-settings>设置</button>
+                                        <button class="desktop-secondary-action" type="button" data-native-preview-prompt>预览提示词</button>
                                         <button class="desktop-primary-action" type="button" data-native-generate>生成</button>
                                         <button class="desktop-secondary-action" type="button" data-native-cancel-generation hidden>取消</button>
                                     </div>
                                 </div>
-                                <details class="desktop-native-generation-advanced" data-native-generation-advanced>
-                                    <summary>
-                                        <span>高级选项</span>
-                                        <small>提示词、写入位置、模型</small>
-                                    </summary>
-                                    <div class="desktop-native-generation-advanced-body">
-                                        <div class="desktop-native-prompt-toolbar">
-                                            <label>
-                                                <span>提示词</span>
-                                                <select data-native-prompt-template aria-label="正文提示词模板"></select>
-                                            </label>
-                                            <div class="desktop-native-prompt-toolbar-actions">
-                                                <button class="desktop-secondary-action" type="button" data-native-preview-prompt>预览</button>
-                                                <button class="desktop-secondary-action" type="button" data-native-manage-prompts>管理</button>
-                                                <button class="desktop-secondary-action" type="button" data-native-manage-global-prompt>指令栈</button>
-                                            </div>
-                                        </div>
-                                        <div class="desktop-native-insert-options">
-                                            <span>写入位置</span>
-                                            <select data-native-generation-insert-mode>
-                                                <option value="append">追加到场景末尾</option>
-                                                <option value="cursor">插入光标处</option>
-                                                <option value="replace">替换选中文本</option>
-                                            </select>
-                                        </div>
-                                        <section class="desktop-native-model-settings" data-native-model-settings>
-                                            <div class="desktop-native-model-settings-head">
-                                                <strong>模型</strong>
-                                                <small class="desktop-native-model-control-hint" data-native-model-control-hint></small>
-                                            </div>
-                                            <div class="desktop-native-model-control" data-native-model-control>
-                                                <div class="desktop-native-model-control-row">
-                                                    <label>
-                                                        <span>配置组</span>
-                                                        <select data-native-profile-select>
-                                                        </select>
-                                                    </label>
-                                                </div>
-                                                <div class="desktop-native-model-control-row">
-                                                    <label>
-                                                        <span>模型</span>
-                                                        <select data-native-model-select>
-                                                        </select>
-                                                    </label>
-                                                </div>
-                                                <div class="desktop-native-model-control-row" data-native-custom-model-group hidden>
-                                                    <label>
-                                                        <span>手填模型 ID</span>
-                                                        <input type="text" data-native-custom-model placeholder="按服务商文档填写模型名称或 ID">
-                                                    </label>
-                                                </div>
-                                                <div class="desktop-native-model-control-row">
-                                                    <label class="desktop-native-writer-check">
-                                                        <input type="checkbox" data-native-thinking-toggle>
-                                                        <span>深度思考</span>
-                                                    </label>
-                                                </div>
-                                                <div class="desktop-native-model-control-row desktop-native-sampling-row">
-                                                    <label>
-                                                        <span>温度</span>
-                                                        <input type="number" data-native-temperature min="0" max="2" step="0.05">
-                                                    </label>
-                                                    <label>
-                                                        <span>最大输出</span>
-                                                        <input type="number" data-native-max-tokens min="1" max="200000" step="100">
-                                                    </label>
-                                                </div>
-                                                <div class="desktop-native-model-control-row">
-                                                    <label class="desktop-native-writer-check">
-                                                        <input type="checkbox" data-native-provider-defaults>
-                                                        <span>使用服务商默认参数</span>
-                                                    </label>
-                                                    <span class="desktop-native-sampling-hint" data-native-sampling-hint></span>
-                                                </div>
-                                            </div>
-                                        </section>
-                                    </div>
-                                </details>
                             </div>
                         </section>
                         <section class="desktop-native-assistant-panel" data-native-panel="rewrite">
                             <div class="desktop-native-rewrite">
-                                <div class="desktop-native-rewrite-original">
-                                    <label>
-                                        <span>选中原文</span>
-                                        <textarea readonly data-native-rewrite-original-text placeholder="在正文中选中文本后，原文会显示在这里。"></textarea>
-                                    </label>
-                                </div>
                                 <div class="desktop-native-task-group" data-native-rewrite-task-group>
                                     <button type="button" class="is-active" data-native-rewrite-task="polish">润色</button>
                                     <button type="button" data-native-rewrite-task="expand">扩写</button>
@@ -414,18 +337,28 @@
                                         </select>
                                     </label>
                                 </div>
-                                <label>
-                                    <span>改写要求</span>
-                                    <textarea data-native-rewrite-instruction placeholder="选择一个预设模板或已保存的 Prompt，也可以直接手写改写要求。"></textarea>
-                                </label>
-                                <label class="desktop-native-rewrite-budget is-compact">
-                                    <span>改写前后文（各）</span>
-                                    <input data-native-rewrite-context-chars type="number" min="0" max="8000" step="100" value="1200">
-                                    <small>只用于改写，窗口较短。</small>
-                                </label>
-                                <div class="desktop-native-generation-actions desktop-native-rewrite-main-actions">
-                                    <button class="desktop-secondary-action" type="button" data-native-preview-rewrite>预览</button>
-                                    <button class="desktop-primary-action" type="button" data-native-start-rewrite>改写选中文本</button>
+                                <div class="desktop-native-rewrite-original">
+                                    <label>
+                                        <span>选中原文</span>
+                                        <textarea readonly data-native-rewrite-original-text placeholder="在正文中选中文本后，原文会显示在这里。"></textarea>
+                                    </label>
+                                </div>
+                                <div class="desktop-native-composer" data-native-composer="rewrite">
+                                    <textarea data-native-rewrite-instruction rows="5" aria-label="改写要求" placeholder="选择一个预设模板或已保存的 Prompt，也可以直接手写改写要求。"></textarea>
+                                    <button class="desktop-native-composer-model" type="button" data-native-composer-model data-native-open-writer-settings title="打开写作设置">未选择模型</button>
+                                    <div class="desktop-native-composer-footer desktop-native-generation-actions desktop-native-rewrite-main-actions">
+                                        <label class="desktop-native-writer-check desktop-native-composer-thinking" data-native-composer-thinking hidden>
+                                            <input type="checkbox" data-native-thinking-toggle>
+                                            <span>深度思考</span>
+                                        </label>
+                                        <label class="desktop-native-rewrite-budget is-compact">
+                                            <span>前后文</span>
+                                            <input data-native-rewrite-context-chars type="number" min="0" max="8000" step="100" value="1200" title="改写时各取的前后文字数" aria-label="改写前后文各多少字">
+                                        </label>
+                                        <button class="desktop-secondary-action" type="button" data-native-open-writer-settings>设置</button>
+                                        <button class="desktop-secondary-action" type="button" data-native-preview-rewrite>预览提示词</button>
+                                        <button class="desktop-primary-action" type="button" data-native-start-rewrite>改写</button>
+                                    </div>
                                 </div>
                                 <details class="desktop-native-rewrite-regenerate" data-native-rewrite-regenerate>
                                     <summary>重生成选区</summary>
@@ -575,6 +508,90 @@
                             <button class="desktop-secondary-action" type="button" data-reader-writer-refresh>重新预览</button>
                             <button class="desktop-primary-action" type="button" data-reader-writer-apply disabled>确认并应用</button>
                         </footer>
+                    </dialog>
+                    <dialog class="desktop-native-prompt-dialog desktop-native-writer-settings-dialog" data-native-writer-settings-dialog data-native-generation-advanced>
+                        <header class="desktop-native-summary-dialog-header">
+                            <div>
+                                <p class="desktop-section-kicker">Writer Settings</p>
+                                <h2>写作设置</h2>
+                            </div>
+                        </header>
+                        <div class="desktop-native-writer-settings-body desktop-native-generation-advanced-body">
+                            <div class="desktop-native-prompt-toolbar">
+                                <label>
+                                    <span>提示词</span>
+                                    <select data-native-prompt-template aria-label="正文提示词模板"></select>
+                                </label>
+                                <div class="desktop-native-prompt-toolbar-actions">
+                                    <button class="desktop-secondary-action" type="button" data-native-preview-prompt>预览提示词</button>
+                                    <button class="desktop-secondary-action" type="button" data-native-manage-prompts>管理</button>
+                                    <button class="desktop-secondary-action" type="button" data-native-manage-global-prompt>指令栈</button>
+                                </div>
+                            </div>
+                            <div class="desktop-native-insert-options">
+                                <span>写入位置</span>
+                                <select data-native-generation-insert-mode>
+                                    <option value="append">追加到场景末尾</option>
+                                    <option value="cursor">插入光标处</option>
+                                    <option value="replace">替换选中文本</option>
+                                </select>
+                            </div>
+                            <section class="desktop-native-model-settings" data-native-model-settings>
+                                <div class="desktop-native-model-settings-head">
+                                    <strong>模型</strong>
+                                    <small class="desktop-native-model-control-hint" data-native-model-control-hint></small>
+                                </div>
+                                <div class="desktop-native-model-control" data-native-model-control>
+                                    <div class="desktop-native-model-control-row">
+                                        <label>
+                                            <span>配置组</span>
+                                            <select data-native-profile-select>
+                                            </select>
+                                        </label>
+                                    </div>
+                                    <div class="desktop-native-model-control-row">
+                                        <label>
+                                            <span>模型</span>
+                                            <select data-native-model-select>
+                                            </select>
+                                        </label>
+                                    </div>
+                                    <div class="desktop-native-model-control-row" data-native-custom-model-group hidden>
+                                        <label>
+                                            <span>手填模型 ID</span>
+                                            <input type="text" data-native-custom-model placeholder="按服务商文档填写模型名称或 ID">
+                                        </label>
+                                    </div>
+                                    <div class="desktop-native-model-control-row">
+                                        <label class="desktop-native-writer-check">
+                                            <input type="checkbox" data-native-thinking-toggle>
+                                            <span>深度思考</span>
+                                            <small data-native-thinking-hint hidden></small>
+                                        </label>
+                                    </div>
+                                    <div class="desktop-native-model-control-row desktop-native-sampling-row">
+                                        <label>
+                                            <span>温度</span>
+                                            <input type="number" data-native-temperature min="0" max="2" step="0.05">
+                                        </label>
+                                        <label>
+                                            <span>最大输出</span>
+                                            <input type="number" data-native-max-tokens min="1" max="200000" step="100">
+                                        </label>
+                                    </div>
+                                    <div class="desktop-native-model-control-row">
+                                        <label class="desktop-native-writer-check">
+                                            <input type="checkbox" data-native-provider-defaults>
+                                            <span>使用服务商默认参数</span>
+                                        </label>
+                                        <span class="desktop-native-sampling-hint" data-native-sampling-hint></span>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                        <div class="desktop-native-generation-actions">
+                            <button class="desktop-primary-action" type="button" data-native-close-writer-settings>完成</button>
+                        </div>
                     </dialog>
                     <dialog class="desktop-native-prompt-dialog" data-native-prompt-dialog>
                         <pre data-native-prompt-preview></pre>

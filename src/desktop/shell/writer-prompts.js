@@ -966,28 +966,58 @@
         }
 
         const selectedModel = writerSelectedModelId(effectiveProfile);
+        const providerLabel = catalog.getProviderMetadata(effectiveProfile.provider).label || effectiveProfile.provider;
+        const entry = selectedModel && catalog.getProviderModelEntry
+            ? catalog.getProviderModelEntry(effectiveProfile.provider, selectedModel)
+            : null;
+        const modelLabel = (entry && entry.label) || selectedModel;
         if (elements.modelControlHint) {
-            const providerLabel = catalog.getProviderMetadata(effectiveProfile.provider).label || effectiveProfile.provider;
-            const entry = selectedModel && catalog.getProviderModelEntry
-                ? catalog.getProviderModelEntry(effectiveProfile.provider, selectedModel)
-                : null;
-            const modelLabel = (entry && entry.label) || selectedModel;
             elements.modelControlHint.textContent = canSelectModel
                 ? (modelLabel ? `${providerLabel} · ${modelLabel}` : providerLabel)
                 : '当前是本地模型。换云端请到设置改写作连接，或选一个配置组';
         }
-        const thinkingAllowed = canSelectModel && catalog.isThinkingSupported(effectiveProfile.provider, selectedModel);
-        if (elements.thinkingToggle) {
-            elements.thinkingToggle.disabled = !thinkingAllowed;
-            if (!thinkingAllowed) writerModelOverride.thinking = false;
-            elements.thinkingToggle.checked = !!writerModelOverride.thinking && thinkingAllowed;
+        const thinkingControl = catalog.getThinkingControl
+            ? catalog.getThinkingControl(effectiveProfile.provider, selectedModel)
+            : (catalog.isThinkingSupported(effectiveProfile.provider, selectedModel) ? 'toggle' : 'none');
+        const thinkingAlwaysOn = thinkingControl === 'always-on';
+        const thinkingAllowed = canSelectModel && (thinkingControl === 'toggle'
+            || thinkingControl === 'toggle-adaptive'
+            || thinkingControl === 'responses-effort');
+        const showComposerThinking = canSelectModel && (thinkingAllowed || thinkingAlwaysOn);
+        if (!thinkingAllowed && !thinkingAlwaysOn) writerModelOverride.thinking = false;
+        (elements.thinkingToggles || []).forEach((toggle) => {
+            if (thinkingAlwaysOn && canSelectModel) {
+                toggle.disabled = true;
+                toggle.checked = true;
+            } else {
+                toggle.disabled = !thinkingAllowed;
+                toggle.checked = !!writerModelOverride.thinking && thinkingAllowed;
+            }
+        });
+        (elements.composerThinking || []).forEach((wrap) => {
+            wrap.hidden = !showComposerThinking;
+        });
+        if (elements.thinkingHint) {
+            const hint = thinkingAlwaysOn && canSelectModel ? '该模型思考无法关闭' : '';
+            elements.thinkingHint.textContent = hint;
+            elements.thinkingHint.hidden = !hint;
         }
+        const composerModelName = !canSelectModel
+            ? '当前是本地模型'
+            : (writerModelOverride.model === '__custom__'
+                ? (writerModelOverride.customModel || '手填模型 ID')
+                : ((entry && entry.label) || selectedModel || providerLabel || '未选择模型'));
+        (elements.composerModelButtons || []).forEach((button) => {
+            button.textContent = composerModelName;
+            button.title = `打开写作设置 · ${composerModelName}`;
+        });
 
         const settings = normalizeDesktopSettings(settingsState.settings || {});
         const defaults = settings.generationDefaults || {};
         const useProviderDefaults = !!defaults.useProviderDefaults;
-        const thinkingActive = !!writerModelOverride.thinking && canSelectModel && catalog.isThinkingSupported(effectiveProfile.provider, selectedModel || effectiveProfile.model);
-        const temperatureDisabled = useProviderDefaults || (effectiveProfile.provider === 'deepseek' && thinkingActive);
+        const thinkingActive = canSelectModel && (thinkingAlwaysOn
+            || (!!writerModelOverride.thinking && thinkingAllowed));
+        const temperatureDisabled = useProviderDefaults || thinkingActive;
         if (elements.writerTemperature) {
             elements.writerTemperature.value = defaults.temperature === undefined ? 0.8 : defaults.temperature;
             elements.writerTemperature.disabled = temperatureDisabled;
@@ -1012,10 +1042,10 @@
                 : '';
             if (useProviderDefaults) {
                 elements.writerSamplingHint.textContent = '已交给服务商默认参数';
-            } else if (effectiveProfile.provider === 'deepseek' && thinkingActive) {
+            } else if (thinkingActive) {
                 elements.writerSamplingHint.textContent = quotaHint
-                    ? `DeepSeek Thinking 不发送温度参数。${quotaHint}`
-                    : 'DeepSeek Thinking 不发送温度参数';
+                    ? `思考模式不发送温度参数。${quotaHint}`
+                    : '思考模式不发送温度参数';
             } else if (quotaHint) {
                 elements.writerSamplingHint.textContent = quotaHint;
             } else {

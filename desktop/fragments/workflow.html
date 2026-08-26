@@ -54,6 +54,7 @@
                                 <label class="desktop-workflow-toggle" title="开启后会实时显示模型返回的思考流。">
                                     <input type="checkbox" data-workflow-thinking checked>
                                     <span>深度思考</span>
+                                    <small data-workflow-thinking-hint hidden></small>
                                 </label>
                             </div>
                             <section class="desktop-workflow-launch-fields" data-workflow-continuation-fields>
@@ -112,7 +113,7 @@
                             <label><span>重写要求（可选）</span><textarea data-workflow-creation-rewrite-instruction rows="2" placeholder="例如：更冷峻，强化悬疑感，不要改变既定世界设定。"></textarea></label>
                             <div class="desktop-workflow-ai-controls desktop-workflow-ai-controls-brief" aria-label="Brief AI 重写设置">
                                 <label><span>重写模型</span><select data-workflow-brief-model aria-label="Brief 重写模型"></select></label>
-                                <label class="desktop-workflow-toggle"><input type="checkbox" data-workflow-brief-thinking checked><span>深度思考</span></label>
+                                <label class="desktop-workflow-toggle"><input type="checkbox" data-workflow-brief-thinking checked><span>深度思考</span><small data-workflow-brief-thinking-hint hidden></small></label>
                             </div>
                             <p class="desktop-modal-status" data-workflow-creation-editor-status aria-live="polite">修改会保留在当前草稿中，保存后即可启动工作流。</p>
                             <div class="desktop-workflow-launch-actions">

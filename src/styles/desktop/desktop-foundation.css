@@ -1784,6 +1784,19 @@ background:
     min-height: 38px;
 }
 
+.desktop-workflow-toggle small,
+[data-workflow-thinking-hint],
+[data-workflow-brief-thinking-hint] {
+    color: var(--desktop-muted);
+    font-size: 11px;
+    font-weight: 400;
+}
+
+[data-workflow-thinking-hint][hidden],
+[data-workflow-brief-thinking-hint][hidden] {
+    display: none !important;
+}
+
 .desktop-workflow-creation-brief {
     display: grid;
     gap: 10px;

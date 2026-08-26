@@ -268,7 +268,13 @@ function assertCloudRequestAllowed(resolved, payload = {}) {
       throw providerError('model_unavailable', '请先填写或选择模型。');
     }
     if (entry && !ModelCatalog.isOpencodeGatewayCallable(entry)) {
-      throw providerError(entry.availability === 'offline' ? 'model_offline' : 'model_unavailable', '当前模型已下线，请重新选择或手填其他模型 ID。');
+      if (entry.availability === 'offline') {
+        throw providerError('model_offline', '当前模型已下线，请重新选择或手填其他模型 ID。');
+      }
+      if (entry.compatibility === 'unsupported-transport') {
+        throw providerError('unsupported_transport', '该模型协议尚未适配，不能发起生成。');
+      }
+      throw providerError('model_unavailable', '当前模型不可用，请重新选择或手填其他模型 ID。');
     }
   } else {
     if (!String(config.model || '').trim()) {

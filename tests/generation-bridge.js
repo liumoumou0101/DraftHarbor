@@ -86,11 +86,20 @@ async function readSse(response) {
     const allowedUnknown = generationBridge.assertCloudRequestAllowed(unknown, { model: 'totally-unknown-model-id' });
     assert.strictEqual(allowedUnknown.model, 'totally-unknown-model-id', 'OpenCode 应允许手填模型 ID');
 
+    const luna = generationBridge.resolveGenerationRequest(await settingsService.readSettings(dataRoot), {
+      model: 'gpt-5.6-luna'
+    });
+    const allowedLuna = generationBridge.assertCloudRequestAllowed(luna, { model: 'gpt-5.6-luna' });
+    assert.strictEqual(allowedLuna.endpoint, 'https://opencode.ai/zen/v1/responses');
+
     const claude = generationBridge.resolveGenerationRequest(await settingsService.readSettings(dataRoot), {
       model: 'claude-opus-4-6'
     });
-    const allowedClaude = generationBridge.assertCloudRequestAllowed(claude, { model: 'claude-opus-4-6' });
-    assert.strictEqual(allowedClaude.model, 'claude-opus-4-6', 'OpenCode 套餐内 Claude 应可经 Chat Completions 调用');
+    assert.throws(
+      () => generationBridge.assertCloudRequestAllowed(claude, { model: 'claude-opus-4-6' }),
+      /协议尚未适配/,
+      'OpenCode Claude 在 Messages 适配完成前不能调用'
+    );
 
     await settingsService.writeSettings(dataRoot, {
       providerSettings: {

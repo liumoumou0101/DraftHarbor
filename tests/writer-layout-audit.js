@@ -185,26 +185,41 @@ async function auditCurrentViewport(page, label) {
       }
     }
 
-    const advanced = document.querySelector('[data-native-generation-advanced]');
     const generatePanel = document.querySelector('[data-native-panel="generate"]');
-    if (advanced && generatePanel && assistant && writer && writer.classList.contains('is-assistant-bottom')) {
-      const wasOpen = advanced.open;
-      advanced.open = true;
-      const dockBefore = assistant.getBoundingClientRect().height;
+    if (generatePanel && assistant && writer && writer.classList.contains('is-assistant-bottom')) {
       const dockRect = assistant.getBoundingClientRect();
       const preview = document.querySelector('[data-native-preview-prompt]');
       const previewRect = preview ? preview.getBoundingClientRect() : null;
       const previewInDock = previewRect
+        && previewRect.width > 1
         && previewRect.top >= dockRect.top - tolerance
         && previewRect.bottom <= dockRect.bottom + tolerance;
-      const panelScrolls = generatePanel.scrollHeight > generatePanel.clientHeight + tolerance;
-      if (!previewInDock && !panelScrolls) {
-        issues.push(`${auditLabel}: advanced preview is clipped and the generate panel is not a scroller`);
+      if (!previewInDock) {
+        issues.push(`${auditLabel}: prompt preview control is not visible in the dock`);
       }
-      if (Math.abs(assistant.getBoundingClientRect().height - dockBefore) > tolerance) {
-        issues.push(`${auditLabel}: opening advanced changed dock height`);
+      const beat = document.querySelector('[data-native-beat-input]');
+      if (beat && isVisible(beat)) {
+        const beatRect = beat.getBoundingClientRect();
+        const minComposer = dockRect.height >= 320 ? 112 : 44;
+        if (beatRect.height + tolerance < minComposer) {
+          issues.push(`${auditLabel}: continuation composer height ${Math.round(beatRect.height)}px < ${minComposer}px`);
+        }
+        if (beatRect.width + 80 < dockRect.width) {
+          issues.push(`${auditLabel}: continuation composer width ${Math.round(beatRect.width)}px should use the dock`);
+        }
       }
-      advanced.open = wasOpen;
+      const settings = document.querySelector('[data-native-writer-settings-dialog]');
+      if (settings) {
+        const closedHeight = assistant.getBoundingClientRect().height;
+        if (typeof settings.showModal === 'function') settings.showModal();
+        else settings.open = true;
+        const openHeight = assistant.getBoundingClientRect().height;
+        if (Math.abs(openHeight - closedHeight) > tolerance) {
+          issues.push(`${auditLabel}: opening writer settings changed dock height`);
+        }
+        if (typeof settings.close === 'function') settings.close();
+        else settings.open = false;
+      }
     }
 
     return issues;

@@ -6,18 +6,21 @@
     if (typeof module === 'object' && module.exports) module.exports = api;
     else root.DraftHarborProviderStream = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (runtime, InstructionStack) {
+    const THINKING_DISABLED_PARAMS = Object.freeze(['temperature', 'top_p', 'presence_penalty', 'frequency_penalty']);
     const MODEL_CAPABILITIES = Object.freeze({
         'deepseek-v4-flash': Object.freeze({
             label: 'DeepSeek V4 Flash',
             thinkingSupported: true,
+            thinkingControl: 'toggle',
             contextNote: '1M 上下文，快速响应',
-            thinkingDisabledParams: Object.freeze(['temperature', 'top_p', 'presence_penalty', 'frequency_penalty'])
+            thinkingDisabledParams: THINKING_DISABLED_PARAMS
         }),
         'deepseek-v4-pro': Object.freeze({
             label: 'DeepSeek V4 Pro',
             thinkingSupported: true,
+            thinkingControl: 'toggle',
             contextNote: '1M 上下文，深度推理',
-            thinkingDisabledParams: Object.freeze(['temperature', 'top_p', 'presence_penalty', 'frequency_penalty'])
+            thinkingDisabledParams: THINKING_DISABLED_PARAMS
         })
     });
 
@@ -333,23 +336,48 @@
         };
     }
 
+    function resolveThinkingControl(config, modelId, entry) {
+        const catalog = resolveModelCatalog();
+        if (catalog && typeof catalog.getThinkingControl === 'function') {
+            return catalog.getThinkingControl(config.provider, modelId, { entry: entry });
+        }
+        if (entry && (entry.thinkingControl === 'toggle' || entry.thinkingControl === 'toggle-adaptive' || entry.thinkingControl === 'always-on')) {
+            return entry.thinkingControl;
+        }
+        if (entry && entry.thinkingSupported) return 'toggle';
+        if (String(config.provider || '') === 'deepseek') return 'toggle';
+        return 'none';
+    }
+
     function resolveChatSelection(config) {
         const provider = String(config.provider || '');
-        if (provider === 'deepseek') return resolveDeepSeekSelection(config);
         const catalog = resolveModelCatalog();
-        const requested = String(config.model || config.aiModel || '').trim();
+        let model = '';
+        let requestedThinking = !!config.enableThinking;
+        if (provider === 'deepseek') {
+            const deepseek = resolveDeepSeekSelection(config);
+            model = deepseek.model;
+            requestedThinking = deepseek.thinking;
+        } else {
+            const requested = String(config.model || config.aiModel || '').trim();
+            const fallback = catalog && typeof catalog.getProviderMetadata === 'function'
+                ? (catalog.getProviderMetadata(provider).defaultModelHint || 'gpt-4o-mini')
+                : 'gpt-4o-mini';
+            model = requested || fallback;
+        }
         const entry = catalog && typeof catalog.getProviderModelEntry === 'function'
-            ? catalog.getProviderModelEntry(provider, requested)
-            : getModelCapability(requested);
-        const thinkingSupported = !!(entry && entry.thinkingSupported);
-        const fallback = catalog && typeof catalog.getProviderMetadata === 'function'
-            ? (catalog.getProviderMetadata(provider).defaultModelHint || 'gpt-4o-mini')
-            : 'gpt-4o-mini';
+            ? catalog.getProviderModelEntry(provider, model)
+            : getModelCapability(model);
+        const thinkingControl = resolveThinkingControl(config, model, entry);
+        const thinkingSupported = thinkingControl === 'toggle' || thinkingControl === 'toggle-adaptive';
+        const thinking = thinkingControl === 'always-on' || (thinkingSupported && requestedThinking);
         return {
-            model: requested || fallback,
-            thinking: thinkingSupported && !!config.enableThinking,
+            model,
+            thinking,
+            requestedThinking,
+            thinkingControl,
             thinkingSupported,
-            capability: entry || getModelCapability(requested)
+            capability: entry || getModelCapability(model)
         };
     }
 
@@ -365,19 +393,35 @@
     function createChatRequest(messages, config) {
         const selection = resolveChatSelection(config);
         const capability = selection.capability || getModelCapability(selection.model) || {};
-        const sendThinking = !!selection.thinkingSupported || config.provider === 'deepseek';
+        const catalog = resolveModelCatalog();
+        const payload = catalog && typeof catalog.thinkingRequestPayload === 'function'
+            ? catalog.thinkingRequestPayload(selection.thinkingControl, selection.requestedThinking)
+            : (selection.thinkingSupported
+                ? { type: selection.thinkingControl === 'toggle-adaptive'
+                    ? (selection.requestedThinking ? 'adaptive' : 'disabled')
+                    : (selection.requestedThinking ? 'enabled' : 'disabled') }
+                : null);
         const body = { model: selection.model, messages, stream: true };
         if (config.includeUsage) body.stream_options = { include_usage: true };
-        if (sendThinking) body.thinking = { type: selection.thinking ? 'enabled' : 'disabled' };
+        if (payload) body.thinking = payload;
         if (!config.useProviderDefaults) {
             body.temperature = numeric(config.temperature, 0.8);
             body.max_tokens = numeric(config.maxTokens, 300);
         }
         if (selection.thinking) {
-            const unsupported = new Set(capability.thinkingDisabledParams || []);
+            const unsupported = new Set(
+                (capability.thinkingDisabledParams && capability.thinkingDisabledParams.length)
+                    ? capability.thinkingDisabledParams
+                    : THINKING_DISABLED_PARAMS
+            );
             for (const key of unsupported) delete body[key];
         }
-        return { body, thinking: selection.thinking, thinkingSupported: sendThinking };
+        return {
+            body,
+            thinking: selection.thinking,
+            thinkingSupported: selection.thinkingSupported,
+            thinkingControl: selection.thinkingControl
+        };
     }
 
     async function requestChat(messages, emit, config, onActivity) {
@@ -548,8 +592,182 @@
         await consumeEventStream(response, (serialized) => visitAnthropicEvent(serialized, emit), onActivity);
     }
 
+    function toResponsesInput(messages) {
+        const systemParts = [];
+        const input = [];
+        (Array.isArray(messages) ? messages : []).forEach((message) => {
+            const role = message && message.role === 'assistant'
+                ? 'assistant'
+                : (message && message.role === 'system' ? 'system' : 'user');
+            const content = String((message && message.content) || '');
+            if (role === 'system') {
+                if (content.trim()) systemParts.push(content);
+                return;
+            }
+            const last = input[input.length - 1];
+            if (last && last.role === role) last.content = `${last.content}\n\n${content}`.trim() || ' ';
+            else input.push({ role, content: content.trim() || ' ' });
+        });
+        if (!input.length) input.push({ role: 'user', content: ' ' });
+        return { instructions: systemParts.join('\n\n'), input };
+    }
+
+    function responsesUsage(usage) {
+        if (!usage || typeof usage !== 'object') return null;
+        return {
+            prompt_tokens: Number(usage.prompt_tokens || usage.input_tokens || 0),
+            completion_tokens: Number(usage.completion_tokens || usage.output_tokens || 0),
+            total_tokens: Number(usage.total_tokens || 0),
+            input_tokens: Number(usage.input_tokens || usage.prompt_tokens || 0),
+            output_tokens: Number(usage.output_tokens || usage.completion_tokens || 0)
+        };
+    }
+
+    function emitResponsesOutput(output, emit, options) {
+        const skipContent = !!(options && options.skipContent);
+        const skipReasoning = !!(options && options.skipReasoning);
+        const items = Array.isArray(output) ? output : [];
+        items.forEach((item) => {
+            if (!item) return;
+            if (item.type === 'reasoning') {
+                if (skipReasoning) return;
+                const summaries = Array.isArray(item.summary) ? item.summary : [];
+                summaries.forEach((part) => {
+                    if (part && part.text) emit(part.text, { type: 'reasoning' });
+                });
+                if (item.content && typeof item.content === 'string') emit(item.content, { type: 'reasoning' });
+                return;
+            }
+            if (skipContent) return;
+            const parts = Array.isArray(item.content) ? item.content : [];
+            parts.forEach((part) => {
+                if (part && part.type === 'output_text' && part.text) emit(part.text, { type: 'content' });
+                if (part && part.type === 'text' && part.text) emit(part.text, { type: 'content' });
+            });
+            if (item.type === 'message' && typeof item.content === 'string' && item.content) {
+                emit(item.content, { type: 'content' });
+            }
+        });
+    }
+
+    function createResponsesVisitor(emit) {
+        let streamedContent = false;
+        let streamedReasoning = false;
+        return function visitResponsesEvent(serialized) {
+            if (!serialized || serialized === '[DONE]') return;
+            const payload = JSON.parse(serialized);
+            if (!payload || !payload.type) return;
+            if (payload.type === 'error' || payload.type === 'response.failed') {
+                const detail = String((payload.error && payload.error.message) || payload.message || 'Responses 返回错误。').replace(/\s+/g, ' ').trim().slice(0, 180);
+                throw providerError('provider_error', detail || 'Responses 返回错误。');
+            }
+            const deltaText = typeof payload.delta === 'string'
+                ? payload.delta
+                : (payload.delta && payload.delta.text ? String(payload.delta.text) : '');
+            if ((payload.type === 'response.output_text.delta' || payload.type === 'response.text.delta') && deltaText) {
+                streamedContent = true;
+                emit(deltaText, { type: 'content' });
+                return;
+            }
+            if ((payload.type === 'response.reasoning_summary_text.delta' || payload.type === 'response.reasoning_text.delta') && deltaText) {
+                streamedReasoning = true;
+                emit(deltaText, { type: 'reasoning' });
+                return;
+            }
+            if (payload.type === 'response.completed' || payload.type === 'response.incomplete') {
+                const completed = payload.response || payload;
+                if (!streamedContent || !streamedReasoning) {
+                    emitResponsesOutput(completed && completed.output, emit, {
+                        skipContent: streamedContent,
+                        skipReasoning: streamedReasoning
+                    });
+                }
+                if (completed && completed.usage) emit('', { type: 'usage', usage: responsesUsage(completed.usage) });
+                const truncated = payload.type === 'response.incomplete'
+                    || (completed && completed.status === 'incomplete')
+                    || (completed && completed.incomplete_details && completed.incomplete_details.reason === 'max_output_tokens');
+                emit('', { type: 'finish', finishReason: truncated ? 'length' : 'stop' });
+            }
+        };
+    }
+
+    function createResponsesRequest(messages, config) {
+        const selection = resolveChatSelection(config);
+        const catalog = resolveModelCatalog();
+        const converted = toResponsesInput(messages);
+        const body = {
+            model: selection.model,
+            input: converted.input,
+            stream: true
+        };
+        if (converted.instructions) body.instructions = converted.instructions;
+        if (!config.useProviderDefaults) {
+            body.max_output_tokens = numeric(config.maxTokens, 800);
+        }
+        const payload = catalog && typeof catalog.thinkingRequestPayload === 'function'
+            ? catalog.thinkingRequestPayload(selection.thinkingControl, selection.requestedThinking)
+            : null;
+        if (payload && payload.effort) body.reasoning = { effort: payload.effort };
+        return {
+            body,
+            thinking: selection.thinking,
+            thinkingSupported: selection.thinkingSupported,
+            thinkingControl: selection.thinkingControl
+        };
+    }
+
+    async function requestResponses(messages, emit, config, onActivity) {
+        const endpoint = resolveChatEndpoint(config);
+        if (!endpoint) throw new Error('API endpoint is required.');
+        const request = createResponsesRequest(messages, config);
+        const catalog = resolveModelCatalog();
+        const headers = catalog && typeof catalog.providerAuthHeaders === 'function'
+            ? catalog.providerAuthHeaders(config.provider, config.apiKey)
+            : {
+                'Content-Type': 'application/json',
+                ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {})
+            };
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(request.body),
+            signal: config.signal
+        });
+        if (!response.ok) {
+            const retryAfter = response.headers && response.headers.get ? response.headers.get('retry-after') : null;
+            let providerType = '';
+            let detail = '';
+            try {
+                const raw = await response.text();
+                const parsed = raw ? JSON.parse(raw) : null;
+                const err = parsed && parsed.error ? parsed.error : parsed;
+                providerType = String((err && (err.type || err.code)) || '');
+                detail = String((err && err.message) || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+            } catch (_) { /* keep status-only fallback */ }
+            throw providerError(`provider_http_${response.status}`, detail || `AI Provider 返回 HTTP ${response.status}。`, {
+                status: response.status,
+                retryAfter,
+                providerType
+            });
+        }
+        if (typeof onActivity === 'function') onActivity();
+        if (!response.body || typeof response.body.getReader !== 'function') {
+            const payload = await response.json();
+            if (typeof onActivity === 'function') onActivity();
+            emitResponsesOutput(payload && payload.output, emit);
+            if (payload && payload.usage) emit('', { type: 'usage', usage: responsesUsage(payload.usage) });
+            emit('', { type: 'finish', finishReason: payload && payload.status === 'incomplete' ? 'length' : 'stop' });
+            return;
+        }
+        await consumeEventStream(response, createResponsesVisitor(emit), onActivity);
+    }
+
     function resolveApiTransport(config) {
         const catalog = resolveModelCatalog();
+        const modelId = config && (config.model || config.aiModel);
+        if (catalog && typeof catalog.getModelTransport === 'function') {
+            return catalog.getModelTransport(config.provider, modelId);
+        }
         if (catalog && typeof catalog.getProviderTransport === 'function') {
             return catalog.getProviderTransport(config.provider);
         }
@@ -587,9 +805,12 @@
                     activeSettings
                 );
                 const chatMessages = prepared.messages;
-                const result = resolveApiTransport(activeSettings) === 'anthropic-messages'
+                const transport = resolveApiTransport(activeSettings);
+                const result = transport === 'anthropic-messages'
                     ? await requestAnthropic(chatMessages, emit, activeSettings, watchdog.touch)
-                    : await requestChat(chatMessages, emit, activeSettings, watchdog.touch);
+                    : (transport === 'responses'
+                        ? await requestResponses(chatMessages, emit, activeSettings, watchdog.touch)
+                        : await requestChat(chatMessages, emit, activeSettings, watchdog.touch));
                 splitter.finish();
                 if (!contentCharacters) throw providerError('provider_empty_response', 'AI Provider 没有返回可用正文。');
                 return result;
@@ -617,6 +838,7 @@
         prependGlobalPrompt,
         prepareDirectiveMessages,
         toAnthropicMessages,
+        toResponsesInput,
         createInlineThinkSplitter,
         streamGeneration
     });

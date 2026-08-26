@@ -28,8 +28,8 @@ const catalogService = require('../desktop/services/model-catalog-service');
   assert.strictEqual(flash.availability, 'online');
   assert.strictEqual(vanished.availability, 'offline');
   assert.strictEqual(fresh.compatibility, 'supported');
-  assert.ok(ModelCatalog.isOpencodeGatewayCallable(fresh), 'OpenCode 在线目录新增模型应可经 Chat Completions 调用');
-  assert.ok(ModelCatalog.isModelSelectable(claude), 'OpenCode 套餐内 Claude 应可调用');
+  assert.ok(ModelCatalog.isOpencodeGatewayCallable(fresh), 'OpenCode 在线目录新增 Chat Completions 模型应可调用');
+  assert.ok(!ModelCatalog.isOpencodeGatewayCallable(claude), 'OpenCode Claude 需 Messages 协议，当前不能当 Chat Completions 调用');
   assert.ok(mergedOnline.diff.added >= 1, 'new remote IDs should count as added');
 
   const hidden = ModelCatalog.mergeZenCatalog(builtin, ['big-pickle', 'deepseek-v4-pro'], { hidePrivacyRiskModels: true });
@@ -39,6 +39,21 @@ const catalogService = require('../desktop/services/model-catalog-service');
   const presented = catalogService.presentCatalog('opencode-zen', null);
   assert.ok(presented.models.some((item) => item.id === 'kimi-k2.6'));
   assert.strictEqual(presented.source, 'builtin');
+  const zenMiniMax = presented.models.find((item) => item.id === 'minimax-m3');
+  assert.strictEqual(zenMiniMax.thinkingControl, 'toggle-adaptive');
+  const goCatalog = catalogService.presentCatalog('opencode-go', null);
+  assert.strictEqual(goCatalog.models.find((item) => item.id === 'glm-5.3').thinkingControl, 'always-on');
+  assert.strictEqual(goCatalog.models.find((item) => item.id === 'kimi-k2.6').thinkingControl, 'toggle');
+  assert.ok(goCatalog.models.find((item) => item.id === 'longcat-2.0'));
+  assert.ok(goCatalog.models.find((item) => item.id === 'ox-alpha-free'));
+  assert.ok(goCatalog.models.find((item) => item.id === 'qwen3.6-plus'));
+  assert.strictEqual(goCatalog.models.find((item) => item.id === 'gpt-5.6-luna').transport, 'responses');
+  assert.ok(ModelCatalog.isOpencodeGatewayCallable(goCatalog.models.find((item) => item.id === 'gpt-5.6-luna')));
+  const remoteGo = ModelCatalog.mergeZenCatalog(ModelCatalog.getBuiltinProviderModels('opencode-go'), ['minimax-m3', 'minimax-m2.5', 'glm-5.3', 'gpt-5.6-sol']);
+  assert.strictEqual(remoteGo.models.find((item) => item.id === 'minimax-m3').thinkingControl, 'toggle-adaptive');
+  assert.strictEqual(remoteGo.models.find((item) => item.id === 'minimax-m2.5').thinkingControl, 'always-on');
+  assert.strictEqual(remoteGo.models.find((item) => item.id === 'gpt-5.6-sol').transport, 'responses');
+  assert.ok(ModelCatalog.isOpencodeGatewayCallable(remoteGo.models.find((item) => item.id === 'gpt-5.6-sol')));
 
   const first = await catalogService.refreshRemoteCatalog(dataRoot, 'opencode-zen', {
     payload: { data: [{ id: 'deepseek-v4-flash' }, { id: 'big-pickle' }, { id: 'new-zen-model' }] },

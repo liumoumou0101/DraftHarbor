@@ -4,6 +4,11 @@
         const profileId = configured === 'inherit' ? '' : configured;
         const selectedModel = workflowState.workflowModel || 'inherit';
         const config = runtimeProviderConfig({ ...(profileId ? { profileId } : {}), ...(selectedModel !== 'inherit' ? { model: selectedModel } : {}) });
+        const catalog = typeof modelCatalog === 'function' ? modelCatalog() : (window.DraftHarborModelCatalog || {});
+        const thinkingModel = selectedModel !== 'inherit' ? selectedModel : (config.model || '');
+        const thinkingAlwaysOn = catalog.isThinkingAlwaysOn
+            ? catalog.isThinkingAlwaysOn(config.provider, thinkingModel)
+            : false;
         const profile = profileId ? (settings.providerProfiles || []).find((item) => item.id === profileId) : null;
         const project = projectSnapshot || (typeof nativeEditorState !== 'undefined' && nativeEditorState.snapshot) || {};
         const directiveSnapshot = window.DraftHarborInstructionStack
@@ -30,7 +35,7 @@
                 globalPrompt: config.globalPrompt || '',
                 directivePolicyVersion: directiveSnapshot ? 1 : undefined,
                 directiveStack: directiveSnapshot || undefined,
-                enableThinking: workflowState.workflowThinking !== false,
+                enableThinking: thinkingAlwaysOn || workflowState.workflowThinking !== false,
                 useProviderDefaults: !!config.useProviderDefaults
             }
         };
@@ -73,8 +78,26 @@
             select.value = Array.from(select.options).some((option) => option.value === selected) ? selected : 'inherit';
         });
         if (!selects.some((select) => select.value === selected)) workflowState.workflowModel = 'inherit';
+        const modelId = (workflowState.workflowModel && workflowState.workflowModel !== 'inherit')
+            ? workflowState.workflowModel
+            : (config.model || '');
+        const thinkingControl = catalog.getThinkingControl
+            ? catalog.getThinkingControl(config.provider, modelId)
+            : 'none';
+        const thinkingAlwaysOn = thinkingControl === 'always-on';
+        const thinkingHint = thinkingAlwaysOn ? '该模型思考无法关闭' : '';
         [elements.thinking, elements.briefThinking].filter(Boolean).forEach((toggle) => {
-            toggle.checked = workflowState.workflowThinking !== false;
+            if (thinkingAlwaysOn) {
+                toggle.checked = true;
+                toggle.disabled = true;
+            } else {
+                toggle.disabled = false;
+                toggle.checked = workflowState.workflowThinking !== false;
+            }
+        });
+        [elements.thinkingHint, elements.briefThinkingHint].filter(Boolean).forEach((hint) => {
+            hint.textContent = thinkingHint;
+            hint.hidden = !thinkingHint;
         });
     };
 
@@ -93,9 +116,15 @@
         const snapshot = policy.snapshot || {};
         const profileId = policy.providerProfileId && policy.providerProfileId !== 'inherit' ? policy.providerProfileId : '';
         const config = runtimeProviderConfig(profileId ? { profileId } : {});
-        const thinking = snapshot.enableThinking === undefined
+        const thinkingRequested = snapshot.enableThinking === undefined
             ? workflowState.workflowThinking !== false
             : !!snapshot.enableThinking;
+        const catalog = typeof modelCatalog === 'function' ? modelCatalog() : (window.DraftHarborModelCatalog || {});
+        const thinkingModel = snapshot.model || config.model || '';
+        const thinkingAlwaysOn = catalog.isThinkingAlwaysOn
+            ? catalog.isThinkingAlwaysOn(snapshot.provider || config.provider, thinkingModel)
+            : false;
+        const thinking = thinkingAlwaysOn || thinkingRequested;
         const minimums = {
             analysis: 12000,
             direction: 8000,

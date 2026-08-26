@@ -15,8 +15,29 @@ async function openNativePanel(page, tab) {
 }
 
 async function openGenerationAdvanced(page) {
+  const dialog = page.locator('[data-native-writer-settings-dialog]');
+  if (await dialog.count()) {
+    const open = await dialog.evaluate((el) => el.open);
+    if (!open) {
+      await page.locator('[data-native-open-writer-settings]').first().click();
+      await page.waitForFunction(() => {
+        const el = document.querySelector('[data-native-writer-settings-dialog]');
+        return el && el.open;
+      });
+    }
+    return;
+  }
   await page.locator('[data-native-generation-advanced]').evaluate((el) => {
     el.open = true;
+  });
+}
+
+async function closeGenerationAdvanced(page) {
+  await page.evaluate(() => {
+    const dialog = document.querySelector('[data-native-writer-settings-dialog]');
+    if (dialog && dialog.open && typeof dialog.close === 'function') dialog.close();
+    const advanced = document.querySelector('[data-native-generation-advanced]');
+    if (advanced && !(advanced instanceof HTMLDialogElement)) advanced.open = false;
   });
 }
 
@@ -61,6 +82,7 @@ module.exports = {
   PANEL_GROUP,
   openNativePanel,
   openGenerationAdvanced,
+  closeGenerationAdvanced,
   openMoreMenu,
   clickMoreAction,
   openOutlineMenu,

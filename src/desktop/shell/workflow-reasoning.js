@@ -44,13 +44,16 @@
     function appendWorkflowReasoning(token) {
         if (!token || !workflowState.reasoning) return;
         const state = workflowState.reasoning;
-        if (!state.requested) return;
         state.hasReasoning = true;
         state.batchHasReasoning = true;
         state.phase = 'thinking';
         state.status = '模型正在思考，内容实时返回中…';
         state.text += token;
         if (state.text.length > 50000) state.text = `…较早的思考内容已省略…\n${state.text.slice(-48000)}`;
+        if (!state.requested) {
+            state.requested = true;
+            state.visible = !state.dismissed;
+        }
         renderWorkflowReasoningBubble();
     }
 

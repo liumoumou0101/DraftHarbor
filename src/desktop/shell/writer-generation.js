@@ -300,7 +300,18 @@
         }
     }
 
+    function writerThinkingControl() {
+        const catalog = modelCatalog();
+        const profile = writerEffectiveProfile();
+        const model = writerSelectedModelId(profile);
+        if (catalog.getThinkingControl) return catalog.getThinkingControl(profile.provider, model);
+        return catalog.isThinkingSupported(profile.provider, model) ? 'toggle' : 'none';
+    }
+
     function nativeWriterThinkingActive() {
+        const control = writerThinkingControl();
+        if (control === 'always-on') return true;
+        if (control !== 'toggle' && control !== 'toggle-adaptive' && control !== 'responses-effort') return false;
         if (writerModelOverride.model === 'inherit') {
             const globalConfig = runtimeProviderConfig();
             if (globalConfig && globalConfig.enableThinking) return true;
@@ -363,15 +374,22 @@
         }
     }
 
+    function syncNativeComposerExpansion(expanded) {
+        const writer = document.querySelector('[data-native-writer]');
+        if (!writer) return;
+        const userSet = writer.style.getPropertyValue('--native-assistant-height');
+        if (!writer.classList.contains('is-assistant-bottom') || userSet) {
+            writer.classList.remove('is-composer-expanded');
+            return;
+        }
+        writer.classList.toggle('is-composer-expanded', !!expanded);
+    }
+
     function autosizeNativeBeatInput() {
         const input = nativeEditorElements().beatInput;
         if (!input) return;
-        const minHeight = 72;
-        const maxHeight = Math.max(minHeight, Math.min(280, Math.floor(window.innerHeight * 0.36)));
-        input.style.height = 'auto';
-        const next = Math.max(minHeight, Math.min(maxHeight, input.scrollHeight));
-        input.style.height = `${next}px`;
-        input.style.overflowY = input.scrollHeight > maxHeight + 1 ? 'auto' : 'hidden';
+        input.style.height = '';
+        input.style.overflowY = 'auto';
     }
 
     function renderNativeGeneration() {
@@ -434,10 +452,11 @@
         }
         const isBeat = generation.genTask === 'beat';
         const canGenerate = !!scene && !generation.inProgress && (isBeat ? !!generation.beat.trim() : true);
-        if (elements.previewPrompt) {
-            const isSummary = generation.genTask === 'summary';
-            elements.previewPrompt.disabled = !scene || generation.inProgress || isSummary || (isBeat && !generation.beat.trim());
-        }
+        const isSummary = generation.genTask === 'summary';
+        const previewDisabled = !scene || generation.inProgress || isSummary || (isBeat && !generation.beat.trim());
+        (elements.previewPrompts && elements.previewPrompts.length ? elements.previewPrompts : (elements.previewPrompt ? [elements.previewPrompt] : [])).forEach((button) => {
+            button.disabled = previewDisabled;
+        });
         if (elements.generate) elements.generate.disabled = !canGenerate;
         if (elements.cancelGeneration) {
             elements.cancelGeneration.hidden = !generation.inProgress;
@@ -841,12 +860,23 @@
         if (writerModelOverride.model !== 'inherit' && selectedModel) {
             extras.model = selectedModel;
         }
-        if (writerModelOverride.thinking && modelCatalog().isThinkingSupported(effectiveProfile.provider, selectedModel || effectiveProfile.model)) {
+        const catalog = modelCatalog();
+        const modelId = selectedModel || effectiveProfile.model;
+        const thinkingControl = catalog.getThinkingControl
+            ? catalog.getThinkingControl(effectiveProfile.provider, modelId)
+            : (catalog.isThinkingSupported(effectiveProfile.provider, modelId) ? 'toggle' : 'none');
+        if (thinkingControl === 'always-on'
+            || (writerModelOverride.thinking && (thinkingControl === 'toggle'
+                || thinkingControl === 'toggle-adaptive'
+                || thinkingControl === 'responses-effort'))) {
             extras.enableThinking = true;
         }
         const config = runtimeProviderConfig(extras);
         const schema = window.DraftHarborSettingsSchema;
-        if (config && config.enableThinking && !config.useProviderDefaults && schema && typeof schema.thinkingOutputQuota === 'function') {
+        const thinkingRuns = catalog.thinkingWillRun
+            ? catalog.thinkingWillRun(config.provider, config.model, config.enableThinking)
+            : !!config.enableThinking;
+        if (config && thinkingRuns && !config.useProviderDefaults && schema && typeof schema.thinkingOutputQuota === 'function') {
             const quota = schema.thinkingOutputQuota(config.maxTokens, true);
             if (quota.raised) config.maxTokens = quota.effective;
         }

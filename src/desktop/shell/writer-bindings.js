@@ -257,6 +257,19 @@
                 if (typeof autosizeNativeBeatInput === 'function') autosizeNativeBeatInput();
                 renderNativeGeneration();
             });
+            elements.beatInput.addEventListener('focus', () => {
+                if (typeof syncNativeComposerExpansion === 'function') syncNativeComposerExpansion(true);
+            });
+            elements.beatInput.addEventListener('blur', () => {
+                if (typeof syncNativeComposerExpansion === 'function') syncNativeComposerExpansion(false);
+            });
+            elements.beatInput.addEventListener('keydown', (event) => {
+                if (!(event.ctrlKey || event.metaKey) || event.key !== 'Enter') return;
+                event.preventDefault();
+                if (nativeEditorState.generation.inProgress) return;
+                if (nativeEditorState.generation.genTask === 'summary') generateNativeSummary('scene');
+                else startNativeGeneration();
+            });
             window.addEventListener('resize', () => {
                 if (typeof autosizeNativeBeatInput === 'function') autosizeNativeBeatInput();
             });
@@ -288,13 +301,26 @@
                 renderWriterModelControl();
             });
         }
-        if (elements.thinkingToggle) {
-            elements.thinkingToggle.addEventListener('change', () => {
-                writerModelOverride.thinking = !!elements.thinkingToggle.checked;
-                saveWriterModelOverride();
-                renderWriterModelControl();
-            });
-        }
+        document.addEventListener('change', (event) => {
+            const toggle = event.target && event.target.closest ? event.target.closest('[data-native-thinking-toggle]') : null;
+            if (!toggle) return;
+            writerModelOverride.thinking = !!toggle.checked;
+            saveWriterModelOverride();
+            renderWriterModelControl();
+        });
+        document.addEventListener('click', (event) => {
+            const openSettings = event.target && event.target.closest ? event.target.closest('[data-native-open-writer-settings]') : null;
+            if (openSettings) {
+                const dialog = nativeEditorElements().writerSettingsDialog;
+                if (dialog && typeof dialog.showModal === 'function' && !dialog.open) dialog.showModal();
+                return;
+            }
+            const closeSettings = event.target && event.target.closest ? event.target.closest('[data-native-close-writer-settings]') : null;
+            if (closeSettings) {
+                const dialog = nativeEditorElements().writerSettingsDialog;
+                if (dialog && typeof dialog.close === 'function' && dialog.open) dialog.close();
+            }
+        });
         if (elements.closePrompt) {
             elements.closePrompt.addEventListener('click', () => {
                 if (elements.promptDialog && typeof elements.promptDialog.close === 'function') elements.promptDialog.close();
@@ -366,6 +392,18 @@
                 nativeEditorState.rewrite.preset = 'custom';
                 if (elements.rewritePreset) elements.rewritePreset.value = 'custom';
                 renderNativeRewrite();
+            });
+            elements.rewriteInstruction.addEventListener('focus', () => {
+                if (typeof syncNativeComposerExpansion === 'function') syncNativeComposerExpansion(true);
+            });
+            elements.rewriteInstruction.addEventListener('blur', () => {
+                if (typeof syncNativeComposerExpansion === 'function') syncNativeComposerExpansion(false);
+            });
+            elements.rewriteInstruction.addEventListener('keydown', (event) => {
+                if (!(event.ctrlKey || event.metaKey) || event.key !== 'Enter') return;
+                event.preventDefault();
+                if (nativeEditorState.generation.inProgress) return;
+                startNativeRewrite();
             });
         }
         if (elements.regenerateUseContext) {

@@ -5,7 +5,7 @@ const path = require('path');
 const { chromium } = require('playwright');
 const { startDesktopServers } = require('../desktop/local-server');
 const projectService = require('../desktop/services/project-service');
-const { openNativePanel, openGenerationAdvanced, clickMoreAction, openOutlineMenu, setAssistantPlacement } = require('./helpers/native-panel');
+const { openNativePanel, openGenerationAdvanced, closeGenerationAdvanced, clickMoreAction, openOutlineMenu, setAssistantPlacement } = require('./helpers/native-panel');
 
 async function submitNativeName(page, value) {
   await page.waitForFunction(() => {
@@ -21,10 +21,7 @@ async function submitNativeName(page, value) {
 }
 
 async function openNativeModelSettings(page) {
-  await page.evaluate(() => {
-    const settings = document.querySelector('[data-native-model-settings]');
-    if (settings) settings.open = true;
-  });
+  await openGenerationAdvanced(page);
 }
 
 (async () => {
@@ -205,27 +202,30 @@ async function openNativeModelSettings(page) {
         long,
         clientHeight: input.clientHeight,
         scrollHeight: input.scrollHeight,
-        maxHeight: window.getComputedStyle(input).maxHeight
+        maxHeight: window.getComputedStyle(input).maxHeight,
+        overflowY: window.getComputedStyle(input).overflowY
       };
       input.value = '';
       input.dispatchEvent(new Event('input', { bubbles: true }));
       return size;
     });
-    assert.ok(beatHeights.empty >= 70, `continuation prompt should be taller than the old 52px cap, got ${beatHeights.empty}`);
-    assert.ok(beatHeights.long > beatHeights.empty + 36, `continuation prompt should grow with longer text, empty ${beatHeights.empty} long ${beatHeights.long}`);
-    assert.ok(beatHeights.scrollHeight <= beatHeights.clientHeight + 2, 'grown continuation prompt should show its text instead of staying clipped');
+    assert.ok(beatHeights.empty >= 112, `continuation composer should show about 5 lines, got ${beatHeights.empty}`);
+    assert.ok(beatHeights.long >= beatHeights.empty - 4, `continuation composer should keep remaining-space height when text grows, empty ${beatHeights.empty} long ${beatHeights.long}`);
+    assert.ok(
+      beatHeights.scrollHeight <= beatHeights.clientHeight + 2 || ['auto', 'scroll'].includes(beatHeights.overflowY),
+      'long continuation text should stay visible or scroll inside the composer'
+    );
     assert.notStrictEqual(beatHeights.maxHeight, '52px', 'continuation prompt must not keep the 52px max-height lock');
+    assert.notStrictEqual(beatHeights.maxHeight, '100px', 'continuation prompt must not keep the 100px max-height lock');
 
-    await page.evaluate(() => {
-      const advanced = document.querySelector('[data-native-generation-advanced]');
-      if (advanced) advanced.open = true;
-    });
+    await openGenerationAdvanced(page);
     await page.click('[data-native-manage-global-prompt]');
     await page.waitForFunction(() => document.querySelector('[data-native-global-prompt-dialog]').open);
     await page.check('[data-native-global-prompt-enabled]');
     await page.fill('[data-native-global-prompt-content]', 'Writer audit global prefix.');
     await page.locator('[data-native-global-prompt-form] button[type="submit"]').click();
     await page.waitForFunction(() => !document.querySelector('[data-native-global-prompt-dialog]').open);
+    await closeGenerationAdvanced(page);
     const writerGlobalPrompt = await fetch(`${servers.appUrl}/api/settings`).then((response) => response.json());
     assert.strictEqual(writerGlobalPrompt.settings.globalPrompt.content, 'Writer audit global prefix.', 'writer global prompt editor should save its content');
 
@@ -672,8 +672,11 @@ async function openNativeModelSettings(page) {
         select.dispatchEvent(new Event('change', { bubbles: true }));
       }
     });
-    await page.waitForSelector('[data-native-model-select]:not([disabled])');
-    await page.waitForSelector('[data-native-thinking-toggle]:not([disabled])');
+    await page.waitForSelector('[data-native-model-select]:not([disabled])', { state: 'attached' });
+    await page.waitForFunction(() => {
+      const toggles = Array.from(document.querySelectorAll('[data-native-thinking-toggle]'));
+      return toggles.some((toggle) => !toggle.disabled);
+    });
 
     // Verify model options with new profile-based control
     var auditOptionCount = await page.evaluate(() => {
@@ -709,7 +712,7 @@ async function openNativeModelSettings(page) {
       var select = document.querySelector('[data-native-model-select]');
       return select && select.value === 'deepseek-v4-pro';
     });
-    await page.locator('[data-native-thinking-toggle]').check();
+    await page.locator('[data-native-writer-settings-dialog] [data-native-thinking-toggle]').check();
     await page.waitForFunction(() => {
       var toggle = document.querySelector('[data-native-thinking-toggle]');
       return toggle && toggle.checked === true;
@@ -717,8 +720,9 @@ async function openNativeModelSettings(page) {
     await page.waitForFunction(() => {
       var temperature = document.querySelector('[data-native-temperature]');
       var hint = document.querySelector('[data-native-sampling-hint]');
-      return temperature && temperature.disabled && hint && hint.textContent.includes('DeepSeek Thinking');
+      return temperature && temperature.disabled && hint && hint.textContent.includes('思考模式不发送温度参数');
     });
+    await closeGenerationAdvanced(page);
 
     // Generate with specific model + thinking
     await page.fill('[data-native-beat-input]', 'A concise audit continuation.');
@@ -736,7 +740,6 @@ async function openNativeModelSettings(page) {
     await page.waitForFunction(() => document.querySelector('[data-native-gen-task="beat"]').classList.contains('is-active'));
     await page.click('[data-native-gen-task="continue"]');
     await page.waitForFunction(() => document.querySelector('[data-native-gen-task="continue"]').classList.contains('is-active'));
-    await openGenerationAdvanced(page);
     await page.click('[data-native-preview-prompt]');
     await page.waitForFunction(() => document.querySelector('[data-native-prompt-dialog]').open);
     await page.click('[data-native-close-prompt]');
@@ -852,7 +855,9 @@ async function openNativeModelSettings(page) {
     assert.ok(Math.abs(buttonDragAudit.movedX) < 2 && Math.abs(buttonDragAudit.movedY) < 2, 'action buttons should not drag the confirmation card');
     await page.dblclick('[data-native-generation-drag-handle]');
     await page.waitForFunction(() => !!localStorage.getItem('draftharbor:nativeGenerationOutputPosition'));
+    await openGenerationAdvanced(page);
     await page.selectOption('[data-native-generation-insert-mode]', 'cursor');
+    await closeGenerationAdvanced(page);
     await page.click('[data-native-accept-generation]');
     await page.waitForFunction(() => document.querySelector('[data-native-scene-editor]').value.includes('Audit generated text.'));
     await page.waitForFunction(() => document.querySelector('[data-native-generation-layer]').hidden, null, { timeout: 3000 });
@@ -866,12 +871,18 @@ async function openNativeModelSettings(page) {
     );
 
     // Test inherit + thinking: should pass enableThinking for DeepSeek
+    await openNativeModelSettings(page);
     await page.selectOption('[data-native-profile-select]', 'inherit');
     await page.waitForFunction(() => {
       var select = document.querySelector('[data-native-profile-select]');
       return select && select.value === 'inherit';
     });
-    await page.locator('[data-native-thinking-toggle]').check();
+    await page.locator('[data-native-writer-settings-dialog] [data-native-thinking-toggle]').check();
+    await page.waitForFunction(() => {
+      var toggle = document.querySelector('[data-native-thinking-toggle]');
+      return toggle && toggle.checked === true;
+    });
+    await closeGenerationAdvanced(page);
     await page.waitForFunction(() => {
       var toggle = document.querySelector('[data-native-thinking-toggle]');
       return toggle && toggle.checked === true;
@@ -899,11 +910,13 @@ async function openNativeModelSettings(page) {
     await page.waitForFunction(() => document.querySelector('[data-native-generation-output]').hidden);
 
     // Restore specific model for remaining tests
+    await openNativeModelSettings(page);
     await page.selectOption('[data-native-profile-select]', 'inherit');
     await page.waitForFunction(() => {
       var select = document.querySelector('[data-native-profile-select]');
       return select && select.value === 'inherit';
     });
+    await closeGenerationAdvanced(page);
 
     await page.fill('[data-native-beat-input]', 'Retry and discard audit.');
     await page.evaluate(() => {
@@ -1122,6 +1135,7 @@ async function openNativeModelSettings(page) {
     await page.click('[data-native-gen-task="continue"]');
     await page.waitForFunction(() => document.querySelector('[data-native-gen-task="continue"]').classList.contains('is-active'));
 
+    await openGenerationAdvanced(page);
     await page.click('[data-native-manage-prompts]');
     await page.waitForFunction(() => document.querySelector('[data-prompt-manager-dialog]').open);
     await page.fill('[data-prompt-manager-title]', 'Audit Rewrite Prompt');
@@ -1134,6 +1148,7 @@ async function openNativeModelSettings(page) {
     });
     await page.click('[data-prompt-manager-close]');
     await page.waitForFunction(() => !document.querySelector('[data-prompt-manager-dialog]').open);
+    await closeGenerationAdvanced(page);
     await openNativePanel(page, 'rewrite');
     await page.selectOption('[data-native-rewrite-saved-prompt]', { label: 'Audit Rewrite Prompt' });
     await page.waitForFunction(() => document.querySelector('[data-native-rewrite-instruction]').value.includes('冷峻克制'));
@@ -1322,13 +1337,13 @@ async function openNativeModelSettings(page) {
 
     await openNativePanel(page, 'generate');
     await page.click('[data-native-gen-task="continue"]');
-    await openGenerationAdvanced(page);
     await page.click('[data-native-preview-prompt]');
     await page.waitForFunction(() => document.querySelector('[data-native-prompt-dialog]').open);
     const fullContextPrompt = await page.locator('[data-native-prompt-preview]').textContent();
     assert.ok(fullContextPrompt.includes('Second scene body.'), 'full chapter context must include complete referenced scene text in the final model prompt');
     await page.click('[data-native-close-prompt]');
     await page.waitForFunction(() => !document.querySelector('[data-native-prompt-dialog]').open);
+    await openGenerationAdvanced(page);
     await page.click('[data-native-manage-prompts]');
     await page.waitForFunction(() => document.querySelector('[data-prompt-manager-dialog]').open);
     await page.fill('[data-prompt-manager-title]', 'Audit Prompt');
@@ -1340,6 +1355,7 @@ async function openNativeModelSettings(page) {
     await page.waitForFunction(() => document.querySelector('[data-prompt-manager-title]').value.includes('新正文提示词'));
     await page.click('[data-prompt-manager-close]');
     await page.waitForFunction(() => !document.querySelector('[data-prompt-manager-dialog]').open);
+    await closeGenerationAdvanced(page);
 
     await openNativePanel(page, 'history');
     await page.waitForFunction(() => document.querySelector('[data-native-generation-history]').textContent.includes('Retry and discard audit'));
@@ -1610,9 +1626,26 @@ async function openNativeModelSettings(page) {
       return toggle && !toggle.disabled;
     }, null, { timeout: 5000 });
 
+    await page.selectOption('[data-native-model-select]', '__custom__');
+    await page.waitForFunction(() => !document.querySelector('[data-native-custom-model-group]').hidden);
+    await page.fill('[data-native-custom-model]', 'kimi-k2.7-code');
+    await page.waitForFunction(() => {
+      var toggle = document.querySelector('[data-native-thinking-toggle]');
+      var hint = document.querySelector('[data-native-thinking-hint]');
+      return toggle && toggle.disabled && toggle.checked
+        && hint && !hint.hidden && hint.textContent.indexOf('无法关闭') >= 0;
+    }, null, { timeout: 5000 });
+    await page.selectOption('[data-native-model-select]', 'deepseek-v4-pro');
+    await page.waitForFunction(() => {
+      var toggle = document.querySelector('[data-native-thinking-toggle]');
+      var hint = document.querySelector('[data-native-thinking-hint]');
+      return toggle && !toggle.disabled && hint && hint.hidden;
+    }, null, { timeout: 5000 });
+
     // 4. Generate with DeepSeek profile + thinking
-    await page.locator('[data-native-thinking-toggle]').check();
+    await page.locator('[data-native-writer-settings-dialog] [data-native-thinking-toggle]').check();
     await page.waitForFunction(() => document.querySelector('[data-native-thinking-toggle]').checked === true);
+    await closeGenerationAdvanced(page);
     await page.fill('[data-native-beat-input]', 'Profile DS thinking test.');
     await page.evaluate(() => {
       window.__lastDraftHarborGenerationConfig = null;
@@ -1636,6 +1669,7 @@ async function openNativeModelSettings(page) {
     await page.waitForFunction(() => document.querySelector('[data-native-generation-output]').hidden);
 
     // 5. Switch to OpenAI profile and generate
+    await openNativeModelSettings(page);
     for (var j = 0; j < profileOptions.length; j++) {
       if (profileOptions[j].text && profileOptions[j].text.includes('OpenAI')) {
         await page.selectOption('[data-native-profile-select]', profileOptions[j].value);
@@ -1670,6 +1704,7 @@ async function openNativeModelSettings(page) {
       });
       throw new Error(error.message + '\nThinking toggle state: ' + toggleState);
     });
+    await closeGenerationAdvanced(page);
 
     await page.fill('[data-native-beat-input]', 'Profile OpenAI test.');
     await page.evaluate(() => {
@@ -1725,6 +1760,7 @@ async function openNativeModelSettings(page) {
       var select = document.querySelector('[data-native-model-select]');
       return select && select.options.length >= 3;
     }, null, { timeout: 5000 }).catch(function () { /* model options may vary */ });
+    await closeGenerationAdvanced(page);
     // Generate with the reloaded profile
     await page.fill('[data-native-beat-input]', 'Reloaded DS profile test.');
     await page.evaluate(function () {
@@ -1806,6 +1842,7 @@ async function openNativeModelSettings(page) {
     assert.ok(finalProfileOptions.some(function (o) { return o.value === 'inherit'; }), 'writer profile select should have inherit option');
     // Anthropic/Google should NOT appear as writer-selectable providers
     assert.ok(!finalProfileOptions.some(function (o) { return o.text && (o.text.toLowerCase().includes('anthropic') || o.text.toLowerCase().includes('google')); }), 'writer profile select should NOT list anthropic/google');
+    await closeGenerationAdvanced(page);
 
     // Phase 34: Compendium context policy tests (via API)
     // Verify UI elements are present for compendium policy
