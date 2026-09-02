@@ -982,7 +982,7 @@
     color: var(--desktop-paper-text);
 }
 
-/* Phase 66: mark pending inline prose without using the native textarea selection. */
+/* Phase 66: mark pending inline prose with a range band, not a glyph clone. */
 .desktop-native-editor-generation-layer[hidden] {
     display: none !important;
 }
@@ -992,7 +992,6 @@
     z-index: 1;
     overflow: hidden;
     pointer-events: none;
-    color: transparent;
     background: transparent;
     line-height: inherit;
 }
@@ -1000,16 +999,49 @@
 .desktop-native-editor-generation-layer-content {
     position: relative;
     display: block;
-    color: transparent;
     background: transparent;
+}
+
+.desktop-native-editor-generation-measure {
+    color: transparent;
+    -webkit-text-fill-color: transparent;
     white-space: pre-wrap;
-    overflow-wrap: anywhere;
 }
 
 .desktop-native-editor-generation-mark {
-    color: var(--desktop-paper-text);
-    background: #e7eedc;
-    border-radius: 3px;
+    color: transparent;
+    background: transparent;
+    -webkit-text-fill-color: transparent;
+}
+
+.desktop-native-editor-generation-dim {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background: color-mix(in srgb, var(--desktop-paper) 38%, transparent);
+}
+
+.desktop-native-editor-generation-band {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background: color-mix(in srgb, var(--desktop-accent) 16%, transparent);
     box-shadow: inset 3px 0 #789873;
-    -webkit-text-fill-color: var(--desktop-paper-text);
+    border-top: 1px solid color-mix(in srgb, #789873 62%, transparent);
+}
+
+.desktop-native-editor-generation-split {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 1px 8px;
+    border: 1px solid color-mix(in srgb, #789873 48%, var(--desktop-paper-line));
+    border-radius: 999px;
+    background: var(--desktop-paper);
+    color: #5f7a5c;
+    font-size: 11px;
+    line-height: 1.4;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
 }

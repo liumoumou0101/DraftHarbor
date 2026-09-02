@@ -97,6 +97,115 @@
         return elements.editor.value === nativePendingInlineValue(generation);
     }
 
+    function hideNativeGenerationLayer(layer, content) {
+        if (layer) layer.hidden = true;
+        if (content) {
+            content.replaceChildren();
+            content.style.transform = '';
+        }
+    }
+
+    function applyNativeGenerationLayerViewport(layer, content, editor, body, computed) {
+        const bodyRect = body.getBoundingClientRect();
+        const editorRect = editor.getBoundingClientRect();
+        if (bodyRect.width < 1 || bodyRect.height < 1 || editorRect.width < 1 || editorRect.height < 1) return false;
+        layer.style.left = `${editorRect.left - bodyRect.left}px`;
+        layer.style.top = `${editorRect.top - bodyRect.top}px`;
+        layer.style.width = `${editorRect.width}px`;
+        layer.style.height = `${editorRect.height}px`;
+        layer.style.padding = '0';
+        layer.style.boxSizing = computed.boxSizing;
+        content.style.width = `${editor.clientWidth}px`;
+        content.style.minHeight = `${Math.max(editor.scrollHeight, editor.clientHeight)}px`;
+        content.style.padding = '0';
+        content.style.transform = `translate(${-editor.scrollLeft}px, ${-editor.scrollTop}px)`;
+        return true;
+    }
+
+    function applyNativeGenerationMeasureStyle(measure, computed) {
+        measure.style.padding = computed.padding;
+        measure.style.boxSizing = computed.boxSizing;
+        measure.style.font = computed.font;
+        measure.style.lineHeight = computed.lineHeight;
+        measure.style.letterSpacing = computed.letterSpacing;
+        measure.style.wordSpacing = computed.wordSpacing;
+        measure.style.textAlign = computed.textAlign;
+        measure.style.textIndent = computed.textIndent;
+        measure.style.whiteSpace = computed.whiteSpace;
+        measure.style.wordBreak = computed.wordBreak;
+        measure.style.overflowWrap = computed.overflowWrap;
+        measure.style.tabSize = computed.tabSize;
+        if ('lineBreak' in measure.style) measure.style.lineBreak = computed.lineBreak;
+    }
+
+    function ensureNativeGenerationLayerParts(content) {
+        let measure = content.querySelector('[data-native-generation-measure]');
+        let dimBefore = content.querySelector('[data-native-generation-dim-before]');
+        let band = content.querySelector('[data-native-generation-band]');
+        let dimAfter = content.querySelector('[data-native-generation-dim-after]');
+        let split = content.querySelector('[data-native-generation-split]');
+        let before = measure && measure.querySelector('[data-native-generation-before]');
+        let pending = measure && measure.querySelector('[data-native-generation-mark]');
+        let after = measure && measure.querySelector('[data-native-generation-after]');
+        if (measure && dimBefore && band && dimAfter && split && before && pending && after) {
+            return { measure, dimBefore, band, dimAfter, split, before, pending, after };
+        }
+        content.replaceChildren();
+        measure = document.createElement('div');
+        measure.className = 'desktop-native-editor-generation-measure';
+        measure.setAttribute('data-native-generation-measure', '');
+        before = document.createElement('span');
+        before.setAttribute('data-native-generation-before', '');
+        pending = document.createElement('span');
+        pending.className = 'desktop-native-editor-generation-mark';
+        pending.setAttribute('data-native-generation-mark', '');
+        after = document.createElement('span');
+        after.setAttribute('data-native-generation-after', '');
+        measure.append(before, pending, after);
+        dimBefore = document.createElement('div');
+        dimBefore.className = 'desktop-native-editor-generation-dim';
+        dimBefore.setAttribute('data-native-generation-dim-before', '');
+        band = document.createElement('div');
+        band.className = 'desktop-native-editor-generation-band';
+        band.setAttribute('data-native-generation-band', '');
+        split = document.createElement('span');
+        split.className = 'desktop-native-editor-generation-split';
+        split.setAttribute('data-native-generation-split', '');
+        split.textContent = '以下为新生成';
+        band.append(split);
+        dimAfter = document.createElement('div');
+        dimAfter.className = 'desktop-native-editor-generation-dim';
+        dimAfter.setAttribute('data-native-generation-dim-after', '');
+        content.append(measure, dimBefore, band, dimAfter);
+        return { measure, dimBefore, band, dimAfter, split, before, pending, after };
+    }
+
+    function layoutNativeGenerationBand(parts, content) {
+        const range = document.createRange();
+        range.selectNodeContents(parts.pending);
+        const pendingRect = range.getBoundingClientRect();
+        const contentRect = content.getBoundingClientRect();
+        const startY = Math.max(0, Math.round(pendingRect.top - contentRect.top));
+        const endY = Math.max(startY, Math.round(pendingRect.bottom - contentRect.top));
+        const height = Math.max(1, endY - startY);
+        const total = Math.max(endY, parts.measure.offsetHeight);
+        parts.dimBefore.style.top = '0';
+        parts.dimBefore.style.height = `${startY}px`;
+        parts.band.style.top = `${startY}px`;
+        parts.band.style.height = `${height}px`;
+        parts.dimAfter.style.top = `${endY}px`;
+        parts.dimAfter.style.height = `${Math.max(0, total - endY)}px`;
+    }
+
+    function syncNativeGenerationLayerScroll() {
+        const elements = nativeEditorElements();
+        const layer = elements.generationLayer;
+        const content = elements.generationLayerContent;
+        const editor = elements.editor;
+        if (!layer || !content || !editor || layer.hidden) return;
+        content.style.transform = `translate(${-editor.scrollLeft}px, ${-editor.scrollTop}px)`;
+    }
+
     function syncNativeGenerationLayer() {
         const elements = nativeEditorElements();
         const layer = elements.generationLayer;
@@ -111,14 +220,12 @@
             && generation.pendingSceneId === scene.id
             && !!editor;
         if (!layer || !content || !editor || !hasPendingInline) {
-            if (layer) layer.hidden = true;
-            if (content) content.replaceChildren();
+            hideNativeGenerationLayer(layer, content);
             return false;
         }
         if (!isNativePendingInlineValueStable(elements)) {
             generation.pendingEditorChanged = true;
-            layer.hidden = true;
-            content.replaceChildren();
+            hideNativeGenerationLayer(layer, content);
             if (elements.generationOutputStatus) {
                 elements.generationOutputStatus.textContent = '正文已修改，无法直接确认；请重新生成或撤回。';
             }
@@ -127,49 +234,22 @@
         generation.pendingEditorChanged = false;
         const body = elements.editorBody;
         if (!body) return false;
-        const bodyRect = body.getBoundingClientRect();
-        const editorRect = editor.getBoundingClientRect();
-        if (bodyRect.width < 1 || bodyRect.height < 1 || editorRect.width < 1 || editorRect.height < 1) {
+        const computed = window.getComputedStyle(editor);
+        if (!applyNativeGenerationLayerViewport(layer, content, editor, body, computed)) {
             layer.hidden = true;
             return false;
         }
-        const computed = window.getComputedStyle(editor);
-        layer.style.left = `${editorRect.left - bodyRect.left}px`;
-        layer.style.top = `${editorRect.top - bodyRect.top}px`;
-        layer.style.width = `${editorRect.width}px`;
-        layer.style.height = `${editorRect.height}px`;
-        layer.style.padding = '0';
-        layer.style.boxSizing = computed.boxSizing;
-        content.style.width = `${editor.clientWidth}px`;
-        content.style.minHeight = `${Math.max(editor.scrollHeight, editor.clientHeight)}px`;
-        content.style.padding = computed.padding;
-        content.style.boxSizing = computed.boxSizing;
-        content.style.font = computed.font;
-        content.style.lineHeight = computed.lineHeight;
-        content.style.letterSpacing = computed.letterSpacing;
-        content.style.textAlign = computed.textAlign;
-        content.style.textIndent = computed.textIndent;
-        content.style.whiteSpace = computed.whiteSpace;
-        content.style.wordBreak = computed.wordBreak;
-        content.style.overflowWrap = computed.overflowWrap;
-        content.style.tabSize = computed.tabSize;
-        content.style.transform = `translate(${-editor.scrollLeft}px, ${-editor.scrollTop}px)`;
-
         const value = editor.value || '';
         const inserted = formatInlineGeneratedText(generation.text || '');
         const start = Math.max(0, Math.min(value.length, generation.insertionStart));
         const end = Math.max(start, Math.min(value.length, start + inserted.length));
-        const fragment = document.createDocumentFragment();
-        const before = document.createElement('span');
-        before.textContent = value.slice(0, start);
-        const pending = document.createElement('mark');
-        pending.className = 'desktop-native-editor-generation-mark';
-        pending.textContent = value.slice(start, end);
-        const after = document.createElement('span');
-        after.textContent = value.slice(end);
-        fragment.append(before, pending, after);
-        content.replaceChildren(fragment);
+        const parts = ensureNativeGenerationLayerParts(content);
+        applyNativeGenerationMeasureStyle(parts.measure, computed);
+        parts.before.textContent = value.slice(0, start);
+        parts.pending.textContent = value.slice(start, end);
+        parts.after.textContent = value.slice(end);
         layer.hidden = false;
+        layoutNativeGenerationBand(parts, content);
         return true;
     }
 
@@ -190,8 +270,8 @@
         const editor = elements.editor;
         if (!editor || editor.dataset.nativeGenerationLayerBound === 'true') return;
         editor.dataset.nativeGenerationLayerBound = 'true';
-        editor.addEventListener('scroll', syncNativeGenerationLayer);
-        window.addEventListener('resize', syncNativeGenerationLayer);
+        editor.addEventListener('scroll', syncNativeGenerationLayerScroll, { passive: true });
+        window.addEventListener('resize', queueNativeGenerationLayer);
     }
 
     function bindNativeGenerationOutputDrag() {

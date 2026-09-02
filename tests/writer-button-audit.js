@@ -778,15 +778,20 @@ async function openNativeModelSettings(page) {
     const generationMark = await page.evaluate(() => {
       const layer = document.querySelector('[data-native-generation-layer]');
       const mark = document.querySelector('.desktop-native-editor-generation-mark');
+      const band = document.querySelector('[data-native-generation-band]');
+      const split = document.querySelector('[data-native-generation-split]');
+      const bandRect = band ? band.getBoundingClientRect() : { height: 0 };
       return {
         visible: !!layer && !layer.hidden,
         text: mark ? mark.textContent : '',
-        color: mark ? getComputedStyle(mark).color : ''
+        split: split ? split.textContent : '',
+        bandHeight: bandRect.height
       };
     });
     assert.ok(generationMark.visible, 'pending inline generation should show a dedicated visual mark layer');
     assert.ok(generationMark.text.includes('Audit generated text.'), 'generation mark should cover the newly inserted text');
-    assert.notStrictEqual(generationMark.color, 'rgba(0, 0, 0, 0)', 'generation mark should keep readable text color');
+    assert.ok(generationMark.bandHeight > 0, 'generation band should highlight the newly inserted range');
+    assert.ok(generationMark.split.includes('以下为新生成'), 'generation split should label the newly inserted range');
     await page.click('[data-native-scene-editor]', { position: { x: 80, y: 80 } });
     await page.waitForFunction(() => !document.querySelector('[data-native-generation-layer]').hidden);
 

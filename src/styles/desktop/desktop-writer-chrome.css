@@ -625,10 +625,25 @@
 }
 
 .desktop-native-editor-generation-mark {
-    background: color-mix(in srgb, var(--desktop-accent) 26%, var(--desktop-paper));
+    color: transparent;
+    background: transparent;
+    -webkit-text-fill-color: transparent;
+}
+
+.desktop-native-editor-generation-dim {
+    background: color-mix(in srgb, var(--desktop-paper) 38%, transparent);
+}
+
+.desktop-native-editor-generation-band {
+    background: color-mix(in srgb, var(--desktop-accent) 16%, transparent);
     box-shadow: inset 3px 0 var(--desktop-accent);
-    color: var(--desktop-paper-text);
-    -webkit-text-fill-color: var(--desktop-paper-text);
+    border-top-color: color-mix(in srgb, var(--desktop-accent) 55%, transparent);
+}
+
+.desktop-native-editor-generation-split {
+    border-color: color-mix(in srgb, var(--desktop-accent) 42%, var(--desktop-paper-line));
+    background: var(--desktop-paper);
+    color: var(--desktop-accent);
 }
 
 .desktop-native-editor-body .desktop-native-generation-output {
