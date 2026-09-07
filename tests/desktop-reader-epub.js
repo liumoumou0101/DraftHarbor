@@ -32,8 +32,8 @@ async function createFixture(target) {
         await page.click('[data-view-target="reader"]');
         await page.setInputFiles('[data-reader-file]', fixturePath);
         await page.waitForFunction(() => document.querySelector('[data-reader-import-dialog]')?.open === true);
-        assert.strictEqual(await page.locator('[data-reader-import-file-name]').textContent(), 'desktop-book.epub');
         await page.waitForFunction(() => document.querySelector('[data-reader-import-summary]')?.textContent.includes('2 章'));
+        assert.strictEqual(await page.locator('[data-reader-import-file-name]').textContent(), 'desktop-book.epub');
         await page.click('[data-reader-import-confirm]');
         await page.waitForFunction(() => document.querySelector('[data-reader-title]')?.textContent.includes('第一章'));
         await page.waitForFunction(() => readerState.apiMode && readerState.contents.length === 2);

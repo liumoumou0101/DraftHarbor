@@ -358,14 +358,25 @@
         elements.content?.addEventListener('dblclick', () => handleReaderWorkspaceEscape());
         document.querySelector('[data-reader-page-prev]')?.addEventListener('click', () => queueReaderPageTurn(-1, { source: 'pointer' }));
         document.querySelector('[data-reader-page-next]')?.addEventListener('click', () => queueReaderPageTurn(1, { source: 'pointer' }));
-        let resizeTimer = null;
-        window.addEventListener('resize', () => {
-            if (resizeTimer) window.clearTimeout(resizeTimer);
-            resizeTimer = window.setTimeout(() => {
-                resizeTimer = null;
-                if (readerState.apiMode && typeof scheduleReaderReflow === 'function') scheduleReaderReflow();
+        // Container changes also occur without window.resize (focus, shell chrome).
+        // Compare settled sizes so transient toolbar wrapping does not replace the deck.
+        let readingResizeTimer = null;
+        const reflowReadingArea = () => {
+            if (readingResizeTimer) window.clearTimeout(readingResizeTimer);
+            readingResizeTimer = window.setTimeout(() => {
+                readingResizeTimer = null;
+                const content = elements.content;
+                if (!content || !content.clientWidth || !content.clientHeight) return;
+                const size = `${content.clientWidth}x${content.clientHeight}`;
+                if (size === readerState.renderedViewportSize) return;
+                if (readerState.apiMode && readerState.currentChapter && typeof scheduleReaderReflow === 'function') scheduleReaderReflow({ viewportOnly: true });
             }, 160);
-        });
+        };
+        if (typeof ResizeObserver === 'function' && elements.content) {
+            new ResizeObserver(reflowReadingArea).observe(elements.content);
+        } else {
+            window.addEventListener('resize', reflowReadingArea);
+        }
         function refreshReaderFontFace() {
             const content = document.querySelector('[data-reader-content]');
             const actual = typeof readerActualFontFamily === 'function' ? readerActualFontFamily(content) : '';

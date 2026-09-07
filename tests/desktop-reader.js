@@ -1061,6 +1061,12 @@ async function selectReaderStudioSection(page, section) {
             };
         });
         assert.deepStrictEqual(rapidLayoutResult, { requested: 'double-page', effective: 'double-page', pageCount: 2, aligned: true, releasedFocus: true }, 'rapid setting changes must settle on the final explicit double-page choice');
+        // Page-count labels can wrap at this narrow width; let their container reflow
+        // settle before testing that animation-only changes preserve the deck.
+        await page.waitForFunction(() => {
+            const content = document.querySelector('[data-reader-content]');
+            return readerState.renderedViewportSize === `${content.clientWidth}x${content.clientHeight}`;
+        });
         const transitionStress = await page.evaluate(async () => {
             const deck = document.querySelector('.desktop-reader-page-deck');
             const control = document.querySelector('[data-reader-page-transition]');

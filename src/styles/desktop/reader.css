@@ -246,6 +246,8 @@
 
     .desktop-reader-page-controls {
         display: flex;
+        flex-shrink: 0;
+        white-space: nowrap;
         align-items: center;
         justify-content: center;
         gap: 10px;

@@ -1,4 +1,4 @@
-/* global readerState createReaderLocatorAt renderReaderPages clearReaderLayoutCache renderReaderReading applyReaderSettings */
+/* global readerState createReaderLocatorAt renderReaderPages clearReaderLayoutCache renderReaderReading applyReaderSettings captureReaderPositionLocator */
 
 const assert = require('assert');
 const fs = require('fs/promises');
@@ -120,6 +120,48 @@ async function assertMeasuredPages(page, snapshot, label) {
     const baseline = await paginationSnapshot(page);
     await assertMeasuredPages(page, baseline, 'default typography');
 
+    // Isolate focus layout changes from window resize / fullscreen events.
+    await page.evaluate(() => {
+      window.draftHarborDesktop = { isFullscreen: async () => true };
+      const block = readerState.currentChapter.blocks.find((item) => item.text.length > 1800);
+      renderReaderReading({ locator: createReaderLocatorAt(block.blockId, 1800) });
+    });
+    const beforeFocus = await page.evaluate(() => ({
+      height: document.querySelector('[data-reader-page]').clientHeight,
+      anchor: captureReaderPositionLocator(),
+      boundaries: JSON.stringify(readerState.pages)
+    }));
+    await page.evaluate(() => window.readerHudToggleFocusMode());
+    await page.waitForTimeout(550);
+    const focused = await paginationSnapshot(page);
+    const focusState = await page.evaluate(() => ({
+      height: document.querySelector('[data-reader-page]').clientHeight,
+      anchor: captureReaderPositionLocator()
+    }));
+    assert.ok(focusState.height > beforeFocus.height + 100, 'focus must reclaim toolbar space');
+    assert.ok(focused.firstLength > baseline.firstLength, 'focus without window resize must repaginate to fit more text');
+    assert.deepStrictEqual(focusState.anchor, beforeFocus.anchor, 'focus must preserve the exact reading anchor');
+    await assertMeasuredPages(page, focused, 'focus typography');
+    const focusedBoundaries = await page.evaluate(() => JSON.stringify(readerState.pages));
+    await page.evaluate(() => window.readerHudShow());
+    await page.waitForTimeout(350);
+    assert.strictEqual(await page.evaluate(() => JSON.stringify(readerState.pages)), focusedBoundaries,
+      'showing focus controls must not change pagination');
+    await page.screenshot({ path: path.join(os.tmpdir(), 'draftharbor-reader-focus-controls.png') });
+    await page.evaluate(() => window.readerHudToggleFocusMode());
+    await page.waitForTimeout(550);
+    assert.strictEqual(await page.evaluate(() => JSON.stringify(readerState.pages)), beforeFocus.boundaries,
+      'leaving focus must restore normal pagination');
+    for (let cycle = 0; cycle < 2; cycle += 1) {
+      const anchor = await page.evaluate(() => captureReaderPositionLocator());
+      await page.evaluate(() => window.readerHudToggleFocusMode());
+      await page.waitForTimeout(350);
+      await page.evaluate(() => window.readerHudToggleFocusMode());
+      await page.waitForTimeout(350);
+      assert.deepStrictEqual(await page.evaluate(() => captureReaderPositionLocator()), anchor,
+        'repeated focus switches must preserve the reading anchor');
+    }
+
     const adjustedStartedAt = Date.now();
     const adjustedPaginationMs = await page.evaluate(() => {
       const startedAt = performance.now();
@@ -153,6 +195,33 @@ async function assertMeasuredPages(page, snapshot, label) {
     const spread = await paginationSnapshot(page);
     await assertMeasuredPages(page, spread, 'double-page spread');
 
+    // Fullscreen / large-window growth must repaginate without an explicit render.
+    await page.setViewportSize({ width: 2560, height: 1440 });
+    await page.waitForTimeout(550);
+    const tall = await paginationSnapshot(page);
+    const tallHeight = await page.evaluate(() => document.querySelector('[data-reader-page]').clientHeight);
+    await page.setViewportSize({ width: 2560, height: 1600 });
+    await page.waitForTimeout(550);
+    const taller = await paginationSnapshot(page);
+    assert.ok(await page.evaluate(() => document.querySelector('[data-reader-page]').clientHeight) > tallHeight,
+      'large-window pages must not freeze at the old 1140px height cap');
+    assert.ok(taller.firstLength > tall.firstLength, 'extra large-window height must display more text');
+    await assertMeasuredPages(page, taller, 'large-window spread');
+
+    await page.evaluate(() => { delete window.draftHarborDesktop; });
+    await page.click('[data-reader-focus-toggle]');
+    await page.waitForFunction(() => !!document.fullscreenElement && readerState.focusMode);
+    await page.waitForTimeout(550);
+    const fullscreen = await paginationSnapshot(page);
+    assert.strictEqual(fullscreen.segments.map((segment) => fullscreen.text.slice(segment.startOffset, segment.endOffset)).join(''),
+      fullscreen.text, 'fullscreen must preserve every character exactly once');
+    assert.strictEqual(await page.evaluate(() => Array.from(document.querySelectorAll('[data-reader-page]')).some((node) =>
+      node.scrollHeight > node.clientHeight + 2 || node.scrollWidth > node.clientWidth + 2)), false,
+    'fullscreen pages must not overflow');
+    await page.evaluate(() => document.exitFullscreen());
+    await page.waitForFunction(() => !readerState.focusMode);
+    await page.waitForTimeout(350);
+
     await page.setViewportSize({ width: 900, height: 500 });
     await page.evaluate(() => {
       readerState.layoutMode = 'single-page';
@@ -169,6 +238,9 @@ async function assertMeasuredPages(page, snapshot, label) {
     console.log(`READER_MEASURED_PAGINATION=${JSON.stringify({
       baselinePages: baseline.pageCount,
       baselineFirstPageCharacters: baseline.firstLength,
+      focusedFirstPageCharacters: focused.firstLength,
+      normalPageHeight: beforeFocus.height,
+      focusedPageHeight: focusState.height,
       baselinePaginationMs: Math.round(baselinePaginationMs * 100) / 100,
       adjustedPages: adjusted.pageCount,
       adjustedFirstPageCharacters: adjusted.firstLength,

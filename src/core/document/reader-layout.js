@@ -59,7 +59,7 @@
         const pageWidth = spread
             ? Math.max(220, (spreadMax - gap) / 2)
             : Math.max(320, spreadMax);
-        const pageHeight = Math.max(120, Math.min(innerHeight, Math.round(pageWidth * 1.38)));
+        const pageHeight = innerHeight;
         return { pageWidth, pageHeight, spreadMax, innerWidth, innerHeight };
     }
 

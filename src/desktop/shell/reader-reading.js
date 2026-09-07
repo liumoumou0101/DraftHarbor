@@ -460,6 +460,7 @@
         stopReaderDeckTransition();
         const metrics = readerLayoutMetrics();
         const content = metrics.content;
+        readerState.renderedViewportSize = `${metrics.width}x${metrics.height}`;
         const baseKey = readerLayoutKey(metrics);
         if (baseKey !== readerPageFitBaseKey) {
             readerPageFitBaseKey = baseKey;
@@ -523,6 +524,7 @@
         stopReaderDeckTransition();
         const metrics = readerLayoutMetrics();
         if (!metrics.content) return;
+        readerState.renderedViewportSize = `${metrics.width}x${metrics.height}`;
         const requestedLocator = options.locator || readerState.anchorLocator
             || readerState.documentRecordState && readerState.documentRecordState.positionLocator;
         const locator = requestedLocator && requestedLocator.chapterId === readerState.activeChapterId
@@ -541,12 +543,20 @@
         if (window.renderReaderAnnotationMarks) window.renderReaderAnnotationMarks();
     }
 
-    function scheduleReaderReflow() {
-        const locator = captureReaderPositionLocator() || readerState.anchorLocator;
+    function scheduleReaderReflow(options = {}) {
+        if (options.viewportOnly && readerReflowTimer) return;
+        const scheduledLocator = captureReaderPositionLocator() || readerState.anchorLocator;
         const preserveFlowRatio = readerState.effectiveLayoutMode === 'flow';
         if (readerReflowTimer) window.clearTimeout(readerReflowTimer);
         readerReflowTimer = window.setTimeout(() => {
             readerReflowTimer = null;
+            if (options.viewportOnly) {
+                const content = document.querySelector('[data-reader-content]');
+                if (!content || !content.clientWidth || !content.clientHeight
+                    || readerState.renderedViewportSize === `${content.clientWidth}x${content.clientHeight}`) return;
+            }
+            // Navigation can happen while a resize/settings reflow is pending.
+            const locator = captureReaderPositionLocator() || readerState.anchorLocator || scheduledLocator;
             const activeLocator = locator && locator.chapterId === readerState.activeChapterId
                 ? locator
                 : (readerState.anchorLocator && readerState.anchorLocator.chapterId === readerState.activeChapterId

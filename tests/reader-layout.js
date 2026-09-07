@@ -23,8 +23,7 @@ const twoKSpread = Layout.pagedGeometry({
   viewportWidth: 2560, viewportHeight: 1440, effectiveMode: 'double-page', gap: 28
 });
 assert.ok(twoKSpread.spreadMax <= 1680, '2K double-page spread must not grow without a cap');
-assert.ok(twoKSpread.pageHeight < 1300, '2K double-page height must follow a book proportion instead of the full window');
-assert.ok(twoKSpread.pageHeight / twoKSpread.pageWidth < 1.5, '2K pages should stay near a book aspect');
+assert.strictEqual(twoKSpread.pageHeight, 1440, '2K double-page must use the available reading height');
 
 const twoKSingle = Layout.pagedGeometry({
   viewportWidth: 2560, viewportHeight: 1440, effectiveMode: 'single-page', gap: 28
