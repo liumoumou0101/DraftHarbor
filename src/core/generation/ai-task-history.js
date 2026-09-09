@@ -59,6 +59,9 @@
             resultText: input.resultText || '',
             resultData: input.resultData === undefined ? null : clonePlain(input.resultData),
             reasoning: input.reasoning || '',
+            finishReason: input.finishReason || '',
+            usage: clonePlain(input.usage || null),
+            maxTokens: input.maxTokens == null ? null : input.maxTokens,
             error: cleanError(input.error),
             startedAt: input.startedAt || task.createdAt || now,
             finishedAt: input.finishedAt || '',
@@ -81,6 +84,9 @@
             promptText: record.promptText || '',
             resultText: overrides.resultText === undefined ? (record.resultText || '') : overrides.resultText,
             reasoning: record.reasoning || '',
+            finishReason: record.finishReason || '',
+            usage: record.usage || null,
+            maxTokens: record.maxTokens,
             error: record.error || null,
             createdAt: record.createdAt || record.finishedAt || record.startedAt
         };

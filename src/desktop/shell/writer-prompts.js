@@ -1038,10 +1038,10 @@
             const maxTokens = Number(defaults.maxTokens) || 8000;
             const schema = window.DraftHarborSettingsSchema;
             const quotaHint = thinkingActive && schema && typeof schema.thinkingOutputQuotaHint === 'function'
-                ? schema.thinkingOutputQuotaHint(maxTokens, true)
+                ? schema.thinkingOutputQuotaHint(maxTokens, true, selectedModel)
                 : '';
             if (useProviderDefaults) {
-                elements.writerSamplingHint.textContent = '已交给服务商默认参数';
+                elements.writerSamplingHint.textContent = '已交给服务商默认参数；不应用应用内的思考额度保护，正文仍可能被截断。';
             } else if (thinkingActive) {
                 elements.writerSamplingHint.textContent = quotaHint
                     ? `思考模式不发送温度参数。${quotaHint}`

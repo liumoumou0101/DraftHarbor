@@ -31,8 +31,6 @@
             elements.assistantPlacement.addEventListener('click', () => {
                 nativeEditorState.assistantPlacement = nativeEditorState.assistantPlacement === 'bottom' ? 'right' : 'bottom';
                 try { window.localStorage.setItem('draftharbor:nativeAssistantPlacement', nativeEditorState.assistantPlacement); } catch (error) { /* ignore */ }
-                const assistantResizer = document.querySelector('[data-native-resize-assistant]');
-                if (assistantResizer) assistantResizer.setAttribute('aria-orientation', nativeEditorState.assistantPlacement === 'bottom' ? 'horizontal' : 'vertical');
                 renderNativeEditor();
             });
         }

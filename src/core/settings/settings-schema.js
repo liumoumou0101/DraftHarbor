@@ -226,18 +226,21 @@
         };
     }
 
-    function thinkingOutputQuota(maxTokens, enableThinking) {
+    function thinkingOutputQuota(maxTokens, enableThinking, model) {
         const requested = Math.round(finiteNumber(maxTokens, DEFAULT_MAX_TOKENS, 1, 200000));
-        if (!enableThinking || requested >= THINKING_OUTPUT_FLOOR) {
+        // Known long-output models get more room for reasoning plus prose.
+        // Do not raise unknown/legacy models beyond the established safe floor.
+        const floor = /^(minimax-m3|mimo-v2\.5|deepseek-v4)(-|$)/i.test(String(model || '')) ? 16384 : THINKING_OUTPUT_FLOOR;
+        if (!enableThinking || requested >= floor) {
             return { requested: requested, effective: requested, raised: false };
         }
-        return { requested: requested, effective: THINKING_OUTPUT_FLOOR, raised: true };
+        return { requested: requested, effective: floor, raised: true };
     }
 
-    function thinkingOutputQuotaHint(maxTokens, enableThinking) {
-        const quota = thinkingOutputQuota(maxTokens, enableThinking);
+    function thinkingOutputQuotaHint(maxTokens, enableThinking, model) {
+        const quota = thinkingOutputQuota(maxTokens, enableThinking, model);
         if (!quota.raised) return '';
-        return '思考会占用输出额度，当前 ' + quota.requested + ' 偏低，正文可能写到一半被截断。本次将按 ' + quota.effective + ' 发送。';
+        return '思考与正文共享输出额度，本次从 ' + quota.requested + ' 提高到 ' + quota.effective + ' tokens，为正文增加余量；仍可能达到上限。';
     }
 
     function normalizeLocalModelSettings(input = {}) {

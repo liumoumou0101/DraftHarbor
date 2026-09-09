@@ -402,12 +402,15 @@
     function resetNativeGenerationStreamFlags(generation) {
         generation.reasoning = '';
         generation.finishReason = '';
+        generation.usage = null;
+        generation.errorMessage = '';
         generation.interruptReason = '';
         generation.reasoningUserCollapsed = false;
     }
 
     function nativeReasoningPhase(generation, thinkingActive) {
         if (generation.interruptReason === 'cancelled') return 'cancelled';
+        if (!generation.inProgress && generation.finishReason === 'length') return 'truncated';
         if (generation.interruptReason === 'failed') return 'failed';
         if (generation.interruptReason === 'empty') return 'empty';
         if (generation.inProgress && thinkingActive && !generation.reasoning) return 'waiting';
@@ -585,16 +588,12 @@
                 } else {
                     elements.generationOutputStatus.textContent = '正在生成，完成后可保留、重试或撤回。';
                 }
-            } else if (!generation.text && generation.interruptReason === 'cancelled') {
-                elements.generationOutputStatus.textContent = '思考已中断：生成已取消。可滚动查看完整思考过程。';
-            } else if (!generation.text && generation.interruptReason === 'empty') {
-                elements.generationOutputStatus.textContent = '思考已结束，但没有返回正文。可滚动查看完整思考过程。';
-            } else if (!generation.text && generation.interruptReason) {
-                elements.generationOutputStatus.textContent = '思考已中断：生成失败。可滚动查看完整思考过程。';
             } else if (generation.finishReason === 'length') {
-                elements.generationOutputStatus.textContent = isPreviewTask
-                    ? '输出因额度用尽被截断。预览后可保留，或提高最大输出后重试。'
-                    : '输出因额度用尽被截断，已写入正文。可撤回后提高最大输出再试。';
+                elements.generationOutputStatus.textContent = '输出达到额度或上下文上限，结果不完整。已保留收到的内容；请检查后决定保留或重试。';
+            } else if (generation.interruptReason) {
+                elements.generationOutputStatus.textContent = generation.errorMessage || (generation.interruptReason === 'cancelled'
+                    ? '生成已取消，已收到的内容可能不完整。'
+                    : '生成中断，已收到的内容可能不完整，请检查后重试。');
             } else if (isPreviewTask) {
                 elements.generationOutputStatus.textContent = '确认后替换原文，撤回保持原文。';
             } else {
@@ -932,6 +931,8 @@
         const selectedModel = writerSelectedModelId(effectiveProfile);
         const extras = {
             signal,
+            includeUsage: true,
+            sessionId: `writer:${nativeEditorState.snapshot && nativeEditorState.snapshot.project && nativeEditorState.snapshot.project.id || ''}:${currentNativeScene() && currentNativeScene().id || ''}`,
             projectDirectiveStack: nativeEditorState.snapshot && nativeEditorState.snapshot.directiveStack
         };
         if (writerModelOverride.profileId && writerModelOverride.profileId !== 'inherit') {
@@ -957,7 +958,7 @@
             ? catalog.thinkingWillRun(config.provider, config.model, config.enableThinking)
             : !!config.enableThinking;
         if (config && thinkingRuns && !config.useProviderDefaults && schema && typeof schema.thinkingOutputQuota === 'function') {
-            const quota = schema.thinkingOutputQuota(config.maxTokens, true);
+            const quota = schema.thinkingOutputQuota(config.maxTokens, true, config.model);
             if (quota.raised) config.maxTokens = quota.effective;
         }
         return config;
@@ -1145,6 +1146,7 @@
 
         const startedAt = new Date().toISOString();
         let failureMessage = '';
+        const requestConfig = { ...nativeGenerationConfig(generation.abortController && generation.abortController.signal), taskKind: 'writer-prose' };
         try {
             if (!desktopGenerationAvailable()) {
                 throw new Error('Native generation provider stream is not loaded.');
@@ -1154,11 +1156,15 @@
                     generation.finishReason = meta.finishReason || '';
                     return;
                 }
+                if (meta && meta.type === 'usage') {
+                    generation.usage = { ...generation.usage, ...meta.usage };
+                    return;
+                }
                 if (meta && meta.type === 'reasoning') generation.reasoning += token;
                 else if (!meta || meta.type === 'content') generation.text += token;
                 syncInlineGenerationToEditor();
                 renderNativeGeneration();
-            }, { ...nativeGenerationConfig(generation.abortController && generation.abortController.signal), taskKind: 'writer-prose' });
+            }, requestConfig);
             if (!generation.text.trim()) {
                 generation.interruptReason = generation.reasoning ? 'empty' : 'failed';
                 throw new Error('AI provider returned an empty response.');
@@ -1183,7 +1189,10 @@
                     messages: prompt.messages || [],
                     promptText: prompt.asString ? prompt.asString() : '',
                     resultText: result.text || generation.text,
-                    reasoning: result.reasoning || ''
+                    reasoning: result.reasoning || '',
+                    finishReason: generation.finishReason,
+                    usage: generation.usage,
+                    maxTokens: requestConfig.useProviderDefaults ? null : requestConfig.maxTokens
                 })
                 : { id: `generation-${Date.now()}`, beat: generation.beat, resultText: generation.text, createdAt: new Date().toISOString() };
             snapshot.promptHistory = snapshot.promptHistory || [];
@@ -1192,9 +1201,9 @@
             const truncated = generation.finishReason === 'length';
             flushNativeEditorFields();
             markNativeDirty(truncated
-                ? '输出因额度用尽被截断，已写入正文，未保存。可提高最大输出后重试'
+                ? '输出达到额度或上下文上限，已写入部分正文，未保存。请检查后重试'
                 : '生成结果已写入正文，未保存');
-            return { ok: true, record };
+            return { ok: !truncated, reason: truncated ? 'truncated' : undefined, record };
         } catch (error) {
             if (error && error.name === 'AbortError') {
                 generation.interruptReason = 'cancelled';
@@ -1205,8 +1214,27 @@
                     ? window.DraftHarborGenerationResult.normalizeGenerationError(error)
                     : { message: error && error.message ? error.message : String(error) };
                 failureMessage = normalized.message;
+                generation.errorMessage = normalized.message;
                 if (!generation.interruptReason) generation.interruptReason = 'failed';
                 setNativeSaveStatus(`生成失败：${normalized.message}`, 'error');
+            }
+            if (window.DraftHarborGenerationHistory) {
+                const record = window.DraftHarborGenerationHistory.createGenerationRecord({
+                    projectId: snapshot.project && snapshot.project.id,
+                    sceneId: scene.id,
+                    task: 'fiction-prose',
+                    beat: generation.beat,
+                    messages: prompt.messages || [],
+                    resultText: generation.text,
+                    reasoning: generation.reasoning,
+                    finishReason: generation.finishReason,
+                    usage: generation.usage,
+                    maxTokens: requestConfig.useProviderDefaults ? null : requestConfig.maxTokens,
+                    error: { code: error.code || (error.name === 'AbortError' ? 'aborted' : 'generation_error'), message: failureMessage || '生成已取消' }
+                });
+                snapshot.promptHistory = snapshot.promptHistory || [];
+                snapshot.promptHistory.push(record);
+                generation.record = record;
             }
         } finally {
             generation.inProgress = false;
@@ -1263,6 +1291,7 @@
         generation.prompt = prompt;
         generation.record = null;
         generation.aiTaskRecord = null;
+        generation.lastAcceptedSceneId = scene.id;
         generation.inlineBaseText = '';
         generation.pendingSceneId = '';
         generation.inProgress = true;
@@ -1300,12 +1329,22 @@
                 onToken(state) {
                     generation.text = state.text;
                     generation.reasoning = state.reasoning;
+                    generation.finishReason = state.finishReason || '';
+                    generation.usage = state.usage || null;
                     renderNativeGeneration();
                 }
             });
             if (!result.ok) {
                 console.error(options.logLabel, result.error);
                 const message = result.error && result.error.message ? result.error.message : 'AI 任务执行失败';
+                generation.errorMessage = message;
+                generation.aiTaskRecord = result.record;
+                if (result.record) {
+                    const partialRecord = window.DraftHarborAITaskHistory.toLegacyGenerationRecord(result.record, { sceneId: scene.id, task: options.action });
+                    snapshot.promptHistory = snapshot.promptHistory || [];
+                    snapshot.promptHistory.push(partialRecord);
+                    generation.record = partialRecord;
+                }
                 generation.interruptReason = result.status === 'cancelled' ? 'cancelled' : 'failed';
                 if (result.status === 'cancelled') setNativeSaveStatus('生成已取消', 'info');
                 else setNativeSaveStatus(`${options.failurePrefix}：${message}`, 'error');

@@ -75,6 +75,8 @@
                 status: state.status,
                 text: state.text,
                 reasoning: state.reasoning,
+                finishReason: state.finishReason || '',
+                usage: state.usage || null,
                 output: state.output,
                 error: state.error || null
             });
@@ -106,6 +108,9 @@
                 promptText: context.promptText,
                 resultText: context.resultText,
                 reasoning: context.reasoning,
+                finishReason: context.finishReason,
+                usage: context.usage,
+                maxTokens: context.maxTokens,
                 error: normalized,
                 startedAt: context.startedAt,
                 finishedAt: failedTask.finishedAt
@@ -160,6 +165,8 @@
                 status: 'running',
                 text: '',
                 reasoning: '',
+                finishReason: '',
+                usage: null,
                 output: null,
                 error: null
             };
@@ -172,18 +179,26 @@
                     if (typeof hook.beforeRun === 'function') await hook.beforeRun(context);
                 }
                 await streamGeneration(prompt, (token, meta) => {
-                    if (meta && meta.type === 'reasoning') state.reasoning += token;
-                    else state.text += token;
+                    if (meta && meta.type === 'finish') state.finishReason = meta.finishReason || '';
+                    else if (meta && meta.type === 'usage') state.usage = { ...state.usage, ...meta.usage };
+                    else if (meta && meta.type === 'reasoning') state.reasoning += token;
+                    else if (!meta || meta.type === 'content') state.text += token;
                     if (typeof runOptions.onToken === 'function') {
                         runOptions.onToken({
                             token,
                             type: meta && meta.type ? meta.type : 'content',
                             text: state.text,
                             reasoning: state.reasoning,
+                            finishReason: state.finishReason,
+                            usage: state.usage,
                             task: state.task
                         });
                     }
                 }, providerConfig);
+
+                if (['length', 'max_tokens', 'max_output_tokens'].includes(state.finishReason)) {
+                    throw Object.assign(new Error('输出达到额度或上下文上限，结果不完整；已保留收到的内容供检查。'), { code: 'provider_output_truncated' });
+                }
 
                 const parser = outputContracts.get(task.outputContract);
                 if (!parser) throw new Error(`No parser registered for output contract ${task.outputContract}`);
@@ -207,6 +222,9 @@
                     resultText: state.text,
                     resultData: state.output,
                     reasoning: state.reasoning,
+                    finishReason: state.finishReason,
+                    usage: state.usage,
+                    maxTokens: providerConfig.useProviderDefaults ? null : providerConfig.maxTokens,
                     startedAt,
                     finishedAt: state.task.finishedAt
                 });
@@ -218,6 +236,8 @@
                     targetKey,
                     text: state.text,
                     reasoning: state.reasoning,
+                    finishReason: state.finishReason,
+                    usage: state.usage,
                     output: state.output,
                     record
                 };
@@ -229,13 +249,16 @@
                     promptText,
                     resultText: state.text,
                     reasoning: state.reasoning,
+                    finishReason: state.finishReason,
+                    usage: state.usage,
+                    maxTokens: providerConfig.useProviderDefaults ? null : providerConfig.maxTokens,
                     startedAt
                 });
                 state.status = result.status;
                 state.task = result.task;
                 state.error = result.error;
                 emitState(runOptions.onStateChange, state);
-                return { ...result, targetKey, text: state.text, reasoning: state.reasoning };
+                return { ...result, targetKey, text: state.text, reasoning: state.reasoning, finishReason: state.finishReason, usage: state.usage };
             } finally {
                 const active = activeTargets.get(targetKey);
                 if (active && active.task.id === task.id) activeTargets.delete(targetKey);

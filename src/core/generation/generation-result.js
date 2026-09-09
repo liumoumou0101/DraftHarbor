@@ -8,8 +8,9 @@
     function normalizeGenerationError(error, context = {}) {
         const message = error && error.message ? error.message : String(error || 'Unknown generation error');
         const lower = message.toLowerCase();
-        let code = context.code || 'generation_error';
+        let code = context.code || (error && error.code) || 'generation_error';
         if (error && error.name === 'AbortError') code = 'aborted';
+        else if (context.code || (error && error.code)) { /* Preserve structured provider diagnostics. */ }
         else if (lower.includes('auth') || lower.includes('401') || lower.includes('403')) code = 'auth_error';
         else if (lower.includes('quota') || lower.includes('balance') || lower.includes('402')) code = 'quota_error';
         else if (lower.includes('rate') || lower.includes('429')) code = 'rate_limited';

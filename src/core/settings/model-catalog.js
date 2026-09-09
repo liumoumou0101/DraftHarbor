@@ -550,8 +550,19 @@
         return getProviderMetadata(provider).setupHint || '';
     }
 
-    function providerAuthHeaders(provider, apiKey) {
+    const opencodeSessions = new Map();
+
+    function providerAuthHeaders(provider, apiKey, sessionKey) {
         var headers = { 'Content-Type': 'application/json' };
+        if (isOpencodeProvider(provider)) {
+            const identity = String(sessionKey || 'default');
+            if (!opencodeSessions.has(identity)) {
+                opencodeSessions.set(identity, typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+                    ? crypto.randomUUID() : `draftharbor-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+            }
+            headers['x-opencode-session'] = opencodeSessions.get(identity);
+            headers['User-Agent'] = 'DraftHarbor/1.2.5';
+        }
         var key = String(apiKey || '');
         if (isAnthropicMessagesProvider(provider)) {
             headers['x-api-key'] = key;

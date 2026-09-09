@@ -100,7 +100,7 @@
         function push(token, meta) {
             const type = meta && meta.type ? meta.type : 'content';
             if (type !== 'content') {
-                if (type === 'finish' || type === 'usage') finish();
+                if (type === 'finish') finish();
                 deliver(token, meta || { type });
                 return;
             }
@@ -176,6 +176,7 @@
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let pending = '';
+        let completed = false;
         while (true) {
             const part = await reader.read();
             if (part.value && part.value.length && typeof onActivity === 'function') onActivity();
@@ -188,11 +189,16 @@
                 const data = line.slice(5).trim();
                 if (!data) continue;
                 if (data === '[DONE]') return true;
-                visit(data);
+                completed = visit(data) === true || completed;
             }
             if (part.done) break;
         }
-        if (pending.trim().startsWith('data:')) visit(pending.trim().slice(5).trim());
+        if (pending.trim().startsWith('data:')) {
+            const data = pending.trim().slice(5).trim();
+            if (data === '[DONE]') completed = true;
+            else if (data) completed = visit(data) === true || completed;
+        }
+        if (!completed) throw providerError('provider_stream_incomplete', '生成连接提前结束，已收到的内容可能不完整，请检查后重试。');
         return true;
     }
 
@@ -290,7 +296,7 @@
             prompt: promptText,
             stream: true,
             top_p: 0.9,
-            stop: ['<|im_end|>', '<|endoftext|>', '\n\n\n\n', 'USER:', 'HUMAN:']
+            stop: ['<|im_end|>', '<|endoftext|>']
         };
         if (!config.useProviderDefaults) {
             requestBody.n_predict = numeric(config.maxTokens, 300);
@@ -305,11 +311,16 @@
         if (!response.ok) throw providerError(`provider_http_${response.status}`, `本地生成服务返回 HTTP ${response.status}。`, { status: response.status });
         if (typeof onActivity === 'function') onActivity();
         await consumeEventStream(response, (serialized) => {
+            let event;
             try {
-                const event = JSON.parse(serialized);
-                if (event.content) emit(event.content);
+                event = JSON.parse(serialized);
             } catch (_) {
-                // A broken event must not discard later valid stream events.
+                throw providerError('provider_stream_invalid', '本地生成数据损坏，结果可能不完整。');
+            }
+            if (event.content) emit(event.content);
+            if (event.stop) {
+                emit('', { type: 'finish', finishReason: event.stopped_limit || event.stop_type === 'limit' ? 'length' : 'stop', rawFinishReason: event.stop_type || (event.stopped_limit ? 'stopped_limit' : 'stop') });
+                return true;
             }
         }, onActivity);
     }
@@ -430,7 +441,7 @@
         const request = createChatRequest(messages, config);
         const catalog = resolveModelCatalog();
         const headers = catalog && typeof catalog.providerAuthHeaders === 'function'
-            ? catalog.providerAuthHeaders(config.provider, config.apiKey)
+            ? catalog.providerAuthHeaders(config.provider, config.apiKey, config.sessionId)
             : {
                 'Content-Type': 'application/json',
                 ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {})
@@ -466,6 +477,7 @@
         if (!response.body || typeof response.body.getReader !== 'function') {
             const payload = await response.json();
             if (typeof onActivity === 'function') onActivity();
+            if (payload && payload.error) throw providerError('provider_error', String(payload.error.message || '生成服务返回错误。'));
             const choice = payload && payload.choices && payload.choices[0] ? payload.choices[0] : {};
             const message = choice.message || {};
             if (message.reasoning_content) emit(message.reasoning_content, { type: 'reasoning' });
@@ -477,12 +489,14 @@
 
         await consumeEventStream(response, (serialized) => {
             const payload = JSON.parse(serialized);
+            if (payload && payload.error) throw providerError('provider_error', String(payload.error.message || '生成服务返回错误。'));
             if (payload && payload.usage) emit('', { type: 'usage', usage: payload.usage });
             const choice = payload && payload.choices && payload.choices[0];
             const delta = choice && choice.delta ? choice.delta : {};
             if (delta.reasoning_content) emit(delta.reasoning_content, { type: 'reasoning' });
             if (delta.content) emit(delta.content, { type: 'content' });
             if (choice && choice.finish_reason) emit('', { type: 'finish', finishReason: choice.finish_reason });
+            return !!(choice && choice.finish_reason);
         }, onActivity);
     }
 
@@ -511,6 +525,7 @@
         if (!serialized || serialized === '[DONE]') return;
         const payload = JSON.parse(serialized);
         if (!payload || payload.type === 'ping') return;
+        if (payload.type === 'message_stop') return true;
         if (payload.type === 'error') {
             const detail = String((payload.error && payload.error.message) || 'Anthropic 返回错误。').replace(/\s+/g, ' ').trim().slice(0, 180);
             throw providerError('provider_error', detail || 'Anthropic 返回错误。');
@@ -525,6 +540,7 @@
             const stop = payload.delta && payload.delta.stop_reason;
             if (stop) emit('', { type: 'finish', finishReason: stop === 'end_turn' ? 'stop' : stop });
             if (payload.usage) emit('', { type: 'usage', usage: payload.usage });
+            return !!stop;
         }
     }
 
@@ -547,7 +563,7 @@
             body.temperature = Math.max(0, Math.min(1, numeric(config.temperature, 0.8)));
         }
         const headers = catalog && typeof catalog.providerAuthHeaders === 'function'
-            ? catalog.providerAuthHeaders(config.provider, config.apiKey)
+            ? catalog.providerAuthHeaders(config.provider, config.apiKey, config.sessionId)
             : {
                 'Content-Type': 'application/json',
                 'x-api-key': String(config.apiKey || ''),
@@ -619,7 +635,9 @@
             completion_tokens: Number(usage.completion_tokens || usage.output_tokens || 0),
             total_tokens: Number(usage.total_tokens || 0),
             input_tokens: Number(usage.input_tokens || usage.prompt_tokens || 0),
-            output_tokens: Number(usage.output_tokens || usage.completion_tokens || 0)
+            output_tokens: Number(usage.output_tokens || usage.completion_tokens || 0),
+            output_tokens_details: usage.output_tokens_details || null,
+            completion_tokens_details: usage.completion_tokens_details || usage.output_tokens_details || null
         };
     }
 
@@ -683,10 +701,9 @@
                     });
                 }
                 if (completed && completed.usage) emit('', { type: 'usage', usage: responsesUsage(completed.usage) });
-                const truncated = payload.type === 'response.incomplete'
-                    || (completed && completed.status === 'incomplete')
-                    || (completed && completed.incomplete_details && completed.incomplete_details.reason === 'max_output_tokens');
-                emit('', { type: 'finish', finishReason: truncated ? 'length' : 'stop' });
+                const incomplete = payload.type === 'response.incomplete' || completed.status === 'incomplete';
+                emit('', { type: 'finish', finishReason: incomplete ? ((completed.incomplete_details && completed.incomplete_details.reason) || 'incomplete') : 'stop' });
+                return true;
             }
         };
     }
@@ -722,7 +739,7 @@
         const request = createResponsesRequest(messages, config);
         const catalog = resolveModelCatalog();
         const headers = catalog && typeof catalog.providerAuthHeaders === 'function'
-            ? catalog.providerAuthHeaders(config.provider, config.apiKey)
+            ? catalog.providerAuthHeaders(config.provider, config.apiKey, config.sessionId)
             : {
                 'Content-Type': 'application/json',
                 ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {})
@@ -756,7 +773,7 @@
             if (typeof onActivity === 'function') onActivity();
             emitResponsesOutput(payload && payload.output, emit);
             if (payload && payload.usage) emit('', { type: 'usage', usage: responsesUsage(payload.usage) });
-            emit('', { type: 'finish', finishReason: payload && payload.status === 'incomplete' ? 'length' : 'stop' });
+            emit('', { type: 'finish', finishReason: payload && payload.status === 'incomplete' ? ((payload.incomplete_details && payload.incomplete_details.reason) || 'incomplete') : 'stop' });
             return;
         }
         await consumeEventStream(response, createResponsesVisitor(emit), onActivity);
@@ -778,6 +795,7 @@
         const settings = config && typeof config === 'object' ? config : {};
         const deliver = typeof onToken === 'function' ? onToken : function () {};
         let contentCharacters = 0;
+        let finishReason = '';
         const splitter = createInlineThinkSplitter((token, meta) => {
             if (!meta || meta.type === 'content') contentCharacters += String(token || '').length;
             deliver(token, meta);
@@ -793,6 +811,16 @@
         const activeSettings = { ...settings, signal: watchdog.signal };
         const emit = (token, meta) => {
             watchdog.touch();
+            if (meta && meta.type === 'finish') {
+                const raw = meta.rawFinishReason || meta.finishReason || '';
+                finishReason = ['max_tokens', 'max_output_tokens', 'length'].includes(meta.finishReason) ? 'length' : meta.finishReason;
+                meta = { ...meta, rawFinishReason: raw, finishReason };
+                splitter.push(token, meta);
+                if (finishReason && !['stop', 'end_turn', 'stop_sequence', 'length'].includes(finishReason)) {
+                    throw providerError('provider_incomplete_response', `生成未正常完成（${finishReason}），请检查已收到的内容。`);
+                }
+                return;
+            }
             splitter.push(token, meta);
         };
         const messages = prompt && Array.isArray(prompt.messages) ? prompt.messages : null;
@@ -812,7 +840,7 @@
                         ? await requestResponses(chatMessages, emit, activeSettings, watchdog.touch)
                         : await requestChat(chatMessages, emit, activeSettings, watchdog.touch));
                 splitter.finish();
-                if (!contentCharacters) throw providerError('provider_empty_response', 'AI Provider 没有返回可用正文。');
+                if (!contentCharacters) throw providerError(finishReason === 'length' ? 'provider_output_truncated' : 'provider_empty_response', finishReason === 'length' ? '生成额度或上下文上限已用尽，尚未返回正文；思考可能占用了输出预算。' : 'AI Provider 没有返回可用正文。');
                 return result;
             }
             const serialized = messages
@@ -820,7 +848,7 @@
                 : String(prompt && typeof prompt.asString === 'function' ? prompt.asString() : prompt || '');
             const result = await requestLocal(serialized, emit, activeSettings, watchdog.touch);
             splitter.finish();
-            if (!contentCharacters) throw providerError('provider_empty_response', '本地生成服务没有返回可用正文。');
+            if (!contentCharacters) throw providerError(finishReason === 'length' ? 'provider_output_truncated' : 'provider_empty_response', finishReason === 'length' ? '本地生成额度或上下文上限已用尽，尚未返回正文。' : '本地生成服务没有返回可用正文。');
             return result;
         } catch (error) {
             splitter.finish();

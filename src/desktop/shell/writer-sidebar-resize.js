@@ -94,6 +94,7 @@
         applyNativeAssistantHeight(root);
         assistantHandle.setAttribute('aria-orientation', root.classList.contains('is-assistant-bottom') ? 'horizontal' : 'vertical');
         assistantHandle.setAttribute('aria-label', root.classList.contains('is-assistant-bottom') ? '调整辅助栏高度' : '调整辅助栏宽度');
+        assistantHandle.title = root.classList.contains('is-assistant-bottom') ? '拖动调整高度，双击恢复默认' : '拖动调整宽度，双击恢复默认';
 
         function startBottomResize(event) {
             if (event.button !== undefined && event.button !== 0) return;

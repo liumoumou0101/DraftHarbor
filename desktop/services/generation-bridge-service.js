@@ -104,6 +104,7 @@ function clientAbortSignal(request) {
 function pickGenerationFields(payload = {}) {
   return {
     profileId: payload.profileId || '',
+    sessionId: String(payload.sessionId || '').slice(0, 200),
     model: payload.model,
     enableThinking: payload.enableThinking,
     temperature: payload.temperature,
@@ -221,6 +222,7 @@ function resolveGenerationRequest(settingsInput, payload = {}, options = {}) {
   const trusted = trustedPolicyFromPayload(payload);
   const extras = {
     profileId: trusted.profileId || fields.profileId || '',
+    sessionId: fields.sessionId || fields.runId || fields.projectId,
     model: trusted.model || fields.model,
     enableThinking: trusted.enableThinking !== undefined ? trusted.enableThinking : fields.enableThinking,
     temperature: trusted.temperature !== undefined ? trusted.temperature : fields.temperature,

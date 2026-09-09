@@ -554,6 +554,13 @@
         elements.root.classList.toggle('is-outline-collapsed', nativeEditorState.outlineCollapsed);
         elements.root.classList.toggle('is-assistant-collapsed', nativeEditorState.assistantCollapsed);
         elements.root.classList.toggle('is-assistant-bottom', nativeEditorState.assistantPlacement === 'bottom');
+        const assistantResizer = elements.root.querySelector('[data-native-resize-assistant]');
+        if (assistantResizer) {
+            const bottom = nativeEditorState.assistantPlacement === 'bottom';
+            assistantResizer.setAttribute('aria-orientation', bottom ? 'horizontal' : 'vertical');
+            assistantResizer.setAttribute('aria-label', bottom ? '调整辅助栏高度' : '调整辅助栏宽度');
+            assistantResizer.title = bottom ? '拖动调整高度，双击恢复默认' : '拖动调整宽度，双击恢复默认';
+        }
         applyNativeEditorPrefs();
         if (elements.assistantPlacement) {
             setNativeToolbarButton(elements.assistantPlacement, nativeEditorState.assistantPlacement === 'bottom' ? '辅助在右' : '辅助在下', nativeEditorState.assistantPlacement === 'bottom' ? '右' : '下');

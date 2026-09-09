@@ -13,6 +13,7 @@
         const source = config && typeof config === 'object' ? config : {};
         return {
             profileId: source.profileId || '',
+            sessionId: source.sessionId || '',
             projectId: source.projectId || '',
             runId: source.runId || '',
             model: source.model || source.aiModel || '',
@@ -53,31 +54,37 @@
         const decoder = new TextDecoder();
         let pending = '';
         let streamError = null;
+        let completed = false;
+        function visit(rawLine) {
+            const line = rawLine.trim();
+            if (!line.startsWith('data:')) return;
+            const data = line.slice(5).trim();
+            if (!data) return;
+            if (data === '[DONE]') { completed = true; return; }
+            let event;
+            try { event = JSON.parse(data); } catch (_) {
+                streamError = Object.assign(new Error('生成数据损坏，结果可能不完整。'), { code: 'provider_stream_invalid' });
+                return;
+            }
+            if (!event) return;
+            if (event.type === 'error' && event.error) {
+                streamError = Object.assign(new Error(event.error.message || '生成失败'), event.error);
+                return;
+            }
+            if (event.type === 'done') { completed = true; return; }
+            if (typeof onToken === 'function') onToken(event.token || '', event.meta || { type: event.type || 'content' });
+        }
         while (true) {
             const part = await reader.read();
             pending += decoder.decode(part.value || new Uint8Array(), { stream: !part.done });
             const lines = pending.split(/\r?\n/);
             pending = lines.pop() || '';
-            for (const rawLine of lines) {
-                const line = rawLine.trim();
-                if (!line.startsWith('data:')) continue;
-                const data = line.slice(5).trim();
-                if (!data || data === '[DONE]') continue;
-                let event = null;
-                try { event = JSON.parse(data); } catch (error) { continue; }
-                if (!event) continue;
-                if (event.type === 'error' && event.error) {
-                    streamError = Object.assign(new Error(event.error.message || '生成失败'), event.error);
-                    continue;
-                }
-                if (event.type === 'done') continue;
-                if (typeof onToken === 'function') {
-                    onToken(event.token || '', event.meta || { type: event.type || 'content' });
-                }
-            }
+            for (const rawLine of lines) visit(rawLine);
             if (part.done) break;
         }
+        if (pending.trim()) visit(pending);
         if (streamError) throw streamError;
+        if (!completed) throw Object.assign(new Error('生成连接提前结束，已收到的内容可能不完整。'), { code: 'provider_stream_incomplete' });
     }
 
     async function streamViaBridge(prompt, onToken, config) {

@@ -19,6 +19,9 @@
             promptText: input.promptText || '',
             resultText: input.resultText || '',
             reasoning: input.reasoning || '',
+            finishReason: input.finishReason || '',
+            usage: input.usage || null,
+            maxTokens: input.maxTokens == null ? null : input.maxTokens,
             error: input.error || null,
             createdAt: input.createdAt || now
         };
