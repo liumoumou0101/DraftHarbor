@@ -252,6 +252,9 @@
                 elements.regenerateUseContext.checked = nativeEditorState.rewrite.regenerateUseContext;
             }
         }
+        if (elements.regenerateInstruction && elements.regenerateInstruction.value !== (nativeEditorState.rewrite.regenerateInstruction || '')) {
+            elements.regenerateInstruction.value = nativeEditorState.rewrite.regenerateInstruction || '';
+        }
         const rewriteContextChars = document.querySelector('[data-native-rewrite-context-chars]');
         const regenerateContextChars = document.querySelector('[data-native-regenerate-context-chars]');
         if (rewriteContextChars && Number(rewriteContextChars.value) !== nativeRewriteContextChars()) {
@@ -264,6 +267,15 @@
             regenerateContextChars.disabled = nativeEditorState.rewrite.regenerateUseContext === false;
         }
         var hasSelection = rememberNativeRewriteSelection();
+        const regenerateInfo = document.querySelector('[data-native-regenerate-selection-info]');
+        if (regenerateInfo) {
+            const rewrite = nativeEditorState.rewrite;
+            const value = elements.editor ? elements.editor.value : '';
+            const budget = rewrite.regenerateUseContext === false ? 0 : nativeRegenerateContextChars();
+            regenerateInfo.textContent = hasSelection
+                ? `已选 ${Math.max(0, rewrite.selectionEnd - rewrite.selectionStart)} 字符；前文 ${Math.min(budget, rewrite.selectionStart)}、后文 ${Math.min(budget, Math.max(0, value.length - rewrite.selectionEnd))} 字符。`
+                : '请先在正文中选中需要重写的内容。';
+        }
         if (elements.rewriteOriginalText) {
             var originalText = nativeEditorState.rewrite.originalText || '';
             if (elements.rewriteOriginalText.value !== originalText) {
@@ -599,6 +611,8 @@
         const start = Number(editor.selectionStart) || 0;
         const end = Number(editor.selectionEnd) || 0;
         if (end > start) {
+            nativeEditorState.rewrite.selectionSceneId = currentNativeScene() && currentNativeScene().id;
+            nativeEditorState.rewrite.selectionProjectId = currentProjectId();
             nativeEditorState.rewrite.selectionStart = start;
             nativeEditorState.rewrite.selectionEnd = end;
             nativeEditorState.rewrite.originalText = editor.value.slice(start, end);
@@ -613,6 +627,8 @@
         const liveStart = Number(editor.selectionStart) || 0;
         const liveEnd = Number(editor.selectionEnd) || 0;
         if (liveEnd > liveStart && !nativeRewritePreviewPending()) {
+            nativeEditorState.rewrite.selectionSceneId = currentNativeScene() && currentNativeScene().id;
+            nativeEditorState.rewrite.selectionProjectId = currentProjectId();
             nativeEditorState.rewrite.selectionStart = liveStart;
             nativeEditorState.rewrite.selectionEnd = liveEnd;
             nativeEditorState.rewrite.originalText = editor.value.slice(liveStart, liveEnd);
@@ -621,6 +637,10 @@
         const start = Number(nativeEditorState.rewrite.selectionStart) || 0;
         const end = Number(nativeEditorState.rewrite.selectionEnd) || 0;
         if (end <= start) return false;
+        const rewrite = nativeEditorState.rewrite;
+        if ((rewrite.selectionSceneId && rewrite.selectionSceneId !== (currentNativeScene() && currentNativeScene().id))
+            || (rewrite.selectionProjectId && rewrite.selectionProjectId !== currentProjectId())
+            || end > editor.value.length || editor.value.slice(start, end) !== rewrite.originalText) return false;
         editor.focus({ preventScroll: true });
         editor.setSelectionRange(start, end);
         return true;
@@ -774,7 +794,7 @@
         nativeEditorState.rewrite.selectionEnd = end;
         var useContext = nativeEditorState.rewrite.regenerateUseContext !== false;
         const contextChars = nativeRegenerateContextChars();
-        const instruction = (nativeEditorState.rewrite.instruction || '').trim() || '重新生成选中文段，使它自然衔接前后文，并保留当前剧情意图。';
+        const instruction = (nativeEditorState.rewrite.regenerateInstruction || '').trim() || '重新组织并完整重写选中的大段内容，保留关键事实、人物关系和剧情意图，使新文本自然衔接前后文；不要仅做逐句润色，也不要把原文缩成摘要。';
         const contextBefore = useContext ? value.slice(Math.max(0, start - contextChars), start) : '[用户选择不发送上下文]';
         const contextAfter = useContext ? value.slice(end, Math.min(value.length, end + contextChars)) : '[用户选择不发送上下文]';
         const contextInstruction = useContext
@@ -809,7 +829,8 @@
                 return this.messages.map((message) => `<|im_start|>${message.role}\n${message.content}<|im_end|>`).join('\n');
             },
             selection: { start, end, selectedText },
-            instruction
+            instruction,
+            regenerateContext: { useContext, contextChars }
         };
     }
 

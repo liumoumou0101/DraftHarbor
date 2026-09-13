@@ -703,7 +703,49 @@
         return nativeAITaskRunner;
     }
 
+    function nativeSelectionTaskBlocked(action, retry = false) {
+        const generation = nativeEditorState.generation;
+        if (generation.inProgress) {
+            setNativeSaveStatus('请先等待当前生成完成，或停止生成。', 'info');
+            return 'in-progress';
+        }
+        if (retry) {
+            const target = generation.selectionTarget;
+            const scene = currentNativeScene();
+            const editor = nativeEditorElements().editor;
+            const projectId = nativeEditorState.snapshot && nativeEditorState.snapshot.project && nativeEditorState.snapshot.project.id;
+            if (generation.task !== action || !target || !generation.selectionRequest || !scene || !editor
+                || target.sceneId !== scene.id || target.projectId !== projectId || editor.value !== target.baseText) {
+                setNativeSaveStatus('原文或项目已变化，请先保留或撤回结果，再重新选择文本。', 'error');
+                return 'stale-selection';
+            }
+        } else if (generation.text || generation.pendingSceneId) {
+            setNativeSaveStatus('请先保留或撤回当前生成结果，再开始新的重写；重试请使用结果中的“重试”。', 'info');
+            return 'pending-result';
+        }
+        return '';
+    }
+
+    function openNativeRegenerateSettings() {
+        if (nativeSelectionTaskBlocked('regenerate-selection')) return;
+        if (!restoreNativeRewriteSelection()) {
+            setNativeSaveStatus('请先选中要重写的正文', 'error');
+            return;
+        }
+        nativeEditorState.assistantPanel = 'rewrite';
+        nativeEditorState.assistantCollapsed = false;
+        nativeEditorState.assistantPanelByGroup = nativeEditorState.assistantPanelByGroup || {};
+        nativeEditorState.assistantPanelByGroup.writing = 'rewrite';
+        renderNativeEditor();
+        const details = document.querySelector('[data-native-rewrite-regenerate]');
+        if (details) { details.open = true; details.scrollIntoView({ block: 'nearest' }); }
+        const input = nativeEditorElements().regenerateInstruction;
+        if (input) input.focus({ preventScroll: true });
+    }
+
     async function runNativeSelectionAITask(options) {
+        const blocked = nativeSelectionTaskBlocked(options.action, options.retry);
+        if (blocked) return { ok: false, reason: blocked };
         const generation = nativeEditorState.generation;
         const snapshot = nativeEditorState.snapshot;
         const scene = options.scene;
@@ -714,7 +756,23 @@
             return { ok: false, reason: 'missing-runner', message: 'AI 任务执行器未加载' };
         }
 
-        if (generation.text && generation.inlineBaseText) restorePendingInlineGeneration();
+        const previous = options.retry && generation.text ? { ...generation } : null;
+        const target = options.retry ? generation.selectionTarget : {
+            projectId: snapshot.project && snapshot.project.id,
+            sceneId: scene.id,
+            baseText: nativeEditorElements().editor.value,
+            ...prompt.selection
+        };
+        generation.selectionTarget = target;
+        generation.selectionRequest = options.retry ? generation.selectionRequest : { ...prompt, messages: structuredClone(prompt.messages || []) };
+        const isCurrent = () => nativeEditorState.generation === generation && nativeEditorState.snapshot === snapshot
+            && currentNativeScene() && currentNativeScene().id === scene.id;
+        const retainPrevious = () => {
+            if (!previous) return false;
+            Object.assign(generation, previous);
+            if (isCurrent()) setNativeSaveStatus('本次重试未完成，已保留上次结果；可继续重试或确认。', 'info');
+            return true;
+        };
         generation.task = options.action;
         generation.beat = prompt.instruction;
         generation.text = '';
@@ -742,9 +800,9 @@
             outputContract: 'text',
             beforeSnapshot: {
                 sceneId: scene.id,
-                selectionStart: nativeEditorState.rewrite.selectionStart,
-                selectionEnd: nativeEditorState.rewrite.selectionEnd,
-                originalText: nativeEditorState.rewrite.originalText
+                selectionStart: target.start,
+                selectionEnd: target.end,
+                originalText: target.selectedText
             }
         };
         generation.aiTaskTargetKey = window.DraftHarborAITaskContract.taskTargetKey(task);
@@ -758,6 +816,7 @@
                 abortController: generation.abortController,
                 providerConfig: nativeGenerationConfig(generation.abortController && generation.abortController.signal),
                 onToken(state) {
+                    if (!isCurrent()) return;
                     generation.text = state.text;
                     generation.reasoning = state.reasoning;
                     generation.finishReason = state.finishReason || '';
@@ -777,8 +836,10 @@
                     generation.record = partialRecord;
                 }
                 generation.interruptReason = result.status === 'cancelled' ? 'cancelled' : 'failed';
-                if (result.status === 'cancelled') setNativeSaveStatus('生成已取消', 'info');
-                else setNativeSaveStatus(`${options.failurePrefix}：${message}`, 'error');
+                if (!retainPrevious() && isCurrent()) {
+                    if (result.status === 'cancelled') setNativeSaveStatus('生成已取消', 'info');
+                    else setNativeSaveStatus(`${options.failurePrefix}：${message}`, 'error');
+                }
                 return { ok: false, reason: result.status || 'failed', message };
             }
 
@@ -795,18 +856,30 @@
             generation.record = record;
             generation.aiTaskRecord = result.record;
             generation.lastAcceptedSceneId = scene.id;
-            setNativeSaveStatus(options.successStatus, 'ok');
+            if (isCurrent()) setNativeSaveStatus(options.successStatus, 'ok');
             return { ok: true, record, aiTaskRecord: result.record };
+        } catch (error) {
+            if (!retainPrevious()) {
+                generation.errorMessage = error.message || String(error);
+                generation.interruptReason = 'failed';
+                if (isCurrent()) setNativeSaveStatus(`${options.failurePrefix}：${generation.errorMessage}`, 'error');
+            }
+            return { ok: false, reason: 'failed' };
         } finally {
             generation.inProgress = false;
             generation.abortController = null;
             generation.aiTaskTargetKey = '';
-            renderNativeGeneration();
+            if (isCurrent()) renderNativeGeneration();
         }
     }
 
-    async function startNativeRewrite() {
+    async function startNativeRewrite(options = {}) {
+        let blocked = nativeSelectionTaskBlocked('rewrite', options.retry === true);
+        if (blocked) return { ok: false, reason: blocked };
         const elements = nativeEditorElements();
+        const requestSnapshot = nativeEditorState.snapshot;
+        const requestSceneId = currentNativeScene() && currentNativeScene().id;
+        const requestText = elements.editor && elements.editor.value;
         if (elements.rewritePreset) nativeEditorState.rewrite.preset = elements.rewritePreset.value || 'polish';
         if (elements.rewriteInstruction) nativeEditorState.rewrite.instruction = elements.rewriteInstruction.value || '';
         if (settingsState.loading && settingsState.loadPromise) {
@@ -814,7 +887,13 @@
         } else if (!settingsState.runtimeProvider) {
             await loadSettings();
         }
-        var prompt = buildNativeRewritePrompt();
+        blocked = nativeSelectionTaskBlocked('rewrite', options.retry === true);
+        if (blocked) return { ok: false, reason: blocked };
+        if (nativeEditorState.snapshot !== requestSnapshot || (currentNativeScene() && currentNativeScene().id) !== requestSceneId || (elements.editor && elements.editor.value) !== requestText) {
+            setNativeSaveStatus('正文或场景已变化，请重新执行。', 'info');
+            return { ok: false, reason: 'scene-changed' };
+        }
+        var prompt = options.retry === true ? nativeEditorState.generation.selectionRequest : buildNativeRewritePrompt();
         var scene = currentNativeScene();
         if (!prompt || !scene) {
             setNativeSaveStatus('请先在正文中选中文本', 'error');
@@ -824,6 +903,7 @@
         if (generation.inProgress) return { ok: false, reason: 'in-progress' };
         return runNativeSelectionAITask({
             action: 'rewrite',
+            retry: options.retry === true,
             prompt,
             scene,
             startStatus: '改写中...',
@@ -833,9 +913,14 @@
         });
     }
 
-    async function startNativeRegenerateSelection() {
+    async function startNativeRegenerateSelection(options = {}) {
+        let blocked = nativeSelectionTaskBlocked('regenerate-selection', options.retry === true);
+        if (blocked) return { ok: false, reason: blocked };
         var elements = nativeEditorElements();
-        if (elements.rewriteInstruction) nativeEditorState.rewrite.instruction = elements.rewriteInstruction.value || '';
+        const requestSnapshot = nativeEditorState.snapshot;
+        const requestSceneId = currentNativeScene() && currentNativeScene().id;
+        const requestText = elements.editor && elements.editor.value;
+        if (elements.regenerateInstruction) nativeEditorState.rewrite.regenerateInstruction = elements.regenerateInstruction.value || '';
         if (elements.regenerateUseContext) {
             nativeEditorState.rewrite.regenerateUseContext = elements.regenerateUseContext.checked !== false;
         }
@@ -844,7 +929,13 @@
         } else if (!settingsState.runtimeProvider) {
             await loadSettings();
         }
-        var prompt = buildNativeRegenerateSelectionPrompt();
+        blocked = nativeSelectionTaskBlocked('regenerate-selection', options.retry === true);
+        if (blocked) return { ok: false, reason: blocked };
+        if (nativeEditorState.snapshot !== requestSnapshot || (currentNativeScene() && currentNativeScene().id) !== requestSceneId || (elements.editor && elements.editor.value) !== requestText) {
+            setNativeSaveStatus('正文或场景已变化，请重新执行。', 'info');
+            return { ok: false, reason: 'scene-changed' };
+        }
+        var prompt = options.retry === true ? nativeEditorState.generation.selectionRequest : buildNativeRegenerateSelectionPrompt();
         var scene = currentNativeScene();
         if (!prompt || !scene) {
             setNativeSaveStatus('请先在正文中选中要重生成的文本', 'error');
@@ -854,6 +945,7 @@
         if (generation.inProgress) return { ok: false, reason: 'in-progress' };
         return runNativeSelectionAITask({
             action: 'regenerate-selection',
+            retry: options.retry === true,
             prompt,
             scene,
             startStatus: '正在重生成选区...',
@@ -1029,6 +1121,7 @@
     function discardNativeGeneration() {
         const elements = nativeEditorElements();
         const generation = nativeEditorState.generation;
+        if (generation.inProgress) return;
         if (elements.editor && generation.pendingSceneId && generation.pendingSceneId === nativeEditorState.activeSceneId) {
             elements.editor.value = generation.inlineBaseText;
             flushNativeEditorFields();
@@ -1040,6 +1133,7 @@
         generation.pendingSceneId = '';
         generation.pendingEditorChanged = false;
         generation.task = '';
+        generation.selectionTarget = null;
         renderNativeGeneration();
         setNativeSaveStatus('已撤回生成内容', 'info');
     }
@@ -1049,13 +1143,21 @@
         var scene = currentNativeScene();
         var generation = nativeEditorState.generation;
         if (!scene || !generation.text || !elements.editor) return;
+        if (generation.inProgress) return;
+        const target = generation.selectionTarget;
+        if (!target || target.sceneId !== scene.id
+            || target.projectId !== (nativeEditorState.snapshot && nativeEditorState.snapshot.project && nativeEditorState.snapshot.project.id)
+            || elements.editor.value !== target.baseText) {
+            setNativeSaveStatus('原文或项目已变化，无法安全替换。请复制保留结果，或撤回后重新选择文本。', 'error');
+            return;
+        }
         if (generation.lastAcceptedSceneId && generation.lastAcceptedSceneId !== scene.id) {
             setNativeSaveStatus('已切换场景，改写结果已失效。请回到原场景或重新执行改写。', 'error');
             return;
         }
-        var origStart = nativeEditorState.rewrite.selectionStart;
-        var origEnd = nativeEditorState.rewrite.selectionEnd;
-        var origText = nativeEditorState.rewrite.originalText || '';
+        var origStart = target.start;
+        var origEnd = target.end;
+        var origText = target.selectedText;
         var currentSelection = elements.editor.value.slice(origStart, origEnd);
         if (origText && currentSelection !== origText) {
             setNativeSaveStatus('原文已发生变化，无法安全替换。请重新选中并执行改写。', 'error');
@@ -1079,6 +1181,7 @@
         generation.pendingSceneId = '';
         generation.pendingEditorChanged = false;
         generation.task = '';
+        generation.selectionTarget = null;
         nativeEditorState.rewrite.originalText = '';
         nativeEditorState.rewrite.selectionStart = 0;
         nativeEditorState.rewrite.selectionEnd = 0;

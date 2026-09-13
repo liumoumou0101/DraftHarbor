@@ -387,6 +387,9 @@
                                 </div>
                                 <details class="desktop-native-rewrite-regenerate" data-native-rewrite-regenerate>
                                     <summary>重生成选区</summary>
+                                    <p>用于大段内容重写。生成后先预览，确认后才替换原文。</p>
+                                    <p data-native-regenerate-selection-info role="status"></p>
+                                    <label class="desktop-native-regenerate-instruction"><span>大段重写要求（独立于润色，可选）</span><textarea data-native-regenerate-instruction rows="4" placeholder="例如：保留关键剧情，重写叙述和对白，调整整段节奏。留空时保留剧情意图并衔接前后文。"></textarea></label>
                                     <label class="desktop-native-writer-check">
                                         <input type="checkbox" data-native-regenerate-use-context checked>
                                         <span>包含前后文</span>
@@ -395,9 +398,9 @@
                                         <span>前后文（各）</span>
                                         <input data-native-regenerate-context-chars type="number" min="0" max="20000" step="500" value="8000">
                                     </label>
-                                    <p class="desktop-native-rewrite-cost-note">重生成面向大段替换，会发送很长的上下文，输入费用明显高于改写。</p>
+                                    <p class="desktop-native-rewrite-cost-note">会发送选中原文及所设范围内的前后文。较长的选区和上下文会增加请求量。</p>
                                     <div class="desktop-native-generation-actions">
-                                        <button class="desktop-secondary-action" type="button" data-native-regenerate-selection>重生成选区</button>
+                                        <button class="desktop-secondary-action" type="button" data-native-regenerate-selection>开始重生成</button>
                                     </div>
                                 </details>
                             </div>

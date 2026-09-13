@@ -114,6 +114,7 @@
             previewRewrite: document.querySelector('[data-native-preview-rewrite]'),
             startRewrite: document.querySelector('[data-native-start-rewrite]'),
             regenerateSelection: document.querySelector('[data-native-regenerate-selection]'),
+            regenerateInstruction: document.querySelector('[data-native-regenerate-instruction]'),
             rewriteTaskButtons: Array.from(document.querySelectorAll('[data-native-rewrite-task]')),
             regenerateUseContext: document.querySelector('[data-native-regenerate-use-context]'),
             newCharacter: document.querySelector('[data-native-new-character]'),

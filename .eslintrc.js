@@ -186,6 +186,7 @@ openCompendiumRewrite
 openDesktopProject
 openNativeCompendiumExtraction
 openNativeEditorContextMenu
+openNativeRegenerateSettings
 openNativeSummaryDialog
 openProjectCreator
 openProjectFolder

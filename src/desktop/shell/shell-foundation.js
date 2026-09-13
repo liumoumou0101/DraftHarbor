@@ -257,6 +257,7 @@
             selectionStart: 0,
             selectionEnd: 0,
             regenerateUseContext: true,
+            regenerateInstruction: '',
             rewriteContextChars: 1200,
             regenerateContextChars: 8000
         },

@@ -1232,7 +1232,7 @@ async function openNativeModelSettings(page) {
     assert.strictEqual(rewriteCostNoteHidden.title, '生成结果待确认');
     await page.fill('[data-native-scene-editor]', 'Rewrite changed audit sentence.');
     await page.click('[data-native-accept-generation]');
-    await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('原文已发生变化'));
+    await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('原文或项目已变化'));
     assert.ok(!(await page.locator('[data-native-scene-editor]').inputValue()).includes('Rewritten audit'), 'rewrite must not replace text after the original selection changes');
     await page.fill('[data-native-scene-editor]', 'Rewrite this audit sentence.');
     await page.click('[data-native-accept-generation]');
@@ -1563,6 +1563,10 @@ async function openNativeModelSettings(page) {
     });
     await page.waitForFunction(() => !document.querySelector('[data-native-context-menu]').hidden);
     await page.click('[data-native-context-action="regenerate-selection"]');
+    await page.waitForFunction(() => document.querySelector('[data-native-rewrite-regenerate]').open);
+    assert.ok(!(await page.locator('[data-native-generation-result]').textContent()).includes('Regenerated from context menu'), 'right-click must open settings before making a request');
+    await page.fill('[data-native-regenerate-instruction]', '保留剧情，重写整段叙述');
+    await page.click('[data-native-regenerate-selection]');
     await page.waitForFunction(() => {
       const result = document.querySelector('[data-native-generation-result]');
       return result && result.textContent.includes('Regenerated from context menu');

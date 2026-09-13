@@ -25,7 +25,7 @@
         "smoke": "node tests/smoke.js",
         "desktop-mainline-test": "npm run compendium-experience-test && node tests/desktop-library.js && npm run workshop-experience-test && npm run reader-shell-test && node tests/summary-workflow.js && node tests/workflow-guided-ui.js && node tests/workflow-creation-guided-ui.js && node tests/workflow-rewrite-guided-ui.js && node tests/workflow-graph-ui.js",
         "writer-audit": "node tests/writer-button-audit.js",
-        "writer-reasoning-test": "node tests/writer-generation-position.js && node tests/writer-reasoning-state.js && node tests/writer-retry.js",
+        "writer-reasoning-test": "node tests/writer-generation-position.js && node tests/writer-reasoning-state.js && node tests/writer-retry.js && node tests/writer-selection-safety.js",
         "writer-save-test": "node tests/writer-save-state.js && node tests/style-guard-state.js",
         "workshop-agent-test": "node tests/workshop-project-reader.js && node tests/workshop-edit-service.js && node tests/workshop-agent-service.js && node tests/workshop-agent-controller.js && node tests/workshop-write-integration.js",
         "workshop-experience-test": "node tests/workshop-ui.js && node tests/workshop-agent-ui.js && node tests/workshop-agent-integration.js",

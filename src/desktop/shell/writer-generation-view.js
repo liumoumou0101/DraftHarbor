@@ -352,11 +352,12 @@
         }
         const costNote = document.querySelector('[data-native-generation-cost-note]');
         if (costNote) {
-            const regenerateChars = typeof nativeRegenerateContextChars === 'function'
+            const usedContext = generation.selectionRequest && generation.selectionRequest.regenerateContext;
+            const regenerateChars = usedContext ? usedContext.contextChars : typeof nativeRegenerateContextChars === 'function'
                 ? nativeRegenerateContextChars()
                 : Number(nativeEditorState.rewrite.regenerateContextChars) || 8000;
             const usedLongContext = generation.task === 'regenerate-selection'
-                && nativeEditorState.rewrite.regenerateUseContext !== false
+                && (usedContext ? usedContext.useContext : nativeEditorState.rewrite.regenerateUseContext !== false)
                 && regenerateChars > 0;
             costNote.hidden = !usedLongContext;
             costNote.textContent = usedLongContext

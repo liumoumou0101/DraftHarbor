@@ -416,6 +416,11 @@
                 renderNativeRewrite();
             });
         }
+        if (elements.regenerateInstruction) {
+            elements.regenerateInstruction.addEventListener('input', () => {
+                nativeEditorState.rewrite.regenerateInstruction = elements.regenerateInstruction.value;
+            });
+        }
         const rewriteContextChars = document.querySelector('[data-native-rewrite-context-chars]');
         if (rewriteContextChars) {
             rewriteContextChars.addEventListener('change', function () {
@@ -540,9 +545,9 @@
             }
             if (target.dataset.nativeRetryGeneration !== undefined) {
                 if (nativeEditorState.generation.task === 'rewrite') {
-                    startNativeRewrite();
+                    startNativeRewrite({ retry: true });
                 } else if (nativeEditorState.generation.task === 'regenerate-selection') {
-                    startNativeRegenerateSelection();
+                    startNativeRegenerateSelection({ retry: true });
                 } else if (nativeEditorState.generation.task === 'summary') {
                     generateNativeSummary(nativeEditorState.generation.summaryScope || 'scene');
                 } else if (nativeEditorState.generation.genTask === 'summary') {
@@ -558,6 +563,10 @@
             if (action) {
                 const key = action.dataset.nativeContextAction;
                 closeNativeWriterPopovers();
+                if (key === 'regenerate-selection') {
+                    openNativeRegenerateSettings();
+                    return;
+                }
                 if (typeof restoreNativeRewriteSelection === 'function') restoreNativeRewriteSelection();
                 if (key === 'rewrite-selection') {
                     nativeEditorState.assistantPanel = 'rewrite';
@@ -572,8 +581,6 @@
                     renderNativeEditor();
                     if (typeof restoreNativeRewriteSelection === 'function') restoreNativeRewriteSelection();
                     renderNativeRewrite();
-                } else if (key === 'regenerate-selection') {
-                    startNativeRegenerateSelection();
                 } else if (key === 'send-to-workshop') {
                     sendNativeSelectionToWorkshop();
                 } else if (key === 'extract-compendium') {
