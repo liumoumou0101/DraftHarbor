@@ -21,7 +21,7 @@ function response(text) {
         const headers = Catalog.providerAuthHeaders('opencode-go', '', 'scene-a');
         assert.strictEqual(headers['x-opencode-session'], Catalog.providerAuthHeaders('opencode-go', '', 'scene-a')['x-opencode-session']);
         assert.notStrictEqual(headers['x-opencode-session'], Catalog.providerAuthHeaders('opencode-go', '', 'scene-b')['x-opencode-session']);
-        assert.strictEqual(headers['User-Agent'], 'DraftHarbor/1.2.5');
+        assert.strictEqual(headers['User-Agent'], 'DraftHarbor/1.2.6');
         assert.ok(!Catalog.providerAuthHeaders('openai-compatible', '')['x-opencode-session']);
         const splitEvents = [];
         const splitter = Provider.createInlineThinkSplitter((token, meta) => splitEvents.push({ token, type: meta.type }));

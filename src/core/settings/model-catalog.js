@@ -561,7 +561,7 @@
                     ? crypto.randomUUID() : `draftharbor-${Date.now()}-${Math.random().toString(36).slice(2)}`);
             }
             headers['x-opencode-session'] = opencodeSessions.get(identity);
-            headers['User-Agent'] = 'DraftHarbor/1.2.5';
+            headers['User-Agent'] = 'DraftHarbor/1.2.6';
         }
         var key = String(apiKey || '');
         if (isAnthropicMessagesProvider(provider)) {

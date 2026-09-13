@@ -12,10 +12,10 @@
 
 最新稳定版可从 [GitHub Releases](https://github.com/liumoumou0101/DraftHarbor/releases/latest) 下载：
 
-- `DraftHarbor Setup 1.2.5.exe`：Windows 安装版。
-- `DraftHarbor 1.2.5.exe`：免安装便携版。
+- `DraftHarbor Setup 1.2.6.exe`：Windows 安装版。
+- `DraftHarbor 1.2.6.exe`：免安装便携版。
 
-`v1.2.5` 完善阅读器分页：按实际稿纸测量铺页、保护自然断行，并消除翻页闪烁与双页书脊位移。
+`v1.2.6` 新增讨论区项目助手，支持项目内查阅、修改预览、确认应用与撤销；同时优化写作、阅读器与资料库体验，并加强保存冲突保护。
 
 ## 项目起源
 
