@@ -1,3 +1,8 @@
+    const compendiumEditorSession = {
+        projectId: '', snapshot: null, entryId: '', version: 0, baseline: null,
+        loadId: 0, loadController: null, saves: new Set(), creating: null, deleting: null, error: ''
+    };
+
     function compendiumElements() {
         return {
             projectLabel: document.querySelector('[data-compendium-project-label]'),
@@ -49,24 +54,34 @@
         if (!compendiumState.dirty) return true;
         if (!window.confirm('资料尚未保存，离开将丢失修改。继续？')) return false;
         compendiumState.dirty = false;
+        compendiumEditorSession.version += 1;
+        compendiumEditorSession.error = '';
         return true;
     }
 
     function markCompendiumDirty() {
+        compendiumEditorSession.version += 1;
+        compendiumEditorSession.error = '';
         compendiumState.dirty = true;
         renderCompendiumSaveStatus();
     }
 
     function renderCompendiumSaveStatus() {
-        const { saveStatus } = compendiumElements();
+        const { saveStatus, save, deleteButton } = compendiumElements();
+        const selected = selectedCompendiumEntry();
+        const saving = Array.from(compendiumEditorSession.saves).some(matchesCurrentCompendiumDraft);
+        const disabled = !selected || saving || !!matchesCurrentCompendiumDraft(compendiumEditorSession.deleting);
+        if (save) save.disabled = disabled;
+        if (deleteButton) deleteButton.disabled = disabled;
         if (!saveStatus) return;
-        if (!selectedCompendiumEntry()) {
+        if (!selected) {
             saveStatus.textContent = '';
             saveStatus.dataset.tone = '';
             return;
         }
-        saveStatus.textContent = compendiumState.dirty ? '未保存' : '';
-        saveStatus.dataset.tone = compendiumState.dirty ? 'warn' : '';
+        saveStatus.textContent = saving ? '保存中…' : compendiumEditorSession.error ? '保存失败，修改仍保留' : compendiumState.dirty ? '未保存' : '已保存';
+        saveStatus.dataset.tone = saving ? 'info' : compendiumEditorSession.error ? 'error' : compendiumState.dirty ? 'warn' : 'ok';
+        saveStatus.title = compendiumEditorSession.error;
     }
 
     function characterProfileHasContent(profile) {
@@ -103,11 +118,13 @@
     }
 
     function selectCompendiumEntry(entryId) {
-        if (entryId === compendiumState.selectedId) return;
-        if (!confirmAbandonCompendiumEdits()) return;
+        if (!compendiumState.entries.some((entry) => entry.id === entryId)) return false;
+        if (entryId === compendiumState.selectedId) return true;
+        if (!confirmAbandonCompendiumEdits()) return false;
         compendiumState.selectedId = entryId;
         compendiumState.dirty = false;
         renderCompendium();
+        return true;
     }
 
     function currentProjectId() {
@@ -130,6 +147,80 @@
         return compendiumState.entries.find((entry) => entry.id === compendiumState.selectedId) || null;
     }
 
+    function invalidateCompendiumLoad() {
+        compendiumEditorSession.loadId += 1;
+        if (compendiumEditorSession.loadController) compendiumEditorSession.loadController.abort();
+        compendiumEditorSession.loadController = null;
+        compendiumState.loading = false;
+    }
+
+    function syncCompendiumDraftIdentity() {
+        const session = compendiumEditorSession;
+        const projectId = currentProjectId();
+        const snapshot = nativeEditorState.snapshot;
+        const entryId = compendiumState.selectedId || '';
+        const projectChanged = session.projectId !== projectId || session.snapshot !== snapshot;
+        if (!projectChanged && session.entryId === entryId) return false;
+        if (projectChanged) invalidateCompendiumLoad();
+        session.projectId = projectId;
+        session.snapshot = snapshot;
+        session.entryId = entryId;
+        session.version += 1;
+        session.error = '';
+        session.baseline = selectedCompendiumEntry() ? structuredClone(selectedCompendiumEntry()) : null;
+        return true;
+    }
+
+    function matchesCurrentCompendiumDraft(captured) {
+        return captured && captured.projectId === currentProjectId()
+            && captured.snapshot === nativeEditorState.snapshot && captured.entryId === compendiumState.selectedId;
+    }
+
+    function captureCompendiumDraft() {
+        const session = compendiumEditorSession;
+        if (session.projectId !== currentProjectId() || session.snapshot !== nativeEditorState.snapshot
+            || session.entryId !== compendiumState.selectedId) renderCompendium();
+        const selected = selectedCompendiumEntry();
+        if (!currentProjectId() || !selected) return null;
+        return {
+            projectId: currentProjectId(), entryId: selected.id,
+            entry: structuredClone({ ...(session.baseline || selected), ...collectCompendiumForm() }),
+            version: session.version, snapshot: nativeEditorState.snapshot
+        };
+    }
+
+    function acceptCompendiumSavedEntry(entry, captured) {
+        if (!entry || !captured || captured.projectId !== currentProjectId() || captured.snapshot !== nativeEditorState.snapshot) return false;
+        const previous = compendiumState.entries.find((item) => item.id === entry.id);
+        if (previous && previous.updatedAt && entry.updatedAt && previous.updatedAt > entry.updatedAt) return false;
+        invalidateCompendiumLoad();
+        const index = compendiumState.entries.findIndex((item) => item.id === entry.id);
+        if (index < 0) compendiumState.entries.push(entry);
+        else compendiumState.entries[index] = entry;
+        const snapshot = nativeEditorState.snapshot;
+        if (snapshot && snapshot.project && snapshot.project.id === captured.projectId) snapshot.compendium = compendiumState.entries;
+        const sameDraft = matchesCurrentCompendiumDraft(captured) && entry.id === captured.entryId;
+        const accepted = sameDraft && captured.version === compendiumEditorSession.version;
+        if (sameDraft) {
+            compendiumEditorSession.baseline = structuredClone(entry);
+            compendiumEditorSession.error = '';
+            if (accepted) compendiumState.dirty = false;
+        }
+        renderCompendium();
+        return accepted;
+    }
+
+    window.captureCompendiumDraft = captureCompendiumDraft;
+    window.acceptCompendiumSavedEntry = acceptCompendiumSavedEntry;
+
+    function isCompendiumSummaryNote(entry) {
+        if (!entry) return false;
+        const tags = Array.isArray(entry.tags) ? entry.tags : [];
+        if (tags.includes('scene-summary') || tags.includes('chapter-summary')) return true;
+        const refs = Array.isArray(entry.sourceReferences) ? entry.sourceReferences : [];
+        return refs.some((ref) => ref && ref.kind === 'summary');
+    }
+
     function typeLabel(type) {
         return {
             character: '角色',
@@ -138,7 +229,8 @@
             item: '物品',
             lore: '设定',
             timeline: '时间线',
-            note: '笔记'
+            note: '笔记',
+            summary: '摘要'
         }[type] || '资料';
     }
 
@@ -164,7 +256,14 @@
     function filteredCompendiumEntries() {
         const query = compendiumState.query.trim().toLowerCase();
         return compendiumState.entries.filter((entry) => {
-            if (compendiumState.type && entry.type !== compendiumState.type) return false;
+            const summaryNote = isCompendiumSummaryNote(entry);
+            if (compendiumState.type === 'summary') {
+                if (!summaryNote) return false;
+            } else if (compendiumState.type === 'note') {
+                if (entry.type !== 'note' || summaryNote) return false;
+            } else if (compendiumState.type && entry.type !== compendiumState.type) {
+                return false;
+            }
             if (!query) return true;
             const haystack = [
                 entry.title,
@@ -228,6 +327,7 @@
     }
 
     function renderCompendium() {
+        const identityChanged = syncCompendiumDraftIdentity();
         const elements = compendiumElements();
         const projectId = currentProjectId();
         const projectName = currentProjectName();
@@ -246,7 +346,9 @@
                 chip.setAttribute('aria-selected', active ? 'true' : 'false');
             });
         }
-        if (elements.newButton) elements.newButton.disabled = !hasProject || compendiumState.loading;
+        const creatingHere = compendiumEditorSession.creating && compendiumEditorSession.creating.projectId === projectId
+            && compendiumEditorSession.creating.snapshot === nativeEditorState.snapshot;
+        if (elements.newButton) elements.newButton.disabled = !hasProject || compendiumState.loading || !!creatingHere;
         if (elements.drawButton) elements.drawButton.disabled = !hasProject || compendiumState.loading;
         if (elements.agentButton) {
             const available = typeof openCompendiumAgent === 'function';
@@ -285,7 +387,9 @@
                     title.textContent = entry.title || '未命名资料';
                     const meta = document.createElement('span');
                     meta.className = 'desktop-compendium-item-meta';
-                    meta.textContent = `${typeLabel(entry.type)}${entry.tags && entry.tags.length ? ` / ${entry.tags.slice(0, 3).join(', ')}` : ''}`;
+                    meta.textContent = isCompendiumSummaryNote(entry)
+                        ? '摘要'
+                        : `${typeLabel(entry.type)}${entry.tags && entry.tags.length ? ` / ${entry.tags.slice(0, 3).join(', ')}` : ''}`;
                     const badge = document.createElement('span');
                     badge.className = 'desktop-compendium-injection-badge';
                     badge.dataset.mode = contextPolicyMode(entry);
@@ -334,15 +438,17 @@
             ...compendiumCharacterFields(elements)
         ];
         fields.forEach((field) => {
-            if (field) field.disabled = !selected;
+            if (field) field.disabled = !selected || !!matchesCurrentCompendiumDraft(compendiumEditorSession.deleting);
         });
         if (elements.save) elements.save.disabled = !selected;
-        if (elements.deleteButton) elements.deleteButton.disabled = !selected;
+        if (elements.deleteButton) elements.deleteButton.disabled = !selected || !!matchesCurrentCompendiumDraft(compendiumEditorSession.deleting)
+            || Array.from(compendiumEditorSession.saves).some(matchesCurrentCompendiumDraft);
         if (elements.aiRewrite) elements.aiRewrite.disabled = !selected;
-        const isCharacter = selected && (selected.type || 'lore') === 'character';
+        const isCharacter = selected && ((!identityChanged && compendiumState.dirty && elements.entryType ? elements.entryType.value : selected.type) || 'lore') === 'character';
         if (elements.characterDetails) elements.characterDetails.hidden = !isCharacter;
         if (elements.character) elements.character.hidden = !isCharacter;
-        if (selected && !compendiumState.dirty) {
+        if (selected && (identityChanged || !compendiumState.dirty)) {
+            compendiumEditorSession.baseline = structuredClone(selected);
             const policy = normalizedContextPolicy(selected);
             const triggers = policy.triggers || {};
             const characterProfile = selected.characterProfile || {};
@@ -384,10 +490,19 @@
     }
 
     async function loadCompendium() {
+        renderCompendium();
         const projectId = currentProjectId();
+        const snapshot = nativeEditorState.snapshot;
+        invalidateCompendiumLoad();
+        const requestId = compendiumEditorSession.loadId;
+        const controller = new AbortController();
+        compendiumEditorSession.loadController = controller;
+        const isCurrent = () => currentProjectId() === projectId && nativeEditorState.snapshot === snapshot
+            && compendiumEditorSession.loadId === requestId;
         if (!projectId) {
             compendiumState.entries = [];
             compendiumState.selectedId = '';
+            compendiumState.dirty = false;
             setCompendiumStatus('未打开项目', 'info');
             renderCompendium();
             return;
@@ -398,29 +513,40 @@
         let failed = false;
         try {
             const params = new URLSearchParams({ projectId });
-            const response = await fetch(`/api/compendium?${params.toString()}`, { cache: 'no-store' });
+            const response = await fetch(`/api/compendium?${params.toString()}`, { cache: 'no-store', signal: controller.signal });
             const result = await response.json().catch(() => ({}));
+            if (!isCurrent()) return false;
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+            const dirtyEntry = compendiumState.dirty && selectedCompendiumEntry();
             compendiumState.entries = result.entries || [];
+            if (snapshot) snapshot.compendium = compendiumState.entries;
+            if (dirtyEntry && !compendiumState.entries.some((entry) => entry.id === dirtyEntry.id)) {
+                compendiumState.entries = [...compendiumState.entries, dirtyEntry];
+                compendiumEditorSession.error = '该资料已在磁盘删除，当前草稿仍保留。请另存或核对来源。';
+            }
             if (!compendiumState.entries.some((entry) => entry.id === compendiumState.selectedId)) {
                 compendiumState.selectedId = compendiumState.entries[0] ? compendiumState.entries[0].id : '';
+                compendiumState.dirty = false;
             }
-            compendiumState.dirty = false;
-            if (nativeEditorState.snapshot) nativeEditorState.snapshot.compendium = compendiumState.entries;
         } catch (error) {
+            if (!isCurrent()) return false;
             console.warn('Failed to load compendium:', error);
-            compendiumState.entries = [];
-            compendiumState.selectedId = '';
             failed = true;
             setCompendiumStatus(`读取资料失败：${error.message || error}`, 'error');
         } finally {
-            compendiumState.loading = false;
-            renderCompendium();
-            if (!failed) setCompendiumCountStatus();
+            if (isCurrent()) {
+                compendiumState.loading = false;
+                compendiumEditorSession.loadController = null;
+                renderCompendium();
+                if (!failed) setCompendiumCountStatus();
+            }
         }
+        return !failed;
     }
 
     function collectCompendiumForm() {
+        if (compendiumEditorSession.projectId !== currentProjectId() || compendiumEditorSession.snapshot !== nativeEditorState.snapshot
+            || compendiumEditorSession.entryId !== compendiumState.selectedId) renderCompendium();
         const elements = compendiumElements();
         const selected = selectedCompendiumEntry();
         const mode = elements.policyMode ? (elements.policyMode.value || 'manual') : (elements.always && elements.always.checked ? 'always' : 'manual');
@@ -436,6 +562,7 @@
             relationshipNotes: elements.characterRelationship ? elements.characterRelationship.value.trim() : ''
         };
         return {
+            ...(compendiumEditorSession.baseline || selected || {}),
             id: selected && selected.id,
             type,
             category: type,
@@ -461,31 +588,46 @@
 
     async function saveCompendiumEntry(event) {
         if (event) event.preventDefault();
-        const projectId = currentProjectId();
-        if (!projectId || !selectedCompendiumEntry()) return;
+        const captured = captureCompendiumDraft();
+        if (!captured || matchesCurrentCompendiumDraft(compendiumEditorSession.deleting)
+            || Array.from(compendiumEditorSession.saves).some(matchesCurrentCompendiumDraft)) return;
+        compendiumEditorSession.saves.add(captured);
+        compendiumEditorSession.error = '';
+        renderCompendiumSaveStatus();
         try {
             const response = await fetch('/api/compendium', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectId, entry: collectCompendiumForm() })
+                body: JSON.stringify({ projectId: captured.projectId, entry: { ...captured.entry, expectedUpdatedAt: captured.entry.updatedAt } })
             });
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
-            compendiumState.dirty = false;
-            await loadCompendium();
-            compendiumState.selectedId = result.entry.id;
-            renderCompendium();
-            setCompendiumStatus('资料已保存', 'ok');
+            const accepted = acceptCompendiumSavedEntry(result.entry, captured);
+            if (matchesCurrentCompendiumDraft(captured)) setCompendiumStatus(accepted ? '资料已保存' : '已保存提交时的内容，后续修改尚未保存', accepted ? 'ok' : 'info');
         } catch (error) {
-            setCompendiumStatus(`保存失败：${error.message || error}`, 'error');
+            if (matchesCurrentCompendiumDraft(captured)) {
+                compendiumEditorSession.error = String(error.message || error);
+                compendiumState.dirty = true;
+                setCompendiumStatus(`保存失败：${error.message || error}`, 'error');
+            }
+        } finally {
+            compendiumEditorSession.saves.delete(captured);
+            renderCompendiumSaveStatus();
         }
     }
 
     async function createCompendiumEntry(typeOverride) {
         const projectId = currentProjectId();
-        if (!projectId) return;
+        if (!projectId || (compendiumEditorSession.creating && compendiumEditorSession.creating.projectId === projectId
+            && compendiumEditorSession.creating.snapshot === nativeEditorState.snapshot)) return;
         if (!confirmAbandonCompendiumEdits()) return;
-        const entryType = typeOverride || compendiumState.type || 'lore';
+        renderCompendium();
+        const captured = { projectId, entryId: compendiumState.selectedId, version: compendiumEditorSession.version, snapshot: nativeEditorState.snapshot };
+        const requestedType = (typeof typeOverride === 'string' && typeOverride) || compendiumState.type || 'lore';
+        const allowedTypes = ['character', 'location', 'organization', 'item', 'lore', 'timeline', 'note'];
+        const entryType = requestedType === 'summary' ? 'note' : allowedTypes.includes(requestedType) ? requestedType : 'lore';
+        compendiumEditorSession.creating = captured;
+        renderCompendium();
         try {
             const response = await fetch('/api/compendium', {
                 method: 'POST',
@@ -502,11 +644,22 @@
             });
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
-            compendiumState.selectedId = result.entry.id;
-            await loadCompendium();
+            if (projectId !== currentProjectId() || captured.snapshot !== nativeEditorState.snapshot) return;
+            const maySelect = matchesCurrentCompendiumDraft(captured) && captured.version === compendiumEditorSession.version;
+            acceptCompendiumSavedEntry(result.entry, captured);
+            if (maySelect) {
+                compendiumState.selectedId = result.entry.id;
+                compendiumState.dirty = false;
+                compendiumState.query = '';
+                if (compendiumState.type && !filteredCompendiumEntries().some((entry) => entry.id === result.entry.id)) compendiumState.type = entryType;
+                renderCompendium();
+            }
             setCompendiumStatus(entryType === 'character' ? '已创建新人物卡' : '已创建新资料', 'ok');
         } catch (error) {
-            setCompendiumStatus(`创建失败：${error.message || error}`, 'error');
+            if (projectId === currentProjectId() && captured.snapshot === nativeEditorState.snapshot) setCompendiumStatus(`创建失败：${error.message || error}`, 'error');
+        } finally {
+            if (compendiumEditorSession.creating === captured) compendiumEditorSession.creating = null;
+            renderCompendium();
         }
     }
 
@@ -514,7 +667,11 @@
         const projectId = currentProjectId();
         const selected = selectedCompendiumEntry();
         if (!projectId || !selected) return;
+        if (compendiumEditorSession.deleting || Array.from(compendiumEditorSession.saves).some(matchesCurrentCompendiumDraft)) return;
         if (!window.confirm(`删除资料“${selected.title || '未命名资料'}”？`)) return;
+        const captured = captureCompendiumDraft();
+        compendiumEditorSession.deleting = captured;
+        renderCompendium();
         try {
             const response = await fetch('/api/delete-compendium-entry', {
                 method: 'POST',
@@ -523,11 +680,21 @@
             });
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
-            compendiumState.selectedId = '';
-            await loadCompendium();
+            if (currentProjectId() !== projectId || nativeEditorState.snapshot !== captured.snapshot) return;
+            invalidateCompendiumLoad();
+            compendiumState.entries = compendiumState.entries.filter((entry) => entry.id !== selected.id);
+            if (nativeEditorState.snapshot) nativeEditorState.snapshot.compendium = compendiumState.entries;
+            if (compendiumState.selectedId === selected.id) {
+                compendiumState.selectedId = compendiumState.entries[0] ? compendiumState.entries[0].id : '';
+                compendiumState.dirty = false;
+            }
+            renderCompendium();
             setCompendiumStatus('资料已删除', 'ok');
         } catch (error) {
-            setCompendiumStatus(`删除失败：${error.message || error}`, 'error');
+            if (currentProjectId() === projectId && nativeEditorState.snapshot === captured.snapshot) setCompendiumStatus(`删除失败：${error.message || error}`, 'error');
+        } finally {
+            if (compendiumEditorSession.deleting === captured) compendiumEditorSession.deleting = null;
+            renderCompendium();
         }
     }
 
@@ -565,7 +732,7 @@
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') closeCompendiumMoreMenu();
         });
-        if (elements.newButton) elements.newButton.addEventListener('click', createCompendiumEntry);
+        if (elements.newButton) elements.newButton.addEventListener('click', () => createCompendiumEntry());
         if (elements.drawButton) elements.drawButton.addEventListener('click', () => { closeCompendiumMoreMenu(); openCompendiumDraw(); });
         if (elements.agentButton && typeof openCompendiumAgent === 'function') elements.agentButton.addEventListener('click', () => { closeCompendiumMoreMenu(); openCompendiumAgent(); });
         if (elements.agentQaButton && typeof openCompendiumAgentQa === 'function') elements.agentQaButton.addEventListener('click', () => { closeCompendiumMoreMenu(); openCompendiumAgentQa(); });

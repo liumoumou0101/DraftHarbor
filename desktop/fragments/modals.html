@@ -116,12 +116,12 @@
         </form>
     </div>
 
-    <div class="desktop-modal-backdrop" data-native-extract-modal hidden>
+    <dialog class="desktop-modal-backdrop" data-native-extract-modal aria-labelledby="compendium-extract-title" hidden>
         <form class="desktop-modal" data-native-extract-form>
             <header class="desktop-modal-header">
                 <div>
                     <p class="desktop-section-kicker">从正文提取</p>
-                    <h2>资料卡草稿</h2>
+                    <h2 id="compendium-extract-title">资料卡草稿</h2>
                 </div>
                 <button class="desktop-icon-action" type="button" data-native-extract-cancel aria-label="关闭">×</button>
             </header>
@@ -141,7 +141,7 @@
             </div>
             <fieldset class="desktop-compendium-extract-character" data-native-extract-character hidden><legend>人物约束</legend><label><span>角色定位</span><input data-native-extract-character-role maxlength="200"></label><label><span>目标</span><input data-native-extract-character-goal maxlength="200"></label><label><span>动机</span><input data-native-extract-character-motivation maxlength="200"></label><label><span>冲突</span><input data-native-extract-character-conflict maxlength="200"></label><label><span>语气/声音</span><input data-native-extract-character-voice maxlength="200"></label><label><span>当前状态</span><input data-native-extract-character-current-state maxlength="300"></label><label><span>已知信息</span><input data-native-extract-character-knowledge maxlength="300"></label><label><span>关系备注</span><input data-native-extract-character-relationship maxlength="300"></label></fieldset>
             <details class="desktop-compendium-reference-picker"><summary>添加参考资料卡 <small data-native-extract-reference-count>未添加</small></summary><p>只作为本次提取的判定依据，最多 5 张，不会建立永久关联。</p><div data-native-extract-reference-list></div></details>
-            <p class="desktop-modal-status" data-native-extract-status></p>
+            <p class="desktop-modal-status" data-native-extract-status role="status"></p>
             <footer class="desktop-modal-actions">
                 <button class="desktop-secondary-action" type="button" data-native-extract-generate>AI 提取草稿</button>
                 <span></span>
@@ -149,11 +149,11 @@
                 <button class="desktop-primary-action" type="submit">确认保存资料卡</button>
             </footer>
         </form>
-    </div>
+    </dialog>
 
-    <div class="desktop-modal-backdrop" data-compendium-rewrite-modal hidden>
+    <dialog class="desktop-modal-backdrop" data-compendium-rewrite-modal aria-labelledby="compendium-rewrite-title" hidden>
         <form class="desktop-modal desktop-compendium-rewrite-modal" data-compendium-rewrite-form>
-            <header class="desktop-modal-header"><div><p class="desktop-section-kicker">资料卡 AI 重写</p><h2>批量补全资料字段</h2></div><button class="desktop-icon-action" type="button" data-compendium-rewrite-cancel aria-label="关闭">×</button></header>
+            <header class="desktop-modal-header"><div><p class="desktop-section-kicker">资料卡 AI 重写</p><h2 id="compendium-rewrite-title">批量补全资料字段</h2></div><button class="desktop-icon-action" type="button" data-compendium-rewrite-cancel aria-label="关闭">×</button></header>
             <div class="desktop-compendium-modal-body">
             <p class="desktop-compendium-rewrite-intro">可一次勾选多个字段。AI 只会生成并应用已勾选的内容，原有其他资料不会被改动。</p>
             <section class="desktop-compendium-rewrite-selection" aria-label="选择要补全的字段">
@@ -169,15 +169,15 @@
                 <summary>AI 字段补丁（生成后可手动调整）</summary>
                 <textarea data-compendium-rewrite-preview rows="10" placeholder="先选择字段，再生成补丁" spellcheck="false"></textarea>
             </details>
-            <p class="desktop-modal-status" data-compendium-rewrite-status></p>
+            <p class="desktop-modal-status" data-compendium-rewrite-status role="status"></p>
             </div>
             <footer class="desktop-modal-actions"><button class="desktop-primary-action" type="button" data-compendium-rewrite-generate>生成补丁</button><span></span><button class="desktop-secondary-action" type="button" data-compendium-rewrite-cancel>放弃</button><button class="desktop-primary-action" type="submit" data-compendium-rewrite-apply disabled>确认并应用补丁</button></footer>
         </form>
-    </div>
+    </dialog>
 
-    <div class="desktop-modal-backdrop" data-compendium-draw-modal hidden>
+    <dialog class="desktop-modal-backdrop" data-compendium-draw-modal aria-labelledby="compendium-draw-title" hidden>
         <form class="desktop-modal desktop-compendium-draw-modal" data-compendium-draw-form>
-            <header class="desktop-modal-header"><div><p class="desktop-section-kicker">创作抽卡</p><h2>生成资料卡草稿</h2></div><button class="desktop-icon-action" type="button" data-compendium-draw-cancel aria-label="关闭">×</button></header>
+            <header class="desktop-modal-header"><div><p class="desktop-section-kicker">创作抽卡</p><h2 id="compendium-draw-title">生成资料卡草稿</h2></div><button class="desktop-icon-action" type="button" data-compendium-draw-cancel aria-label="关闭">×</button></header>
             <div class="desktop-compendium-modal-body">
             <p class="desktop-compendium-draw-intro">选择资料类型并给出灵感，生成后可以编辑字段、锁定部分内容并重新抽卡。</p>
             <div class="desktop-form-grid desktop-compendium-draw-config">
@@ -201,11 +201,11 @@
                 <div class="desktop-form-grid desktop-compendium-draw-fields"><label class="desktop-form-wide"><span>标题</span><input data-compendium-draw-title maxlength="160" required></label><label class="desktop-form-wide"><span>标签</span><input data-compendium-draw-tags></label><label class="desktop-form-wide"><span>摘要</span><textarea data-compendium-draw-summary rows="3"></textarea></label><label class="desktop-form-wide"><span>正文</span><textarea data-compendium-draw-body rows="7"></textarea></label></div>
                 <fieldset class="desktop-compendium-draw-character" data-compendium-draw-character hidden><legend>人物约束</legend><label><span>角色定位</span><textarea data-compendium-draw-character-role maxlength="200" rows="2"></textarea></label><label><span>目标</span><textarea data-compendium-draw-character-goal maxlength="200" rows="2"></textarea></label><label><span>动机</span><textarea data-compendium-draw-character-motivation maxlength="200" rows="2"></textarea></label><label><span>冲突</span><textarea data-compendium-draw-character-conflict maxlength="200" rows="2"></textarea></label><label><span>语气/声音</span><textarea data-compendium-draw-character-voice maxlength="200" rows="2"></textarea></label><label><span>当前状态</span><textarea data-compendium-draw-character-current-state maxlength="300" rows="2"></textarea></label><label><span>已知信息</span><textarea data-compendium-draw-character-knowledge maxlength="300" rows="2"></textarea></label><label><span>关系备注</span><textarea data-compendium-draw-character-relationship maxlength="300" rows="2"></textarea></label></fieldset>
             </section>
-            <p class="desktop-modal-status" data-compendium-draw-status></p>
+            <p class="desktop-modal-status" data-compendium-draw-status role="status"></p>
             </div>
             <footer class="desktop-modal-actions"><button class="desktop-primary-action" type="button" data-compendium-draw-generate>生成草稿</button><span></span><button class="desktop-secondary-action" type="button" data-compendium-draw-cancel>放弃</button><button class="desktop-primary-action" type="submit" data-compendium-draw-save disabled>保存资料卡</button></footer>
         </form>
-    </div>
+    </dialog>
 
     <div class="desktop-modal-backdrop" data-style-guard-modal hidden>
         <form class="desktop-modal" data-style-guard-form>

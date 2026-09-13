@@ -114,10 +114,10 @@ function sourceRequest(source, envelopeId, destination) {
           const preview = await writerService.preview(dataRoot, request);
           await assert.rejects(() => writerService.apply(dataRoot, { ...request, confirmed: false }), /explicit confirmation/);
           const applied = await writerService.apply(dataRoot, {
-            ...request, confirmed: true, expectedTargetUpdatedAt: preview.targetProject.updatedAt,
+            ...request, confirmed: true, previewToken: preview.previewToken, expectedTargetUpdatedAt: preview.targetProject.updatedAt,
             selectedItemIds: preview.items.map((item) => item.itemId)
           });
-          const retry = await writerService.apply(dataRoot, { ...request, confirmed: true, expectedTargetUpdatedAt: preview.targetProject.updatedAt });
+          const retry = await writerService.apply(dataRoot, { ...request, confirmed: true, previewToken: preview.previewToken, expectedTargetUpdatedAt: preview.targetProject.updatedAt });
           assert.strictEqual(applied.idempotent, false);
           assert.strictEqual(retry.idempotent, true);
         } else if (destination === 'compendium') {

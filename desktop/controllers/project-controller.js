@@ -234,7 +234,7 @@ function createController(dependencies) {
       payload.filesystemSavedAt = new Date().toISOString();
       payload.filesystemSaveVersion = 1;
       const normalizedProject = legacySnapshotToProject(payload);
-      const saved = await projectService.saveProject(dataRoot, normalizedProject);
+      const saved = await projectService.saveProject(dataRoot, normalizedProject, { expectedWriterRevision: payload.writerRevision || undefined });
       const relativePath = path.relative(projectsRoot(dataRoot), saved.projectPath).replace(/\\/g, '/');
       jsonResponse(response, 200, {
         ok: true,
@@ -242,10 +242,11 @@ function createController(dependencies) {
         filename: '',
         source: 'project-directory',
         projectPath: saved.projectPath,
+        writerRevision: saved.writerRevision || saved.project.writerRevision,
         projectSaveLocation: projectsDir
       });
     } catch (error) {
-      jsonResponse(response, 500, { ok: false, error: error.message });
+      jsonResponse(response, error.name === 'ProjectConflictError' ? 409 : 500, { ok: false, error: error.message });
     }
     return true;
   }

@@ -1,0 +1,28 @@
+.desktop-workshop-mode { display: flex; gap: 4px; margin-top: 7px; }
+.desktop-workshop-mode button { padding: 5px 10px; border: 1px solid var(--desktop-line); border-radius: 7px; background: transparent; color: var(--desktop-muted); font: inherit; font-size: 12px; cursor: pointer; }
+.desktop-workshop-mode button[aria-pressed="true"] { color: var(--desktop-accent); background: var(--desktop-accent-soft); border-color: var(--desktop-accent); }
+.desktop-workshop-mode-help { margin: 0 0 8px; color: var(--desktop-muted); font-size: 12px; line-height: 1.5; }
+.desktop-workshop-message .desktop-workshop-message-role { border: 0; padding: 0; background: transparent; color: var(--desktop-text); font: inherit; font-weight: 650; text-align: left; cursor: pointer; }
+.desktop-workshop-message .desktop-workshop-message-role:disabled { opacity: 1; cursor: default; }
+.desktop-workshop-message { cursor: default; }
+.desktop-workshop-message.is-agent-result { width: 100%; max-width: 1480px; box-sizing: border-box; }
+.desktop-workshop-message.is-agent-result .desktop-workshop-message-body { flex: 1; min-width: 0; }
+.desktop-workshop-template[hidden] { display: none !important; }
+[data-workshop-agent-result] { margin-top: 10px; min-width: 0; }
+.desktop-workshop-agent-status { color: var(--desktop-accent); font-weight: 650; margin: 0 0 6px; }
+.desktop-workshop-agent-steps { padding-left: 20px; margin: 0 0 12px; color: var(--desktop-muted); font-size: 12px; line-height: 1.75; }
+[data-workshop-agent-result] details { border: 1px solid var(--desktop-line); border-radius: 8px; padding: 10px; }
+[data-workshop-agent-result] summary { cursor: pointer; font-weight: 650; }
+.desktop-workshop-agent-change { margin-top: 12px; }
+.desktop-workshop-agent-change h4 { font-size: 14px; margin: 0 0 6px; }
+.desktop-workshop-agent-change h5 { margin: 12px 0 6px; font-size: 13px; }
+.desktop-workshop-agent-change p { margin: 0 0 8px; font-size: 12px; color: var(--desktop-muted); }
+.desktop-workshop-agent-compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.desktop-workshop-agent-compare.is-create { grid-template-columns: minmax(0, 1fr); }
+.desktop-workshop-agent-compare > div { min-width: 0; padding: 10px; background: var(--desktop-panel-soft); border-radius: 6px; }
+.desktop-workshop-agent-compare strong { font-size: 12px; color: var(--desktop-muted); }
+.desktop-workshop-agent-compare pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; font: inherit; font-size: 13px; line-height: 1.7; }
+.desktop-workshop-agent-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.desktop-workshop-agent-actions span { font-size: 12px; color: var(--desktop-muted); }
+.desktop-workshop-agent-error { color: var(--desktop-danger); font-size: 13px; white-space: pre-wrap; }
+@media (max-width: 900px) { .desktop-workshop-agent-compare { grid-template-columns: minmax(0, 1fr); } .desktop-workshop-chat-header { align-items: flex-start; flex-wrap: wrap; } }

@@ -1,4 +1,5 @@
-    const compendiumAgentState = { running: false, result: null };
+    /* global selectCompendiumEntry */
+    const compendiumAgentState = { running: false, applying: false, result: null, projectId: '', snapshot: null, requestId: 0, controller: null, selected: new Set() };
 
     function compendiumAgentElements() {
         return {
@@ -21,6 +22,30 @@
         if (!elements.status) return;
         elements.status.textContent = message || '';
         elements.status.dataset.tone = tone;
+    }
+
+    function syncCompendiumAgentControls() {
+        const elements = compendiumAgentElements();
+        const busy = compendiumAgentState.running || compendiumAgentState.applying;
+        [elements.run, elements.scope, elements.selectAll, elements.selectNone].forEach(element => { if (element) element.disabled = busy; });
+        if (elements.cancel) elements.cancel.disabled = compendiumAgentState.applying;
+        if (elements.apply) elements.apply.disabled = busy || !compendiumAgentState.result || !compendiumAgentState.selected.size;
+        elements.results?.querySelectorAll('button, input').forEach(element => { element.disabled = busy || (element.tagName === 'BUTTON' && element.dataset.missing === 'true'); });
+    }
+
+    function invalidateCompendiumAgentRequest() {
+        compendiumAgentState.requestId += 1;
+        compendiumAgentState.controller?.abort();
+        compendiumAgentState.controller = null;
+        compendiumAgentState.running = false;
+        compendiumAgentState.applying = false;
+        syncCompendiumAgentControls();
+    }
+
+    function compendiumAgentRequestCurrent(requestId, projectId) {
+        return requestId === compendiumAgentState.requestId && projectId === currentProjectId()
+            && projectId === compendiumAgentState.projectId && compendiumAgentState.snapshot === nativeEditorState.snapshot
+            && !!compendiumAgentElements().modal?.open;
     }
 
     function agentConfigured() {
@@ -56,7 +81,7 @@
         if (!elements.results) return;
         elements.results.replaceChildren();
         const result = compendiumAgentState.result;
-        if (!result) { if (elements.resultActions) elements.resultActions.hidden = true; return; }
+        if (!result) { if (elements.resultActions) elements.resultActions.hidden = true; syncCompendiumAgentControls(); return; }
         const operations = new Map((result.operations || []).map((operation) => [operation.id, operation]));
         (result.findings || []).forEach((finding) => {
             const card = document.createElement('article');
@@ -80,6 +105,7 @@
                     button.className = 'desktop-secondary-action';
                     button.textContent = entry ? `查看资料：${entry.title || entry.id}` : `资料已不存在：${entryId}`;
                     button.disabled = !entry;
+                    button.dataset.missing = String(!entry);
                     if (entry) button.addEventListener('click', () => focusCompendiumAgentEntry(entry.id));
                     actions.appendChild(button);
                 });
@@ -91,7 +117,12 @@
                 const line = document.createElement('label');
                 line.className = 'desktop-settings-check';
                 const input = document.createElement('input');
-                input.type = 'checkbox'; input.checked = true; input.dataset.compendiumAgentOperation = operation.id;
+                input.type = 'checkbox'; input.checked = compendiumAgentState.selected.has(operation.id); input.dataset.compendiumAgentOperation = operation.id;
+                input.addEventListener('change', () => {
+                    if (input.checked) compendiumAgentState.selected.add(operation.id);
+                    else compendiumAgentState.selected.delete(operation.id);
+                    syncCompendiumAgentControls();
+                });
                 const text = document.createElement('span');
                 const entry = (compendiumState.entries || []).find((item) => item.id === operation.entryId) || {};
                 const diff = Object.keys(operation.patch || {}).map((key) => `${key}: ${JSON.stringify(entry[key] || '')} → ${JSON.stringify(operation.patch[key])}`).join('；');
@@ -101,76 +132,113 @@
             elements.results.appendChild(card);
         });
         const operationCount = elements.results.querySelectorAll('[data-compendium-agent-operation]').length;
-        if (elements.apply) elements.apply.disabled = !operationCount;
         if (elements.resultActions) elements.resultActions.hidden = !operationCount;
+        syncCompendiumAgentControls();
     }
 
     function openCompendiumAgent() {
-        if (!currentProjectId()) return;
-        if (!agentConfigured()) { setCompendiumStatus('请先在设置中心的「资料库管家」中启用并选择专用配置组。', 'error'); setView('settings'); return; }
+        const projectId = currentProjectId();
+        if (!projectId) return;
+        if (!agentConfigured()) { setCompendiumStatus('请先在设置中心的「资料库管家」中启用并选择专用配置组。', 'error'); setView('settings'); window.setSettingsCategory?.('compendium-agent'); return; }
         const elements = compendiumAgentElements();
-        compendiumAgentState.result = null;
-        renderCompendiumAgentResults(); renderCompendiumAgentScope(); setCompendiumAgentStatus('选择范围后开始体检。');
+        const sameProject = compendiumAgentState.projectId === projectId && compendiumAgentState.snapshot === nativeEditorState.snapshot;
+        if (elements.modal?.open && sameProject) return;
+        invalidateCompendiumAgentRequest();
+        if (!sameProject) {
+            compendiumAgentState.result = null;
+            compendiumAgentState.selected.clear();
+        }
+        compendiumAgentState.projectId = projectId;
+        compendiumAgentState.snapshot = nativeEditorState.snapshot;
+        renderCompendiumAgentResults(); renderCompendiumAgentScope();
+        const warning = compendiumAgentState.result?.warning;
+        setCompendiumAgentStatus(warning || (compendiumAgentState.result ? '已保留上次体检结果和勾选，可继续审阅。' : '选择范围后开始体检。'), warning ? 'warn' : 'info');
         if (elements.modal && typeof elements.modal.showModal === 'function') elements.modal.showModal();
     }
 
     function closeCompendiumAgent() {
+        if (compendiumAgentState.applying) return false;
         const elements = compendiumAgentElements();
+        invalidateCompendiumAgentRequest();
         if (elements.modal) elements.modal.close();
-        compendiumAgentState.running = false;
+        return true;
     }
 
     function focusCompendiumAgentEntry(entryId) {
+        if (compendiumAgentState.running || compendiumAgentState.applying || compendiumAgentState.projectId !== currentProjectId()
+            || compendiumAgentState.snapshot !== nativeEditorState.snapshot) return false;
         const entry = (compendiumState.entries || []).find((item) => item.id === entryId);
         if (!entry) {
             setCompendiumAgentStatus('关联资料已不存在，请重新运行体检。', 'error');
             return false;
         }
-        compendiumState.selectedId = entry.id;
+        if (selectCompendiumEntry(entry.id) !== true) return false;
         closeCompendiumAgent();
-        renderCompendium();
         setCompendiumStatus(`已定位到资料：${entry.title || entry.id}`, 'ok');
         return true;
     }
 
     async function runCompendiumAgent() {
         const entries = agentScopeEntries();
-        const elements = compendiumAgentElements();
-        if (!entries.length || compendiumAgentState.running) { setCompendiumAgentStatus('当前范围没有可分析的资料卡。', 'error'); return; }
-        compendiumAgentState.running = true; if (elements.run) elements.run.disabled = true;
+        const projectId = currentProjectId();
+        if (compendiumAgentState.running || compendiumAgentState.applying || !compendiumAgentRequestCurrent(compendiumAgentState.requestId, projectId)) return;
+        if (!entries.length) { setCompendiumAgentStatus('当前范围没有可分析的资料卡。', 'error'); return; }
+        const requestId = ++compendiumAgentState.requestId;
+        const controller = new AbortController();
+        compendiumAgentState.controller = controller;
+        compendiumAgentState.running = true;
+        compendiumAgentState.result = null;
+        compendiumAgentState.selected.clear();
+        renderCompendiumAgentResults();
         setCompendiumAgentStatus('正在体检资料库…');
         try {
-            const response = await fetch('/api/compendium-agent/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: currentProjectId(), entryIds: entries.map((entry) => entry.id) }) });
+            const response = await fetch('/api/compendium-agent/analyze', { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, entryIds: entries.map((entry) => entry.id) }) });
             const result = await response.json().catch(() => ({}));
+            if (!compendiumAgentRequestCurrent(requestId, projectId)) return;
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+            if (result.projectId && result.projectId !== projectId) throw new Error('体检结果与当前项目不匹配。');
+            compendiumAgentState.selected = new Set((result.operations || []).map(operation => operation.id));
             compendiumAgentState.result = result; renderCompendiumAgentResults();
-            setCompendiumAgentStatus(`体检完成：${(result.findings || []).length} 项发现，${(result.operations || []).length} 条可应用建议。`, 'ok');
-        } catch (error) { setCompendiumAgentStatus(`体检失败：${error.message || error}`, 'error'); }
-        finally { compendiumAgentState.running = false; if (elements.run) elements.run.disabled = false; }
+            setCompendiumAgentStatus(result.warning || `体检完成：${(result.findings || []).length} 项发现，${(result.operations || []).length} 条可应用建议。`, result.warning ? 'warn' : 'ok');
+        } catch (error) { if (compendiumAgentRequestCurrent(requestId, projectId)) setCompendiumAgentStatus(`体检失败：${error.message || error}`, 'error'); }
+        finally {
+            if (requestId === compendiumAgentState.requestId) {
+                compendiumAgentState.running = false; compendiumAgentState.controller = null; syncCompendiumAgentControls();
+            }
+        }
     }
 
     async function applyCompendiumAgent() {
-        const elements = compendiumAgentElements(); const result = compendiumAgentState.result;
-        if (!result) return;
-        const selected = new Set(Array.from(document.querySelectorAll('[data-compendium-agent-operation]:checked')).map((input) => input.dataset.compendiumAgentOperation));
-        const operations = (result.operations || []).filter((operation) => selected.has(operation.id));
+        const result = compendiumAgentState.result;
+        const projectId = currentProjectId();
+        if (!result || compendiumAgentState.running || compendiumAgentState.applying || !compendiumAgentRequestCurrent(compendiumAgentState.requestId, projectId)) return;
+        if (compendiumState.dirty) { setCompendiumAgentStatus('当前资料有未保存修改，请先保存后再应用体检建议。', 'error'); return; }
+        const operations = (result.operations || []).filter((operation) => compendiumAgentState.selected.has(operation.id));
         if (!operations.length) { setCompendiumAgentStatus('请至少勾选一条建议。', 'error'); return; }
         if (!window.confirm(`应用 ${operations.length} 条资料库建议？系统会先创建备份。`)) return;
-        if (elements.apply) elements.apply.disabled = true; setCompendiumAgentStatus('正在应用建议并创建备份…');
+        const captured = window.captureCompendiumDraft() || { projectId, snapshot: nativeEditorState.snapshot, entryId: '', version: -1 };
+        const requestId = ++compendiumAgentState.requestId;
+        compendiumAgentState.applying = true;
+        syncCompendiumAgentControls(); setCompendiumAgentStatus('正在应用建议并创建备份…');
         try {
-            const response = await fetch('/api/compendium-agent/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: currentProjectId(), operations }) });
+            const response = await fetch('/api/compendium-agent/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, operations }) });
             const applied = await response.json().catch(() => ({}));
+            if (!compendiumAgentRequestCurrent(requestId, projectId)) return;
             if (!response.ok || !applied.ok) throw new Error(applied.error || `HTTP ${response.status}`);
-            await loadCompendium(); closeCompendiumAgent(); setCompendiumStatus(`已应用 ${applied.appliedCount} 条资料库建议，并已创建备份。`, 'ok');
-        } catch (error) { setCompendiumAgentStatus(`应用失败：${error.message || error}`, 'error'); if (elements.apply) elements.apply.disabled = false; }
+            applied.entries.forEach(entry => window.acceptCompendiumSavedEntry(entry, captured));
+            compendiumAgentState.result = null; compendiumAgentState.selected.clear(); compendiumAgentState.applying = false;
+            closeCompendiumAgent(); setCompendiumStatus(`已应用 ${applied.appliedCount} 条资料库建议，并已创建备份。`, 'ok');
+        } catch (error) { if (compendiumAgentRequestCurrent(requestId, projectId)) setCompendiumAgentStatus(`应用失败：${error.message || error}`, 'error'); }
+        finally { if (requestId === compendiumAgentState.requestId) { compendiumAgentState.applying = false; syncCompendiumAgentControls(); } }
     }
 
     function bindCompendiumAgent() {
         const elements = compendiumAgentElements();
         if (elements.scope) elements.scope.addEventListener('change', renderCompendiumAgentScope);
         if (elements.run) elements.run.addEventListener('click', runCompendiumAgent);
-        if (elements.selectAll) elements.selectAll.addEventListener('click', () => document.querySelectorAll('[data-compendium-agent-operation]').forEach((input) => { input.checked = true; }));
-        if (elements.selectNone) elements.selectNone.addEventListener('click', () => document.querySelectorAll('[data-compendium-agent-operation]').forEach((input) => { input.checked = false; }));
+        if (elements.selectAll) elements.selectAll.addEventListener('click', () => { compendiumAgentState.selected = new Set((compendiumAgentState.result?.operations || []).map(operation => operation.id)); renderCompendiumAgentResults(); });
+        if (elements.selectNone) elements.selectNone.addEventListener('click', () => { compendiumAgentState.selected.clear(); renderCompendiumAgentResults(); });
         if (elements.apply) elements.apply.addEventListener('click', applyCompendiumAgent);
         if (elements.cancel) elements.cancel.addEventListener('click', closeCompendiumAgent);
+        elements.modal?.addEventListener('cancel', event => { event.preventDefault(); closeCompendiumAgent(); });
     }

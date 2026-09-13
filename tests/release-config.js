@@ -144,6 +144,18 @@ assert.ok(
   desktopHtml.indexOf('writer-prompts.js') < desktopHtml.indexOf('writer-chrome.js'),
   'writer-chrome.js must load after writer-prompts.js so it can wrap renderNativeRewrite'
 );
+assert.ok(desktopHtml.includes('src/core/document/manuscript-format.js'), 'desktop.html should load manuscript format before writer-format.js');
+assert.ok(desktopHtml.includes('src/desktop/shell/writer-format.js'), 'desktop.html should load writer manuscript format after writer-overlays.js');
+assert.ok(
+  desktopHtml.indexOf('manuscript-format.js') < desktopHtml.indexOf('writer-format.js'),
+  'writer-format.js must load after manuscript-format.js'
+);
+assert.ok(
+  desktopHtml.indexOf('writer-overlays.js') < desktopHtml.indexOf('writer-format.js')
+    && desktopHtml.indexOf('writer-format.js') < desktopHtml.indexOf('writer-bindings.js'),
+  'writer-format.js must load after writer-overlays.js and before writer-bindings.js'
+);
+assert.ok(desktopMarkup.includes('data-native-format-manuscript'), 'writer markup should expose one-click manuscript format');
 const writerSidebarResize = fs.readFileSync(path.join(root, 'src/desktop/shell/writer-sidebar-resize.js'), 'utf8');
 assert.ok(writerSidebarResize.includes('NATIVE_ASSISTANT_MIN_HEIGHT = 208'), 'writer dock drag floor should be 208');
 assert.ok(desktopMarkup.includes('data-settings-cat-target="storage"'), 'settings should expose storage and maintenance as a first-class category');

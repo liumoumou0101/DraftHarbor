@@ -1,88 +1,3 @@
-    const NATIVE_GENERATION_OUTPUT_POSITION_KEY = 'draftharbor:nativeGenerationOutputPosition';
-
-    function readNativeGenerationOutputPosition() {
-        try {
-            const value = JSON.parse(window.localStorage.getItem(NATIVE_GENERATION_OUTPUT_POSITION_KEY) || 'null');
-            if (!value || !Number.isFinite(Number(value.left)) || !Number.isFinite(Number(value.top))) return null;
-            return { left: Number(value.left), top: Number(value.top) };
-        } catch (error) { return null; }
-    }
-
-    function writeNativeGenerationOutputPosition(position) {
-        if (!position) return;
-        try {
-            window.localStorage.setItem(NATIVE_GENERATION_OUTPUT_POSITION_KEY, JSON.stringify({
-                left: Math.round(position.left), top: Math.round(position.top)
-            }));
-        } catch (error) { /* ignore */ }
-    }
-
-    function clearNativeGenerationOutputPosition() {
-        try { window.localStorage.removeItem(NATIVE_GENERATION_OUTPUT_POSITION_KEY); } catch (error) { /* ignore */ }
-    }
-
-    function nativeGenerationOutputFooterReserve(bodyRect) {
-        const footer = document.querySelector('[data-native-paper-footer]');
-        if (!footer || window.getComputedStyle(footer).display === 'none') return 12;
-        const footerRect = footer.getBoundingClientRect();
-        return footerRect.height < 1 ? 12 : Math.max(12, bodyRect.bottom - footerRect.top + 8);
-    }
-
-    function clampNativeGenerationOutputPosition(position, bodyRect, outputRect) {
-        const margin = 12;
-        const bottomReserve = nativeGenerationOutputFooterReserve(bodyRect);
-        const maxLeft = Math.max(margin, bodyRect.width - outputRect.width - margin);
-        const maxTop = Math.max(margin, bodyRect.height - outputRect.height - bottomReserve);
-        return {
-            left: Math.min(maxLeft, Math.max(margin, Number(position.left) || 0)),
-            top: Math.min(maxTop, Math.max(margin, Number(position.top) || 0))
-        };
-    }
-
-    function defaultNativeGenerationOutputPosition(bodyRect, outputRect) {
-        return clampNativeGenerationOutputPosition({
-            left: bodyRect.width - outputRect.width - 12,
-            top: 12
-        }, bodyRect, outputRect);
-    }
-
-    function syncNativeGenerationOutputPosition(options = {}) {
-        const elements = nativeEditorElements();
-        const output = elements.generationOutput;
-        const body = elements.editorBody;
-        if (!output || !body || output.hidden) return null;
-        const bodyRect = body.getBoundingClientRect();
-        const outputRect = output.getBoundingClientRect();
-        if (bodyRect.width < 1 || bodyRect.height < 1 || outputRect.width < 1 || outputRect.height < 1) return null;
-        if (options.reset) clearNativeGenerationOutputPosition();
-        const stored = options.reset ? null : readNativeGenerationOutputPosition();
-        const inlineLeft = Number.parseFloat(output.style.left);
-        const inlineTop = Number.parseFloat(output.style.top);
-        const position = stored || (Number.isFinite(inlineLeft) && Number.isFinite(inlineTop)
-            ? { left: inlineLeft, top: inlineTop }
-            : defaultNativeGenerationOutputPosition(bodyRect, outputRect));
-        const clamped = clampNativeGenerationOutputPosition(position, bodyRect, outputRect);
-        output.style.left = `${Math.round(clamped.left)}px`;
-        output.style.top = `${Math.round(clamped.top)}px`;
-        output.style.right = 'auto';
-        output.style.bottom = 'auto';
-        output.style.transform = 'none';
-        if (options.persist) writeNativeGenerationOutputPosition(clamped);
-        return clamped;
-    }
-
-    function queueNativeGenerationOutputPosition() {
-        const output = nativeEditorElements().generationOutput;
-        if (!output || output.__nativeGenerationPositionFrame) return;
-        const schedule = typeof window.requestAnimationFrame === 'function'
-            ? window.requestAnimationFrame.bind(window)
-            : (callback) => window.setTimeout(callback, 0);
-        output.__nativeGenerationPositionFrame = schedule(() => {
-            output.__nativeGenerationPositionFrame = 0;
-            syncNativeGenerationOutputPosition();
-        });
-    }
-
     function nativePendingInlineValue(generation) {
         if (!generation || !generation.pendingSceneId) return '';
         const base = generation.inlineBaseText || '';
@@ -272,497 +187,6 @@
         editor.dataset.nativeGenerationLayerBound = 'true';
         editor.addEventListener('scroll', syncNativeGenerationLayerScroll, { passive: true });
         window.addEventListener('resize', queueNativeGenerationLayer);
-    }
-
-    function bindNativeGenerationOutputDrag() {
-        const elements = nativeEditorElements();
-        const output = elements.generationOutput;
-        const body = elements.editorBody;
-        const labeledHandle = elements.generationOutputDragHandle
-            || (output && output.querySelector('.desktop-native-generation-output-header'));
-        if (!output || !body || output.dataset.nativeGenerationDragBound === 'true') return;
-        output.dataset.nativeGenerationDragBound = 'true';
-        let dragState = null;
-
-        const ignoreDragFrom = (target) => !!(target && target.closest && target.closest(
-            'button, a, textarea, input, select, summary, [data-native-generation-result], [data-native-reasoning]'
-        ));
-
-        const applyDragPosition = (left, top) => {
-            const bodyRect = body.getBoundingClientRect();
-            const outputRect = output.getBoundingClientRect();
-            const next = clampNativeGenerationOutputPosition({ left, top }, bodyRect, outputRect);
-            output.style.left = `${Math.round(next.left)}px`;
-            output.style.top = `${Math.round(next.top)}px`;
-            output.style.right = 'auto';
-            output.style.bottom = 'auto';
-            output.style.transform = 'none';
-            return next;
-        };
-
-        const currentOutputOffset = () => {
-            const left = Number.parseFloat(output.style.left);
-            const top = Number.parseFloat(output.style.top);
-            if (Number.isFinite(left) && Number.isFinite(top)) return { left, top };
-            const bodyRect = body.getBoundingClientRect();
-            const outputRect = output.getBoundingClientRect();
-            return {
-                left: outputRect.left - bodyRect.left,
-                top: outputRect.top - bodyRect.top
-            };
-        };
-
-        const finishDrag = (event) => {
-            if (!dragState) return;
-            dragState = null;
-            output.classList.remove('is-generation-output-dragging');
-            if (labeledHandle) labeledHandle.setAttribute('aria-grabbed', 'false');
-            if (event && output.releasePointerCapture && output.hasPointerCapture && output.hasPointerCapture(event.pointerId)) {
-                try { output.releasePointerCapture(event.pointerId); } catch (error) { /* ignore */ }
-            }
-            writeNativeGenerationOutputPosition(applyDragPosition(currentOutputOffset().left, currentOutputOffset().top));
-        };
-
-        const onPointerMove = (event) => {
-            if (!dragState) return;
-            event.preventDefault();
-            applyDragPosition(
-                dragState.position.left + event.clientX - dragState.clientX,
-                dragState.position.top + event.clientY - dragState.clientY
-            );
-        };
-
-        const onPointerUp = (event) => {
-            window.removeEventListener('pointermove', onPointerMove);
-            window.removeEventListener('pointerup', onPointerUp);
-            window.removeEventListener('pointercancel', onPointerUp);
-            finishDrag(event);
-        };
-
-        output.addEventListener('pointerdown', (event) => {
-            if (event.button !== 0 || output.hidden || ignoreDragFrom(event.target)) return;
-            event.preventDefault();
-            syncNativeGenerationOutputPosition();
-            dragState = {
-                clientX: event.clientX,
-                clientY: event.clientY,
-                position: currentOutputOffset()
-            };
-            output.classList.add('is-generation-output-dragging');
-            if (labeledHandle) labeledHandle.setAttribute('aria-grabbed', 'true');
-            if (output.setPointerCapture) {
-                try { output.setPointerCapture(event.pointerId); } catch (error) { /* ignore synthetic pointer events */ }
-            }
-            window.addEventListener('pointermove', onPointerMove);
-            window.addEventListener('pointerup', onPointerUp);
-            window.addEventListener('pointercancel', onPointerUp);
-        });
-
-        output.addEventListener('pointermove', onPointerMove);
-        output.addEventListener('pointerup', onPointerUp);
-        output.addEventListener('pointercancel', onPointerUp);
-        output.addEventListener('dblclick', (event) => {
-            if (ignoreDragFrom(event.target)) return;
-            event.preventDefault();
-            if (dragState) finishDrag(event);
-            syncNativeGenerationOutputPosition({ reset: true, persist: true });
-        });
-        window.addEventListener('resize', () => {
-            if (!dragState) syncNativeGenerationOutputPosition({ persist: true });
-        });
-        if (elements.reasoning && elements.reasoning.dataset.nativeReasoningToggleBound !== 'true') {
-            elements.reasoning.dataset.nativeReasoningToggleBound = 'true';
-            elements.reasoning.addEventListener('toggle', () => {
-                const generation = nativeEditorState.generation;
-                generation.reasoningUserCollapsed = !elements.reasoning.open;
-                syncNativeReasoningBubbleLayout();
-            });
-        }
-    }
-
-    function writerThinkingControl() {
-        const catalog = modelCatalog();
-        const profile = writerEffectiveProfile();
-        const model = writerSelectedModelId(profile);
-        if (catalog.getThinkingControl) return catalog.getThinkingControl(profile.provider, model);
-        return catalog.isThinkingSupported(profile.provider, model) ? 'toggle' : 'none';
-    }
-
-    function nativeWriterThinkingActive() {
-        const control = writerThinkingControl();
-        if (control === 'always-on') return true;
-        if (control !== 'toggle' && control !== 'toggle-adaptive' && control !== 'responses-effort') return false;
-        if (writerModelOverride.model === 'inherit') {
-            const globalConfig = runtimeProviderConfig();
-            if (globalConfig && globalConfig.enableThinking) return true;
-        }
-        return !!writerModelOverride.thinking;
-    }
-
-    function resetNativeGenerationStreamFlags(generation) {
-        generation.reasoning = '';
-        generation.finishReason = '';
-        generation.usage = null;
-        generation.errorMessage = '';
-        generation.interruptReason = '';
-        generation.reasoningUserCollapsed = false;
-    }
-
-    function nativeReasoningPhase(generation, thinkingActive) {
-        if (generation.interruptReason === 'cancelled') return 'cancelled';
-        if (!generation.inProgress && generation.finishReason === 'length') return 'truncated';
-        if (generation.interruptReason === 'failed') return 'failed';
-        if (generation.interruptReason === 'empty') return 'empty';
-        if (generation.inProgress && thinkingActive && !generation.reasoning) return 'waiting';
-        if (generation.inProgress && generation.reasoning && !generation.text) return 'thinking';
-        if (generation.inProgress && generation.text) return 'answer';
-        if (generation.finishReason === 'length') return 'truncated';
-        if (generation.reasoning) return 'complete';
-        return 'idle';
-    }
-
-    function nativeReasoningSummaryLabel(phase, charCount) {
-        const count = charCount > 0 ? ` · ${charCount} 字` : '';
-        if (phase === 'waiting') return `推理/思考 · 等待思考流${count}`;
-        if (phase === 'thinking') return `推理/思考 · 进行中${count}`;
-        if (phase === 'answer') return `推理/思考 · 已完成，正在生成正文${count}`;
-        if (phase === 'complete') return `推理/思考 · 已完成${count}`;
-        if (phase === 'cancelled') return `推理/思考 · 已中断（已取消）${count}`;
-        if (phase === 'failed') return `推理/思考 · 已中断（失败）${count}`;
-        if (phase === 'empty') return `推理/思考 · 已中断（无正文）${count}`;
-        if (phase === 'truncated') return `推理/思考 · 额度用尽，可能不完整${count}`;
-        return charCount > 0 ? `推理/思考${count}` : '推理/思考';
-    }
-
-    function nativeReasoningDisplayText(generation, phase, thinkingActive) {
-        let text = generation.reasoning || '';
-        if (!text && generation.inProgress && thinkingActive) text = '等待思考流...';
-        if (phase === 'cancelled') return `${text}\n\n—— 思考已中断：生成已取消 ——`;
-        if (phase === 'failed') return `${text}\n\n—— 思考已中断：生成失败 ——`;
-        if (phase === 'empty') return `${text}\n\n—— 思考已结束，但没有返回正文 ——`;
-        if (phase === 'truncated') return `${text}\n\n—— 输出因额度用尽被截断，思考过程可能不完整 ——`;
-        return text;
-    }
-
-    function syncNativeReasoningBubbleLayout() {
-        const elements = nativeEditorElements();
-        const output = elements.generationOutput;
-        const details = elements.reasoning;
-        if (output) {
-            output.classList.toggle('is-reasoning-expanded', !!(details && !details.hidden && details.open));
-            output.classList.toggle('is-reasoning-interrupted', ['cancelled', 'failed', 'empty'].includes(output.dataset.reasoningPhase));
-        }
-        if (output && !output.hidden && !output.classList.contains('is-generation-output-dragging')) {
-            queueNativeGenerationOutputPosition();
-        }
-    }
-
-    function syncNativeComposerExpansion(expanded) {
-        const writer = document.querySelector('[data-native-writer]');
-        if (!writer) return;
-        const userSet = writer.style.getPropertyValue('--native-assistant-height');
-        if (!writer.classList.contains('is-assistant-bottom') || userSet) {
-            writer.classList.remove('is-composer-expanded');
-            return;
-        }
-        writer.classList.toggle('is-composer-expanded', !!expanded);
-    }
-
-    function autosizeNativeBeatInput() {
-        const input = nativeEditorElements().beatInput;
-        if (!input) return;
-        input.style.height = '';
-        input.style.overflowY = 'auto';
-    }
-
-    function renderNativeGeneration() {
-        const elements = nativeEditorElements();
-        const generation = nativeEditorState.generation;
-        const scene = currentNativeScene();
-        const snapshot = nativeEditorState.snapshot;
-        const activeChapter = scene && snapshot && Array.isArray(snapshot.chapters)
-            ? snapshot.chapters.find((chapter) => chapter.id === scene.chapterId)
-            : null;
-        const currentText = scene
-            ? (elements.editor ? String(elements.editor.value || '') : nativeSceneContent(scene.id))
-            : '';
-        const wordCount = countNativeWords(currentText);
-        if (elements.copilotGreeting) {
-            elements.copilotGreeting.textContent = scene
-                ? `继续处理《${scene.title || '未命名场景'}》`
-                : '打开一个场景后开始创作';
-        }
-        if (elements.copilotBrief) {
-            elements.copilotBrief.textContent = scene
-                ? '选择一个创作动作，或直接写下下一段的方向。'
-                : '从书库打开项目并选择场景后，AI 写作动作会在这里启用。';
-        }
-        if (elements.copilotScene) {
-            elements.copilotScene.textContent = scene ? (scene.title || '未命名场景') : '未选择场景';
-        }
-        if (elements.copilotChapter) {
-            elements.copilotChapter.textContent = activeChapter ? (activeChapter.title || '未命名章节') : '未选择章节';
-        }
-        if (elements.copilotWords) {
-            elements.copilotWords.textContent = scene ? `${formatNumber(wordCount)} 字` : '0 字';
-        }
-        if (elements.copilotContextNote) {
-            const context = nativeEditorState.context || {};
-            const extraCount = (context.compendiumIds || []).length
-                + (context.compendiumTags || []).length
-                + Object.values(context.chapterModes || {}).filter(Boolean).length
-                + Object.values(context.sceneModes || {}).filter(Boolean).length;
-            elements.copilotContextNote.textContent = extraCount > 0 ? `${extraCount} 项额外引用` : '未选择额外引用';
-        }
-        const isPreviewTask = generation.task === 'rewrite' || generation.task === 'regenerate-selection';
-        if (elements.genTaskButtons && elements.genTaskButtons.length) {
-            elements.genTaskButtons.forEach((btn) => {
-                const task = btn.getAttribute('data-native-gen-task');
-                btn.classList.toggle('is-active', task === generation.genTask);
-            });
-        }
-        if (elements.beatInput) {
-            if (elements.beatInput.value !== generation.beat) {
-                elements.beatInput.value = generation.beat;
-            }
-            const placeholders = {
-                'continue': '输入这一段要发生什么，或写下续写方向（可选）',
-                'beat': '输入节拍描述（必填）',
-                'summary': '无需输入，直接生成场景摘要'
-            };
-            elements.beatInput.placeholder = placeholders[generation.genTask] || '输入这一段要发生什么，或写下续写方向（可选）';
-            autosizeNativeBeatInput();
-        }
-        const isBeat = generation.genTask === 'beat';
-        const canGenerate = !!scene && !generation.inProgress && (isBeat ? !!generation.beat.trim() : true);
-        const isSummary = generation.genTask === 'summary';
-        const previewDisabled = !scene || generation.inProgress || isSummary || (isBeat && !generation.beat.trim());
-        (elements.previewPrompts && elements.previewPrompts.length ? elements.previewPrompts : (elements.previewPrompt ? [elements.previewPrompt] : [])).forEach((button) => {
-            button.disabled = previewDisabled;
-        });
-        if (elements.generate) elements.generate.disabled = !canGenerate;
-        if (elements.cancelGeneration) {
-            elements.cancelGeneration.hidden = !generation.inProgress;
-            elements.cancelGeneration.disabled = !generation.inProgress;
-        }
-        const thinkingActive = nativeWriterThinkingActive();
-        const reasoningPhase = nativeReasoningPhase(generation, thinkingActive);
-        const showGenerationOutput = !!generation.text || generation.inProgress || !!generation.reasoning;
-        if (elements.editorBody) elements.editorBody.classList.toggle('has-generation-output', showGenerationOutput);
-        if (elements.generationOutput) {
-            elements.generationOutput.hidden = !showGenerationOutput;
-            elements.generationOutput.classList.toggle('is-inline-confirmation', showGenerationOutput && !isPreviewTask);
-            elements.generationOutput.dataset.reasoningPhase = reasoningPhase;
-        }
-        const outputTitle = document.querySelector('[data-native-generation-output-title]');
-        if (outputTitle) {
-            if (!generation.text && (generation.interruptReason === 'cancelled' || generation.interruptReason === 'failed' || generation.interruptReason === 'empty')) {
-                outputTitle.textContent = '思考已中断';
-            } else {
-                outputTitle.textContent = generation.task === 'regenerate-selection' ? '重生成结果待确认' : '生成结果待确认';
-            }
-        }
-        const costNote = document.querySelector('[data-native-generation-cost-note]');
-        if (costNote) {
-            const regenerateChars = typeof nativeRegenerateContextChars === 'function'
-                ? nativeRegenerateContextChars()
-                : Number(nativeEditorState.rewrite.regenerateContextChars) || 8000;
-            const usedLongContext = generation.task === 'regenerate-selection'
-                && nativeEditorState.rewrite.regenerateUseContext !== false
-                && regenerateChars > 0;
-            costNote.hidden = !usedLongContext;
-            costNote.textContent = usedLongContext
-                ? `这次是重生成：会发送选区前后各 ${regenerateChars} 字，输入费用高于改写。`
-                : '';
-        }
-        if (elements.generationOutputStatus) {
-            if (generation.inProgress) {
-                if (generation.reasoning && !generation.text) {
-                    elements.generationOutputStatus.textContent = '正在思考，可滚动查看完整思考过程。';
-                } else if (generation.text && !isPreviewTask) {
-                    elements.generationOutputStatus.textContent = '正在正文中生成，确认后保留，撤回会恢复原文。';
-                } else if (generation.text) {
-                    elements.generationOutputStatus.textContent = '正在生成预览...';
-                } else if (thinkingActive) {
-                    elements.generationOutputStatus.textContent = '正在思考...';
-                } else {
-                    elements.generationOutputStatus.textContent = '正在生成，完成后可保留、重试或撤回。';
-                }
-            } else if (generation.finishReason === 'length') {
-                elements.generationOutputStatus.textContent = '输出达到额度或上下文上限，结果不完整。已保留收到的内容；请检查后决定保留或重试。';
-            } else if (generation.interruptReason) {
-                elements.generationOutputStatus.textContent = generation.errorMessage || (generation.interruptReason === 'cancelled'
-                    ? '生成已取消，已收到的内容可能不完整。'
-                    : '生成中断，已收到的内容可能不完整，请检查后重试。');
-            } else if (isPreviewTask) {
-                elements.generationOutputStatus.textContent = '确认后替换原文，撤回保持原文。';
-            } else {
-                elements.generationOutputStatus.textContent = '已写入正文，确认后保留，撤回可恢复原文。';
-            }
-        }
-        if (elements.generationResult) {
-            elements.generationResult.hidden = !isPreviewTask;
-            elements.generationResult.textContent = generation.text || (generation.inProgress && isPreviewTask ? '生成中...' : '');
-        }
-        if (elements.reasoning) {
-            const showReasoning = (thinkingActive && generation.inProgress) || !!generation.reasoning;
-            elements.reasoning.hidden = !showReasoning;
-            elements.reasoning.dataset.phase = reasoningPhase;
-            if (showReasoning && generation.interruptReason) {
-                elements.reasoning.open = true;
-                generation.reasoningUserCollapsed = false;
-            } else if (showReasoning && generation.inProgress && !generation.reasoningUserCollapsed) {
-                elements.reasoning.open = true;
-            }
-            if (elements.reasoningSummary) {
-                elements.reasoningSummary.textContent = nativeReasoningSummaryLabel(reasoningPhase, (generation.reasoning || '').length);
-            }
-        }
-        if (elements.reasoningText) {
-            const followThreshold = 48;
-            const shouldFollow = elements.reasoningText.scrollHeight - elements.reasoningText.scrollTop - elements.reasoningText.clientHeight < followThreshold;
-            elements.reasoningText.textContent = nativeReasoningDisplayText(generation, reasoningPhase, thinkingActive);
-            if (elements.reasoning && !elements.reasoning.hidden && elements.reasoning.open && (shouldFollow || generation.interruptReason)) {
-                elements.reasoningText.scrollTop = elements.reasoningText.scrollHeight;
-            }
-        }
-        syncNativeReasoningBubbleLayout();
-        if (elements.acceptGeneration) elements.acceptGeneration.disabled = !generation.text || generation.inProgress;
-        if (elements.retryGeneration) {
-            const needsBeat = generation.genTask === 'beat';
-            elements.retryGeneration.disabled = generation.inProgress || (needsBeat && !generation.beat.trim());
-        }
-        if (elements.discardGeneration) {
-            elements.discardGeneration.disabled = generation.inProgress || (!generation.text && !generation.reasoning);
-            elements.discardGeneration.textContent = !generation.text && generation.reasoning ? '关闭' : '撤回';
-        }
-        if (elements.insertMode) elements.insertMode.disabled = generation.inProgress || !generation.text;
-        if (elements.lengthHint) {
-            const hint = generation.lengthHint || 'natural';
-            elements.lengthHint.value = hint;
-            elements.lengthHint.disabled = generation.inProgress;
-        }
-        if (elements.promptTemplate) {
-            elements.promptTemplate.replaceChildren();
-            const prompts = promptState.prompts.length ? promptState.prompts : [{ id: 'default-prose', title: '均衡续写' }];
-            prompts.forEach((prompt) => {
-                const option = document.createElement('option');
-                option.value = prompt.id;
-                option.textContent = prompt.title || '未命名提示词';
-                elements.promptTemplate.appendChild(option);
-            });
-            elements.promptTemplate.value = promptState.selectedId;
-            elements.promptTemplate.disabled = !currentProjectId();
-        }
-        if (elements.managePrompts) elements.managePrompts.disabled = !currentProjectId();
-
-        if (elements.generationHistory) {
-            const allRecords = nativeGenerationHistory();
-            const scene = currentNativeScene();
-            const filtered = nativeEditorState.historySceneFilter && scene
-                ? allRecords.filter((r) => r.sceneId === scene.id)
-                : allRecords;
-            const records = filtered.slice(-5).reverse();
-            elements.generationHistory.replaceChildren();
-            if (elements.historyToolbar) {
-                elements.historyToolbar.replaceChildren();
-                const filterToggle = document.createElement('button');
-                filterToggle.type = 'button';
-                filterToggle.className = 'desktop-native-history-filter-toggle';
-                filterToggle.setAttribute('data-native-history-filter', '');
-                filterToggle.textContent = '当前场景';
-                filterToggle.setAttribute('aria-pressed', nativeEditorState.historySceneFilter ? 'true' : 'false');
-                if (nativeEditorState.historySceneFilter) filterToggle.classList.add('is-active');
-                filterToggle.addEventListener('click', () => {
-                    nativeEditorState.historySceneFilter = !nativeEditorState.historySceneFilter;
-                    renderNativeGeneration();
-                });
-                elements.historyToolbar.appendChild(filterToggle);
-            }
-            if (!records.length) {
-                const empty = document.createElement('div');
-                empty.className = 'desktop-native-history-item';
-                empty.textContent = '暂无生成记录';
-                elements.generationHistory.appendChild(empty);
-            } else {
-                const snapshot = nativeEditorState.snapshot;
-                const scenes = (snapshot && Array.isArray(snapshot.scenes)) ? snapshot.scenes : [];
-                const TASK_LABELS = {
-                    'fiction-prose': '正文扩写',
-                    'summary': '场景摘要',
-                    'continue': '续写',
-                    'beat': '节拍生成'
-                };
-                records.forEach((record) => {
-                    const item = document.createElement('div');
-                    item.className = 'desktop-native-history-item';
-                    const taskLabel = document.createElement('div');
-                    taskLabel.className = 'desktop-native-history-task-label';
-                    taskLabel.setAttribute('data-native-history-task', '');
-                    taskLabel.textContent = TASK_LABELS[record.task] || record.task || '生成';
-                    const sceneName = scenes.find((s) => s.id === record.sceneId);
-                    if (sceneName) {
-                        taskLabel.textContent += ` · ${sceneName.title || sceneName.id}`;
-                        taskLabel.title = sceneName.title || sceneName.id;
-                    }
-                    const title = document.createElement('strong');
-                    title.textContent = record.beat || '未命名生成';
-                    const meta = document.createElement('span');
-                    meta.className = 'desktop-native-history-meta';
-                    meta.setAttribute('data-native-history-meta', '');
-                    const wc = countNativeWords(record.resultText || '');
-                    meta.textContent = `${new Date(record.createdAt || Date.now()).toLocaleString('zh-CN')} · ${wc} 字`;
-                    const preview = document.createElement('div');
-                    preview.className = 'desktop-native-history-preview';
-                    preview.setAttribute('data-native-history-preview', '');
-                    const previewText = (record.resultText || '').trim();
-                    preview.textContent = previewText.slice(0, 60) + (previewText.length > 60 ? '...' : '');
-                    const actions = document.createElement('div');
-                    actions.className = 'desktop-native-history-actions';
-                    const reuse = document.createElement('button');
-                    reuse.type = 'button';
-                    reuse.textContent = '复用提示';
-                    reuse.setAttribute('data-native-history-reuse', '');
-                    reuse.addEventListener('click', () => {
-                        generation.beat = record.beat || '';
-                        generation.text = record.resultText || '';
-                        generation.reasoning = record.reasoning || '';
-                        generation.prompt = { messages: record.messages || [], asString: () => record.promptText || '' };
-                        renderNativeGeneration();
-                    });
-                    const copy = document.createElement('button');
-                    copy.type = 'button';
-                    copy.textContent = '复制';
-                    copy.setAttribute('data-native-history-copy', '');
-                    copy.disabled = !record.resultText;
-                    copy.addEventListener('click', () => copyNativeHistoryRecord(record));
-                    const retry = document.createElement('button');
-                    retry.type = 'button';
-                    retry.textContent = '重试';
-                    retry.setAttribute('data-native-history-retry', '');
-                    retry.disabled = !scene;
-                    retry.addEventListener('click', () => retryNativeHistoryRecord(record));
-                    const insert = document.createElement('button');
-                    insert.type = 'button';
-                    insert.textContent = '写入';
-                    insert.setAttribute('data-native-history-insert', '');
-                    insert.disabled = !scene || !record.resultText;
-                    insert.addEventListener('click', () => insertNativeHistoryRecord(record));
-                    const remove = document.createElement('button');
-                    remove.type = 'button';
-                    remove.textContent = '删除';
-                    remove.setAttribute('data-native-history-delete', '');
-                    remove.addEventListener('click', () => deleteNativeHistoryRecord(record));
-                    actions.append(reuse, copy, retry, insert, remove);
-                    item.append(taskLabel, title, meta, preview, actions);
-                    elements.generationHistory.appendChild(item);
-                });
-            }
-        }
-        if (elements.generationOutput && !elements.generationOutput.hidden && !elements.generationOutput.classList.contains('is-generation-output-dragging')) {
-            queueNativeGenerationOutputPosition();
-        }
-        queueNativeGenerationLayer();
     }
 
     function insertNativeHistoryRecord(record) {
@@ -1008,7 +432,7 @@
         return `${prefix}${text}${suffix}`;
     }
 
-    function syncInlineGenerationToEditor() {
+    function syncInlineGenerationToEditor(options = {}) {
         const elements = nativeEditorElements();
         const scene = currentNativeScene();
         const generation = nativeEditorState.generation;
@@ -1029,7 +453,7 @@
             elements.editor.selectionStart = cursor;
             elements.editor.selectionEnd = cursor;
         }
-        elements.editor.focus();
+        if (!options.preserveFocus) elements.editor.focus();
         updateNativeStats();
     }
 
@@ -1161,8 +585,10 @@
                     return;
                 }
                 if (meta && meta.type === 'reasoning') generation.reasoning += token;
-                else if (!meta || meta.type === 'content') generation.text += token;
-                syncInlineGenerationToEditor();
+                else if (!meta || meta.type === 'content') {
+                    generation.text += token;
+                    syncInlineGenerationToEditor({ preserveFocus: true });
+                }
                 renderNativeGeneration();
             }, requestConfig);
             if (!generation.text.trim()) {
@@ -1450,7 +876,13 @@
         const elements = nativeEditorElements();
         const scene = currentNativeScene();
         const chapter = currentNativeChapterByState();
-        if (!nativeEditorState.snapshot || !scene || !chapter) return;
+        const snapshot = nativeEditorState.snapshot;
+        const generation = nativeEditorState.generation;
+        if (!snapshot || !scene || !chapter || generation.inProgress) return;
+        if (generation.text && generation.task !== 'summary') {
+            setNativeSaveStatus('请先保留或撤回当前生成结果，再生成摘要。', 'info');
+            return;
+        }
         flushNativeEditorFields();
         let sourceText = '';
         let targetTitle = '';
@@ -1485,50 +917,80 @@
                 return this.messages.map((message) => `<|im_start|>${message.role}\n${message.content}<|im_end|>`).join('\n');
             }
         };
-        const generation = nativeEditorState.generation;
-        if (generation.inProgress) return;
+        const sourceScenes = (snapshot.scenes || []).filter((item) => scope === 'chapter' ? item.chapterId === chapter.id : item.id === scene.id);
+        const sourceContents = sourceScenes.map((item) => [item.id, String((snapshot.sceneContents || {})[item.id] || '')]);
+        resetNativeGenerationStreamFlags(generation);
+        generation.task = 'summary';
+        generation.summaryScope = scope;
+        generation.prompt = prompt;
+        generation.record = null;
+        generation.inlineBaseText = '';
+        generation.pendingSceneId = '';
+        generation.pendingEditorChanged = false;
+        generation.insertionStart = 0;
+        generation.insertionEnd = 0;
+        generation.lastAcceptedSceneId = '';
         generation.inProgress = true;
         generation.abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        let summary = '';
+        const isCurrentTask = () => nativeEditorState.snapshot === snapshot && nativeEditorState.generation === generation;
         renderNativeGeneration();
         setNativeSaveStatus(scope === 'chapter' ? '正在生成章节摘要...' : '正在生成场景摘要...', 'info');
         try {
             await streamDesktopGeneration(prompt, (token, meta) => {
-                if (meta && meta.type && meta.type !== 'content') return;
-                summary += token;
-                if (scope === 'scene' && elements.summary) elements.summary.value = summary;
+                if (!isCurrentTask()) return;
+                if (meta && meta.type === 'reasoning') generation.reasoning += token;
+                else if (meta && meta.type === 'finish') generation.finishReason = meta.finishReason || '';
+                else if (meta && meta.type === 'usage') generation.usage = { ...generation.usage, ...meta.usage };
+                else if (!meta || !meta.type || meta.type === 'content') generation.summaryText += token;
+                renderNativeGeneration();
             }, { ...nativeGenerationConfig(generation.abortController && generation.abortController.signal), taskKind: 'writer-summary' });
-            summary = cleanNativeSummaryText(summary);
-            if (!summary) throw new Error('AI provider returned an empty response.');
+            if (!isCurrentTask()) return;
+            const summary = cleanNativeSummaryText(generation.summaryText);
+            if (generation.finishReason === 'length') throw new Error('摘要输出达到额度或上下文上限，请重试。');
+            if (!summary) {
+                generation.interruptReason = generation.reasoning ? 'empty' : 'failed';
+                throw new Error('模型没有返回摘要内容。');
+            }
+            if (!(snapshot.scenes || []).includes(scene) || !(snapshot.chapters || []).includes(chapter)) {
+                throw new Error('摘要对应的场景或章节已删除，请重新选择。');
+            }
+            const sourceChanged = sourceContents.some(([id, content]) => String((snapshot.sceneContents || {})[id] || '') !== content);
             if (scope === 'chapter') {
                 chapter.summary = summary;
                 chapter.summaryUpdated = new Date().toISOString();
                 chapter.summarySource = 'ai';
-                chapter.summaryStale = false;
+                chapter.summaryStale = sourceChanged;
             } else {
                 scene.summary = summary;
                 scene.summaryUpdated = new Date().toISOString();
                 scene.summarySource = 'ai';
-                scene.summaryStale = false;
-                if (elements.summary) elements.summary.value = summary;
+                scene.summaryStale = sourceChanged;
+                if (nativeEditorState.activeSceneId === scene.id && elements.summary) elements.summary.value = summary;
+                markNativeChapterSummaryStale(scene.chapterId);
             }
-            // Rendering metadata must retain the current writing target; otherwise the
-            // chapter-summary action can become disabled after a scene summary completes.
-            nativeEditorState.activeSceneId = scene.id;
-            nativeEditorState.activeChapterId = chapter.id;
+            generation.summaryText = summary;
+            generation.summaryCompleted = true;
             const status = scope === 'chapter'
                 ? `章节摘要已生成${sourceInfo && sourceInfo.compressed ? '（输入已压缩）' : ''}，未保存`
                 : '场景摘要已生成，未保存';
             markNativeDirty(status);
             renderNativeEditor();
-            openNativeSummaryDialog(scope);
+            if (nativeEditorState.activeSceneId === scene.id) openNativeSummaryDialog(scope);
         } catch (error) {
-            console.error('Native summary failed:', error);
-            setNativeSaveStatus(`摘要生成失败：${error.message || error}`, 'error');
+            if (!isCurrentTask()) return;
+            if (error && error.name === 'AbortError') {
+                generation.interruptReason = 'cancelled';
+                setNativeSaveStatus('摘要生成已停止', 'info');
+            } else {
+                console.error('Native summary failed:', error);
+                generation.interruptReason = generation.interruptReason || 'failed';
+                generation.errorMessage = error.message || String(error);
+                setNativeSaveStatus(`摘要生成失败：${generation.errorMessage}`, 'error');
+            }
         } finally {
             generation.inProgress = false;
             generation.abortController = null;
-            renderNativeGeneration();
+            if (isCurrentTask()) renderNativeGeneration();
         }
     }
 
@@ -1629,6 +1091,7 @@
     }
 
     async function openDesktopProject(project, options) {
+        if (window.WorkshopAgent && !window.WorkshopAgent.canLeave()) return;
         if (project && project.health === 'invalid') {
             setProjectLibraryStatus('这个项目文件暂时无法读取，请先检查磁盘快照。', 'error');
             return;
@@ -1638,6 +1101,7 @@
         setView((options && options.view) || 'writer');
 
         const snapshot = await fetchProjectSnapshot(project);
+        if (window.WorkshopAgent && !window.WorkshopAgent.canLeave()) return;
         loadNativeProjectEditor(snapshot, project || {});
         await loadReaderFromProjectSnapshot(snapshot);
         await loadCompendium();

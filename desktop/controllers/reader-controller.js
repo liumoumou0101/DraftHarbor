@@ -1,3 +1,5 @@
+const ReaderNavigation = require('../../src/core/document/reader-navigation');
+
 function cleanString(value) {
   return String(value === undefined || value === null ? '' : value).trim();
 }
@@ -14,12 +16,22 @@ async function decorateLibraryDocuments(dataRoot, documents, dependencies) {
       const state = await readerStateStore.readReaderDocumentState(dataRoot, document.documentId);
       const chapterCount = Number(revision && revision.chapterCount) || Number(document.chapterCount) || 0;
       const characterCount = Number(revision && revision.characterCount) || Number(document.characterCount) || 0;
-      const chapterIndex = state && state.positionLocator && revision && Array.isArray(revision.chapters)
-        ? revision.chapters.findIndex((chapter) => chapter.chapterId === state.positionLocator.chapterId)
-        : -1;
-      const progress = state && state.positionLocator && chapterCount > 0
-        ? Math.max(1, Math.min(99, Math.round(((Math.max(0, chapterIndex) + 0.5) / chapterCount) * 100)))
-        : 0;
+      const locator = state && state.positionLocator;
+      let progress = 0;
+      if (locator && revision && (!locator.documentId || locator.documentId === document.documentId)) {
+        const positionRevision = metadata.revisions.find((item) => item.revisionId === locator.revisionId) || revision;
+        const isProject = document.sourceKind === 'project' && readerProjectLibraryService;
+        const contents = Array.isArray(positionRevision.chapters) ? positionRevision
+          : await readerStore.readReaderDocumentContents(dataRoot, document.documentId, positionRevision.revisionId);
+        if (contents && contents.chapters.some((chapter) => chapter.chapterId === locator.chapterId)) {
+          const result = isProject
+            ? await readerProjectLibraryService.readChapter(dataRoot, document.documentId.slice('project:'.length), positionRevision.revisionId, locator.chapterId)
+            : await readerStore.readReaderDocumentChapter(dataRoot, document.documentId, positionRevision.revisionId, locator.chapterId);
+          if (result && result.revision.revisionId === positionRevision.revisionId) {
+            progress = Math.round(ReaderNavigation.contentProgressForLocator(contents.chapters, result.chapter, locator) * 100);
+          }
+        }
+      }
       return {
         ...document,
         chapterCount,

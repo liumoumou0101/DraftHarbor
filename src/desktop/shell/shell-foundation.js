@@ -462,8 +462,14 @@
         const nextView = state ? state.normalizeView(view) : 'bookshelf';
         const root = document.getElementById('desktop-root');
         if (!root) return;
+        if (root.dataset.view !== nextView && window.WorkshopAgent && !window.WorkshopAgent.canLeave()) return;
         if (root.dataset.view === 'compendium' && nextView !== 'compendium' && typeof confirmAbandonCompendiumEdits === 'function' && !confirmAbandonCompendiumEdits()) return;
 
+        // Capture while the reader still has layout; a delayed scroll save must
+        // not measure the hidden view after leaving it.
+        if (root.dataset.view === 'reader' && nextView !== 'reader' && typeof window.saveReaderWorkspacePosition === 'function') {
+            window.saveReaderWorkspacePosition();
+        }
         if (nextView !== 'reader' && typeof window.readerHudLeaveReader === 'function') window.readerHudLeaveReader();
 
         root.dataset.view = nextView;

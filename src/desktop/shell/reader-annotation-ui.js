@@ -83,8 +83,12 @@ function readerAnnotationRangeResolution(annotation) {
 }
 
 async function refreshReaderAnnotationResolutions() {
+    const documentId = readerState.activeDocumentId;
+    const revisionId = readerState.activeRevisionId;
     readerState.annotationResolutions.clear();
     const annotations = Array.isArray(readerState.annotations) ? readerState.annotations : [];
+    const isCurrent = () => documentId === readerState.activeDocumentId
+        && revisionId === readerState.activeRevisionId && annotations === readerState.annotations;
     annotations.forEach((annotation) => readerState.annotationResolutions.set(annotation.annotationId, readerAnnotationRangeResolution(annotation)));
     const stale = annotations.filter((annotation) => annotation.revisionId !== readerState.activeRevisionId);
     if (!stale.length || typeof readerRevisionSnapshot !== 'function') {
@@ -94,6 +98,7 @@ async function refreshReaderAnnotationResolutions() {
     }
     try {
         const revision = await readerRevisionSnapshot();
+        if (!isCurrent()) return;
         stale.forEach((annotation) => {
             const start = window.DraftHarborReaderLocator.resolveReaderLocator(annotation.range.start, revision);
             const end = window.DraftHarborReaderLocator.resolveReaderLocator(annotation.range.end, revision);
@@ -105,22 +110,33 @@ async function refreshReaderAnnotationResolutions() {
             });
         });
     } catch (error) {
+        if (!isCurrent()) return;
         readerAnnotationStatus(`批注精确度检查失败：${error.message || error}`);
     }
     renderReaderAnnotations();
     renderReaderAnnotationMarks();
 }
 
+let readerAnnotationLoadRequestId = 0;
+
 async function loadReaderAnnotationDocument() {
-    if (!readerState.activeDocumentId) return;
+    const documentId = readerState.activeDocumentId;
+    const revisionId = readerState.activeRevisionId;
+    if (!documentId) return;
+    const requestId = ++readerAnnotationLoadRequestId;
+    const isCurrent = () => requestId === readerAnnotationLoadRequestId
+        && documentId === readerState.activeDocumentId && revisionId === readerState.activeRevisionId;
     try {
-        const payload = await readerApi(`/api/reader/annotations?documentId=${encodeURIComponent(readerState.activeDocumentId)}`);
+        const payload = await readerApi(`/api/reader/annotations?documentId=${encodeURIComponent(documentId)}`);
+        if (!isCurrent()) return;
         const record = payload.record;
         readerState.annotations = record && Array.isArray(record.annotations) ? record.annotations : [];
         readerState.annotationRecordUpdatedAt = record && record.updatedAt || '';
         await refreshReaderAnnotationResolutions();
+        if (!isCurrent()) return;
         readerAnnotationStatus(readerState.annotations.length ? `已加载 ${readerState.annotations.length} 条批注。` : '选中文本后可创建高亮、下划线或批注。');
     } catch (error) {
+        if (!isCurrent()) return;
         readerState.annotations = [];
         readerState.annotationRecordUpdatedAt = '';
         readerAnnotationStatus(`批注加载失败：${error.message || error}`);
@@ -351,16 +367,25 @@ async function deleteReaderAnnotation(annotationId) {
     }
 }
 
+let readerHistoryLoadRequestId = 0;
+
 async function loadReaderPositionHistory() {
-    if (!readerState.activeDocumentId) return;
+    const documentId = readerState.activeDocumentId;
+    const revisionId = readerState.activeRevisionId;
+    if (!documentId) return;
+    const requestId = ++readerHistoryLoadRequestId;
+    const isCurrent = () => requestId === readerHistoryLoadRequestId
+        && documentId === readerState.activeDocumentId && revisionId === readerState.activeRevisionId;
     try {
-        const payload = await readerApi(`/api/reader/history?documentId=${encodeURIComponent(readerState.activeDocumentId)}`);
+        const payload = await readerApi(`/api/reader/history?documentId=${encodeURIComponent(documentId)}`);
+        if (!isCurrent()) return;
         const record = payload.record;
         readerState.historyItems = record && record.history && Array.isArray(record.history.items) ? record.history.items : [];
         readerState.historyCursor = readerState.historyItems.length - 1;
         readerState.historyRecordUpdatedAt = record && record.updatedAt || '';
         renderReaderHistory();
     } catch (error) {
+        if (!isCurrent()) return;
         readerState.historyItems = [];
         readerState.historyCursor = -1;
         readerAnnotationHistoryStatus(`历史加载失败：${error.message || error}`);
@@ -368,12 +393,17 @@ async function loadReaderPositionHistory() {
 }
 
 async function recordReaderPositionHistory(locator, options = {}) {
-    if (!readerState.activeDocumentId || !locator || readerState.historyNavigating) return;
+    const documentId = readerState.activeDocumentId;
+    const revisionId = readerState.activeRevisionId;
+    const navigationToken = readerState.r;
+    if (!documentId || !locator || readerState.historyNavigating || (locator.documentId && locator.documentId !== documentId)) return;
+    const isCurrent = () => documentId === readerState.activeDocumentId
+        && revisionId === readerState.activeRevisionId && navigationToken === readerState.r;
     const last = readerState.historyItems[readerState.historyCursor] || readerState.historyItems[readerState.historyItems.length - 1];
     if (last && readerHistoryKey(last.locator) === readerHistoryKey(locator)) return;
     const entry = {
-        documentId: readerState.activeDocumentId,
-        revisionId: readerState.activeRevisionId,
+        documentId,
+        revisionId,
         locator,
         source: options.source || 'navigation',
         label: options.label || '',
@@ -384,26 +414,36 @@ async function recordReaderPositionHistory(locator, options = {}) {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ entry, expectedUpdatedAt: readerState.historyRecordUpdatedAt || undefined })
         });
+        if (!isCurrent()) return;
         const record = response.record;
         readerState.historyRecordUpdatedAt = record.updatedAt || '';
-        readerState.historyItems = (record.history.items || []).filter((item) => item.documentId === readerState.activeDocumentId);
+        readerState.historyItems = (record.history.items || []).filter((item) => item.documentId === documentId);
         readerState.historyCursor = readerState.historyItems.length - 1;
         renderReaderHistory();
     } catch (error) {
+        if (!isCurrent()) return;
         readerAnnotationHistoryStatus(`历史保存失败：${error.message || error}`);
     }
 }
 
+let readerHistoryNavigationId = 0;
+
 async function navigateReaderHistory(index) {
     const entry = readerState.historyItems[index];
     if (!entry || !entry.locator) return;
+    const requestId = ++readerHistoryNavigationId;
+    const documentId = readerState.activeDocumentId;
+    const revisionId = readerState.activeRevisionId;
     readerState.historyNavigating = true;
     try {
-        await navigateReaderToLocator(entry.locator, { highlight: true, skipHistory: true });
+        if (!await navigateReaderToLocator(entry.locator, { highlight: true, skipHistory: true })) return false;
+        if (requestId !== readerHistoryNavigationId || documentId !== readerState.activeDocumentId
+            || revisionId !== readerState.activeRevisionId || readerState.historyItems[index] !== entry) return false;
         readerState.historyCursor = index;
         renderReaderHistory();
+        return true;
     } finally {
-        readerState.historyNavigating = false;
+        if (requestId === readerHistoryNavigationId) readerState.historyNavigating = false;
     }
 }
 

@@ -76,6 +76,26 @@
         return Math.max(0, Math.min(100, Number(document.reading && document.reading.progress) || 0));
     }
 
+    let readerLibraryLoadRequestId = 0;
+    let readerLibraryReadingVersion = 0;
+    const readerLibraryReadingUpdates = new Map();
+
+    window.updateReaderLibraryReading = function (state, snapshot) {
+        const locator = state && state.positionLocator;
+        const navigation = window.DraftHarborReaderNavigation;
+        if (!locator || !navigation || !snapshot || state.documentId !== snapshot.documentId
+            || !snapshot.chapter || snapshot.chapter.chapterId !== locator.chapterId) return;
+        const reading = {
+            hasState: true,
+            lastReadAt: state.updatedAt || '',
+            chapterId: locator.chapterId,
+            progress: Math.round(navigation.contentProgressForLocator(snapshot.contents, snapshot.chapter, locator) * 100)
+        };
+        readerLibraryReadingUpdates.set(state.documentId, { version: ++readerLibraryReadingVersion, reading });
+        readerState.libraryDocuments = (readerState.libraryDocuments || []).map((item) => item.documentId === state.documentId ? { ...item, reading } : item);
+        if (readerState.leftTab === 'library') renderReaderLibrary();
+    };
+
     let readerLibraryViewSaveTimer = null;
 
     async function persistReaderLibraryView(changes) {
@@ -199,10 +219,12 @@
         const card = readerLibraryElement('article', 'desktop-reader-library-card desktop-reader-library-item');
         card.tabIndex = 0;
         card.addEventListener('click', (event) => {
-            if (!event.target.closest('button')) openReaderLibraryDocument(documentSummary.documentId);
+            const control = event.target.closest('button, input, select, textarea, a, label, summary, [contenteditable]:not([contenteditable="false"]), [tabindex], [role="button"], [role="link"]');
+            if (event.defaultPrevented || (control && control !== card)) return;
+            openReaderLibraryDocument(documentSummary.documentId);
         });
         card.addEventListener('keydown', (event) => {
-            if (event.target !== card || !['Enter', ' '].includes(event.key)) return;
+            if (event.defaultPrevented || event.target !== card || !['Enter', ' '].includes(event.key)) return;
             event.preventDefault();
             openReaderLibraryDocument(documentSummary.documentId);
         });
@@ -386,17 +408,24 @@
 
     async function loadReaderLibrary() {
         const container = document.querySelector('[data-reader-library]');
+        const requestId = ++readerLibraryLoadRequestId;
+        const readingVersion = readerLibraryReadingVersion;
         try {
             const results = await Promise.all([readerApi('/api/reader/documents'), readerApi('/api/reader/library-view')]);
+            if (requestId !== readerLibraryLoadRequestId) return readerState.libraryDocuments;
             const documentsPayload = results[0];
             const viewPayload = results[1];
-            readerState.libraryDocuments = Array.isArray(documentsPayload.documents) ? documentsPayload.documents : [];
+            readerState.libraryDocuments = (Array.isArray(documentsPayload.documents) ? documentsPayload.documents : []).map((item) => {
+                const update = readerLibraryReadingUpdates.get(item.documentId);
+                return update && update.version > readingVersion ? { ...item, reading: update.reading } : item;
+            });
             readerState.libraryIndexVersion = documentsPayload.index && Number(documentsPayload.index.version) || 0;
             readerState.libraryViewRecord = viewPayload.record;
             readerState.libraryView = viewPayload.record && viewPayload.record.view || readerCurrentLibraryView();
             renderReaderLibrary();
             return readerState.libraryDocuments;
         } catch (error) {
+            if (requestId !== readerLibraryLoadRequestId) return readerState.libraryDocuments;
             if (container) container.textContent = '书库载入失败：' + (error.message || error);
             return [];
         }

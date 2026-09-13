@@ -39,7 +39,7 @@ function createController(dependencies) {
       const projectId = String(payload.projectId || '').trim();
       jsonResponse(response, 200, await compendiumService.saveEntry(dataRoot, projectId, payload.entry || payload));
     } catch (error) {
-      jsonResponse(response, 500, { ok: false, error: error.message });
+      jsonResponse(response, error.name === 'CompendiumConflictError' ? 409 : 500, { ok: false, error: error.message });
     }
     return true;
   }
@@ -103,7 +103,7 @@ function createController(dependencies) {
       });
       jsonResponse(response, 200, result);
     } catch (error) {
-      jsonResponse(response, 400, { ok: false, error: error.message });
+      jsonResponse(response, error.name === 'CompendiumConflictError' ? 409 : 400, { ok: false, error: error.message });
     }
     return true;
   }

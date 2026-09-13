@@ -61,6 +61,27 @@ assert.strictEqual(pagePosition.blockId, 'long-block');
 assert.ok(pagePosition.offset <= 512, 'page position must not follow the requested locator');
 assert.strictEqual(Layout.buildReaderPages({ blocks: [] }, { capacity: 128 }).length, 1, 'empty chapters retain one empty page');
 
+const endingChapter = { chapterId: 'ending-chapter', blocks: [
+  { blockId: 'before-ending', type: 'paragraph', text: '开头'.repeat(80) },
+  { blockId: 'long-ending', type: 'paragraph', text: '末段'.repeat(1000) }
+] };
+for (const capacity of [128, 200, 3000]) {
+  const endPages = Layout.buildReaderPages(endingChapter, { capacity });
+  const endPage = Layout.pageIndexForLocator(endPages, { blockId: 'long-ending', offset: 2000 });
+  assert.strictEqual(endPage, endPages.length - 1, 'an exclusive document-end locator must resolve to the final page');
+  const split = endPages.findIndex((page, index) => index > 0 && page.segments[0].blockId === 'long-ending');
+  if (split > 0) {
+    const boundary = endPages[split].segments[0];
+    assert.strictEqual(Layout.pageIndexForLocator(endPages, { blockId: boundary.blockId, offset: boundary.startOffset }), split, 'ordinary page boundaries must still select the following page');
+  }
+}
+const emptyTailPages = Layout.buildReaderPages({ blocks: [
+  { blockId: 'body', text: '字'.repeat(300) }, { blockId: 'empty-tail', text: '' }
+] }, { capacity: 128 });
+assert.strictEqual(Layout.pageIndexForLocator(emptyTailPages, { blockId: 'empty-tail', offset: 0 }), emptyTailPages.length - 1, 'an empty final block must retain its page');
+assert.strictEqual(Layout.pageIndexForLocator(pages, { blockId: 'long-block', offset: 1000 }), pages.findLastIndex(page => page.segments.some(segment => segment.blockId === 'long-block')), 'a block-end locator must not jump to another following block');
+assert.strictEqual(Layout.pageIndexForLocator(pages, { blockId: 'missing', offset: 1000 }), 0, 'unknown blocks retain the existing safe fallback');
+
 const windowRange = Layout.flowWindowForAnchor(1000, 500);
 assert.ok(windowRange.start <= 500 && windowRange.end > 500);
 assert.ok(windowRange.end - windowRange.start <= 73, 'flow DOM window must stay bounded');

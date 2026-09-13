@@ -38,6 +38,49 @@
         }
     }
 
+    function readerFlowTextGeometry(node) {
+        const parts = [];
+        const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+        let length = 0;
+        let textNode;
+        while ((textNode = walker.nextNode())) {
+            if (!textNode.length) continue;
+            parts.push({ node: textNode, start: length, end: length + textNode.length });
+            length += textNode.length;
+        }
+        const range = document.createRange();
+        return {
+            length,
+            rectAt(offset) {
+                if (!length) return node.getBoundingClientRect();
+                const index = Math.max(0, Math.min(length - 1, offset));
+                const part = parts.find((item) => index < item.end);
+                let start = index - part.start;
+                const text = part.node.data;
+                // DOM offsets are UTF-16; avoid measuring half of a surrogate pair.
+                if (start > 0 && /[\uDC00-\uDFFF]/.test(text[start]) && /[\uD800-\uDBFF]/.test(text[start - 1])) start -= 1;
+                const end = Math.min(text.length, start + (text.codePointAt(start) > 0xFFFF ? 2 : 1));
+                range.setStart(part.node, start);
+                range.setEnd(part.node, end);
+                return range.getBoundingClientRect();
+            }
+        };
+    }
+
+    function readerFlowVisibleOffset(node, top) {
+        const geometry = readerFlowTextGeometry(node);
+        let low = 0;
+        let high = geometry.length;
+        // A long paragraph may span many screens. Locate the visible line without
+        // walking every character, including text split by annotation marks.
+        while (low < high) {
+            const middle = Math.floor((low + high) / 2);
+            if (geometry.rectAt(middle).bottom > top) high = middle;
+            else low = middle + 1;
+        }
+        return (Number(node.dataset.readerStartOffset) || 0) + low;
+    }
+
     function captureReaderPositionLocator() {
         if (!readerState.currentChapter) return null;
         if (readerState.effectiveLayoutMode !== 'flow') {
@@ -52,11 +95,11 @@
             return position ? createReaderLocatorAt(position.blockId, position.offset) : null;
         }
         const content = document.querySelector('[data-reader-content]');
-        if (!content) return null;
+        if (!content || !content.clientWidth || !content.clientHeight) return null;
         const contentTop = content.getBoundingClientRect().top;
         const nodes = Array.from(content.querySelectorAll('[data-reader-block]'));
         const visible = nodes.find((node) => node.getBoundingClientRect().bottom > contentTop + 8) || nodes[0];
-        return visible ? createReaderLocatorAt(visible.dataset.readerBlock, Number(visible.dataset.readerStartOffset) || 0) : null;
+        return visible ? createReaderLocatorAt(visible.dataset.readerBlock, readerFlowVisibleOffset(visible, contentTop + 8)) : null;
     }
 
     function readerActualFontFamily(content) {
@@ -159,7 +202,11 @@
 
     function renderReaderFlow(locator, options = {}) {
         const content = document.querySelector('[data-reader-content]');
-        const blocks = readerState.currentChapter.blocks || [];
+        const chapter = readerState.currentChapter;
+        const blocks = chapter.blocks || [];
+        const documentId = readerState.activeDocumentId;
+        const revisionId = readerState.activeRevisionId;
+        const navigationRequest = readerState.r;
         const anchorIndex = Math.max(0, blocks.findIndex((block) => block.blockId === (locator && locator.blockId)));
         const range = window.DraftHarborReaderLayout.flowWindowForAnchor(blocks.length, anchorIndex);
         const previousRatio = options.preserveRatio && content.scrollHeight > content.clientHeight
@@ -186,8 +233,16 @@
             setReaderFlowScrollTop(content, max * previousRatio);
         } else if (locator && locator.blockId) {
             window.requestAnimationFrame(() => {
+                if (readerState.currentChapter !== chapter || readerState.activeDocumentId !== documentId
+                    || readerState.activeRevisionId !== revisionId || readerState.r !== navigationRequest
+                    || readerState.effectiveLayoutMode !== 'flow' || topSpacer.parentNode !== content
+                    || !content.clientWidth || !content.clientHeight) return;
                 const target = content.querySelector(`[data-reader-block="${CSS.escape(locator.blockId)}"]`);
-                if (target) target.scrollIntoView({ block: 'start', behavior: 'auto' });
+                if (!target) return;
+                const offset = Math.max(0, (Number(locator.offset) || 0) - (Number(target.dataset.readerStartOffset) || 0));
+                const rect = readerFlowTextGeometry(target).rectAt(offset);
+                const top = content.getBoundingClientRect().top + 8;
+                setReaderFlowScrollTop(content, content.scrollTop + rect.top - top);
             });
         } else {
             setReaderFlowScrollTop(content, 0);
@@ -523,7 +578,7 @@
         window.stopReaderPageFlip?.();
         stopReaderDeckTransition();
         const metrics = readerLayoutMetrics();
-        if (!metrics.content) return;
+        if (!metrics.content || !metrics.width || !metrics.height) return;
         readerState.renderedViewportSize = `${metrics.width}x${metrics.height}`;
         const requestedLocator = options.locator || readerState.anchorLocator
             || readerState.documentRecordState && readerState.documentRecordState.positionLocator;
@@ -546,7 +601,6 @@
     function scheduleReaderReflow(options = {}) {
         if (options.viewportOnly && readerReflowTimer) return;
         const scheduledLocator = captureReaderPositionLocator() || readerState.anchorLocator;
-        const preserveFlowRatio = readerState.effectiveLayoutMode === 'flow';
         if (readerReflowTimer) window.clearTimeout(readerReflowTimer);
         readerReflowTimer = window.setTimeout(() => {
             readerReflowTimer = null;
@@ -562,7 +616,7 @@
                 : (readerState.anchorLocator && readerState.anchorLocator.chapterId === readerState.activeChapterId
                     ? readerState.anchorLocator : null);
             readerState.anchorLocator = activeLocator;
-            renderReaderReading({ locator: activeLocator, preserveFlowRatio });
+            renderReaderReading({ locator: activeLocator });
             updateReaderWorkspaceProgress();
         }, 120);
     }
@@ -572,8 +626,12 @@
         const content = document.querySelector('[data-reader-content]');
         const blocks = readerState.currentChapter && readerState.currentChapter.blocks || [];
         if (!content || blocks.length <= 73 || content.scrollHeight <= content.clientHeight) return;
+        const chapter = readerState.currentChapter;
+        const navigationRequest = readerState.r;
         readerFlowShiftFrame = window.requestAnimationFrame(() => {
             readerFlowShiftFrame = null;
+            if (readerState.currentChapter !== chapter || readerState.r !== navigationRequest
+                || readerState.effectiveLayoutMode !== 'flow' || !content.clientHeight) return;
             const ratio = content.scrollTop / Math.max(1, content.scrollHeight - content.clientHeight);
             const approximate = Math.max(0, Math.min(blocks.length - 1, Math.round(ratio * (blocks.length - 1))));
             const range = readerState.virtualWindow;
@@ -589,8 +647,16 @@
         if (readerState.effectiveLayoutMode === 'flow') return false;
         readerState.pendingPageDelta += Number(delta) || 0;
         if (readerState.pageTurnFrame || readerState.chapterPageTurnPromise) return true;
+        const chapter = readerState.currentChapter;
+        const navigationRequest = readerState.r;
+        const layoutMode = readerState.effectiveLayoutMode;
         readerState.pageTurnFrame = window.requestAnimationFrame(() => {
             readerState.pageTurnFrame = null;
+            if (readerState.currentChapter !== chapter || readerState.r !== navigationRequest
+                || readerState.effectiveLayoutMode !== layoutMode) {
+                readerState.pendingPageDelta = 0;
+                return;
+            }
             const spreadSize = readerState.effectiveLayoutMode === 'double-page' ? 2 : 1;
             const maxStart = readerState.effectiveLayoutMode === 'double-page'
                 ? Math.max(0, readerState.pages.length - (readerState.pages.length % 2 || 2))

@@ -3,6 +3,21 @@
     let readerStateWriteRevision = 0;
     const readerStateWriteDrafts = new Map();
 
+    function startReaderNavigation(token) {
+        if (token != null) return token === readerState.r ? token : null;
+        readerState.r = (Number(readerState.r) || 0) + 1;
+        return readerState.r;
+    }
+
+    function readerNavigationCurrent(token, documentId, revisionId) {
+        return token != null && token === readerState.r
+            && (documentId === undefined || documentId === readerState.activeDocumentId)
+            && (revisionId === undefined || revisionId === readerState.activeRevisionId);
+    }
+
+    window.startReaderNavigation = startReaderNavigation;
+    window.readerNavigationCurrent = readerNavigationCurrent;
+
     function readerWorkspaceElements() {
         return {
             shell: document.querySelector('[data-reader-shell]'),
@@ -85,6 +100,10 @@
         });
         const heading = document.getElementById('reader-navigation-title');
         if (heading) heading.textContent = ({ library: '书库', contents: '目录', search: '搜索', bookmarks: '书签', annotations: '批注', history: '历史' })[tab] || '目录';
+        if (tab === 'library') {
+            renderReaderLibrary();
+            if (readerState.apiMode && readerState.currentChapter) saveReaderWorkspacePosition();
+        }
     }
 
     function handleReaderWorkspaceEscape() {
@@ -121,10 +140,9 @@
             button.classList.toggle('is-active', item.chapterId === readerState.activeChapterId);
             button.textContent = item.title || `第 ${index + 1} 章`;
             button.addEventListener('click', async () => {
-                await loadReaderWorkspaceChapter(item.chapterId);
-                await saveReaderWorkspacePosition();
-                if (window.recordReaderPositionHistory) await window.recordReaderPositionHistory(captureReaderPositionLocator(), { source: 'contents', label: item.title || `第 ${index + 1} 章` });
-                setReaderDrawer('');
+                await navigateReaderWorkspaceChapterTo(item.chapterId, {
+                    source: 'contents', label: item.title || `第 ${index + 1} 章`, closeDrawer: true
+                });
             });
             container.appendChild(button);
         });
@@ -181,10 +199,13 @@
         const weighted = readerState.effectiveLayoutMode !== 'flow' && window.DraftHarborReaderNavigation && locator
             ? window.DraftHarborReaderNavigation.contentProgressForLocator(readerState.contents, readerState.currentChapter, locator)
             : (totalWeight > 0 ? (previousWeight + chapterWeight * layoutRatio) / totalWeight : 0);
+        const chapterRatio = readerState.effectiveLayoutMode !== 'flow' && window.DraftHarborReaderNavigation && locator && readerState.contents[index]
+            ? window.DraftHarborReaderNavigation.contentProgressForLocator([readerState.contents[index]], readerState.currentChapter, locator)
+            : layoutRatio;
         const percent = Math.max(0, Math.min(100, Math.round(weighted * 100)));
         if (elements.progress) elements.progress.value = percent;
         if (elements.progressPercent) elements.progressPercent.textContent = `${percent}%`;
-        if (elements.positionLabel) elements.positionLabel.textContent = `本章 ${Math.round(layoutRatio * 100)}% · 全书 ${percent}%`;
+        if (elements.positionLabel) elements.positionLabel.textContent = `本章 ${Math.round(chapterRatio * 100)}% · 全书 ${percent}%`;
         renderReaderStatusBar(index, weighted, layoutRatio);
         if (typeof updateReaderNavigationProgress === 'function') updateReaderNavigationProgress(weighted);
         if (typeof maybeShiftReaderFlowWindow === 'function') maybeShiftReaderFlowWindow();
@@ -194,6 +215,7 @@
 
     function queueReaderDocumentStateWrite(changes = {}) {
         const documentId = readerState.activeDocumentId;
+        const readingSnapshot = { documentId, contents: readerState.contents, chapter: readerState.currentChapter };
         const previousDraft = readerStateWriteDrafts.get(documentId);
         const queuedExisting = previousDraft && previousDraft.state || readerState.documentRecordState || {};
         const queuedLocator = changes.positionLocator !== undefined
@@ -224,6 +246,7 @@
                     readerStateWriteDrafts.delete(documentId);
                     if (readerState.activeDocumentId === documentId) readerState.documentRecordState = payload.state;
                 }
+                window.updateReaderLibraryReading?.(payload.state, readingSnapshot);
                 return payload.state;
             } catch (error) {
                 const latest = readerStateWriteDrafts.get(documentId);
@@ -238,6 +261,7 @@
     }
 
     async function saveReaderWorkspacePosition() {
+        if (readerPositionSaveTimer) window.clearTimeout(readerPositionSaveTimer);
         readerPositionSaveTimer = null;
         if (!readerState.apiMode || !readerState.currentChapter) return;
         const locator = typeof captureReaderPositionLocator === 'function' ? captureReaderPositionLocator() : null;
@@ -250,60 +274,114 @@
     }
 
     async function loadReaderWorkspaceChapter(chapterId, locator, t) {
+        const token = startReaderNavigation(t);
+        const documentId = readerState.activeDocumentId;
+        const revisionId = readerState.activeRevisionId;
+        if (token === null || !documentId || !revisionId) return false;
         window.readerTtsPauseForNavigation?.();
-        if (chapterId !== readerState.activeChapterId && typeof clearReaderTransferSelection === 'function') clearReaderTransferSelection();
-        const payload = await readerApi(`/api/reader/chapter?documentId=${encodeURIComponent(readerState.activeDocumentId)}&revisionId=${encodeURIComponent(readerState.activeRevisionId)}&chapterId=${encodeURIComponent(chapterId)}`);
-        if (t != null && readerState.r !== t) return false;
-        readerState.activeChapterId = chapterId;
-        readerState.currentChapter = payload.chapter;
-        readerState.anchorLocator = locator && locator.chapterId === chapterId ? locator : null;
-        readerState.pageIndex = 0;
-        renderReaderWorkspace();
+        try {
+            const payload = await readerApi(`/api/reader/chapter?documentId=${encodeURIComponent(documentId)}&revisionId=${encodeURIComponent(revisionId)}&chapterId=${encodeURIComponent(chapterId)}`);
+            if (!readerNavigationCurrent(token, documentId, revisionId)) return false;
+            if (chapterId !== readerState.activeChapterId && typeof clearReaderTransferSelection === 'function') clearReaderTransferSelection();
+            readerState.activeChapterId = chapterId;
+            readerState.currentChapter = payload.chapter;
+            readerState.anchorLocator = locator && locator.chapterId === chapterId ? locator : null;
+            readerState.pageIndex = 0;
+            renderReaderWorkspace();
+            return true;
+        } catch (error) {
+            if (!readerNavigationCurrent(token, documentId, revisionId)) return false;
+            throw error;
+        }
     }
 
     async function openReaderLibraryDocument(documentId, t) {
+        const token = startReaderNavigation(t);
+        if (token === null) return false;
+        window.readerTtsPauseForNavigation?.();
+        window.cancelReaderSearch?.({ silent: true });
         try {
+            if (readerPositionSaveTimer) window.clearTimeout(readerPositionSaveTimer);
+            if (readerState.apiMode && readerState.currentChapter) await saveReaderWorkspacePosition();
+            if (!readerNavigationCurrent(token)) return false;
             const metadataPayload = await readerApi(`/api/reader/document?documentId=${encodeURIComponent(documentId)}`);
+            if (!readerNavigationCurrent(token)) return false;
             const metadata = metadataPayload.metadata;
-            const contentsPayload = await readerApi(`/api/reader/contents?documentId=${encodeURIComponent(documentId)}&revisionId=${encodeURIComponent(metadata.activeRevisionId)}`);
-            const statePayload = await readerApi(`/api/reader/state?documentId=${encodeURIComponent(documentId)}`);
-            if (t != null && readerState.r !== t) return;
+            const revisionId = metadata.activeRevisionId;
+            const [contentsPayload, statePayload] = await Promise.all([
+                readerApi(`/api/reader/contents?documentId=${encodeURIComponent(documentId)}&revisionId=${encodeURIComponent(revisionId)}`),
+                readerApi(`/api/reader/state?documentId=${encodeURIComponent(documentId)}`)
+            ]);
+            if (!readerNavigationCurrent(token)) return false;
+            const contents = contentsPayload.contents.chapters || [];
+            const locator = statePayload.state && statePayload.state.positionLocator;
+            const chapterId = locator && contents.some((item) => item.chapterId === locator.chapterId)
+                ? locator.chapterId : contents[0] && contents[0].chapterId;
+            if (!chapterId) throw new Error('文档没有可阅读章节');
+            const chapterPayload = await readerApi(`/api/reader/chapter?documentId=${encodeURIComponent(documentId)}&revisionId=${encodeURIComponent(revisionId)}&chapterId=${encodeURIComponent(chapterId)}`);
+            if (!readerNavigationCurrent(token)) return false;
+            if (typeof clearReaderTransferSelection === 'function') clearReaderTransferSelection();
+            // Commit a complete document/chapter together. During loading the
+            // previous document must not acquire the next document's identity.
+            if (documentId !== readerState.activeDocumentId || revisionId !== readerState.activeRevisionId) {
+                readerState.annotations = [];
+                readerState.annotationResolutions?.clear();
+                readerState.annotationRecordUpdatedAt = '';
+                readerState.historyItems = [];
+                readerState.historyCursor = -1;
+                readerState.historyRecordUpdatedAt = '';
+                readerState.historyNavigating = false;
+            }
             readerState.apiMode = true;
             readerState.activeDocumentId = documentId;
-            readerState.activeRevisionId = metadata.activeRevisionId;
+            readerState.activeRevisionId = revisionId;
             readerState.documentMetadata = metadata;
-            readerState.contents = contentsPayload.contents.chapters || [];
+            readerState.contents = contents;
             readerState.documentRecordState = statePayload.state;
             readerState.preferenceOverrides = statePayload.state && statePayload.state.preferenceOverrides || {};
             readerState.preferenceScope = Object.keys(readerState.preferenceOverrides).length ? 'document' : 'global';
+            readerState.activeChapterId = chapterId;
+            readerState.currentChapter = chapterPayload.chapter;
+            readerState.anchorLocator = locator && locator.chapterId === chapterId ? locator : null;
+            readerState.pageIndex = 0;
             if (typeof applyReaderPreferenceModel === 'function') applyReaderPreferenceModel();
-            const locator = statePayload.state && statePayload.state.positionLocator;
-            const chapterId = locator && readerState.contents.some((item) => item.chapterId === locator.chapterId)
-                ? locator.chapterId : readerState.contents[0] && readerState.contents[0].chapterId;
-            if (!chapterId) throw new Error('文档没有可阅读章节');
-            if (await loadReaderWorkspaceChapter(chapterId, locator, t) === false) return;
+            renderReaderWorkspace();
             if (typeof initializeReaderNavigationDocument === 'function') initializeReaderNavigationDocument();
             if (window.loadReaderAnnotationDocument) await window.loadReaderAnnotationDocument();
+            if (!readerNavigationCurrent(token, documentId, revisionId)) return false;
             if (window.loadReaderPositionHistory) await window.loadReaderPositionHistory();
+            if (!readerNavigationCurrent(token, documentId, revisionId)) return false;
             if (!statePayload.state && typeof queueReaderDocumentStateWrite === 'function' && typeof captureReaderPositionLocator === 'function') {
                 const initialLocator = captureReaderPositionLocator();
                 if (initialLocator) queueReaderDocumentStateWrite({ positionLocator: initialLocator });
             }
             setReaderDrawer('');
+            return true;
         } catch (error) {
+            if (!readerNavigationCurrent(token)) return false;
             const content = document.querySelector('[data-reader-content]');
             if (content) content.textContent = `无法打开文档：${error.message || error}`;
             return false;
         }
     }
 
+    async function navigateReaderWorkspaceChapterTo(chapterId, options = {}) {
+        const token = startReaderNavigation();
+        const documentId = readerState.activeDocumentId;
+        const revisionId = readerState.activeRevisionId;
+        if (await loadReaderWorkspaceChapter(chapterId, null, token) === false) return false;
+        const locator = captureReaderPositionLocator();
+        await saveReaderWorkspacePosition();
+        if (!readerNavigationCurrent(token, documentId, revisionId)) return false;
+        if (window.recordReaderPositionHistory) await window.recordReaderPositionHistory(locator, options);
+        if (!readerNavigationCurrent(token, documentId, revisionId)) return false;
+        if (options.closeDrawer) setReaderDrawer('');
+        return true;
+    }
+
     async function navigateReaderWorkspaceChapter(offset) {
         const next = readerState.contents[readerWorkspaceChapterIndex() + offset];
-        if (next) {
-            await loadReaderWorkspaceChapter(next.chapterId);
-            await saveReaderWorkspacePosition();
-            if (window.recordReaderPositionHistory) await window.recordReaderPositionHistory(captureReaderPositionLocator(), { source: 'chapter', label: next.title || '章节跳转' });
-        }
+        return next ? navigateReaderWorkspaceChapterTo(next.chapterId, { source: 'chapter', label: next.title || '章节跳转' }) : false;
     }
 
     function initializeReaderWorkspace() {

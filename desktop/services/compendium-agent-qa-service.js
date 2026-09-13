@@ -1,6 +1,9 @@
 const AITaskRunner = require('../../src/core/generation/ai-task-runner');
 const ProviderStream = require('../../src/core/generation/provider-stream');
 const { resolveProviderConfig } = require('./compendium-agent-runner-service');
+const compendiumStore = require('../storage/compendium-store');
+const projectService = require('./project-service');
+const CompendiumAgentPolicy = require('../../src/core/knowledge/compendium-agent-policy');
 
 const MAX_SOURCES = 8;
 const MAX_BODY_CHARS = 1200;
@@ -63,7 +66,8 @@ function sanitizeAnswer(output, sources) {
   const raw = output && typeof output === 'object' ? output : {};
   const answer = String(raw.answer || '').trim().slice(0, 4000);
   const cited = [...new Set((Array.isArray(raw.sourceIds) ? raw.sourceIds : []).map((id) => String(id || '').trim()).filter((id) => sourceIds.has(id)))];
-  const confidence = ['grounded', 'partial', 'not-found'].includes(raw.confidence) ? raw.confidence : (cited.length ? 'partial' : 'not-found');
+  const confidence = !cited.length ? 'not-found'
+    : (['grounded', 'partial', 'not-found'].includes(raw.confidence) ? raw.confidence : 'partial');
   return { answer: answer || '资料库未提供足够信息。', sourceIds: cited, confidence };
 }
 
@@ -76,8 +80,12 @@ function createCompendiumAgentQaService({ settingsService, compendiumAgentServic
     if (!cleanQuestion) throw new Error('question is required');
     const settings = await settingsService.readSettings(dataRoot);
     const { agentSettings, profile, config } = resolveProviderConfig(settings);
-    const snapshotResult = await compendiumAgentService.readSnapshot(dataRoot, projectId, [], agentSettings);
-    const ranked = rankEntries(snapshotResult.snapshot.entries, cleanQuestion);
+    await projectService.projectLocation(dataRoot, projectId);
+    // The model input limit must not limit local retrieval. Snapshot every card
+    // with the same body-access policy, then send only the best bounded matches.
+    const entries = await compendiumStore.listEntries(dataRoot, projectId);
+    const snapshots = entries.map(entry => CompendiumAgentPolicy.createAgentEntrySnapshot(entry, agentSettings));
+    const ranked = rankEntries(snapshots, cleanQuestion, Math.min(MAX_SOURCES, agentSettings.maxCardsPerRun));
     if (!ranked.length) return { ok: true, projectId, answer: '资料库中没有找到与此问题相关的资料。', sourceIds: [], confidence: 'not-found', sources: [], provider: { profileId: profile.id, provider: profile.provider, model: config.model } };
     const sources = sourceSnapshot(ranked);
     const task = { projectId, domain: 'compendium', action: 'update', scope: 'project', target: { type: 'compendium-agent-qa', projectId, id: `compendium-qa-${projectId}` }, instruction: '基于检索到的资料卡回答问题', providerProfileId: profile.id, model: config.model, outputContract: 'field-patch', beforeSnapshot: { sourceIds: sources.map((source) => source.id) } };

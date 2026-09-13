@@ -644,6 +644,24 @@ async function openNativeModelSettings(page) {
     await page.waitForFunction(() => document.querySelector('[data-native-scene-editor]').value.includes('\u2026'));
     await page.fill('[data-native-scene-editor]', 'Auto -- replace.');
     await page.waitForFunction(() => document.querySelector('[data-native-scene-editor]').value.includes('Auto \u2014 replace.'));
+    await page.fill('[data-native-scene-editor]', '她走进雨里,街灯亮着...\n\n他说:"走吧."');
+    await clickMoreAction(page, '[data-native-more-menu] [data-native-format-manuscript]');
+    await page.waitForFunction(() => {
+      const value = document.querySelector('[data-native-scene-editor]').value;
+      return value.includes('\u3000\u3000她走进雨里，街灯亮着……')
+        && value.includes('\u3000\u3000他说：“走吧。”');
+    });
+    const formattedManuscript = await page.evaluate(() => document.querySelector('[data-native-scene-editor]').value);
+    await clickMoreAction(page, '[data-native-more-menu] [data-native-format-manuscript]');
+    assert.strictEqual(
+      await page.evaluate(() => document.querySelector('[data-native-scene-editor]').value),
+      formattedManuscript,
+      'one-click manuscript format should be idempotent'
+    );
+    await page.waitForFunction(() => {
+      const status = document.querySelector('[data-native-save-status]');
+      return status && status.textContent.includes('\u5f53\u524d\u6b63\u6587\u5df2\u662f\u6392\u7248\u683c\u5f0f');
+    });
 
     await openNativePanel(page, 'generate');
 
@@ -859,7 +877,13 @@ async function openNativeModelSettings(page) {
     });
     assert.ok(Math.abs(buttonDragAudit.movedX) < 2 && Math.abs(buttonDragAudit.movedY) < 2, 'action buttons should not drag the confirmation card');
     await page.dblclick('[data-native-generation-drag-handle]');
-    await page.waitForFunction(() => !!localStorage.getItem('draftharbor:nativeGenerationOutputPosition'));
+    await page.waitForFunction(() => {
+      const output = document.querySelector('[data-native-generation-output]').getBoundingClientRect();
+      const body = document.querySelector('.desktop-native-editor-body').getBoundingClientRect();
+      return localStorage.getItem('draftharbor:nativeGenerationOutputPosition') === null
+        && Math.abs(body.right - output.right - 12) <= 1
+        && Math.abs(output.top - body.top - 12) <= 1;
+    });
     await openGenerationAdvanced(page);
     await page.selectOption('[data-native-generation-insert-mode]', 'cursor');
     await closeGenerationAdvanced(page);
@@ -984,6 +1008,9 @@ async function openNativeModelSettings(page) {
       });
     });
     await page.click('[data-native-generate]');
+    await page.waitForFunction(() => document.querySelector('[data-native-reasoning-text]').textContent.includes('THINK-END-VISIBLE'));
+    assert.strictEqual(await page.locator('[data-native-reasoning]').evaluate((details) => details.open), false, 'a new thinking stream should start collapsed');
+    await page.click('[data-native-reasoning-toggle]');
     try {
       await page.waitForFunction(() => {
         const output = document.querySelector('[data-native-generation-output]');
@@ -993,7 +1020,6 @@ async function openNativeModelSettings(page) {
         if (!output || !pre || !details || !footer) return false;
         if (output.hidden || details.hidden || !details.open) return false;
         if (!pre.textContent.includes('THINK-END-VISIBLE')) return false;
-        if (!output.classList.contains('is-reasoning-expanded')) return false;
         if (pre.scrollHeight <= pre.clientHeight + 8) return false;
         return output.getBoundingClientRect().bottom <= footer.getBoundingClientRect().top + 1;
       });
@@ -1037,6 +1063,8 @@ async function openNativeModelSettings(page) {
       const outputRect = output.getBoundingClientRect();
       const preRect = pre.getBoundingClientRect();
       const footerRect = footer.getBoundingClientRect();
+      const dock = pre.closest('[data-native-reasoning-dock]');
+      const readingRect = (dock || output).getBoundingClientRect();
       return {
         hidden: output.hidden,
         detailsOpen: details.open,
@@ -1044,21 +1072,23 @@ async function openNativeModelSettings(page) {
         summary: document.querySelector('[data-native-reasoning-summary]').textContent,
         phase: output.dataset.reasoningPhase,
         preScrolls: pre.scrollHeight > pre.clientHeight + 8,
-        preClipped: preRect.bottom > outputRect.bottom + 1,
+        preClipped: preRect.bottom > readingRect.bottom + 1,
+        docked: !!dock,
         outputBottom: outputRect.bottom,
         footerTop: footerRect.top,
         expanded: output.classList.contains('is-reasoning-expanded')
       };
     });
     assert.strictEqual(reasoningLayout.hidden, false, 'long reasoning should keep the generation bubble visible');
-    assert.ok(reasoningLayout.detailsOpen, 'thinking details should auto-open while reasoning streams');
+    assert.ok(reasoningLayout.detailsOpen, 'the view thinking control should open the current stream');
     assert.ok(reasoningLayout.text.includes('THINK-START-VISIBLE'), 'reasoning bubble should keep the start of a long thinking stream');
     assert.ok(reasoningLayout.text.includes('THINK-END-VISIBLE'), 'reasoning bubble should keep the end of a long thinking stream');
-    assert.ok(reasoningLayout.preScrolls, 'long thinking text should scroll inside the bubble instead of being clipped');
-    assert.ok(!reasoningLayout.preClipped, 'the thinking pre should stay inside the generation bubble');
-    assert.ok(reasoningLayout.expanded, 'opening a long thinking stream should expand the generation bubble');
+    assert.ok(reasoningLayout.preScrolls, 'long thinking text should scroll inside its reading area instead of being clipped');
+    assert.ok(!reasoningLayout.preClipped, 'the thinking pre should stay inside its reading area');
+    assert.strictEqual(reasoningLayout.expanded, !reasoningLayout.docked, 'only inline details should expand the floating bubble');
     assert.ok(reasoningLayout.outputBottom <= reasoningLayout.footerTop + 1, 'expanded thinking bubble should stay above the paper footer');
-    await page.click('[data-native-cancel-generation]');
+    await page.click('[data-native-reasoning-toggle]');
+    await page.click('[data-native-stop-generation]');
     await page.waitForFunction(() => {
       const output = document.querySelector('[data-native-generation-output]');
       const pre = document.querySelector('[data-native-reasoning-text]');
@@ -1072,7 +1102,8 @@ async function openNativeModelSettings(page) {
       summary: document.querySelector('[data-native-reasoning-summary]').textContent,
       discard: document.querySelector('[data-native-discard-generation]').textContent
     }));
-    assert.strictEqual(interrupted.title, '思考已中断');
+    assert.strictEqual(await page.locator('[data-native-reasoning]').evaluate((details) => details.open), false, 'cancellation must respect the user closing the details');
+    assert.strictEqual(interrupted.title, '生成已停止');
     assert.ok(interrupted.status.includes('已取消'), 'interrupted thinking should say the stream was cancelled');
     assert.ok(interrupted.summary.includes('已中断'), 'thinking summary should show the interrupted state');
     assert.strictEqual(interrupted.discard, '关闭');
@@ -1362,9 +1393,26 @@ async function openNativeModelSettings(page) {
     await page.waitForFunction(() => !document.querySelector('[data-prompt-manager-dialog]').open);
     await closeGenerationAdvanced(page);
 
+    // History shows the latest five records. Give these controls their own fresh
+    // record so earlier cancellation/rewrite cases cannot push the fixture out.
+    await openNativePanel(page, 'generate');
+    await page.fill('[data-native-beat-input]', 'History controls audit.');
+    await page.evaluate(() => {
+      window.__draftHarborGenerationStub = async (_prompt, onToken) => {
+        onToken(' Audit generated text.');
+      };
+    });
+    await page.click('[data-native-generate]');
+    await page.waitForFunction(() => {
+      const result = document.querySelector('[data-native-generation-result]');
+      return result && result.textContent.includes('Audit generated text.') && !nativeEditorState.generation.inProgress;
+    });
+    await page.click('[data-native-discard-generation]');
+    await page.waitForFunction(() => document.querySelector('[data-native-generation-output]').hidden);
+
     await openNativePanel(page, 'history');
-    await page.waitForFunction(() => document.querySelector('[data-native-generation-history]').textContent.includes('Retry and discard audit'));
-    const proseHistoryItem = page.locator('.desktop-native-history-item').filter({ hasText: 'Retry and discard audit' }).first();
+    await page.waitForFunction(() => document.querySelector('[data-native-generation-history]').textContent.includes('History controls audit'));
+    const proseHistoryItem = page.locator('.desktop-native-history-item').filter({ hasText: 'History controls audit' }).first();
     await proseHistoryItem.locator('[data-native-history-reuse]').click();
     await page.waitForFunction(() => document.querySelector('[data-native-generation-result]').textContent.length > 0);
 
@@ -1375,7 +1423,7 @@ async function openNativeModelSettings(page) {
     const clipboardBeforeFilter = await page.evaluate(() => window.__draftHarborAuditClipboard);
     assert.ok(clipboardBeforeFilter.includes('Audit generated text.'), 'copy should capture the generated text in audit clipboard');
 
-    const retryHistoryItem = page.locator('.desktop-native-history-item').filter({ hasText: 'Retry and discard audit' }).first();
+    const retryHistoryItem = page.locator('.desktop-native-history-item').filter({ hasText: 'History controls audit' }).first();
     const editorBeforeHistoryRetry = await page.locator('[data-native-scene-editor]').inputValue();
     const oldHistoryTextCountBefore = (editorBeforeHistoryRetry.match(/Audit generated text\./g) || []).length;
     await page.evaluate(() => {
@@ -1392,7 +1440,7 @@ async function openNativeModelSettings(page) {
     await retryHistoryItem.locator('[data-native-history-retry]').click();
     await page.waitForFunction(() => {
       const input = document.querySelector('[data-native-beat-input]');
-      return input && input.value === 'Retry and discard audit.';
+      return input && input.value === 'History controls audit.';
     });
     await page.waitForFunction(() => {
       const panel = document.querySelector('[data-native-panel="generate"]');
@@ -1404,7 +1452,7 @@ async function openNativeModelSettings(page) {
     });
     assert.strictEqual(await page.evaluate(() => window.__historyRetryGenerationCalls), 1, 'history retry should start one fresh generation');
     const retryPrompt = await page.evaluate(() => window.__lastHistoryRetryPrompt || '');
-    assert.ok(retryPrompt.includes('Retry and discard audit.'), 'history retry prompt should reuse the record beat');
+    assert.ok(retryPrompt.includes('History controls audit.'), 'history retry prompt should reuse the record beat');
     const editorAfterRetry = await page.locator('[data-native-scene-editor]').inputValue();
     const oldHistoryTextCountAfter = (editorAfterRetry.match(/Audit generated text\./g) || []).length;
     assert.strictEqual(oldHistoryTextCountAfter, oldHistoryTextCountBefore, 'history retry should not insert the old stored result again');

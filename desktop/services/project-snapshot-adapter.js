@@ -65,6 +65,7 @@ function projectToLegacySnapshot(project) {
 
   return {
     version: '3.0-project-directory',
+    writerRevision: project.writerRevision || '',
     exportedAt: new Date().toISOString(),
     filesystemSavedAt: project.updatedAt || new Date().toISOString(),
     filesystemSaveVersion: 1,

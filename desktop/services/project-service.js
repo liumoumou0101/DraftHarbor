@@ -16,11 +16,12 @@ async function createProject(dataRoot, input = {}) {
   };
 }
 
-async function saveProject(dataRoot, project) {
-  const result = await projectStore.saveProject(dataRoot, project);
+async function saveProject(dataRoot, project, options = {}) {
+  const result = await projectStore.saveProject(dataRoot, project, options);
   return {
     ok: true,
     project: result.project,
+    writerRevision: result.writerRevision || result.project.writerRevision,
     projectPath: result.projectPath
   };
 }

@@ -15,6 +15,7 @@ const exePath = process.env.DRAFTHARBOR_PACKAGED_EXE || path.join(root, 'release
   try {
     electronApp = await electron.launch({
       executablePath: exePath,
+      args: [`--user-data-dir=${path.join(dataRoot, 'profile')}`],
       env: {
         ...process.env,
         DRAFTHARBOR_DATA_ROOT: dataRoot
@@ -26,6 +27,10 @@ const exePath = process.env.DRAFTHARBOR_PACKAGED_EXE || path.join(root, 'release
     assert.ok(pageUrl.startsWith('draftharbor://app/desktop.html'), `loaded URL should start with draftharbor://app/desktop.html, got: ${pageUrl}`);
 
     await window.waitForSelector('#desktop-root', { timeout: 30000 });
+    await window.waitForSelector('[data-workshop-mode="agent"]', { state: 'attached', timeout: 30000 });
+
+    const profilePath = await electronApp.evaluate(({ app }) => app.getPath('userData'));
+    assert.strictEqual(path.resolve(profilePath), path.join(dataRoot, 'profile'), 'packaged smoke must use an isolated browser profile');
 
     const listBefore = await window.evaluate(async () => {
       const response = await fetch('/api/list-projects');

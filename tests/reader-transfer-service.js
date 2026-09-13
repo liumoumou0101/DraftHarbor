@@ -106,7 +106,7 @@ function externalTransfer(revisionInput) {
       currentSceneId: 'scene-1',
       updatedAt: '2026-07-16T10:00:00.000Z'
     };
-    await projectStore.saveProject(dataRoot, project);
+    project.writerRevision = (await projectStore.saveProject(dataRoot, project)).writerRevision;
     const projection = ReaderDocument.projectToReaderDocumentV2(project, { digest: readerStore.sha256 });
     const projectRevision = projection.revisions[0];
     const projectLocator = {

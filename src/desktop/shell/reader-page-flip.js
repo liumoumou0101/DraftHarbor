@@ -194,7 +194,7 @@
         const chapterId = readerState.activeChapterId;
         const outgoingDeck = captureReaderChapterPageTurn();
         if (readerState.apiMode) {
-            await global.navigateReaderWorkspaceChapter(direction);
+            if (await global.navigateReaderWorkspaceChapter(direction) === false) return false;
             if (readerState.activeChapterId === chapterId) return false;
         } else {
             const chapters = readerState.document && readerState.document.chapters || [];

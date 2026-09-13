@@ -57,33 +57,22 @@ function applyPatch(entry, patch) {
 async function applyOperations(dataRoot, projectId, operations, options = {}) {
   await ensureProject(dataRoot, projectId);
   const settings = CompendiumAgentPolicy.normalizeCompendiumAgentSettings(options.agentSettings);
-  const entries = await compendiumStore.listEntries(dataRoot, projectId);
-  const validation = CompendiumAgentPolicy.validateOperationsAgainstEntries(operations, entries, {
-    maxOperations: settings.maxCardsPerRun
+  return compendiumStore.withEntriesTransaction(dataRoot, projectId, async (transaction) => {
+    const validation = CompendiumAgentPolicy.validateOperationsAgainstEntries(operations, transaction.entries, {
+      maxOperations: settings.maxCardsPerRun
+    });
+    if (!validation.ok) {
+      const ErrorType = validation.errors.every((error) => /entry has changed|entry does not exist/.test(error))
+        ? compendiumStore.CompendiumConflictError : Error;
+      throw new ErrorType(`invalid compendium agent operations: ${validation.errors.join('; ')}`);
+    }
+    const backup = typeof options.beforeWrite === 'function'
+      ? await options.beforeWrite({ projectId, entryIds: validation.operations.map((operation) => operation.entryId) })
+      : null;
+    const entryMap = new Map(transaction.entries.map((entry) => [entry.id, entry]));
+    const savedEntries = validation.operations.map((operation) => transaction.saveEntry(applyPatch(entryMap.get(operation.entryId), operation.patch)));
+    return { ok: true, entries: savedEntries, appliedCount: validation.operations.length, backup };
   });
-  if (!validation.ok) throw new Error(`invalid compendium agent operations: ${validation.errors.join('; ')}`);
-
-  const operationMap = new Map(validation.operations.map((operation) => [operation.entryId, operation]));
-  const nextEntries = entries.map((entry) => {
-    const operation = operationMap.get(entry.id);
-    return operation ? applyPatch(entry, operation.patch) : entry;
-  });
-
-  const backup = typeof options.beforeWrite === 'function'
-    ? await options.beforeWrite({ projectId, entryIds: validation.operations.map((operation) => operation.entryId) })
-    : null;
-  const savedEntries = await compendiumStore.writeEntries(
-    require('../storage/library-paths').projectDir(dataRoot, projectId),
-    nextEntries,
-    projectId
-  );
-  const savedMap = new Map(savedEntries.map((entry) => [entry.id, entry]));
-  return {
-    ok: true,
-    entries: validation.operations.map((operation) => savedMap.get(operation.entryId)),
-    appliedCount: validation.operations.length,
-    backup
-  };
 }
 
 module.exports = {

@@ -77,6 +77,10 @@
                                                     <span class="desktop-native-tool-mark" aria-hidden="true">「」</span>
                                                     <span class="desktop-native-tool-label">符号</span>
                                                 </button>
+                                                <button class="desktop-secondary-action desktop-native-toolbar-button" type="button" role="menuitem" data-native-format-manuscript title="一键整理段落、标点和段首缩进">
+                                                    <span class="desktop-native-tool-mark" aria-hidden="true">段</span>
+                                                    <span class="desktop-native-tool-label">一键排版</span>
+                                                </button>
                                                 <button class="desktop-secondary-action desktop-native-toolbar-button" type="button" role="menuitem" data-native-toggle-typography title="排版设置">
                                                     <span class="desktop-native-tool-mark" aria-hidden="true">Aa</span>
                                                     <span class="desktop-native-tool-label">排版</span>
@@ -114,6 +118,8 @@
                         </header>
                         <div class="desktop-native-editor-body">
                             <div class="desktop-native-typography" data-native-typography hidden>
+                                <button class="desktop-secondary-action" type="button" data-native-format-manuscript title="整理段落、全角标点和段首缩进；有选区则只处理选区">一键排版正文</button>
+                                <p class="desktop-native-typography-format-hint">整理段首缩进、标点和多余空行。有选区则只处理选区。</p>
                                 <label>
                                     字号
                                     <input type="range" data-native-editor-font-size min="15" max="24" step="1">
@@ -179,6 +185,7 @@
                                 <button type="button" role="menuitem" data-native-context-action="generate-summary">生成场景摘要</button>
                                 <button type="button" role="menuitem" data-native-context-action="view-summary">查看场景摘要</button>
                                 <div class="desktop-native-context-menu-separator" role="separator"></div>
+                                <button type="button" role="menuitem" data-native-context-action="format-manuscript">一键排版</button>
                                 <button type="button" role="menuitem" data-native-context-action="save">保存当前场景</button>
                                 <button type="button" role="menuitem" data-native-context-action="read-aloud">朗读当前场景</button>
                             </div>
@@ -196,11 +203,22 @@
                                     </div>
                                 </div>
                                 <div class="desktop-native-generation-result" data-native-generation-result></div>
-                                <details data-native-reasoning hidden>
-                                    <summary data-native-reasoning-summary>推理/思考</summary>
-                                    <pre data-native-reasoning-text tabindex="0"></pre>
-                                </details>
-                                <div class="desktop-native-generation-actions">
+                                <div class="desktop-native-generation-stream-actions">
+                                    <button class="desktop-secondary-action" type="button" data-native-reasoning-toggle aria-controls="native-reasoning-details" aria-expanded="false" hidden>查看思考</button>
+                                    <button class="desktop-secondary-action" type="button" data-native-stop-generation hidden>停止生成</button>
+                                </div>
+                                <div data-native-reasoning-inline-host>
+                                    <details class="desktop-native-reasoning" id="native-reasoning-details" data-native-reasoning hidden>
+                                        <summary data-native-reasoning-summary>思考过程</summary>
+                                        <pre data-native-reasoning-text tabindex="0" aria-label="思考过程"></pre>
+                                        <div class="desktop-native-reasoning-tools">
+                                            <button class="desktop-secondary-action" type="button" data-native-reasoning-copy>复制思考</button>
+                                            <button class="desktop-secondary-action" type="button" data-native-reasoning-latest>回到最新</button>
+                                            <span data-native-reasoning-feedback role="status"></span>
+                                        </div>
+                                    </details>
+                                </div>
+                                <div class="desktop-native-generation-actions" data-native-generation-confirm-actions>
                                     <button class="desktop-primary-action" type="button" data-native-accept-generation>保留</button>
                                     <button class="desktop-secondary-action" type="button" data-native-retry-generation>重试</button>
                                     <button class="desktop-secondary-action" type="button" data-native-discard-generation>撤回</button>
@@ -229,6 +247,7 @@
                             <button type="button" data-native-panel-tab="search" data-native-panel-group="document">查找</button>
                             <button type="button" data-native-panel-tab="history" data-native-panel-group="document">历史</button>
                         </div>
+                        <div class="desktop-native-reasoning-dock" data-native-reasoning-dock hidden></div>
                         <section class="desktop-native-assistant-panel is-active" data-native-panel="generate">
                             <div class="desktop-native-generation" data-native-generation>
                                 <div class="desktop-native-copilot-brief">
@@ -600,15 +619,17 @@
                     <dialog class="desktop-native-prompt-dialog desktop-native-summary-dialog" data-native-summary-dialog>
                         <header class="desktop-native-summary-dialog-header">
                             <div>
-                                <p class="desktop-section-kicker">Scene Summary</p>
+                                <p class="desktop-section-kicker">前情摘要</p>
                                 <h2 data-native-summary-dialog-title>场景摘要</h2>
                             </div>
                             <span data-native-summary-dialog-meta>未保存</span>
                         </header>
-                        <textarea data-native-summary-dialog-content readonly aria-label="摘要内容"></textarea>
+                        <p class="desktop-native-summary-dialog-hint">保存后，写下一场会自动带上这篇摘要作前情。资料库的「摘要」页会留下一张卡片，默认提及时注入。</p>
+                        <textarea data-native-summary-dialog-content aria-label="摘要内容"></textarea>
                         <div class="desktop-native-generation-actions">
+                            <button class="desktop-primary-action" type="button" data-native-summary-dialog-save>保存摘要</button>
                             <button class="desktop-secondary-action" type="button" data-native-summary-dialog-copy>复制摘要</button>
-                            <button class="desktop-primary-action" type="button" data-native-summary-dialog-edit>前往编辑</button>
+                            <button class="desktop-secondary-action" type="button" data-native-summary-dialog-edit>前往编辑</button>
                             <button class="desktop-secondary-action" type="button" data-native-summary-dialog-close>关闭</button>
                         </div>
                     </dialog>

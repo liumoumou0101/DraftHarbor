@@ -22,6 +22,13 @@ function revision() {
   }, { digest: readerStore.sha256 });
 }
 
+function confirmedRequest(preview, extra = {}) {
+  return {
+    ...preview.request, confirmed: true, previewToken: preview.previewToken,
+    expectedTargetUpdatedAt: preview.targetProject && preview.targetProject.updatedAt, ...extra
+  };
+}
+
 (async () => {
   const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-reader-writer-'));
   try {
@@ -51,7 +58,10 @@ function revision() {
     const targetSceneId = createdTarget.project.scenes[0].id;
     await projectService.saveProject(dataRoot, {
       ...createdTarget.project,
-      scenes: createdTarget.project.scenes.map((scene) => scene.id === targetSceneId ? { ...scene, content: '原正文。' } : scene)
+      scenes: [
+        ...createdTarget.project.scenes.map((scene) => scene.id === targetSceneId ? { ...scene, content: '原正文。' } : scene),
+        { ...createdTarget.project.scenes[0], id: 'second-target-scene', title: '另一目标', content: '另一场景必须保留。', order: 1 }
+      ]
     });
     const backups = [];
     const writerService = createReaderWriterTransferService({
@@ -76,22 +86,31 @@ function revision() {
       targetProjectId: 'writer-target', targetSceneId, expectedTargetUpdatedAt: preview.targetProject.updatedAt
     }), /explicit confirmation/);
     assert.deepStrictEqual((await projectService.openProject(dataRoot, 'writer-target')).project, beforeConfirm.project, 'preview without confirmation must not change disk');
+    for (const changed of [
+      { intent: 'replace', targetSceneId: 'second-target-scene' },
+      { intent: 'replace' }, { targetSceneId: 'second-target-scene' },
+      { targetProjectId: 'another-project' }, { targetChapterId: 'another-chapter' },
+      { envelopeId: 'writer-new-scenes-envelope' }, { applicationId: 'another-application' },
+      { expectedTargetUpdatedAt: 'another-version' }, { previewToken: '' },
+      { previewToken: '0'.repeat(64) }
+    ]) {
+      await assert.rejects(() => writerService.apply(dataRoot, confirmedRequest(preview, changed)), /preview identity conflict/);
+    }
+    assert.deepStrictEqual((await projectService.openProject(dataRoot, 'writer-target')).project, beforeConfirm.project,
+      'an append preview must not authorize another intent, scene, project, or version');
+    assert.strictEqual(backups.length, 0, 'mismatched preview requests must be rejected before backing up or writing');
 
-    const applied = await writerService.apply(dataRoot, {
-      envelopeId: 'writer-append-envelope', applicationId: 'append-application', intent: 'append', confirmed: true,
-      targetProjectId: 'writer-target', targetSceneId, expectedTargetUpdatedAt: preview.targetProject.updatedAt,
+    const applied = await writerService.apply(dataRoot, confirmedRequest(preview, {
       appliedAt: '2026-07-16T13:10:00.000Z'
-    });
+    }));
     assert.strictEqual(applied.idempotent, false);
     const afterAppend = (await projectService.openProject(dataRoot, 'writer-target')).project;
     assert.strictEqual(afterAppend.scenes.find((scene) => scene.id === targetSceneId).content, '原正文。\n\n导入正文一。');
     assert.strictEqual(afterAppend.scenes.find((scene) => scene.id === targetSceneId).sourceReferences[0].envelopeId, 'writer-append-envelope');
     assert.strictEqual(backups.length, 1, 'formal update must create one backup before writing');
-    const retried = await writerService.apply(dataRoot, {
-      envelopeId: 'writer-append-envelope', applicationId: 'append-application', intent: 'append', confirmed: true,
-      targetProjectId: 'writer-target', targetSceneId, expectedTargetUpdatedAt: afterAppend.updatedAt,
+    const retried = await writerService.apply(dataRoot, confirmedRequest(preview, {
       appliedAt: '2026-07-16T13:11:00.000Z'
-    });
+    }));
     assert.strictEqual(retried.idempotent, true);
     assert.strictEqual((await projectService.openProject(dataRoot, 'writer-target')).project.scenes.find((scene) => scene.id === targetSceneId).content, '原正文。\n\n导入正文一。', 'retry must not append twice');
     assert.strictEqual(backups.length, 1, 'idempotent retry must not create another backup');
@@ -99,11 +118,9 @@ function revision() {
     const scenePreview = await writerService.preview(dataRoot, {
       envelopeId: 'writer-new-scenes-envelope', applicationId: 'scene-application', intent: 'new-scenes', targetProjectId: 'writer-target'
     });
-    const sceneApplied = await writerService.apply(dataRoot, {
-      envelopeId: 'writer-new-scenes-envelope', applicationId: 'scene-application', intent: 'new-scenes', confirmed: true,
-      targetProjectId: 'writer-target', targetChapterId: scenePreview.targetChapterId, expectedTargetUpdatedAt: scenePreview.targetProject.updatedAt,
+    const sceneApplied = await writerService.apply(dataRoot, confirmedRequest(scenePreview, {
       appliedAt: '2026-07-16T13:20:00.000Z'
-    });
+    }));
     assert.strictEqual(sceneApplied.targetSceneIds.length, 2, 'chapter sections should become two deterministic scenes');
     const afterScenes = (await projectService.openProject(dataRoot, 'writer-target')).project;
     assert.deepStrictEqual(sceneApplied.targetSceneIds.map((id) => afterScenes.scenes.find((scene) => scene.id === id).content), ['导入正文一。', '导入正文二。']);
@@ -112,21 +129,19 @@ function revision() {
       envelopeId: 'writer-conflict-envelope', applicationId: 'conflict-application', intent: 'replace', targetProjectId: 'writer-target', targetSceneId
     });
     await projectService.saveProject(dataRoot, { ...afterScenes, description: '并发修改', updatedAt: '2026-07-16T13:30:00.000Z' });
-    await assert.rejects(() => writerService.apply(dataRoot, {
-      envelopeId: 'writer-conflict-envelope', applicationId: 'conflict-application', intent: 'replace', confirmed: true,
-      targetProjectId: 'writer-target', targetSceneId, expectedTargetUpdatedAt: stalePreview.targetProject.updatedAt
-    }), /changed after preview/);
+    await assert.rejects(() => writerService.apply(dataRoot, confirmedRequest(stalePreview)), /changed after preview/);
 
-    const newProject = await writerService.apply(dataRoot, {
-      envelopeId: 'writer-new-project-envelope', applicationId: 'new-project-application', intent: 'new-project', confirmed: true,
-      newProjectId: 'reader-imported-project', newProjectTitle: '导入新项目', appliedAt: '2026-07-16T13:40:00.000Z'
+    const newProjectPreview = await writerService.preview(dataRoot, {
+      envelopeId: 'writer-new-project-envelope', applicationId: 'new-project-application', intent: 'new-project',
+      newProjectId: 'reader-imported-project', newProjectTitle: '导入新项目'
     });
+    for (const changed of [{ newProjectTitle: '未经预览的新标题' }, { newProjectId: 'another-imported-project' }]) {
+      await assert.rejects(() => writerService.apply(dataRoot, confirmedRequest(newProjectPreview, changed)), /preview identity conflict/);
+    }
+    const newProject = await writerService.apply(dataRoot, confirmedRequest(newProjectPreview, { appliedAt: '2026-07-16T13:40:00.000Z' }));
     assert.strictEqual(newProject.targetSceneIds.length, 2);
     assert.deepStrictEqual((await projectService.openProject(dataRoot, 'reader-imported-project')).project.scenes.map((scene) => scene.content), ['导入正文一。', '导入正文二。']);
-    const newProjectRetry = await writerService.apply(dataRoot, {
-      envelopeId: 'writer-new-project-envelope', applicationId: 'new-project-application', intent: 'new-project', confirmed: true,
-      newProjectId: 'reader-imported-project', newProjectTitle: '导入新项目', appliedAt: '2026-07-16T13:41:00.000Z'
-    });
+    const newProjectRetry = await writerService.apply(dataRoot, confirmedRequest(newProjectPreview, { appliedAt: '2026-07-16T13:41:00.000Z' }));
     assert.strictEqual(newProjectRetry.idempotent, true);
 
     const failingWriterService = createReaderWriterTransferService({
@@ -134,10 +149,11 @@ function revision() {
       projectService: { ...projectService, createProject: async () => { throw new Error('forced project create failure'); } },
       createBackup: async () => { throw new Error('backup should not run for a new project'); }
     });
-    await assert.rejects(() => failingWriterService.apply(dataRoot, {
-      envelopeId: 'writer-failed-new-project-envelope', applicationId: 'failed-new-project-application', intent: 'new-project', confirmed: true,
+    const failingPreview = await failingWriterService.preview(dataRoot, {
+      envelopeId: 'writer-failed-new-project-envelope', applicationId: 'failed-new-project-application', intent: 'new-project',
       newProjectId: 'failed-reader-project', newProjectTitle: '失败项目'
-    }), /forced project create failure/);
+    });
+    await assert.rejects(() => failingWriterService.apply(dataRoot, confirmedRequest(failingPreview)), /forced project create failure/);
     await assert.rejects(() => projectService.openProject(dataRoot, 'failed-reader-project'), /ENOENT/, 'failed import must not leave a partial project');
 
     await transferService.createTransferFromRange(dataRoot, {
@@ -154,6 +170,8 @@ function revision() {
       scenes: beforeApproximate.scenes.filter((scene) => scene.id !== targetSceneId),
       updatedAt: '2026-07-16T13:46:00.000Z'
     });
+    await assert.rejects(() => writerService.apply(dataRoot, confirmedRequest(exactLocation)), /changed after preview/,
+      'an exact-location preview must not silently become approximate after the source scene is removed');
     const approximateLocation = await writerService.preview(dataRoot, {
       envelopeId: 'writer-locate-envelope', applicationId: 'locate-application', intent: 'locate', targetProjectId: 'writer-target'
     });

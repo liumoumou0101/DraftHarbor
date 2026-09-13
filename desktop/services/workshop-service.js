@@ -1,6 +1,8 @@
 const workshopStore = require('../storage/workshop-store');
 const projectService = require('./project-service');
 const WorkshopSchema = require('../../src/core/workshop/workshop-schema');
+const { withProjectWriteLock } = require('../storage/project-write-lock');
+const { projectDir } = require('../storage/library-paths');
 
 async function ensureProject(dataRoot, projectId) {
   if (!projectId) throw new Error('projectId is required');
@@ -25,6 +27,7 @@ async function saveSession(dataRoot, projectId, sessionInput = {}) {
 
 async function appendMessage(dataRoot, projectId, sessionId, messageInput = {}) {
   await ensureProject(dataRoot, projectId);
+  return withProjectWriteLock(projectDir(dataRoot, projectId), async () => {
   const sessions = await workshopStore.listSessions(dataRoot, projectId);
   let session = sessions.find((item) => item.id === sessionId);
   if (!session) {
@@ -40,6 +43,7 @@ async function appendMessage(dataRoot, projectId, sessionId, messageInput = {}) 
     ok: true,
     session: await workshopStore.saveSession(dataRoot, projectId, session)
   };
+  });
 }
 
 async function deleteSession(dataRoot, projectId, sessionId) {

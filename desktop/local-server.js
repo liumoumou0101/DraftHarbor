@@ -16,6 +16,8 @@ try {
 }
 const promptService = require('./services/prompt-service');
 const workshopService = require('./services/workshop-service');
+const { createWorkshopEditService } = require('./services/workshop-edit-service');
+const { createWorkshopAgentService } = require('./services/workshop-agent-service');
 const projectMigrationService = require('./services/project-migration-service');
 const workflowService = require('./services/workflow-service');
 const workflowTransferService = require('./services/workflow-transfer-service');
@@ -689,7 +691,9 @@ const handleKnowledgeApi = createKnowledgeController({
   compendiumService, compendiumAgentService, compendiumAgentRunnerService, compendiumAgentQaService, readerCompendiumTransferService, projectAssetQueryService, promptService, readJsonPayload, jsonResponse,
   readSettings, createPreRestoreBackup
 });
-const handleWorkshopApi = createWorkshopController({ workshopService, readJsonPayload, jsonResponse });
+const workshopEditService = createWorkshopEditService({ createBackup: createPreRestoreBackup });
+const workshopAgentService = createWorkshopAgentService({ settingsService, workshopService, projectService, compendiumService, workshopEditService });
+const handleWorkshopApi = createWorkshopController({ workshopService, workshopAgentService, projectService, projectToLegacySnapshot, readJsonPayload, jsonResponse });
 const workflowLockService = require('./services/workflow-lock-service');
 const readerWorkflowTransferService = createReaderWorkflowTransferService({ readerTransferService, projectService, workflowGuidedService, workflowRewriteGuidedService }); const handleWorkflowApi = createWorkflowController({ workflowService, workflowTransferService, workflowGuidedService, workflowCreationGuidedService, workflowRewriteGuidedService, workflowVariantService, workflowTemplateService, readerWorkflowTransferService, workflowLockService, projectService, createPreRestoreBackup, readJsonPayload, jsonResponse });
 const handleReaderApi = createReaderController({

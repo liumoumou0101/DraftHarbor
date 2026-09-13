@@ -16,6 +16,10 @@
                     <header class="desktop-workshop-chat-header">
                         <div>
                             <h2 data-workshop-title>选择或新建对话</h2>
+                            <div class="desktop-workshop-mode" role="group" aria-label="讨论模式">
+                                <button type="button" data-workshop-mode="chat" aria-pressed="true">普通讨论</button>
+                                <button type="button" data-workshop-mode="agent" aria-pressed="false">项目助手</button>
+                            </div>
                         </div>
                         <div class="desktop-workshop-chat-actions">
                             <label class="desktop-workshop-template">
@@ -56,9 +60,11 @@
                         <button class="desktop-workshop-convert-action" type="button" data-workshop-insert-draft disabled>插入正文</button>
                     </div>
                     <div class="desktop-workshop-composer">
+                        <p class="desktop-workshop-mode-help" data-workshop-mode-help>讨论人物与情节，回复由你决定如何使用。</p>
                         <div class="desktop-workshop-input-row">
                             <textarea data-workshop-input placeholder="想清楚再写。可用 @[资料] 或 #[场景] 引用上下文。"></textarea>
                             <button class="desktop-primary-action" type="button" data-workshop-send>发送</button>
+                            <button class="desktop-secondary-action" type="button" data-workshop-stop hidden>停止</button>
                         </div>
                     </div>
                 </section>

@@ -3,6 +3,7 @@
         if (typeof bindNativeSidebarResize === 'function') bindNativeSidebarResize();
         if (typeof bindNativeGlobalPrompt === 'function') bindNativeGlobalPrompt();
         if (typeof bindNativeWriterChrome === 'function') bindNativeWriterChrome();
+        if (typeof bindNativeManuscriptFormat === 'function') bindNativeManuscriptFormat();
         if (typeof loadNativeContextBudgets === 'function') loadNativeContextBudgets();
         if (typeof window.bindNativeGenerationOutputDrag === 'function') window.bindNativeGenerationOutputDrag();
         if (typeof window.bindNativeGenerationLayer === 'function') window.bindNativeGenerationLayer();
@@ -211,6 +212,8 @@
         if (elements.summaryDialogClose) elements.summaryDialogClose.addEventListener('click', closeNativeSummaryDialog);
         if (elements.summaryDialogCopy) elements.summaryDialogCopy.addEventListener('click', copyNativeSummaryDialog);
         if (elements.summaryDialogEdit) elements.summaryDialogEdit.addEventListener('click', editNativeSummaryDialog);
+        const summaryDialogSave = document.querySelector('[data-native-summary-dialog-save]');
+        if (summaryDialogSave) summaryDialogSave.addEventListener('click', () => { saveNativeSummaryDialog(); });
         if (elements.summaryDialog) elements.summaryDialog.addEventListener('click', (event) => {
             if (event.target === elements.summaryDialog) closeNativeSummaryDialog();
         });
@@ -538,6 +541,8 @@
                     startNativeRewrite();
                 } else if (nativeEditorState.generation.task === 'regenerate-selection') {
                     startNativeRegenerateSelection();
+                } else if (nativeEditorState.generation.task === 'summary') {
+                    generateNativeSummary(nativeEditorState.generation.summaryScope || 'scene');
                 } else if (nativeEditorState.generation.genTask === 'summary') {
                     generateNativeSummary('scene');
                 } else {
@@ -575,6 +580,8 @@
                     generateNativeSummary('scene');
                 } else if (key === 'view-summary') {
                     openNativeSummaryDialog('scene');
+                } else if (key === 'format-manuscript') {
+                    applyNativeManuscriptFormat();
                 } else if (key === 'save') {
                     saveNativeScene();
                 } else if (key === 'read-aloud') {

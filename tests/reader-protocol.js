@@ -132,9 +132,17 @@ async function jsonRequest(handler, pathname, method = 'GET', body) {
     });
     assert.strictEqual(writerPreview.response.status, 200);
     assert.strictEqual((await projectStore.openProject(dataRoot, 'protocol-writer-target')).scenes.length, 1, 'writer preview must not change project disk');
+    const changedWriterIntent = await jsonRequest(handler, '/api/writer/reader-transfer/apply', 'POST', {
+      ...writerPreview.body.preview.request, intent: 'replace', targetSceneId: writerTarget.project.scenes[0].id,
+      confirmed: true, previewToken: writerPreview.body.preview.previewToken,
+      expectedTargetUpdatedAt: writerPreview.body.preview.targetProject.updatedAt
+    });
+    assert.strictEqual(changedWriterIntent.response.status, 409, 'an old preview cannot authorize another HTTP apply intent or target');
+    assert.strictEqual((await projectStore.openProject(dataRoot, 'protocol-writer-target')).scenes.length, 1);
     const writerApplied = await jsonRequest(handler, '/api/writer/reader-transfer/apply', 'POST', {
       envelopeId: 'protocol-range-envelope', applicationId: 'protocol-writer-application', intent: 'new-scenes', confirmed: true,
       targetProjectId: 'protocol-writer-target', targetChapterId: writerTarget.project.chapters[0].id,
+      previewToken: writerPreview.body.preview.previewToken,
       expectedTargetUpdatedAt: writerPreview.body.preview.targetProject.updatedAt,
       selectedItemIds: [writerPreview.body.preview.items[0].itemId], appliedAt: '2026-07-15T09:22:00.000Z'
     });
@@ -147,6 +155,7 @@ async function jsonRequest(handler, pathname, method = 'GET', body) {
     const writerRetry = await jsonRequest(handler, '/api/writer/reader-transfer/apply', 'POST', {
       envelopeId: 'protocol-range-envelope', applicationId: 'protocol-writer-application', intent: 'new-scenes', confirmed: true,
       targetProjectId: 'protocol-writer-target', targetChapterId: writerTarget.project.chapters[0].id,
+      previewToken: writerPreview.body.preview.previewToken,
       expectedTargetUpdatedAt: writerPreview.body.preview.targetProject.updatedAt,
       selectedItemIds: [writerPreview.body.preview.items[0].itemId], appliedAt: '2026-07-15T09:22:00.000Z'
     });

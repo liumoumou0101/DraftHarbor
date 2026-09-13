@@ -1,10 +1,35 @@
 const fs = require('fs/promises');
 const path = require('path');
+const crypto = require('crypto');
 
 const { normalizeProject } = require('../../src/core/project/project-normalize');
 const { projectStats } = require('../../src/core/project/project-stats');
 const { writeFileAtomic, writeJsonAtomic } = require('./atomic-write');
 const paths = require('./library-paths');
+const { withProjectWriteLock } = require('./project-write-lock');
+
+class ProjectConflictError extends Error {
+  constructor(message = 'Project has changed; reload it before saving') {
+    super(message);
+    this.name = 'ProjectConflictError';
+    this.statusCode = 409;
+  }
+}
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().filter((key) => value[key] !== undefined)
+      .map((key) => [key, stableValue(value[key])]));
+  }
+  return value;
+}
+
+function revisionForWriter(project) {
+  return crypto.createHash('sha256').update(JSON.stringify(stableValue({
+    ...manifestFromProject(project), chapters: project.chapters, scenes: project.scenes
+  }))).digest('hex');
+}
 
 async function pathExists(target) {
   try {
@@ -27,6 +52,7 @@ function manifestFromProject(project) {
   delete manifest.prompts;
   delete manifest.workshopSessions;
   delete manifest.workflowRuns;
+  delete manifest.writerRevision;
   return {
     ...manifest,
     chapterOrder: project.chapterOrder || (project.chapters || []).map((chapter) => chapter.id),
@@ -52,8 +78,30 @@ async function pruneOwnedProjectFiles(directory, allowedNames) {
   }
 }
 
-async function writeProject(projectPath, projectInput) {
+async function writeProjectUnlocked(projectPath, projectInput, options) {
   const project = normalizeProject(projectInput);
+  if (options.expectedWriterRevision !== undefined) {
+    let current;
+    try { current = await readProjectUnlocked(projectPath); } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    if (options.expectedWriterRevision !== (current ? current.writerRevision : '')) throw new ProjectConflictError();
+  }
+  const dedicated = [
+    ['compendium', path.join(projectPath, 'compendium', 'entries.json')],
+    ['prompts', path.join(projectPath, 'prompts', 'prompts.json')],
+    ['workshopSessions', path.join(projectPath, 'workshop', 'sessions.json')]
+  ];
+  const dedicatedWrites = [];
+  for (const [field, target] of dedicated) {
+    if (options.replaceDedicatedStores === true) dedicatedWrites.push([target, project[field] || []]);
+    else {
+      try { project[field] = await readJson(target); } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+        dedicatedWrites.push([target, project[field] || []]);
+      }
+    }
+  }
   await ensureProjectDirs(projectPath);
   await writeJsonAtomic(paths.manifestPath(projectPath), manifestFromProject(project));
 
@@ -73,16 +121,24 @@ async function writeProject(projectPath, projectInput) {
     path.basename(paths.sceneMarkdownPath(projectPath, scene.id))
   ])));
 
-  await writeJsonAtomic(path.join(projectPath, 'compendium', 'entries.json'), project.compendium || []);
-  await writeJsonAtomic(path.join(projectPath, 'prompts', 'prompts.json'), project.prompts || []);
-  await writeJsonAtomic(path.join(projectPath, 'workshop', 'sessions.json'), project.workshopSessions || []);
+  for (const [target, value] of dedicatedWrites) await writeJsonAtomic(target, value);
   // Workflow files are owned by their dedicated Store. A project-wide save may
   // carry an old in-memory workflowRuns snapshot, but must never overwrite it.
 
+  project.writerRevision = revisionForWriter(project);
   return {
     project,
+    writerRevision: project.writerRevision,
     projectPath
   };
+}
+
+async function writeProject(projectPath, projectInput, options = {}) {
+  const effectiveOptions = { ...options };
+  if (effectiveOptions.expectedWriterRevision === undefined && options.replaceDedicatedStores !== true && projectInput.writerRevision !== undefined) {
+    effectiveOptions.expectedWriterRevision = projectInput.writerRevision;
+  }
+  return withProjectWriteLock(projectPath, () => writeProjectUnlocked(projectPath, projectInput, effectiveOptions));
 }
 
 async function readDirJsonFiles(dir) {
@@ -124,7 +180,7 @@ async function readScenes(projectPath) {
   return scenes;
 }
 
-async function readProject(projectPath) {
+async function readProjectUnlocked(projectPath) {
   const manifest = await readJson(paths.manifestPath(projectPath));
   const chapters = await readDirJsonFiles(paths.chaptersDir(projectPath));
   const scenes = await readScenes(projectPath);
@@ -138,7 +194,7 @@ async function readProject(projectPath) {
   try { workshopSessions = await readJson(path.join(projectPath, 'workshop', 'sessions.json')); } catch { workshopSessions = []; }
   try { workflowRuns = await readJson(path.join(projectPath, 'workflows', 'runs.json')); } catch { workflowRuns = []; }
 
-  return normalizeProject({
+  const project = normalizeProject({
     ...manifest,
     chapters,
     scenes,
@@ -147,20 +203,26 @@ async function readProject(projectPath) {
     workshopSessions,
     workflowRuns
   });
+  project.writerRevision = revisionForWriter(project);
+  return project;
+}
+
+async function readProject(projectPath) {
+  return withProjectWriteLock(projectPath, () => readProjectUnlocked(projectPath));
 }
 
 async function createProject(dataRoot, projectInput) {
   const project = normalizeProject(projectInput);
   const projectPath = paths.projectDir(dataRoot, project.id);
-  if (await pathExists(projectPath)) {
-    throw new Error(`Project already exists: ${project.id}`);
-  }
-  return writeProject(projectPath, project);
+  return withProjectWriteLock(projectPath, async () => {
+    if (await pathExists(projectPath)) throw new Error(`Project already exists: ${project.id}`);
+    return writeProjectUnlocked(projectPath, project, {});
+  });
 }
 
-async function saveProject(dataRoot, projectInput) {
+async function saveProject(dataRoot, projectInput, options = {}) {
   const project = normalizeProject(projectInput);
-  return writeProject(paths.projectDir(dataRoot, project.id), project);
+  return writeProject(paths.projectDir(dataRoot, project.id), { ...project, writerRevision: projectInput.writerRevision }, options);
 }
 
 async function openProject(dataRoot, projectId) {
@@ -218,6 +280,8 @@ async function listProjects(dataRoot) {
 }
 
 module.exports = {
+  ProjectConflictError,
+  revisionForWriter,
   createProject,
   saveProject,
   openProject,

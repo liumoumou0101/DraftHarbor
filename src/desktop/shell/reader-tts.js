@@ -229,8 +229,7 @@
         if (!next || typeof loadReaderWorkspaceChapter !== 'function') return false;
         readerState.tts.internalNavigation = true;
         try {
-            await loadReaderWorkspaceChapter(next.chapterId);
-            return true;
+            return await loadReaderWorkspaceChapter(next.chapterId) !== false;
         } finally {
             readerState.tts.internalNavigation = false;
         }

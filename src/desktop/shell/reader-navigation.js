@@ -46,8 +46,7 @@
             excerpt.textContent = result.excerpt;
             button.append(title, excerpt);
             button.addEventListener('click', async () => {
-                await navigateReaderToLocator(result.locator, { highlight: true, historySource: 'search', historyLabel: result.excerpt });
-                setReaderDrawer('');
+                if (await navigateReaderToLocator(result.locator, { highlight: true, historySource: 'search', historyLabel: result.excerpt })) setReaderDrawer('');
             });
             elements.searchResults.appendChild(button);
         });
@@ -73,6 +72,11 @@
         }
         cancelReaderSearch({ silent: true });
         const requestId = ++readerState.searchRequestId;
+        const documentId = readerState.activeDocumentId;
+        const revisionId = readerState.activeRevisionId;
+        const contents = readerState.contents.slice();
+        const isCurrent = () => requestId === readerState.searchRequestId
+            && documentId === readerState.activeDocumentId && revisionId === readerState.activeRevisionId;
         const controller = new AbortController();
         readerState.searchAbortController = controller;
         readerState.searchQuery = query;
@@ -82,12 +86,12 @@
         const cancel = readerNavigationElements().searchCancel;
         if (cancel) cancel.disabled = false;
         try {
-            for (let index = 0; index < readerState.contents.length; index += 1) {
-                if (requestId !== readerState.searchRequestId) return;
-                const summary = readerState.contents[index];
-                readerSetNavigationStatus('search', `正在搜索第 ${index + 1} / ${readerState.contents.length} 章，已找到 ${readerState.searchResults.length} 条…`);
-                const payload = await readerApi(`/api/reader/chapter?documentId=${encodeURIComponent(readerState.activeDocumentId)}&revisionId=${encodeURIComponent(readerState.activeRevisionId)}&chapterId=${encodeURIComponent(summary.chapterId)}`, { signal: controller.signal });
-                if (requestId !== readerState.searchRequestId) return;
+            for (let index = 0; index < contents.length; index += 1) {
+                if (!isCurrent()) return;
+                const summary = contents[index];
+                readerSetNavigationStatus('search', `正在搜索第 ${index + 1} / ${contents.length} 章，已找到 ${readerState.searchResults.length} 条…`);
+                const payload = await readerApi(`/api/reader/chapter?documentId=${encodeURIComponent(documentId)}&revisionId=${encodeURIComponent(revisionId)}&chapterId=${encodeURIComponent(summary.chapterId)}`, { signal: controller.signal });
+                if (!isCurrent()) return;
                 const matches = window.DraftHarborReaderNavigation.findLiteralMatches(payload.chapter, query, {
                     limit: Math.max(1, 500 - readerState.searchResults.length)
                 });
@@ -100,19 +104,19 @@
                 if (readerState.searchResults.length >= 500) break;
                 await new Promise((resolve) => window.setTimeout(resolve, 0));
             }
-            if (requestId !== readerState.searchRequestId) return;
+            if (!isCurrent()) return;
             readerState.searchStatus = 'complete';
             readerSetNavigationStatus('search', readerState.searchResults.length
                 ? `搜索完成，共 ${readerState.searchResults.length} 条结果。`
                 : '搜索完成，没有匹配项。');
         } catch (error) {
             if (error && error.name === 'AbortError') return;
-            if (requestId === readerState.searchRequestId) {
+            if (isCurrent()) {
                 readerState.searchStatus = 'failed';
                 readerSetNavigationStatus('search', `搜索失败：${error.message || error}`);
             }
         } finally {
-            if (requestId === readerState.searchRequestId) {
+            if (isCurrent()) {
                 readerState.searchAbortController = null;
                 if (cancel) cancel.disabled = true;
             }
@@ -120,43 +124,66 @@
     }
 
     async function readerRevisionSnapshot() {
-        const key = `${readerState.activeDocumentId}:${readerState.activeRevisionId}`;
+        const documentId = readerState.activeDocumentId;
+        const revisionId = readerState.activeRevisionId;
+        const contents = readerState.contents.slice();
+        const key = `${documentId}:${revisionId}`;
         if (readerState.revisionSnapshotPromise && readerState.revisionSnapshotKey === key) return readerState.revisionSnapshotPromise;
         readerState.revisionSnapshotKey = key;
-        readerState.revisionSnapshotPromise = (async () => {
+        const promise = (async () => {
             const chapters = [];
-            for (const summary of readerState.contents) {
-                const payload = await readerApi(`/api/reader/chapter?documentId=${encodeURIComponent(readerState.activeDocumentId)}&revisionId=${encodeURIComponent(readerState.activeRevisionId)}&chapterId=${encodeURIComponent(summary.chapterId)}`);
+            for (const summary of contents) {
+                const payload = await readerApi(`/api/reader/chapter?documentId=${encodeURIComponent(documentId)}&revisionId=${encodeURIComponent(revisionId)}&chapterId=${encodeURIComponent(summary.chapterId)}`);
                 chapters.push(payload.chapter);
             }
-            return { revisionId: readerState.activeRevisionId, chapters };
+            return { revisionId, chapters };
         })();
-        return readerState.revisionSnapshotPromise;
+        readerState.revisionSnapshotPromise = promise;
+        try {
+            return await promise;
+        } catch (error) {
+            if (readerState.revisionSnapshotPromise === promise) {
+                readerState.revisionSnapshotPromise = null;
+                readerState.revisionSnapshotKey = '';
+            }
+            throw error;
+        }
     }
 
     async function navigateReaderToLocator(locator, options = {}) {
-        if (!locator || !readerState.activeDocumentId) return false;
-        let target = locator;
-        if (locator.revisionId !== readerState.activeRevisionId) {
-            const revision = await readerRevisionSnapshot();
-            target = window.DraftHarborReaderLocator.resolveReaderLocator(locator, revision).locator;
+        const documentId = readerState.activeDocumentId;
+        const revisionId = readerState.activeRevisionId;
+        if (!locator || !documentId || (locator.documentId && locator.documentId !== documentId)) return false;
+        const token = window.startReaderNavigation(options.navigationToken);
+        if (token === null) return false;
+        const isCurrent = () => window.readerNavigationCurrent(token, documentId, revisionId);
+        try {
+            let target = locator;
+            if (locator.revisionId !== revisionId) {
+                const revision = await readerRevisionSnapshot();
+                if (!isCurrent()) return false;
+                target = window.DraftHarborReaderLocator.resolveReaderLocator(locator, revision).locator;
+            }
+            if (await loadReaderWorkspaceChapter(target.chapterId, target, token) === false || !isCurrent()) return false;
+            if (!options.skipHistory && typeof recordReaderPositionHistory === 'function') {
+                await recordReaderPositionHistory(target, { source: options.historySource || 'navigation', label: options.historyLabel || '' });
+            }
+            if (!isCurrent()) return false;
+            if (options.highlight) {
+                window.requestAnimationFrame(() => {
+                    if (!isCurrent()) return;
+                    const node = document.querySelector(`[data-reader-block="${CSS.escape(target.blockId)}"]`);
+                    if (node) {
+                        node.classList.add('is-reader-location-highlight');
+                        window.setTimeout(() => node.classList.remove('is-reader-location-highlight'), 1800);
+                    }
+                });
+            }
+            return true;
+        } catch (error) {
+            if (!isCurrent()) return false;
+            throw error;
         }
-        await loadReaderWorkspaceChapter(target.chapterId, target);
-        readerState.anchorLocator = target;
-        renderReaderWorkspace();
-        if (!options.skipHistory && typeof recordReaderPositionHistory === 'function') {
-            await recordReaderPositionHistory(target, { source: options.historySource || 'navigation', label: options.historyLabel || '' });
-        }
-        if (options.highlight) {
-            window.requestAnimationFrame(() => {
-                const node = document.querySelector(`[data-reader-block="${CSS.escape(target.blockId)}"]`);
-                if (node) {
-                    node.classList.add('is-reader-location-highlight');
-                    window.setTimeout(() => node.classList.remove('is-reader-location-highlight'), 1800);
-                }
-            });
-        }
-        return true;
     }
 
     function updateReaderNavigationProgress(ratioInput) {
@@ -171,35 +198,47 @@
     }
 
     async function navigateReaderToBookRatio(ratioInput) {
-        if (!readerState.apiMode) return;
-        const token = ++readerState.progressNavigationToken;
+        if (!readerState.apiMode) return false;
         const target = window.DraftHarborReaderNavigation.chapterTargetForBookRatio(readerState.contents, Number(ratioInput));
-        if (!target) return;
-        const payload = await readerApi(`/api/reader/chapter?documentId=${encodeURIComponent(readerState.activeDocumentId)}&revisionId=${encodeURIComponent(readerState.activeRevisionId)}&chapterId=${encodeURIComponent(target.chapterId)}`);
-        if (token !== readerState.progressNavigationToken) return;
-        const position = window.DraftHarborReaderNavigation.blockPositionForChapterRatio(payload.chapter, target.chapterRatio);
-        if (!position) return;
-        const locator = window.DraftHarborReaderLocator.locatorFromBlockPosition({
-            documentId: readerState.activeDocumentId,
-            chapterId: target.chapterId,
-            blockId: position.blockId,
-            offset: position.offset
-        }, { revisionId: readerState.activeRevisionId, chapters: [payload.chapter] });
-        await navigateReaderToLocator(locator);
-        await new Promise((resolve) => window.requestAnimationFrame(resolve));
-        const requestedRatio = Math.max(0, Math.min(1, Number(ratioInput) || 0));
-        const content = document.querySelector('[data-reader-content]');
-        if (content && readerState.effectiveLayoutMode === 'flow') {
-            const previousScrollBehavior = content.style.scrollBehavior;
-            content.style.scrollBehavior = 'auto';
-            if (requestedRatio <= 0) content.scrollTop = 0;
-            if (requestedRatio >= 1) content.scrollTop = Math.max(0, content.scrollHeight - content.clientHeight);
-            window.requestAnimationFrame(() => { content.style.scrollBehavior = previousScrollBehavior; });
+        if (!target) return false;
+        const token = window.startReaderNavigation();
+        const documentId = readerState.activeDocumentId;
+        const revisionId = readerState.activeRevisionId;
+        const isCurrent = () => window.readerNavigationCurrent(token, documentId, revisionId);
+        try {
+            const payload = await readerApi(`/api/reader/chapter?documentId=${encodeURIComponent(documentId)}&revisionId=${encodeURIComponent(revisionId)}&chapterId=${encodeURIComponent(target.chapterId)}`);
+            if (!isCurrent()) return false;
+            const position = window.DraftHarborReaderNavigation.blockPositionForChapterRatio(payload.chapter, target.chapterRatio);
+            if (!position) return false;
+            const locator = window.DraftHarborReaderLocator.locatorFromBlockPosition({
+                documentId, chapterId: target.chapterId, blockId: position.blockId, offset: position.offset
+            }, { revisionId, chapters: [payload.chapter] });
+            if (!await navigateReaderToLocator(locator, { navigationToken: token })) return false;
+            await new Promise((resolve) => window.requestAnimationFrame(resolve));
+            if (!isCurrent()) return false;
+            const requestedRatio = Math.max(0, Math.min(1, Number(ratioInput) || 0));
+            const content = document.querySelector('[data-reader-content]');
+            if (content && readerState.effectiveLayoutMode === 'flow') {
+                const previousScrollBehavior = content.style.scrollBehavior;
+                content.style.scrollBehavior = 'auto';
+                if (requestedRatio <= 0) content.scrollTop = 0;
+                if (requestedRatio >= 1) content.scrollTop = Math.max(0, content.scrollHeight - content.clientHeight);
+                window.requestAnimationFrame(() => { if (isCurrent()) content.style.scrollBehavior = previousScrollBehavior; });
+            }
+            updateReaderWorkspaceProgress();
+            return true;
+        } catch (error) {
+            if (!isCurrent()) return false;
+            throw error;
         }
-        updateReaderWorkspaceProgress();
     }
 
     function initializeReaderNavigationDocument() {
+        cancelReaderSearch({ silent: true });
+        readerState.searchResults = [];
+        readerState.searchStatus = 'idle';
+        readerSetNavigationStatus('search', '');
+        renderReaderSearchResults();
         const elements = readerNavigationElements();
         const canBookmark = !!(readerState.currentChapter && (readerState.apiMode || readerState.document));
         if (elements.addBookmark) {

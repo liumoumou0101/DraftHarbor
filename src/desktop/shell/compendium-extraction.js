@@ -1,4 +1,4 @@
-    const compendiumExtractionState = { source: null, running: false };
+    const compendiumExtractionState = { source: null, running: false, saving: false, requestId: 0, controller: null };
 
     function compendiumExtractionElements() {
         return {
@@ -24,21 +24,40 @@
     function renderExtractionType() { const elements = compendiumExtractionElements(); if (elements.character) elements.character.hidden = !elements.type || elements.type.value !== 'character'; }
 
     function closeNativeCompendiumExtraction() {
+        if (compendiumExtractionState.saving) return;
         const { modal } = compendiumExtractionElements();
-        if (modal) modal.hidden = true;
+        compendiumExtractionState.requestId += 1;
+        compendiumExtractionState.controller?.abort();
+        compendiumExtractionState.controller = null;
+        if (modal) { if (modal.open) modal.close(); modal.hidden = true; }
         compendiumExtractionState.source = null;
         compendiumExtractionState.running = false;
     }
 
+    function currentCompendiumExtraction(requestId, source) {
+        return requestId === compendiumExtractionState.requestId && source === compendiumExtractionState.source
+            && source.projectId === currentProjectId() && source.snapshot === nativeEditorState.snapshot && !compendiumExtractionElements().modal.hidden;
+    }
+
+    function renderCompendiumExtractionState() {
+        const elements = compendiumExtractionElements();
+        const busy = compendiumExtractionState.running || compendiumExtractionState.saving;
+        elements.form?.querySelectorAll('input, textarea, select, button[type="submit"]').forEach((field) => { field.disabled = busy; });
+        if (elements.generate) elements.generate.disabled = busy;
+        elements.cancel.forEach((button) => { button.disabled = compendiumExtractionState.saving; });
+    }
+
     function openNativeCompendiumExtraction() {
+        if (compendiumExtractionState.saving) return;
         const projectId = currentProjectId();
         const payload = nativeSelectedOrSceneExcerpt();
         if (!projectId || !payload.scene || !payload.selected) {
             setNativeSaveStatus('请先在正文中选中要提取的文字', 'error');
             return;
         }
+        closeNativeCompendiumExtraction();
         const elements = compendiumExtractionElements();
-        compendiumExtractionState.source = { projectId, sceneId: payload.scene.id, excerpt: payload.selected, sceneTitle: payload.scene.title || '当前场景' };
+        compendiumExtractionState.source = Object.freeze({ projectId, snapshot: nativeEditorState.snapshot, sceneId: payload.scene.id, excerpt: payload.selected, sceneTitle: payload.scene.title || '当前场景' });
         if (elements.source) elements.source.value = payload.selected;
         if (elements.title) elements.title.value = '';
         if (elements.tags) elements.tags.value = '';
@@ -48,8 +67,9 @@
         setExtractionCharacterProfile(elements);
         renderExtractionType();
         renderCompendiumReferencePicker(elements.referenceList, elements.referenceCount);
+        renderCompendiumExtractionState();
         setCompendiumExtractionStatus('选择类型后生成草稿，或直接手动填写。');
-        if (elements.modal) elements.modal.hidden = false;
+        if (elements.modal) { elements.modal.hidden = false; elements.modal.showModal(); }
     }
 
     function extractionPrompt(source, type, references) {
@@ -65,59 +85,81 @@
     async function generateNativeCompendiumDraft() {
         const source = compendiumExtractionState.source;
         const elements = compendiumExtractionElements();
-        if (!source || compendiumExtractionState.running) return;
+        if (!source || !currentCompendiumExtraction(compendiumExtractionState.requestId, source) || compendiumExtractionState.running || compendiumExtractionState.saving) return;
+        const requestId = ++compendiumExtractionState.requestId;
+        const controller = new AbortController();
+        compendiumExtractionState.controller = controller;
         compendiumExtractionState.running = true;
-        if (elements.generate) elements.generate.disabled = true;
+        renderCompendiumExtractionState();
         setCompendiumExtractionStatus('正在提取资料卡草稿...', 'info');
-        const profile = writerEffectiveProfile();
-        const task = {
-            projectId: source.projectId, domain: 'compendium', action: 'extract', scope: 'selection',
-            target: { type: 'scene-selection', sceneId: source.sceneId, id: source.sceneId },
-            instruction: `从正文选区提取${elements.type ? elements.type.value : 'character'}资料卡`,
-            model: writerSelectedModelId(profile), outputContract: 'card-drafts',
-            beforeSnapshot: { sceneId: source.sceneId, excerpt: source.excerpt }
-        };
-        const result = await getNativeAITaskRunner().run(task, {
-            prompt: extractionPrompt(source, elements.type ? elements.type.value : 'character', selectedCompendiumReferenceCards(elements.referenceList)),
-            providerConfig: nativeGenerationConfig(),
-            onToken: ({ text }) => setCompendiumExtractionStatus(`正在接收草稿… ${text.length} 字`, 'info')
-        });
-        compendiumExtractionState.running = false;
-        if (elements.generate) elements.generate.disabled = false;
-        if (!result.ok) { setCompendiumExtractionStatus(`提取失败：${result.error.message}`, 'error'); return; }
-        const draft = result.output[0] || {};
-        if (elements.type && draft.type) elements.type.value = draft.type;
-        if (elements.title) elements.title.value = draft.title || '';
-        if (elements.tags) elements.tags.value = Array.isArray(draft.tags) ? draft.tags.join(', ') : '';
-        if (elements.summary) elements.summary.value = draft.summary || '';
-        if (elements.body) elements.body.value = draft.body || draft.content || '';
-        setExtractionCharacterProfile(elements, draft.characterProfile || {});
-        renderExtractionType();
-        setCompendiumExtractionStatus('草稿已生成。请检查并确认保存。', 'ok');
+        try {
+            const profile = writerEffectiveProfile();
+            const task = {
+                projectId: source.projectId, domain: 'compendium', action: 'extract', scope: 'selection',
+                target: { type: 'scene-selection', sceneId: source.sceneId, id: source.sceneId },
+                instruction: `从正文选区提取${elements.type ? elements.type.value : 'character'}资料卡`,
+                model: writerSelectedModelId(profile), outputContract: 'card-drafts',
+                beforeSnapshot: { sceneId: source.sceneId, excerpt: source.excerpt }
+            };
+            const result = await getNativeAITaskRunner().run(task, {
+                prompt: extractionPrompt(source, elements.type ? elements.type.value : 'character', selectedCompendiumReferenceCards(elements.referenceList)),
+                providerConfig: nativeGenerationConfig(), abortController: controller,
+                onToken: ({ text }) => { if (currentCompendiumExtraction(requestId, source)) setCompendiumExtractionStatus(`正在接收草稿… ${text.length} 字`, 'info'); }
+            });
+            if (!currentCompendiumExtraction(requestId, source)) return;
+            if (!result.ok) throw new Error(result.error?.message || '提取失败');
+            const draft = result.output[0] || {};
+            if (elements.type && draft.type) elements.type.value = draft.type;
+            if (elements.title) elements.title.value = draft.title || '';
+            if (elements.tags) elements.tags.value = Array.isArray(draft.tags) ? draft.tags.join(', ') : '';
+            if (elements.summary) elements.summary.value = draft.summary || '';
+            if (elements.body) elements.body.value = draft.body || draft.content || '';
+            setExtractionCharacterProfile(elements, draft.characterProfile || {});
+            renderExtractionType();
+            setCompendiumExtractionStatus('草稿已生成。请检查并确认保存。', 'ok');
+        } catch (error) {
+            if (currentCompendiumExtraction(requestId, source)) setCompendiumExtractionStatus(`提取失败：${error.message || error}`, 'error');
+        } finally {
+            if (requestId === compendiumExtractionState.requestId) {
+                compendiumExtractionState.running = false;
+                compendiumExtractionState.controller = null;
+                renderCompendiumExtractionState();
+            }
+        }
     }
 
     async function saveNativeCompendiumDraft(event) {
         if (event) event.preventDefault();
         const source = compendiumExtractionState.source;
         const elements = compendiumExtractionElements();
-        if (!source) return;
+        if (!source || !currentCompendiumExtraction(compendiumExtractionState.requestId, source) || compendiumExtractionState.running || compendiumExtractionState.saving) return;
         const entry = {
             type: elements.type.value, title: elements.title.value.trim(), summary: elements.summary.value.trim(), body: elements.body.value,
             tags: parseCommaList(elements.tags.value), characterProfile: elements.type.value === 'character' ? extractionCharacterProfile(elements) : undefined, relatedSceneIds: [source.sceneId],
             sourceReferences: [{ sceneId: source.sceneId, excerpt: source.excerpt }], contextPolicy: { mode: 'manual' }
         };
         if (!entry.title) { setCompendiumExtractionStatus('请填写资料卡标题', 'error'); return; }
+        const requestId = compendiumExtractionState.requestId;
+        compendiumExtractionState.saving = true;
+        renderCompendiumExtractionState();
         try {
             const response = await fetch('/api/compendium', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: source.projectId, entry }) });
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
-            await loadCompendium();
-            compendiumState.selectedId = result.entry.id;
+            if (!currentCompendiumExtraction(requestId, source)) return;
+            window.acceptCompendiumSavedEntry(result.entry, { projectId: source.projectId, snapshot: source.snapshot, entryId: '', version: -1 });
+            window.selectCompendiumEntry(result.entry.id);
+            compendiumExtractionState.saving = false;
             closeNativeCompendiumExtraction();
             setNativeSaveStatus(`已保存资料卡：${result.entry.title}`, 'ok');
             setView('compendium');
             renderCompendium();
-        } catch (error) { setCompendiumExtractionStatus(`保存失败：${error.message || error}`, 'error'); }
+        } catch (error) {
+            if (currentCompendiumExtraction(requestId, source)) setCompendiumExtractionStatus(`保存失败：${error.message || error}`, 'error');
+        } finally {
+            compendiumExtractionState.saving = false;
+            renderCompendiumExtractionState();
+        }
     }
 
     function bindNativeCompendiumExtraction() {
@@ -126,4 +168,5 @@
         if (elements.form) elements.form.addEventListener('submit', saveNativeCompendiumDraft);
         if (elements.type) elements.type.addEventListener('change', renderExtractionType);
         elements.cancel.forEach((button) => button.addEventListener('click', closeNativeCompendiumExtraction));
+        if (elements.modal) elements.modal.addEventListener('cancel', (event) => { event.preventDefault(); closeNativeCompendiumExtraction(); });
     }

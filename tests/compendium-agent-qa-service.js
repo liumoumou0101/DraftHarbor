@@ -19,6 +19,10 @@ const { createCompendiumAgentQaService, rankEntries, sanitizeAnswer } = require(
 
     assert.strictEqual(rankEntries([{ ...linyan }, { title: '其他', body: '无关' }], '钟楼的调查员是谁？')[0].entry.id, linyan.id);
     assert.deepStrictEqual(sanitizeAnswer({ answer: '答案', sourceIds: [linyan.id, 'forged'], confidence: 'grounded' }, [{ id: linyan.id }]).sourceIds, [linyan.id]);
+    const unsupported = sanitizeAnswer({ answer: '无效引用的回答', sourceIds: ['forged'], confidence: 'grounded' }, [{ id: linyan.id }]);
+    assert.deepStrictEqual(unsupported.sourceIds, []);
+    assert.strictEqual(unsupported.confidence, 'not-found', 'removing every invalid citation must also remove grounded confidence');
+    assert.strictEqual(sanitizeAnswer({ answer: '无引用', confidence: 'partial' }, []).confidence, 'not-found');
 
     let providerConfig = null;
     const service = createCompendiumAgentQaService({ settingsService, compendiumAgentService, streamGeneration: async (_prompt, onToken, config) => {
@@ -38,6 +42,34 @@ const { createCompendiumAgentQaService, rankEntries, sanitizeAnswer } = require(
     const empty = await emptyService.ask(root, 'qa-project', '完全不存在的星球名');
     assert.strictEqual(empty.confidence, 'not-found');
     assert.strictEqual(called, false);
+
+    for (let index = 0; index < 30; index += 1) {
+      await compendiumService.saveEntry(root, 'qa-project', { type: 'lore', title: `Unrelated card ${index}`, summary: 'Ordinary background.' });
+    }
+    const lastCard = (await compendiumService.saveEntry(root, 'qa-project', {
+      type: 'lore', title: 'ONLY_MATCH_33', body: 'BODY_ONLY_SECRET', summary: 'Unique record.'
+    })).entry;
+    await settingsService.updateSettings(root, {
+      compendiumAgent: { enabled: true, providerProfileId: 'qa-profile', maxCardsPerRun: 1 }
+    });
+    let sentSources;
+    const allCardsService = createCompendiumAgentQaService({ settingsService, compendiumAgentService, streamGeneration: async (prompt, onToken) => {
+      const text = prompt.messages[1].content;
+      sentSources = JSON.parse(text.slice(text.indexOf('[{')));
+      onToken(JSON.stringify({ answer: '找到了末尾资料。', sourceIds: [lastCard.id], confidence: 'grounded' }));
+    } });
+    const beyondLimit = await allCardsService.ask(root, 'qa-project', 'ONLY_MATCH_33');
+    assert.deepStrictEqual(beyondLimit.sourceIds, [lastCard.id], 'retrieval must include cards beyond the model input limit');
+    assert.strictEqual(sentSources.length, 1, 'the configured model card limit still applies after retrieval');
+    assert.strictEqual(sentSources[0].body, 'BODY_ONLY_SECRET');
+    assert.strictEqual(sentSources[0].projectId, undefined);
+
+    await settingsService.updateSettings(root, {
+      compendiumAgent: { enabled: true, providerProfileId: 'qa-profile', maxCardsPerRun: 1, cardBodyAccess: 'none' }
+    });
+    const noBodyService = createCompendiumAgentQaService({ settingsService, compendiumAgentService, streamGeneration: async () => { throw new Error('Disabled card bodies must not enter retrieval or prompts'); } });
+    const noBodyMatch = await noBodyService.ask(root, 'qa-project', 'BODY_ONLY_SECRET');
+    assert.strictEqual(noBodyMatch.confidence, 'not-found');
     console.log('compendium agent qa service tests passed');
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 })().catch((error) => { console.error(error); process.exitCode = 1; });

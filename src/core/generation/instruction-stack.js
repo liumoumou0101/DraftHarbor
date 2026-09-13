@@ -13,6 +13,7 @@
         'writer-rewrite',
         'writer-summary',
         'workshop-chat',
+        'workshop-agent',
         'workflow-brief',
         'workflow-json',
         'workflow-draft',

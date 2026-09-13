@@ -108,7 +108,7 @@ function createBackupController(dependencies) {
 
       restoreSnapshot.filesystemSavedAt = new Date().toISOString();
       const normalizedProject = legacySnapshotToProject(restoreSnapshot);
-      const saved = await projectService.saveProject(dataRoot, normalizedProject);
+      const saved = await projectService.saveProject(dataRoot, normalizedProject, { replaceDedicatedStores: true });
       jsonResponse(response, 200, {
         ok: true,
         mode,

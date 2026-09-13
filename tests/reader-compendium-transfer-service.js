@@ -60,7 +60,7 @@ const { createReaderCompendiumTransferService } = require('../desktop/services/r
     const retry = await service.apply(root, { projectId: 'target-project', batchId: 'batch-1', confirmed: true });
     assert.strictEqual(retry.idempotent, true);
     assert.strictEqual((await compendiumService.listEntries(root, 'target-project')).entries.length, 2, 'retry must not duplicate cards');
-    await projectService.saveProject(root, backups[0]);
+    await projectService.saveProject(root, backups[0], { replaceDedicatedStores: true });
     assert.strictEqual((await compendiumService.listEntries(root, 'target-project')).entries.length, 1, 'project backup should restore the original compendium');
     await assert.rejects(() => compendiumService.saveEntriesBatch(root, 'target-project', [{ projectId: 'other-project', type: 'note', title: '越界' }]), /cross projects/);
     assert.strictEqual(created.project.id, 'target-project');

@@ -128,7 +128,11 @@ function createCompendiumAgentRunnerService({ settingsService, compendiumAgentSe
       providerConfig: config,
       onToken: options.onToken
     });
-    if (!result.ok) throw new Error(result.error.message || 'compendium agent analysis failed');
+    if (!result.ok) return {
+      ok: true, projectId, findings: localFindings(snapshot), operations: [],
+      warning: `AI 体检未完成，以下仅为本地检查结果：${result.error.message || '模型请求失败'}`,
+      provider: { profileId: profile.id, provider: profile.provider, model: config.model }
+    };
     const sanitized = sanitizeModelAnalysis(result.output, agentSettings.maxCardsPerRun);
     const validation = CompendiumAgentPolicy.validateAnalysisResultAgainstEntries(sanitized, snapshot.entries, {
       maxOperations: agentSettings.maxCardsPerRun

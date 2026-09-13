@@ -16,6 +16,7 @@ applyDesktopTheme
 applyDesktopThemeFromStorage
 applyNativeAutoReplace
 applyNativeEditorPrefs
+applyNativeManuscriptFormat
 applyNativeWriterChrome
 applyReaderPreferenceModel
 applyReaderSettings
@@ -33,6 +34,7 @@ bindContextStrip
 bindNativeCompendiumExtraction
 bindNativeEditor
 bindNativeGlobalPrompt
+bindNativeManuscriptFormat
 bindNativeSidebarResize
 bindNativeWriterChrome
 bindNavigation
@@ -72,6 +74,14 @@ contextPolicyLabel
 contextPolicyMode
 contextStripElements
 copyNativeSummaryDialog
+copyNativeHistoryRecord
+retryNativeHistoryRecord
+insertNativeHistoryRecord
+deleteNativeHistoryRecord
+queueNativeGenerationLayer
+saveNativeSummaryDialog
+syncNativeSummaryDialogMeta
+flushNativeSummaryDialogFields
 countNativeWords
 createCompendiumEntry
 createProjectFromDesktop
@@ -116,6 +126,7 @@ importProjectSnapshotFile
 importReaderFile
 importWritingway1Files
 isRewriteWorkflow
+isCompendiumSummaryNote
 initializeReaderNavigation
 initializeReaderNavigationDocument
 initializeReaderSelection
@@ -147,6 +158,7 @@ loadWorkshopTemplates
 loadWriterModelOverride
 closeReaderAnnotationDialog
 markNativeDirty
+markNativeChapterSummaryStale
 markWorkflowAnswerStarted
 markWorkflowStreamSaving
 maybeShiftReaderFlowWindow
@@ -220,11 +232,15 @@ renderNativeEditor
 renderNativeGeneration
 autosizeNativeBeatInput
 syncNativeComposerExpansion
+syncNativeFormatButtons
 nativeWriterThinkingActive
 resetNativeGenerationStreamFlags
 nativeReasoningPhase
 nativeReasoningSummaryLabel
 nativeReasoningDisplayText
+nativeReasoningElements
+renderNativeReasoning
+bindNativeReasoningControls
 syncNativeReasoningBubbleLayout
 renderNativeRewrite
 renderProjectLibrary
@@ -345,6 +361,7 @@ const playwrightPageGlobals = Object.fromEntries([
     'readerDrawerFocusable',
     'readerEffectiveTransition',
     'readerState',
+    'nativeEditorState',
     'refreshReaderBookmarkResolutions',
     'renderReaderReading'
 ].map((name) => [name, 'readonly']));
@@ -405,6 +422,7 @@ module.exports = {
                 'tests/reader-realistic-visual-audit.js',
                 'tests/writer-button-audit.js',
                 'tests/writer-layout-audit.js',
+                'tests/writer-2k-visual-audit.js',
                 'tests/writer-realistic-visual-audit.js'
             ],
             globals: playwrightPageGlobals

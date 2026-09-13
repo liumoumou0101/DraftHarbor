@@ -232,6 +232,14 @@
             && (offset < segment.endOffset || (offset === segment.endOffset && segment.endOffset === segment.startOffset))
         )));
         if (index >= 0) return index;
+        // A locator at a block's end is valid (for example 100% book progress).
+        // Keep ordinary page boundaries right-biased via the match above, then
+        // map an exclusive final offset to the block's last rendered segment.
+        for (let pageIndex = pages.length - 1; pageIndex >= 0; pageIndex -= 1) {
+            if (pages[pageIndex].segments.some((segment) => (
+                segment.blockId === locator.blockId && offset === segment.endOffset
+            ))) return pageIndex;
+        }
         const fallback = pages.findIndex((page) => page.segments.some((segment) => segment.blockId === locator.blockId));
         return fallback >= 0 ? fallback : 0;
     }

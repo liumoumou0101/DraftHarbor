@@ -563,6 +563,27 @@
     border-top: 1px solid var(--desktop-line);
 }
 
+.desktop-native-summary-dialog-hint {
+    margin: 0 0 12px;
+    color: var(--desktop-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.desktop-native-typography [data-native-format-manuscript] {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    min-height: 32px;
+}
+
+.desktop-native-typography-format-hint {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: var(--desktop-muted);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
 .desktop-native-more-menu .desktop-native-toolbar-button,
 .desktop-native-more-menu .desktop-mini-action {
     display: flex;

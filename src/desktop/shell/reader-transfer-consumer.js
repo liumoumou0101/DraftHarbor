@@ -107,7 +107,7 @@
         const locator = envelope.sourceLocators && envelope.sourceLocators[0];
         try {
             if (readerState.activeDocumentId !== envelope.documentId) {
-                await openReaderLibraryDocument(envelope.documentId);
+                if (await openReaderLibraryDocument(envelope.documentId) === false) return;
             }
             if (readerState.activeDocumentId === envelope.documentId && locator && typeof navigateReaderToLocator === 'function') {
                 await navigateReaderToLocator(locator, { highlight: true });

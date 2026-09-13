@@ -1,8 +1,12 @@
     const readerWriterTransferState = {
         transfer: null,
         preview: null,
+        previewRequest: null,
         targetSnapshot: null,
-        busy: false
+        busy: false,
+        applying: false,
+        requestId: 0,
+        controller: null
     };
 
     function readerWriterTransferElements() {
@@ -38,11 +42,10 @@
         return '来源状态：创建时版本仍可解析。';
     }
 
-    async function loadReaderWriterTargetSnapshot(projectId) {
-        const response = await fetch(`/api/get-project?projectId=${encodeURIComponent(projectId)}`);
+    async function loadReaderWriterTargetSnapshot(projectId, signal) {
+        const response = await fetch(`/api/get-project?projectId=${encodeURIComponent(projectId)}`, { signal });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload.ok) throw new Error(payload.error || `HTTP ${response.status}`);
-        readerWriterTransferState.targetSnapshot = payload.project;
         return payload.project;
     }
 
@@ -87,7 +90,7 @@
         elements.sceneField.hidden = !['append', 'replace'].includes(intent);
         if (!preview) {
             elements.sections.replaceChildren();
-            elements.location.textContent = '正在生成写前预览…';
+            elements.location.textContent = readerWriterTransferState.busy ? '正在生成写前预览…' : '暂无可应用预览，请刷新。';
             elements.conflicts.replaceChildren();
             elements.apply.disabled = true;
             return;
@@ -97,7 +100,10 @@
             const label = document.createElement('label');
             const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.value = item.itemId;
             checkbox.checked = selected.size ? selected.has(item.itemId) : true;
-            checkbox.addEventListener('change', renderReaderWriterApplyState);
+            checkbox.addEventListener('change', () => {
+                elements.confirm.checked = false;
+                renderReaderWriterApplyState();
+            });
             const copy = document.createElement('span'); copy.textContent = `${item.title} · ${item.characterCount.toLocaleString()} 字符`;
             label.append(checkbox, copy); return label;
         }));
@@ -110,55 +116,84 @@
 
     function renderReaderWriterApplyState() {
         const elements = readerWriterTransferElements();
+        const state = readerWriterTransferState;
         const selectedCount = elements.sections.querySelectorAll('input:checked').length;
-        elements.apply.disabled = readerWriterTransferState.busy || !readerWriterTransferState.preview || !elements.confirm.checked || (!selectedCount && elements.intent.value !== 'locate');
+        elements.confirm.disabled = state.busy || !state.preview;
+        elements.apply.disabled = state.busy || !state.preview || !state.previewRequest || !elements.confirm.checked || (!selectedCount && state.preview.intent !== 'locate');
+        [elements.project, elements.intent, elements.chapter, elements.scene, elements.projectTitle, elements.refresh,
+            ...elements.sections.querySelectorAll('input')].forEach((control) => { control.disabled = state.applying; });
+    }
+
+    function invalidateReaderWriterPreview() {
+        const state = readerWriterTransferState;
+        state.requestId += 1;
+        if (state.controller) state.controller.abort();
+        state.controller = null;
+        state.preview = null;
+        state.previewRequest = null;
+        readerWriterTransferElements().confirm.checked = false;
+        return state.requestId;
     }
 
     async function refreshReaderWriterPreview() {
         const elements = readerWriterTransferElements();
-        if (!readerWriterTransferState.transfer || readerWriterTransferState.busy) return;
-        readerWriterTransferState.busy = true;
-        readerWriterTransferState.preview = null;
+        const state = readerWriterTransferState;
+        if (!state.transfer || state.applying) return;
+        const requestId = invalidateReaderWriterPreview();
+        const controller = new AbortController();
+        state.controller = controller;
+        state.busy = true;
         elements.status.textContent = '正在读取目标版本并计算冲突…';
         renderReaderWriterPreview();
+        renderReaderWriterApplyState();
         try {
             const request = readerWriterPreviewRequest();
             if (request.intent !== 'new-project') {
-                await loadReaderWriterTargetSnapshot(request.targetProjectId);
+                const snapshot = await loadReaderWriterTargetSnapshot(request.targetProjectId, controller.signal);
+                if (requestId !== state.requestId) return;
+                state.targetSnapshot = snapshot;
                 renderReaderWriterTargets();
                 request.targetChapterId = elements.chapter.value;
                 request.targetSceneId = elements.scene.value;
             }
             const response = await fetch('/api/writer/reader-transfer/preview', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request)
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: controller.signal
             });
             const payload = await response.json().catch(() => ({}));
+            if (requestId !== state.requestId) return;
             if (!response.ok || !payload.ok) throw new Error(payload.error || `HTTP ${response.status}`);
-            readerWriterTransferState.preview = payload.preview;
-            if (payload.preview.location.sceneId && elements.scene && Array.from(elements.scene.options).some((option) => option.value === payload.preview.location.sceneId)) {
-                elements.scene.value = payload.preview.location.sceneId;
-            }
+            state.preview = payload.preview;
+            state.previewRequest = Object.freeze({ ...payload.preview.request });
             elements.status.textContent = '预览完成；确认前项目磁盘不会变化。';
         } catch (error) {
+            if (requestId !== state.requestId) return;
             elements.status.textContent = `预览失败：${error.message || error}`;
         } finally {
-            readerWriterTransferState.busy = false;
-            renderReaderWriterPreview();
+            if (requestId === state.requestId) {
+                state.busy = false;
+                state.controller = null;
+                renderReaderWriterPreview();
+                renderReaderWriterApplyState();
+            }
         }
     }
 
     async function applyReaderWriterTransfer() {
         const elements = readerWriterTransferElements();
+        const state = readerWriterTransferState;
         const preview = readerWriterTransferState.preview;
-        if (!preview || !elements.confirm.checked || readerWriterTransferState.busy) return;
-        readerWriterTransferState.busy = true;
+        if (!preview || !state.previewRequest || !elements.confirm.checked || state.busy) return;
+        const selectedItemIds = Array.from(elements.sections.querySelectorAll('input:checked')).map((input) => input.value);
+        if (!selectedItemIds.length && preview.intent !== 'locate') return;
+        state.busy = true;
+        state.applying = true;
         elements.status.textContent = '正在创建写前备份并应用…';
         renderReaderWriterApplyState();
         try {
             const request = {
-                ...readerWriterPreviewRequest(), confirmed: true,
+                ...state.previewRequest, confirmed: true, previewToken: preview.previewToken,
                 expectedTargetUpdatedAt: preview.targetProject && preview.targetProject.updatedAt,
-                selectedItemIds: Array.from(elements.sections.querySelectorAll('input:checked')).map((input) => input.value)
+                selectedItemIds
             };
             const response = await fetch('/api/writer/reader-transfer/apply', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request)
@@ -178,32 +213,53 @@
                 : `已定位到目标场景${payload.idempotent ? '。' : ''}`;
             if (elements.dialog.open) elements.dialog.close();
         } catch (error) {
+            invalidateReaderWriterPreview();
             elements.status.textContent = `应用失败：${error.message || error}。请重新预览，项目不会部分重复写入。`;
         } finally {
-            readerWriterTransferState.busy = false;
+            state.busy = false;
+            state.applying = false;
+            renderReaderWriterPreview();
             renderReaderWriterApplyState();
         }
     }
 
     async function openReaderWriterTransfer(transfer) {
         const elements = readerWriterTransferElements();
-        if (!elements.dialog) return;
-        readerWriterTransferState.transfer = transfer;
-        readerWriterTransferState.preview = null;
+        const state = readerWriterTransferState;
+        if (!elements.dialog || state.applying) return;
+        const requestId = invalidateReaderWriterPreview();
+        const controller = new AbortController();
+        state.controller = controller;
+        state.transfer = transfer;
+        state.targetSnapshot = null;
+        state.busy = true;
         elements.source.textContent = `${transfer.snapshot.sourceTitle} · ${transfer.envelope.characterCount.toLocaleString()} 字符`;
         elements.freshness.textContent = readerWriterFreshnessLabel(transfer);
         elements.projectTitle.value = transfer.snapshot.sourceTitle;
-        elements.confirm.checked = false;
-        const projectsPayload = await (await fetch('/api/list-projects')).json();
-        const projects = (projectsPayload.projects || []).filter((project) => project.health === 'ok');
-        elements.project.replaceChildren(...projects.map((project) => {
-            const option = document.createElement('option'); option.value = project.id; option.textContent = project.name; return option;
-        }));
-        const activeProjectId = typeof currentProjectId === 'function' ? currentProjectId() : '';
-        if (activeProjectId && projects.some((project) => project.id === activeProjectId)) elements.project.value = activeProjectId;
-        elements.intent.value = transfer.envelope.sourceKind === 'project' && transfer.envelope.suggestedProjectId === elements.project.value ? 'locate' : 'new-scenes';
         if (!elements.dialog.open) elements.dialog.showModal();
-        await refreshReaderWriterPreview();
+        elements.status.textContent = '正在读取目标项目…';
+        renderReaderWriterPreview();
+        renderReaderWriterApplyState();
+        try {
+            const response = await fetch('/api/list-projects', { signal: controller.signal });
+            const projectsPayload = await response.json();
+            if (requestId !== state.requestId) return;
+            if (!response.ok) throw new Error(projectsPayload.error || `HTTP ${response.status}`);
+            const projects = (projectsPayload.projects || []).filter((project) => project.health === 'ok');
+            elements.project.replaceChildren(...projects.map((project) => {
+                const option = document.createElement('option'); option.value = project.id; option.textContent = project.name; return option;
+            }));
+            const activeProjectId = typeof currentProjectId === 'function' ? currentProjectId() : '';
+            if (activeProjectId && projects.some((project) => project.id === activeProjectId)) elements.project.value = activeProjectId;
+            elements.intent.value = transfer.envelope.sourceKind === 'project' && transfer.envelope.suggestedProjectId === elements.project.value ? 'locate' : 'new-scenes';
+            await refreshReaderWriterPreview();
+        } catch (error) {
+            if (requestId !== state.requestId) return;
+            state.busy = false;
+            elements.status.textContent = `读取项目失败：${error.message || error}`;
+            renderReaderWriterPreview();
+            renderReaderWriterApplyState();
+        }
     }
 
     function bindReaderWriterTransfer() {
@@ -212,6 +268,12 @@
         elements.dialog.dataset.readerWriterBound = 'true';
         elements.close.addEventListener('click', () => elements.dialog.close());
         elements.dialog.addEventListener('cancel', (event) => { event.preventDefault(); elements.dialog.close(); });
+        elements.dialog.addEventListener('close', () => {
+            if (readerWriterTransferState.applying) return;
+            invalidateReaderWriterPreview();
+            readerWriterTransferState.transfer = null;
+            readerWriterTransferState.busy = false;
+        });
         elements.refresh.addEventListener('click', refreshReaderWriterPreview);
         elements.apply.addEventListener('click', applyReaderWriterTransfer);
         elements.confirm.addEventListener('change', renderReaderWriterApplyState);
@@ -219,4 +281,5 @@
         elements.intent.addEventListener('change', refreshReaderWriterPreview);
         elements.chapter.addEventListener('change', () => { renderReaderWriterTargets(); refreshReaderWriterPreview(); });
         elements.scene.addEventListener('change', refreshReaderWriterPreview);
+        elements.projectTitle.addEventListener('input', refreshReaderWriterPreview);
     }

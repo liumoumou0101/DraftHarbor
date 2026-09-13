@@ -316,7 +316,7 @@ async function restoreWorkflowApplication(options = {}) {
   if (!record) throw new Error(`workflow application record not found: ${applicationId}`);
   const backup = await applicationStore.readApplicationBackup(projectPath, runId, applicationId);
   if (!backup || !backup.project) throw new Error(`workflow application backup not found: ${applicationId}`);
-  await projectService.saveProject(dataRoot, backup.project);
+  await projectService.saveProject(dataRoot, backup.project, { replaceDedicatedStores: true });
   const backupSceneIds = new Set((backup.project.scenes || []).map((scene) => scene.id));
   const backupChapterIds = new Set((backup.project.chapters || []).map((chapter) => chapter.id));
   for (const operation of record.operations || []) {

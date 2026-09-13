@@ -9,6 +9,20 @@ function stableId(prefix, value) {
   return `${prefix}-${crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 16)}`;
 }
 
+function previewRequestIdentity(request = {}) {
+  const envelopeId = cleanString(request.envelopeId);
+  return {
+    envelopeId,
+    applicationId: cleanString(request.applicationId) || stableId('reader-writer-application', envelopeId),
+    intent: cleanString(request.intent || 'locate'),
+    targetProjectId: cleanString(request.targetProjectId),
+    targetChapterId: cleanString(request.targetChapterId),
+    targetSceneId: cleanString(request.targetSceneId),
+    newProjectId: cleanString(request.newProjectId),
+    newProjectTitle: cleanString(request.newProjectTitle)
+  };
+}
+
 function sourceItems(transfer) {
   let cursor = 0;
   return transfer.snapshot.sections.map((section, index) => {
@@ -51,6 +65,12 @@ function locateProjectSource(envelope, project) {
 
 function createReaderWriterTransferService({ readerTransferService, projectService, createBackup } = {}) {
   if (!readerTransferService || !projectService || !createBackup) throw new Error('reader writer transfer dependencies are required');
+  // A preview authorizes precisely its request and target version. Tokens are
+  // intentionally invalid after restarting the server: the user can re-preview.
+  const previewSecret = crypto.randomBytes(32);
+  const previewToken = (dataRoot, request, updatedAt) => crypto.createHmac('sha256', previewSecret)
+    .update(JSON.stringify([String(dataRoot), previewRequestIdentity(request), cleanString(updatedAt)]))
+    .digest('hex');
 
   async function preview(dataRoot, request = {}) {
     const envelopeId = cleanString(request.envelopeId);
@@ -80,6 +100,8 @@ function createReaderWriterTransferService({ readerTransferService, projectServi
     if (intent === 'locate' && location.accuracy === 'approximate') conflicts.push('定位结果为近似匹配');
     if (intent === 'locate' && location.accuracy === 'missing') conflicts.push('来源位置已经丢失');
     return {
+      request: previewRequestIdentity(request),
+      previewToken: previewToken(dataRoot, request, project && project.updatedAt),
       applicationId,
       envelope: transfer.envelope,
       freshness: transfer.freshness,
@@ -108,8 +130,15 @@ function createReaderWriterTransferService({ readerTransferService, projectServi
 
   async function apply(dataRoot, request = {}) {
     if (request.confirmed !== true) throw new Error('reader writer application requires explicit confirmation');
+    const suppliedToken = cleanString(request.previewToken);
+    const expectedToken = previewToken(dataRoot, request, request.expectedTargetUpdatedAt);
+    if (!/^[a-f0-9]{64}$/.test(suppliedToken)
+      || !crypto.timingSafeEqual(Buffer.from(suppliedToken, 'hex'), Buffer.from(expectedToken, 'hex'))) {
+      throw new Error('reader writer preview identity conflict; refresh preview before applying');
+    }
     const prepared = await preview(dataRoot, request);
     if (prepared.intent === 'locate') {
+      if (cleanString(request.expectedTargetUpdatedAt) !== prepared.targetProject.updatedAt) throw new Error('target project changed after preview');
       if (!['exact', 'approximate'].includes(prepared.location.accuracy)) throw new Error('reader writer source location is unavailable');
       const appliedAt = cleanString(request.appliedAt) || new Date().toISOString();
       await materializeApplicationConsumer(dataRoot, prepared, prepared.applicationId, prepared.targetProject.id, [prepared.location.sceneId], appliedAt);

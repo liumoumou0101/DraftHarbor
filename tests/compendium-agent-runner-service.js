@@ -71,6 +71,15 @@ const { createCompendiumAgentRunnerService, resolveProviderConfig, localFindings
     assert.ok(promptText.includes('只在资料卡中出现的背景。'), 'read-only card body may be provided to the agent');
     assert.ok(!promptText.includes('agent-secret'), 'API key must not enter the prompt');
     assert.strictEqual(settings.providerProfiles.length, 1);
+    const offline = createCompendiumAgentRunnerService({
+      settingsService, compendiumAgentService,
+      streamGeneration: async () => { throw new Error('Controlled provider failure'); }
+    });
+    const localOnly = await offline.analyze(dataRoot, 'agent-runner-project', [entry.id]);
+    assert.strictEqual(localOnly.ok, true);
+    assert.ok(localOnly.findings.some(finding => finding.id === `local-missing-tags-${entry.id}`));
+    assert.deepStrictEqual(localOnly.operations, [], 'provider failure must never manufacture applicable operations');
+    assert.ok(localOnly.warning.includes('Controlled provider failure'), 'local-only results must disclose the AI failure');
     console.log('Compendium agent runner service test passed.');
   } finally {
     await fs.rm(dataRoot, { recursive: true, force: true });

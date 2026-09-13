@@ -1,3 +1,35 @@
+    const workshopSessionState = { projectId: '', snapshot: null, sessionId: '', loadId: 0, revision: 0, drafts: new Map(), saves: new Map(), chat: null, creating: false };
+
+    function captureWorkshopSession(session = selectedWorkshopSession()) {
+        return { projectId: (session && session.projectId) || currentProjectId(), snapshot: nativeEditorState.snapshot, sessionId: session && session.id, session };
+    }
+
+    function isCurrentWorkshopSession(captured, includeSelection = true) {
+        return !!captured && captured.projectId === currentProjectId() && captured.snapshot === nativeEditorState.snapshot
+            && (!includeSelection || captured.sessionId === workshopState.selectedId);
+    }
+
+    function syncWorkshopIdentity() {
+        const state = workshopSessionState;
+        const projectId = currentProjectId();
+        const snapshot = nativeEditorState.snapshot;
+        if (state.projectId === projectId && state.snapshot === snapshot && state.sessionId === workshopState.selectedId) return;
+        if (state.chat) { state.chat.cancelled = true; state.chat.controller.abort(); state.chat = null; }
+        workshopState.generating = false;
+        if (state.projectId !== projectId || state.snapshot !== snapshot) state.loadId += 1;
+        state.projectId = projectId;
+        state.snapshot = snapshot;
+        state.sessionId = workshopState.selectedId;
+        workshopState.input = state.drafts.get(`${projectId}:${state.sessionId}`) || '';
+        setWorkshopStatus(projectId ? `${workshopState.sessions.length} 个对话` : '未打开项目', projectId ? 'ok' : 'info');
+        if (window.WorkshopAgent) window.WorkshopAgent.sync();
+    }
+
+    function rememberWorkshopInput(value) {
+        workshopState.input = value;
+        workshopSessionState.drafts.set(`${currentProjectId()}:${workshopState.selectedId}`, value);
+    }
+
     function workshopElements() {
         return {
             projectLabel: document.querySelector('[data-workshop-project-label]'),
@@ -70,7 +102,7 @@
             return;
         }
         if (!selectedWorkshopSession()) await createWorkshopSession();
-        workshopState.input = text;
+        rememberWorkshopInput(text);
         renderWorkshop();
         const { input } = workshopElements();
         if (input) {
@@ -79,10 +111,10 @@
         }
     }
 
-    function appendWorkshopStarters(container) {
+    function appendWorkshopStarters(container, starters = WORKSHOP_STARTERS) {
         const list = document.createElement('div');
         list.className = 'desktop-workshop-empty-starters';
-        WORKSHOP_STARTERS.forEach((text) => {
+        starters.forEach((text) => {
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'desktop-workshop-empty-starter';
@@ -132,8 +164,8 @@
         }
     }
 
-    async function loadWorkshopTemplates() {
-        const projectId = currentProjectId();
+    async function loadWorkshopTemplates(captured = captureWorkshopSession(), isCurrent = () => isCurrentWorkshopSession(captured, false)) {
+        const projectId = captured.projectId;
         const defaults = defaultWorkshopTemplates();
         if (!projectId) {
             workshopState.templates = defaults;
@@ -143,10 +175,10 @@
             const response = await fetch(`/api/prompts?${new URLSearchParams({ projectId, category: 'workshop' }).toString()}`, { cache: 'no-store' });
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
-            workshopState.templates = result.prompts && result.prompts.length ? result.prompts : defaults;
+            if (isCurrent()) workshopState.templates = result.prompts && result.prompts.length ? result.prompts : defaults;
         } catch (error) {
             console.warn('Failed to load workshop prompts:', error);
-            workshopState.templates = defaults;
+            if (isCurrent()) workshopState.templates = defaults;
         }
     }
 
@@ -168,11 +200,13 @@
     }
 
     function renderWorkshop() {
+        syncWorkshopIdentity();
         const elements = workshopElements();
         const projectId = currentProjectId();
         const projectName = currentProjectName();
         const session = selectedWorkshopSession();
         const assistant = selectedAssistantMessage();
+        const agentMode = !!(window.WorkshopAgent && window.WorkshopAgent.mode() === 'agent');
         if (elements.projectLabel) elements.projectLabel.textContent = projectId ? `当前项目：${projectName}` : '请先在书库打开或新建一个项目。';
         if (elements.projectSummary) {
             elements.projectSummary.hidden = !projectId;
@@ -183,7 +217,7 @@
                 if (elements.projectStats) elements.projectStats.textContent = `${workshopState.sessions.length} 个对话${entries.length ? ` · ${entries.length} 张资料` : ''}${scene ? ` · 当前场景：${scene.title || '未命名'}` : ''}`;
             }
         }
-        if (elements.newButton) elements.newButton.disabled = !projectId || workshopState.generating;
+        if (elements.newButton) elements.newButton.disabled = !projectId || workshopState.generating || workshopSessionState.creating;
         if (elements.deleteButton) elements.deleteButton.disabled = !session || workshopState.generating;
         if (elements.moreButton) elements.moreButton.disabled = !session;
         if (elements.contractToggle) elements.contractToggle.disabled = !session;
@@ -233,6 +267,7 @@
                     const button = document.createElement('button');
                     button.type = 'button';
                     button.className = 'desktop-workshop-session';
+                    button.disabled = !!(window.WorkshopAgent && !window.WorkshopAgent.canLeave(false));
                     button.classList.toggle('is-active', item.id === workshopState.selectedId);
                     const title = document.createElement('strong');
                     title.textContent = item.title || '新对话';
@@ -240,6 +275,7 @@
                     meta.textContent = `${(item.messages || []).length} 条消息`;
                     button.append(title, meta);
                     button.addEventListener('click', () => {
+                        if (window.WorkshopAgent && !window.WorkshopAgent.canLeave()) return;
                         workshopState.selectedId = item.id;
                         workshopState.selectedAssistantMessageId = '';
                         renderWorkshop();
@@ -268,61 +304,83 @@
                 elements.emptyState.hidden = false;
                 elements.emptyContent.replaceChildren();
                 const heading = document.createElement('h3');
-                heading.textContent = session ? '问一句' : '先想清楚';
+                heading.textContent = agentMode ? '让助手核对当前作品' : session ? '问一句' : '先想清楚';
                 const desc = document.createElement('p');
-                desc.textContent = '选一个开头，或自己输入。可用 @[资料] 和 #[场景] 带上上下文。';
+                desc.textContent = agentMode ? '描述你要核对或整理的内容。助手会读取需要的正文与资料，修改由你确认。' : '选一个开头，或自己输入。可用 @[资料] 和 #[场景] 带上上下文。';
                 elements.emptyContent.append(heading, desc);
-                appendWorkshopStarters(elements.emptyContent);
+                appendWorkshopStarters(elements.emptyContent, agentMode ? [
+                    '核对当前场景的人物动机与资料是否一致，先列出发现。',
+                    '整理当前作品中的伏笔，标出尚未交代的线索。',
+                    '检查现有资料卡，提出需要补充或修正的内容。'
+                ] : WORKSHOP_STARTERS);
             } else {
                 elements.emptyState.hidden = true;
             }
         }
 
-        if (elements.messages) {
-            elements.messages.replaceChildren();
-            if (!session || !(session.messages || []).length) {
-                /* empty state covers the thread */
-            } else {
-                (session.messages || []).forEach((message) => {
-                    const item = document.createElement('button');
-                    item.type = 'button';
-                    item.className = 'desktop-workshop-message';
-                    item.dataset.role = message.role;
-                    const isAssistant = message.role === 'assistant';
-                    if (isAssistant && message.id === workshopState.selectedAssistantMessageId) {
-                        item.classList.add('is-selected');
-                    }
-                    const avatar = document.createElement('span');
-                    avatar.className = 'desktop-workshop-message-avatar';
-                    avatar.textContent = isAssistant ? '助' : '我';
-                    const body = document.createElement('div');
-                    body.className = 'desktop-workshop-message-body';
-                    const role = document.createElement('strong');
-                    role.className = 'desktop-workshop-message-role';
-                    role.textContent = isAssistant ? '助手' : '你';
-                    const content = document.createElement('div');
-                    content.className = 'desktop-workshop-message-text';
-                    content.textContent = message.content || (isAssistant && workshopState.generating ? '生成中...' : '');
-                    body.append(role, content);
-                    item.append(avatar, body);
-                    item.addEventListener('click', () => {
-                        if (isAssistant) {
-                            workshopState.selectedAssistantMessageId = message.id;
-                            renderWorkshop();
-                        }
-                    });
-                    elements.messages.appendChild(item);
-                });
-                elements.messages.scrollTop = elements.messages.scrollHeight;
-            }
-        }
-        if (projectId && !workshopState.generating) setWorkshopStatus(`${workshopState.sessions.length} 个对话`, 'ok');
+        renderWorkshopMessages();
+        if (window.WorkshopAgent) window.WorkshopAgent.renderMode();
         renderContextStrip();
     }
 
+    function renderWorkshopMessages() {
+        const { messages } = workshopElements();
+        if (!messages) return;
+        const session = selectedWorkshopSession();
+        const key = `${currentProjectId()}:${session ? session.id : ''}`;
+        const changedSession = messages.dataset.session !== key;
+        const selection = window.getSelection();
+        const reading = selection && !selection.isCollapsed && messages.contains(selection.anchorNode);
+        const follow = changedSession || (!reading && messages.scrollHeight - messages.clientHeight - messages.scrollTop < 48);
+        if (changedSession) { messages.replaceChildren(); messages.dataset.session = key; }
+        const existing = new Map(Array.from(messages.children).map(item => [item.dataset.messageId, item]));
+        for (const message of (session && session.messages) || []) {
+            let item = existing.get(message.id);
+            if (!item) {
+                item = document.createElement('article');
+                item.className = 'desktop-workshop-message';
+                item.dataset.messageId = message.id;
+                item.dataset.role = message.role;
+                const avatar = document.createElement('span');
+                avatar.className = 'desktop-workshop-message-avatar';
+                avatar.textContent = message.role === 'assistant' ? '助' : '我';
+                const body = document.createElement('div');
+                body.className = 'desktop-workshop-message-body';
+                const role = document.createElement('button');
+                role.type = 'button';
+                role.className = 'desktop-workshop-message-role';
+                role.textContent = message.role === 'assistant' ? '助手' : '你';
+                role.disabled = message.role !== 'assistant';
+                role.addEventListener('click', () => { workshopState.selectedAssistantMessageId = message.id; renderWorkshop(); });
+                const content = document.createElement('div');
+                content.className = 'desktop-workshop-message-text';
+                body.append(role, content);
+                item.append(avatar, body);
+                messages.appendChild(item);
+            }
+            existing.delete(message.id);
+            item.classList.toggle('is-selected', message.id === workshopState.selectedAssistantMessageId);
+            const content = item.querySelector('.desktop-workshop-message-text');
+            const text = message.content || (message.role === 'assistant' && workshopState.generating && !message.meta?.workshopAgent ? '生成中…' : '');
+            if (content.textContent !== text) {
+                if (content.firstChild && content.childNodes.length === 1 && text.startsWith(content.textContent)) content.firstChild.appendData(text.slice(content.textContent.length));
+                else content.textContent = text;
+            }
+            if (window.WorkshopAgent) window.WorkshopAgent.renderMessage(item, message);
+        }
+        existing.forEach(item => item.remove());
+        if (follow) messages.scrollTop = messages.scrollHeight;
+    }
+
     async function loadWorkshopSessions() {
-        const projectId = currentProjectId();
-        await loadWorkshopTemplates();
+        syncWorkshopIdentity();
+        const captured = captureWorkshopSession();
+        const projectId = captured.projectId;
+        const requestId = ++workshopSessionState.loadId;
+        const revision = workshopSessionState.revision;
+        const current = () => isCurrentWorkshopSession(captured, false) && requestId === workshopSessionState.loadId && revision === workshopSessionState.revision;
+        await loadWorkshopTemplates(captured, current);
+        if (!current()) return;
         if (!projectId) {
             workshopState.sessions = [];
             workshopState.selectedId = '';
@@ -333,6 +391,7 @@
         try {
             const response = await fetch(`/api/workshop-sessions?${new URLSearchParams({ projectId }).toString()}`, { cache: 'no-store' });
             const result = await response.json().catch(() => ({}));
+            if (!current() || workshopState.generating) return;
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
             workshopState.sessions = result.sessions || [];
             if (!workshopState.sessions.some((session) => session.id === workshopState.selectedId)) {
@@ -340,45 +399,62 @@
             }
             if (nativeEditorState.snapshot) nativeEditorState.snapshot.workshopSessions = workshopState.sessions;
         } catch (error) {
+            if (!current()) return;
             console.warn('Failed to load workshop sessions:', error);
             setWorkshopStatus(`读取对话失败：${error.message || error}`, 'error');
         }
         renderWorkshop();
+        if (current() && window.WorkshopAgent) window.WorkshopAgent.restore();
     }
 
-    async function saveWorkshopSession(session) {
-        const projectId = currentProjectId();
+    async function saveWorkshopSession(session, captured = captureWorkshopSession(session)) {
+        const projectId = captured.projectId;
         if (!projectId || !session) return null;
-        const response = await fetch('/api/workshop-sessions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectId, session })
+        workshopSessionState.revision += 1;
+        const body = JSON.stringify({ projectId, session });
+        const key = projectId;
+        const previous = workshopSessionState.saves.get(key) || Promise.resolve();
+        const pending = previous.catch(() => {}).then(async () => {
+            const response = await fetch('/api/workshop-sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+            if (isCurrentWorkshopSession(captured, false) && captured.snapshot) captured.snapshot.workshopSessions = workshopState.sessions;
+            return result.session;
         });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
-        return result.session;
+        workshopSessionState.saves.set(key, pending);
+        try { return await pending; }
+        finally { if (workshopSessionState.saves.get(key) === pending) workshopSessionState.saves.delete(key); }
     }
 
     async function createWorkshopSession() {
         const projectId = currentProjectId();
-        if (!projectId || !window.DraftHarborWorkshopSchema) return;
+        if (!projectId || !window.DraftHarborWorkshopSchema || workshopSessionState.creating || workshopState.generating) return;
+        const captured = captureWorkshopSession();
         const elements = workshopElements();
         const session = window.DraftHarborWorkshopSchema.createWorkshopSession({
             projectId,
             title: `对话 ${workshopState.sessions.length + 1}`,
             promptTemplateId: (elements.template && elements.template.value) || 'default-workshop-coach'
         });
-        const saved = await saveWorkshopSession(session);
-        workshopState.sessions = [saved, ...workshopState.sessions];
-        workshopState.selectedId = saved.id;
-        workshopState.selectedAssistantMessageId = '';
+        workshopSessionState.creating = true;
         renderWorkshop();
+        try {
+            const saved = await saveWorkshopSession(session, captured);
+            if (!isCurrentWorkshopSession(captured, false)) return;
+            workshopState.sessions = [saved, ...workshopState.sessions];
+            if (captured.snapshot) captured.snapshot.workshopSessions = workshopState.sessions;
+            workshopState.selectedId = saved.id;
+            workshopState.selectedAssistantMessageId = '';
+        } catch (error) {
+            if (isCurrentWorkshopSession(captured, false)) setWorkshopStatus(`创建失败：${error.message || error}`, 'error');
+        } finally { workshopSessionState.creating = false; renderWorkshop(); }
     }
 
     async function saveWorkshopDirectiveContract() {
         const elements = workshopElements();
         const session = selectedWorkshopSession();
-        if (!session) return;
+        if (!session || workshopState.generating) return;
+        const captured = captureWorkshopSession(session);
         const enabled = !!(elements.contractEnabled && elements.contractEnabled.checked);
         const content = elements.contractContent ? elements.contractContent.value.trim() : '';
         if (enabled && !content) {
@@ -391,25 +467,27 @@
             reinforcedAt: new Date().toISOString(),
             pinMode: 'off'
         };
-        const saved = await saveWorkshopSession(session);
-        const index = workshopState.sessions.findIndex((item) => item.id === saved.id);
-        if (index >= 0) workshopState.sessions[index] = saved;
-        if (nativeEditorState.snapshot) nativeEditorState.snapshot.workshopSessions = workshopState.sessions;
-        setWorkshopStatus(enabled ? '会话指令已启用。' : '会话指令已关闭。', 'ok');
-        closeWorkshopContract();
-        renderWorkshop();
+        try {
+            await saveWorkshopSession(session, captured);
+            if (isCurrentWorkshopSession(captured)) { setWorkshopStatus(enabled ? '会话指令已启用。' : '会话指令已关闭。', 'ok'); closeWorkshopContract(); }
+        } catch (error) { if (isCurrentWorkshopSession(captured)) setWorkshopStatus(`保存失败：${error.message || error}`, 'error'); }
+        if (isCurrentWorkshopSession(captured)) renderWorkshop();
     }
 
     async function sendWorkshopMessage() {
+        if (window.WorkshopAgent && window.WorkshopAgent.mode() === 'agent') return window.WorkshopAgent.start();
         const projectId = currentProjectId();
         const session = selectedWorkshopSession();
         const text = workshopState.input.trim();
         if (!projectId || !session || !text || workshopState.generating) return;
+        const captured = captureWorkshopSession(session);
+        const run = { ...captured, controller: new AbortController(), cancelled: false };
+        workshopSessionState.chat = run;
         const userMessage = window.DraftHarborWorkshopSchema.createWorkshopMessage({ role: 'user', content: text });
         const assistantMessage = window.DraftHarborWorkshopSchema.createWorkshopMessage({ role: 'assistant', content: '' });
         session.messages = [...(session.messages || []), userMessage, assistantMessage];
         session.updatedAt = new Date().toISOString();
-        workshopState.input = '';
+        rememberWorkshopInput('');
         workshopState.selectedAssistantMessageId = assistantMessage.id;
         workshopState.generating = true;
         setWorkshopStatus('生成中...', 'info');
@@ -417,7 +495,7 @@
         try {
             const prompt = window.DraftHarborWorkshopPrompt.buildWorkshopPrompt({
                 project: {
-                    ...nativeEditorState.snapshot,
+                    ...captured.snapshot,
                     currentSceneId: nativeEditorState.activeSceneId
                 },
                 session: {
@@ -432,12 +510,14 @@
                 throw new Error('Provider stream is not loaded');
             }
             await streamDesktopGeneration(prompt, (token, meta) => {
+                if (run.cancelled || !isCurrentWorkshopSession(captured)) return;
                 if (meta && meta.type && meta.type !== 'content') return;
                 assistantMessage.content += token;
-                renderWorkshop();
+                renderWorkshopMessages();
             }, runtimeProviderConfig({
                 taskKind: 'workshop-chat',
-                projectDirectiveStack: nativeEditorState.snapshot && nativeEditorState.snapshot.directiveStack,
+                signal: run.controller.signal,
+                projectDirectiveStack: captured.snapshot && captured.snapshot.directiveStack,
                 sessionDirective: session.directiveContract && session.directiveContract.enabled
                     ? {
                         id: 'run_session',
@@ -449,26 +529,27 @@
                     }
                     : null
             }));
-            const saved = await saveWorkshopSession(session);
-            const index = workshopState.sessions.findIndex((item) => item.id === saved.id);
-            if (index >= 0) workshopState.sessions[index] = saved;
-            if (nativeEditorState.snapshot) nativeEditorState.snapshot.workshopSessions = workshopState.sessions;
-            setWorkshopStatus('对话已保存', 'ok');
+            await saveWorkshopSession(session, captured);
+            if (isCurrentWorkshopSession(captured)) setWorkshopStatus(run.cancelled ? '讨论已停止' : '对话已保存', 'ok');
         } catch (error) {
-            assistantMessage.content = `Error: ${error.message || error}`;
-            assistantMessage.isError = true;
-            try { await saveWorkshopSession(session); } catch {}
-            setWorkshopStatus(`生成失败：${error.message || error}`, 'error');
+            assistantMessage.meta = { ...assistantMessage.meta, error: run.cancelled ? '已停止' : String(error.message || error) };
+            if (!assistantMessage.content) assistantMessage.content = run.cancelled ? '讨论已停止。' : `生成失败：${error.message || error}`;
+            assistantMessage.isError = !run.cancelled;
+            try { await saveWorkshopSession(session, captured); } catch {}
+            if (isCurrentWorkshopSession(captured)) {
+                if (!run.cancelled) rememberWorkshopInput(text);
+                setWorkshopStatus(run.cancelled ? '讨论已停止' : `生成失败：${error.message || error}`, 'error');
+            }
         } finally {
-            workshopState.generating = false;
-            renderWorkshop();
+            if (workshopSessionState.chat === run) { workshopSessionState.chat = null; workshopState.generating = false; renderWorkshop(); }
         }
     }
 
     async function deleteWorkshopSession() {
         const projectId = currentProjectId();
         const session = selectedWorkshopSession();
-        if (!projectId || !session) return;
+        if (!projectId || !session || workshopState.generating) return;
+        const captured = captureWorkshopSession(session);
         if (!window.confirm(`删除对话“${session.title || '新对话'}”？`)) return;
         const response = await fetch('/api/delete-workshop-session', {
             method: 'POST',
@@ -476,6 +557,7 @@
             body: JSON.stringify({ projectId, sessionId: session.id })
         });
         const result = await response.json().catch(() => ({}));
+        if (!isCurrentWorkshopSession(captured, false)) return;
         if (!response.ok || !result.ok) {
             setWorkshopStatus(`删除失败：${result.error || response.status}`, 'error');
             return;
@@ -577,12 +659,12 @@
         const session = await ensureWorkshopSession();
         if (!session) return;
         const sceneTitle = payload.scene.title || '当前场景';
-        workshopState.input = [
+        rememberWorkshopInput([
             `请基于《${sceneTitle}》帮我讨论这段内容的下一步处理。`,
             '',
             payload.selected ? '选中片段：' : '场景片段：',
             payload.text
-        ].join('\n');
+        ].join('\n'));
         setView('workshop');
         renderWorkshop();
         const elements = workshopElements();
@@ -651,8 +733,8 @@
         if (elements.contractSave) elements.contractSave.addEventListener('click', saveWorkshopDirectiveContract);
         if (elements.input) {
             elements.input.addEventListener('input', () => {
-                workshopState.input = elements.input.value;
-                renderWorkshop();
+                rememberWorkshopInput(elements.input.value);
+                if (elements.send) elements.send.disabled = workshopState.generating || !workshopState.input.trim();
             });
             elements.input.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter' && !event.shiftKey) {
@@ -664,24 +746,40 @@
         if (elements.template) {
             elements.template.addEventListener('change', async () => {
                 const session = selectedWorkshopSession();
-                if (!session) return;
+                if (!session || workshopState.generating) return;
+                const captured = captureWorkshopSession(session);
                 session.promptTemplateId = elements.template.value || 'default-workshop-coach';
                 session.updatedAt = new Date().toISOString();
                 try {
-                    const saved = await saveWorkshopSession(session);
-                    const index = workshopState.sessions.findIndex((item) => item.id === saved.id);
-                    if (index >= 0) workshopState.sessions[index] = saved;
-                    if (nativeEditorState.snapshot) nativeEditorState.snapshot.workshopSessions = workshopState.sessions;
-                    setWorkshopStatus('讨论角度已保存', 'ok');
+                    await saveWorkshopSession(session, captured);
+                    if (isCurrentWorkshopSession(captured)) setWorkshopStatus('讨论角度已保存', 'ok');
                 } catch (error) {
-                    setWorkshopStatus(`保存讨论角度失败：${error.message || error}`, 'error');
+                    if (isCurrentWorkshopSession(captured)) setWorkshopStatus(`保存讨论角度失败：${error.message || error}`, 'error');
                 }
-                renderWorkshop();
+                if (isCurrentWorkshopSession(captured)) renderWorkshop();
             });
         }
         if (elements.send) elements.send.addEventListener('click', sendWorkshopMessage);
         if (elements.toCompendium) elements.toCompendium.addEventListener('click', workshopOutputToCompendium);
         if (elements.toSummary) elements.toSummary.addEventListener('click', workshopOutputToSummary);
         if (elements.insertDraft) elements.insertDraft.addEventListener('click', workshopOutputInsertDraft);
+        if (window.WorkshopAgent) window.WorkshopAgent.bind();
         renderWorkshop();
     }
+
+    window.WorkshopUI = {
+        capture: captureWorkshopSession, isCurrent: isCurrentWorkshopSession, persist: saveWorkshopSession,
+        render: renderWorkshop, renderMessages: renderWorkshopMessages, elements: workshopElements,
+        state: () => workshopState, native: () => nativeEditorState, compendium: () => compendiumState,
+        input: rememberWorkshopInput, status: setWorkshopStatus, session: selectedWorkshopSession,
+        stopChat: () => {
+            const run = workshopSessionState.chat;
+            if (!run) return;
+            run.cancelled = true;
+            run.controller.abort();
+            workshopSessionState.chat = null;
+            workshopState.generating = false;
+            saveWorkshopSession(run.session, run).catch(error => setWorkshopStatus(`保存失败：${error.message}`, 'error'));
+            renderWorkshop();
+        }
+    };

@@ -1,4 +1,4 @@
-    const compendiumDrawState = { running: false, hasDraft: false };
+    const compendiumDrawState = { projectId: '', snapshot: null, requestId: 0, controller: null, running: false, saving: false, hasDraft: false };
 
     function compendiumDrawElements() {
         return { modal: document.querySelector('[data-compendium-draw-modal]'), form: document.querySelector('[data-compendium-draw-form]'), type: document.querySelector('[data-compendium-draw-type]'), instruction: document.querySelector('[data-compendium-draw-instruction]'), referenceList: document.querySelector('[data-compendium-draw-reference-list]'), referenceCount: document.querySelector('[data-compendium-draw-reference-count]'), title: document.querySelector('[data-compendium-draw-title]'), tags: document.querySelector('[data-compendium-draw-tags]'), summary: document.querySelector('[data-compendium-draw-summary]'), body: document.querySelector('[data-compendium-draw-body]'), status: document.querySelector('[data-compendium-draw-status]'), generate: document.querySelector('[data-compendium-draw-generate]'), save: document.querySelector('[data-compendium-draw-save]'), draft: document.querySelector('[data-compendium-draw-draft]'), character: document.querySelector('[data-compendium-draw-character]'), characterLock: document.querySelector('[data-compendium-draw-character-lock]'), characterRole: document.querySelector('[data-compendium-draw-character-role]'), characterGoal: document.querySelector('[data-compendium-draw-character-goal]'), characterMotivation: document.querySelector('[data-compendium-draw-character-motivation]'), characterConflict: document.querySelector('[data-compendium-draw-character-conflict]'), characterVoice: document.querySelector('[data-compendium-draw-character-voice]'), characterCurrentState: document.querySelector('[data-compendium-draw-character-current-state]'), characterKnowledge: document.querySelector('[data-compendium-draw-character-knowledge]'), characterRelationship: document.querySelector('[data-compendium-draw-character-relationship]'), locks: document.querySelectorAll('[data-compendium-draw-lock]'), cancel: document.querySelectorAll('[data-compendium-draw-cancel]') };
@@ -15,22 +15,44 @@
     }
     function renderCompendiumDrawState() {
         const elements = compendiumDrawElements();
+        const busy = compendiumDrawState.running || compendiumDrawState.saving;
+        elements.form?.querySelectorAll('input, textarea, select, [data-compendium-draw-type-chip]').forEach((field) => { field.disabled = busy; });
+        elements.cancel.forEach((button) => { button.disabled = compendiumDrawState.saving; });
         const isCharacter = elements.type && elements.type.value === 'character';
         if (elements.form) elements.form.classList.toggle('has-draft', compendiumDrawState.hasDraft);
         if (elements.draft) elements.draft.hidden = !compendiumDrawState.hasDraft;
         if (elements.character) elements.character.hidden = !compendiumDrawState.hasDraft || !isCharacter;
         if (elements.characterLock) elements.characterLock.hidden = !compendiumDrawState.hasDraft || !isCharacter;
         if (elements.generate) {
+            elements.generate.disabled = busy;
             elements.generate.textContent = compendiumDrawState.hasDraft ? '重新抽卡' : '生成草稿';
             elements.generate.classList.toggle('desktop-primary-action', !compendiumDrawState.hasDraft);
             elements.generate.classList.toggle('desktop-secondary-action', compendiumDrawState.hasDraft);
         }
-        if (elements.save) elements.save.disabled = !compendiumDrawState.hasDraft || compendiumDrawState.running;
+        if (elements.save) elements.save.disabled = !compendiumDrawState.hasDraft || busy;
         if (elements.type) syncDrawTypeChips(elements.type.value);
     }
-    function closeCompendiumDraw() { const { modal } = compendiumDrawElements(); if (modal) modal.hidden = true; compendiumDrawState.running = false; compendiumDrawState.hasDraft = false; }
+    function closeCompendiumDraw() {
+        if (compendiumDrawState.saving) return;
+        const { modal } = compendiumDrawElements();
+        const wasOpen = modal?.open;
+        compendiumDrawState.requestId += 1;
+        compendiumDrawState.controller?.abort();
+        compendiumDrawState.controller = null;
+        if (modal) { if (modal.open) modal.close(); modal.hidden = true; }
+        if (wasOpen) document.querySelector('[data-compendium-more]')?.focus();
+        compendiumDrawState.running = false;
+        compendiumDrawState.hasDraft = false;
+    }
+    function currentCompendiumDraw(requestId) {
+        return requestId === compendiumDrawState.requestId && compendiumDrawState.projectId === currentProjectId()
+            && compendiumDrawState.snapshot === nativeEditorState.snapshot && !compendiumDrawElements().modal.hidden;
+    }
     function openCompendiumDraw() {
-        if (!currentProjectId()) return;
+        if (!currentProjectId() || compendiumDrawState.saving) return;
+        closeCompendiumDraw();
+        compendiumDrawState.projectId = currentProjectId();
+        compendiumDrawState.snapshot = nativeEditorState.snapshot;
         const elements = compendiumDrawElements();
         ['title', 'tags', 'summary', 'body'].forEach((key) => { if (elements[key]) elements[key].value = ''; });
         setDrawCharacterProfile(elements);
@@ -40,7 +62,7 @@
         compendiumDrawState.hasDraft = false;
         renderCompendiumDrawState();
         setCompendiumDrawStatus('选择类型后抽取一张草稿卡；可锁定字段后重抽。');
-        if (elements.modal) elements.modal.hidden = false;
+        if (elements.modal) { elements.modal.hidden = false; elements.modal.showModal(); }
     }
     function currentDrawDraft() {
         const elements = compendiumDrawElements();
@@ -56,41 +78,68 @@
         ], asString() { return this.messages.map((message) => `<|im_start|>${message.role}\n${message.content}<|im_end|>`).join('\n'); } };
     }
     async function generateCompendiumDraw() {
-        const elements = compendiumDrawElements(); if (compendiumDrawState.running) return;
+        const elements = compendiumDrawElements();
+        if (compendiumDrawState.running || compendiumDrawState.saving || !currentCompendiumDraw(compendiumDrawState.requestId)) return;
         const before = currentDrawDraft(); const locked = {};
         elements.locks.forEach((lock) => { if (lock.checked) locked[lock.dataset.compendiumDrawLock] = before[lock.dataset.compendiumDrawLock]; });
         compendiumDrawState.running = true; if (elements.generate) elements.generate.disabled = true; renderCompendiumDrawState(); setCompendiumDrawStatus('正在抽取草稿卡…');
-        const profile = writerEffectiveProfile();
-        const task = { projectId: currentProjectId(), domain: 'compendium', action: 'draw', scope: 'project', target: { type: 'compendium-draw', projectId: currentProjectId(), id: `draw-${elements.type.value}` }, instruction: elements.instruction.value.trim(), model: writerSelectedModelId(profile), outputContract: 'card-drafts', beforeSnapshot: { locked } };
-        const result = await getNativeAITaskRunner().run(task, { prompt: drawPrompt(elements.type.value, task.instruction, locked, selectedCompendiumReferenceCards(elements.referenceList)), providerConfig: nativeGenerationConfig(), onToken: ({ text }) => setCompendiumDrawStatus(`正在接收草稿… ${text.length} 字`) });
-        compendiumDrawState.running = false; if (elements.generate) elements.generate.disabled = false;
-        if (!result.ok) { setCompendiumDrawStatus(`抽取失败：${result.error.message}`, 'error'); return; }
-        const draft = { ...(result.output[0] || {}), ...locked };
-        if (elements.type && draft.type) {
-            elements.type.value = draft.type;
-            syncDrawTypeChips(draft.type);
+        const requestId = ++compendiumDrawState.requestId;
+        const controller = new AbortController();
+        compendiumDrawState.controller = controller;
+        try {
+            const profile = writerEffectiveProfile();
+            const task = { projectId: compendiumDrawState.projectId, domain: 'compendium', action: 'draw', scope: 'project', target: { type: 'compendium-draw', projectId: compendiumDrawState.projectId, id: `draw-${elements.type.value}` }, instruction: elements.instruction.value.trim(), model: writerSelectedModelId(profile), outputContract: 'card-drafts', beforeSnapshot: { locked } };
+            const result = await getNativeAITaskRunner().run(task, {
+                prompt: drawPrompt(elements.type.value, task.instruction, locked, selectedCompendiumReferenceCards(elements.referenceList)), providerConfig: nativeGenerationConfig(), abortController: controller,
+                onToken: ({ text }) => { if (currentCompendiumDraw(requestId)) setCompendiumDrawStatus(`正在接收草稿… ${text.length} 字`); }
+            });
+            if (!currentCompendiumDraw(requestId)) return;
+            if (!result.ok) throw new Error(result.error?.message || '抽取失败');
+            const draft = { ...(result.output[0] || {}), ...locked };
+            if (elements.type && draft.type) { elements.type.value = draft.type; syncDrawTypeChips(draft.type); }
+            if (elements.title) elements.title.value = draft.title || '';
+            if (elements.tags) elements.tags.value = Array.isArray(draft.tags) ? draft.tags.join(', ') : '';
+            if (elements.summary) elements.summary.value = draft.summary || '';
+            if (elements.body) elements.body.value = draft.body || draft.content || '';
+            setDrawCharacterProfile(elements, draft.characterProfile || {});
+            compendiumDrawState.hasDraft = true;
+            setCompendiumDrawStatus('草稿已生成。可继续重抽或确认保存。', 'ok');
+        } catch (error) {
+            if (currentCompendiumDraw(requestId)) setCompendiumDrawStatus(`抽取失败：${error.message || error}`, 'error');
+        } finally {
+            if (requestId === compendiumDrawState.requestId) {
+                compendiumDrawState.running = false;
+                compendiumDrawState.controller = null;
+                renderCompendiumDrawState();
+            }
         }
-        if (elements.title) elements.title.value = draft.title || '';
-        if (elements.tags) elements.tags.value = Array.isArray(draft.tags) ? draft.tags.join(', ') : '';
-        if (elements.summary) elements.summary.value = draft.summary || '';
-        if (elements.body) elements.body.value = draft.body || draft.content || '';
-        setDrawCharacterProfile(elements, draft.characterProfile || {});
-        compendiumDrawState.hasDraft = true;
-        renderCompendiumDrawState();
-        setCompendiumDrawStatus('草稿已生成。可继续重抽或确认保存。', 'ok');
     }
     async function saveCompendiumDraw(event) {
         if (event) event.preventDefault(); const draft = currentDrawDraft();
+        if (!compendiumDrawState.hasDraft || compendiumDrawState.running || compendiumDrawState.saving || !currentCompendiumDraw(compendiumDrawState.requestId)) return;
         if (!draft.title) { setCompendiumDrawStatus('请填写标题', 'error'); return; }
+        const projectId = compendiumDrawState.projectId;
+        const requestId = compendiumDrawState.requestId;
+        compendiumDrawState.saving = true;
+        renderCompendiumDrawState();
         try {
             const response = await fetch('/api/compendium', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectId: currentProjectId(), entry: { ...draft, contextPolicy: { mode: 'manual' } } })
+                body: JSON.stringify({ projectId, entry: { ...draft, contextPolicy: { mode: 'manual' } } })
             });
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
-            await loadCompendium(); compendiumState.selectedId = result.entry.id; closeCompendiumDraw(); setView('compendium'); renderCompendium(); setCompendiumStatus(`已保存抽卡资料：${result.entry.title}`, 'ok');
-        } catch (error) { setCompendiumDrawStatus(`保存失败：${error.message || error}`, 'error'); }
+            if (!currentCompendiumDraw(requestId)) return;
+            window.acceptCompendiumSavedEntry(result.entry, { projectId, snapshot: compendiumDrawState.snapshot, entryId: '', version: -1 });
+            window.selectCompendiumEntry(result.entry.id);
+            compendiumDrawState.saving = false;
+            closeCompendiumDraw(); setView('compendium'); renderCompendium(); setCompendiumStatus(`已保存抽卡资料：${result.entry.title}`, 'ok');
+        } catch (error) {
+            if (currentCompendiumDraw(requestId)) setCompendiumDrawStatus(`保存失败：${error.message || error}`, 'error');
+        } finally {
+            compendiumDrawState.saving = false;
+            renderCompendiumDrawState();
+        }
     }
     function bindCompendiumDraw() {
         const elements = compendiumDrawElements();
@@ -98,10 +147,11 @@
         if (elements.generate) elements.generate.addEventListener('click', generateCompendiumDraw);
         if (elements.form) elements.form.addEventListener('submit', saveCompendiumDraw);
         elements.cancel.forEach((button) => button.addEventListener('click', closeCompendiumDraw));
+        if (elements.modal) elements.modal.addEventListener('cancel', (event) => { event.preventDefault(); closeCompendiumDraw(); });
         if (typeChips) {
             typeChips.addEventListener('click', (event) => {
                 const chip = event.target.closest('[data-compendium-draw-type-chip]');
-                if (!chip || compendiumDrawState.running) return;
+                if (!chip || compendiumDrawState.running || compendiumDrawState.saving) return;
                 const nextType = chip.dataset.compendiumDrawTypeChip;
                 if (elements.type) elements.type.value = nextType;
                 syncDrawTypeChips(nextType);
