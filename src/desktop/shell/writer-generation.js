@@ -239,7 +239,7 @@
     }
 
     async function retryNativeHistoryRecord(record) {
-        if (!record || !record.beat) return;
+        if (!record) return;
         const elements = nativeEditorElements();
         const scene = currentNativeScene();
         if (!scene) {
@@ -253,18 +253,12 @@
         }
         const generation = nativeEditorState.generation;
         if (generation.inProgress) return;
-        if (generation.text && generation.inlineBaseText) restorePendingInlineGeneration();
-        generation.text = '';
-        resetNativeGenerationStreamFlags(generation);
-        generation.record = null;
-        generation.prompt = null;
         generation.beat = record.beat || '';
         if (elements.beatInput) elements.beatInput.value = generation.beat;
         if (elements.generationResult) elements.generationResult.textContent = '';
         if (elements.generationOutput) elements.generationOutput.hidden = false;
         setNativeSaveStatus('正在重试...', 'info');
         nativeEditorState.assistantPanel = 'generate';
-        renderNativeEditor();
         await startNativeGeneration();
     }
 
@@ -460,8 +454,10 @@
     function restorePendingInlineGeneration() {
         const elements = nativeEditorElements();
         const generation = nativeEditorState.generation;
-        if (!elements.editor || !generation.inlineBaseText || generation.pendingSceneId !== nativeEditorState.activeSceneId) return;
+        if (!elements.editor || !generation.pendingSceneId || generation.pendingSceneId !== nativeEditorState.activeSceneId) return;
         elements.editor.value = generation.inlineBaseText;
+        elements.editor.selectionStart = generation.insertionStart;
+        elements.editor.selectionEnd = generation.insertionEnd;
         flushNativeEditorFields();
     }
 
@@ -546,18 +542,27 @@
             return { ok: false, reason: 'no-scene' };
         }
         if (nativeEditorState.generation.inProgress) return { ok: false, reason: 'in-progress' };
-        const prompt = buildNativePrompt();
         if (nativeEditorState.generation.genTask === 'beat' && !nativeEditorState.generation.beat.trim()) {
             setNativeSaveStatus('请输入 beat', 'error');
             return { ok: false, reason: 'empty-beat' };
         }
+        const generation = nativeEditorState.generation;
+        // Remove the pending draft before collecting context, otherwise a retry
+        // asks the provider to continue the very result it is meant to replace.
+        if (generation.pendingSceneId === scene.id && generation.task === 'fiction-prose') {
+            if (!isNativePendingInlineValueStable(elements)
+                && !(generation.text === '' && elements.editor && elements.editor.value === generation.inlineBaseText)) {
+                setNativeSaveStatus('正文已修改，请先保留编辑内容或撤回，再重新生成。', 'error');
+                return { ok: false, reason: 'editor-changed' };
+            }
+            restorePendingInlineGeneration();
+        }
+        const prompt = buildNativePrompt();
         if (!prompt) {
             setNativeSaveStatus('Prompt 构建失败', 'error');
             return { ok: false, reason: 'no-prompt' };
         }
 
-        const generation = nativeEditorState.generation;
-        if (generation.text && generation.inlineBaseText) restorePendingInlineGeneration();
         generation.text = '';
         resetNativeGenerationStreamFlags(generation);
         generation.prompt = prompt;
@@ -1024,7 +1029,7 @@
     function discardNativeGeneration() {
         const elements = nativeEditorElements();
         const generation = nativeEditorState.generation;
-        if (elements.editor && generation.pendingSceneId === nativeEditorState.activeSceneId && generation.inlineBaseText) {
+        if (elements.editor && generation.pendingSceneId && generation.pendingSceneId === nativeEditorState.activeSceneId) {
             elements.editor.value = generation.inlineBaseText;
             flushNativeEditorFields();
             markNativeDirty('已撤回生成内容，未保存');
