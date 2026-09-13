@@ -1,0 +1,21 @@
+.desktop-native-writing-tools { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--desktop-line); }
+.desktop-native-writing-tools button { font: inherit; color: inherit; border: 1px solid var(--desktop-line); background: var(--desktop-surface); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+[data-style-guard-modal] { border: 0; padding: 0; max-width: none; max-height: none; width: 100vw; height: 100vh; margin: 0; }
+[data-style-guard-modal][open] { display: flex; align-items: center; justify-content: center; }
+[data-style-guard-modal]::backdrop { background: rgba(0,0,0,.45); }
+.desktop-modal.desktop-style-guard { display: flex; flex-direction: column; gap: 14px; width: min(860px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow-y: auto; box-sizing: border-box; }
+.desktop-style-guard p { margin: 0; line-height: 1.6; }
+.desktop-style-guard label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.desktop-style-guard input:not([type=checkbox]), .desktop-style-guard select, .desktop-style-guard textarea { width: 100%; box-sizing: border-box; padding: 9px 10px; font: inherit; color: inherit; background: rgba(127,127,127,.1); border: 1px solid var(--desktop-line); border-radius: 8px; }
+.desktop-style-guard-scope { max-width: 250px; }
+.desktop-style-guard-list { display: grid; gap: 12px; }
+.desktop-style-guard-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.25fr) auto auto; gap: 12px; align-items: end; padding: 12px; border: 1px solid var(--desktop-line); border-radius: 10px; }
+.desktop-style-guard-row .desktop-style-guard-enabled { flex-direction: row; align-items: center; align-self: center; }
+.desktop-style-guard .desktop-modal-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.desktop-style-guard .desktop-modal-actions span { flex: 1 1 220px; font-size: 12px; }
+.desktop-style-guard summary { cursor: pointer; padding: 8px 0; }
+.desktop-native-history-prompt { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; padding: 10px; font: 12px/1.6 monospace; user-select: text; }
+.desktop-native-history-item details { min-width: 0; }
+.desktop-native-history-item summary { cursor: pointer; padding: 8px 0; }
+.desktop-native-history-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+@media (max-width: 700px) { .desktop-style-guard-row { grid-template-columns: minmax(0,1fr) auto; } .desktop-style-guard-row > label:not(.desktop-style-guard-enabled) { grid-column: 1 / -1; } }

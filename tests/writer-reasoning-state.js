@@ -128,9 +128,17 @@ const cases = [
             renderNativeGeneration();
         });
         const history = page.locator('[data-test-history]');
-        assert.strictEqual(await history.locator('.desktop-native-history-item').count(), 5);
-        assert.strictEqual(await history.getByText('Stored prompt 0', { exact: true }).count(), 0,
-            'history controls operate on the latest five records, independently of earlier audit cases');
+        assert.strictEqual(await history.locator('.desktop-native-history-item').count(), 6);
+        assert.strictEqual(await history.getByText('Stored prompt 0', { exact: true }).count(), 1,
+            'older records must remain reachable');
+        const latest = history.locator('.desktop-native-history-item').filter({ hasText: 'Stored prompt 5' });
+        await latest.getByText('查看历史提示词', { exact: true }).click();
+        assert.strictEqual(await latest.locator('pre').innerText(), 'Full prompt 5.');
+        await page.evaluate(() => {
+            window.copyNativeHistoryRecord = record => { window.copiedHistoryText = record.resultText; };
+        });
+        await latest.getByText('复制历史提示词', { exact: true }).click();
+        assert.strictEqual(await page.evaluate(() => window.copiedHistoryText), 'Full prompt 5.');
         await history.locator('.desktop-native-history-item').filter({ hasText: 'Stored prompt 5' })
             .locator('[data-native-history-reuse]').click();
         const result = await page.evaluate(() => {

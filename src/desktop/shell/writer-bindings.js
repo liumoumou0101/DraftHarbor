@@ -161,6 +161,12 @@
             context: 'characters',
             document: 'metadata'
         };
+        document.querySelectorAll('[data-native-open-history]').forEach(button => {
+            button.addEventListener('click', () => {
+                nativeEditorState.assistantPanel = 'history';
+                renderNativeEditor();
+            });
+        });
         elements.assistantGroupTabs.forEach((tab) => {
             tab.addEventListener('click', () => {
                 const group = tab.dataset.nativeAssistantGroup || 'writing';

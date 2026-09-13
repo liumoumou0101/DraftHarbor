@@ -442,7 +442,8 @@
             const filtered = nativeEditorState.historySceneFilter && scene
                 ? allRecords.filter((r) => r.sceneId === scene.id)
                 : allRecords;
-            const records = filtered.slice(-5).reverse();
+            const historyLimit = nativeEditorState.historyDisplayLimit || 20;
+            const records = filtered.slice(-historyLimit).reverse();
             elements.generationHistory.replaceChildren();
             if (elements.historyToolbar) {
                 elements.historyToolbar.replaceChildren();
@@ -458,6 +459,20 @@
                     renderNativeGeneration();
                 });
                 elements.historyToolbar.appendChild(filterToggle);
+                const count = document.createElement('span');
+                count.textContent = `显示 ${records.length} / ${filtered.length} 条`;
+                elements.historyToolbar.appendChild(count);
+                if (records.length < filtered.length) {
+                    const more = document.createElement('button');
+                    more.type = 'button';
+                    more.className = 'desktop-secondary-action';
+                    more.textContent = '加载更早记录';
+                    more.addEventListener('click', () => {
+                        nativeEditorState.historyDisplayLimit = historyLimit + 20;
+                        renderNativeGeneration();
+                    });
+                    elements.historyToolbar.appendChild(more);
+                }
             }
             if (!records.length) {
                 const empty = document.createElement('div');
@@ -512,7 +527,7 @@
                     });
                     const copy = document.createElement('button');
                     copy.type = 'button';
-                    copy.textContent = '复制';
+                    copy.textContent = '复制结果';
                     copy.setAttribute('data-native-history-copy', '');
                     copy.disabled = !record.resultText;
                     copy.addEventListener('click', () => copyNativeHistoryRecord(record));
@@ -535,6 +550,25 @@
                     remove.addEventListener('click', () => deleteNativeHistoryRecord(record));
                     actions.append(reuse, copy, retry, insert, remove);
                     item.append(taskLabel, title, meta, preview, actions);
+                    const promptDetails = document.createElement('details');
+                    const promptSummary = document.createElement('summary');
+                    promptSummary.textContent = '查看历史提示词';
+                    const promptText = record.promptText || (record.messages || []).map(message => {
+                        const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2);
+                        return `[${message.role || 'message'}]\n${content || ''}`;
+                    }).join('\n\n');
+                    const promptBody = document.createElement('pre');
+                    promptBody.className = 'desktop-native-history-prompt';
+                    promptBody.tabIndex = 0;
+                    promptBody.textContent = promptText || '这条旧记录未保存完整提示词。';
+                    const copyPrompt = document.createElement('button');
+                    copyPrompt.type = 'button';
+                    copyPrompt.className = 'desktop-secondary-action';
+                    copyPrompt.textContent = '复制历史提示词';
+                    copyPrompt.disabled = !promptText;
+                    copyPrompt.addEventListener('click', () => copyNativeHistoryRecord({ resultText: promptText }));
+                    promptDetails.append(promptSummary, promptBody, copyPrompt);
+                    item.append(promptDetails);
                     elements.generationHistory.appendChild(item);
                 });
             }

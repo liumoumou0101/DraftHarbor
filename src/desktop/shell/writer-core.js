@@ -371,6 +371,7 @@
     }
 
     function renderNativeEditor() {
+        if (typeof window.renderStyleGuardCount === 'function') window.renderStyleGuardCount();
         const elements = nativeEditorElements();
         const snapshot = nativeEditorState.snapshot;
         const project = snapshot && snapshot.project ? snapshot.project : null;

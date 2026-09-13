@@ -207,12 +207,16 @@
         </form>
     </dialog>
 
-    <div class="desktop-modal-backdrop" data-style-guard-modal hidden>
-        <form class="desktop-modal" data-style-guard-form>
-            <header class="desktop-modal-header"><div><p class="desktop-section-kicker">避免写法</p><h2>项目写作偏好</h2></div><button class="desktop-icon-action" type="button" data-style-guard-cancel aria-label="关闭">×</button></header>
-            <label><span>作用范围</span><select data-style-guard-scope><option value="project">当前项目</option><option value="global">所有项目</option></select></label>
-            <label class="desktop-form-wide"><span>每行一条：表达式 <code>|</code> 原因（原因可省略）</span><textarea data-style-guard-rules rows="10" placeholder="例如：\n嘴角微微上扬 | 避免模板化微表情\n仿佛被命运推着走"></textarea></label>
-            <p class="desktop-modal-status" data-style-guard-status></p>
-            <footer class="desktop-modal-actions"><span>规则会用于续写、改写和摘要。</span><button class="desktop-secondary-action" type="button" data-style-guard-cancel>取消</button><button class="desktop-primary-action" type="submit">保存规则</button></footer>
+    <dialog class="desktop-modal-backdrop" data-style-guard-modal aria-labelledby="style-guard-title" hidden>
+        <form class="desktop-modal desktop-style-guard" data-style-guard-form>
+            <header class="desktop-modal-header"><div><p class="desktop-section-kicker">写作偏好</p><h2 id="style-guard-title">避用规则</h2></div><button class="desktop-icon-action" type="button" data-style-guard-cancel aria-label="关闭避用规则">×</button></header>
+            <p>告诉 AI 哪些表达应当少用或换一种写法。规则用于续写、改写和摘要，无法保证模型完全遵守。</p>
+            <label class="desktop-style-guard-scope">编辑范围<select data-style-guard-scope><option value="project">当前项目</option><option value="global">所有项目</option></select></label>
+            <p data-style-guard-summary></p>
+            <div class="desktop-style-guard-list" data-style-guard-list></div>
+            <button class="desktop-secondary-action" type="button" data-style-guard-add>添加规则</button>
+            <details><summary>批量添加</summary><label>每行一条，可用“表达 | 原因”的格式<textarea data-style-guard-rules rows="4" placeholder="嘴角微微上扬 | 避免模板化微表情&#10;仿佛被命运推着走"></textarea></label><button type="button" class="desktop-secondary-action" data-style-guard-import>添加到列表</button></details>
+            <p class="desktop-modal-status" data-style-guard-status role="status"></p>
+            <footer class="desktop-modal-actions"><span>项目与全局规则共同生效；保存会应用两个范围的修改。</span><button class="desktop-secondary-action" type="button" data-style-guard-cancel>取消</button><button class="desktop-primary-action" type="submit">保存规则</button></footer>
         </form>
-    </div>
+    </dialog>
