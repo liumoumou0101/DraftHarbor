@@ -7,7 +7,7 @@
             metadata: 'document',
             structure: 'document',
             search: 'document',
-            history: 'document'
+            history: 'writing'
         }[panel] || 'writing';
     }
     function nativeSceneContent(sceneId) {

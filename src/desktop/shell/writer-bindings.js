@@ -161,17 +161,13 @@
             context: 'characters',
             document: 'metadata'
         };
-        document.querySelectorAll('[data-native-open-history]').forEach(button => {
-            button.addEventListener('click', () => {
-                nativeEditorState.assistantPanel = 'history';
-                renderNativeEditor();
-            });
-        });
         elements.assistantGroupTabs.forEach((tab) => {
             tab.addEventListener('click', () => {
                 const group = tab.dataset.nativeAssistantGroup || 'writing';
                 const remembered = nativeEditorState.assistantPanelByGroup && nativeEditorState.assistantPanelByGroup[group];
-                nativeEditorState.assistantPanel = remembered || assistantGroupDefaults[group] || 'generate';
+                const rememberedTab = elements.panelTabs.find(item => item.dataset.nativePanelTab === remembered);
+                nativeEditorState.assistantPanel = rememberedTab && rememberedTab.dataset.nativePanelGroup === group
+                    ? remembered : assistantGroupDefaults[group] || 'generate';
                 renderNativeEditor();
                 if (nativeEditorState.assistantPanel === 'metadata' && typeof loadSummaryPrompts === 'function') {
                     loadSummaryPrompts();

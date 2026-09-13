@@ -1,5 +1,9 @@
-.desktop-native-writing-tools { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--desktop-line); }
-.desktop-native-writing-tools button { font: inherit; color: inherit; border: 1px solid var(--desktop-line); background: var(--desktop-surface); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+.desktop-native-composer-settings { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 12px 0; }
+.desktop-native-writer .desktop-native-composer-settings .desktop-native-composer-model { flex: 1 1 0; width: auto; padding: 0; overflow-wrap: anywhere; }
+.desktop-native-rule-status { flex: 0 0 auto; max-width: 100%; padding: 5px 0 5px 8px; border: 0; background: transparent; color: var(--desktop-muted); font: inherit; font-size: 12px; cursor: pointer; }
+.desktop-native-rule-status:hover { color: var(--desktop-text); text-decoration: underline; }
+.desktop-native-rule-status:focus-visible { outline: 2px solid var(--desktop-accent); outline-offset: 2px; border-radius: 4px; }
+.desktop-native-writer:not(.is-assistant-bottom) .desktop-native-composer-settings { grid-column: 1; grid-row: 1; padding-top: 6px; }
 [data-style-guard-modal] { border: 0; padding: 0; max-width: none; max-height: none; width: 100vw; height: 100vh; margin: 0; }
 [data-style-guard-modal][open] { display: flex; align-items: center; justify-content: center; }
 [data-style-guard-modal]::backdrop { background: rgba(0,0,0,.45); }

@@ -6,7 +6,7 @@ const PANEL_GROUP = {
   metadata: 'document',
   structure: 'document',
   search: 'document',
-  history: 'document'
+  history: 'writing'
 };
 
 async function openNativePanel(page, tab) {
