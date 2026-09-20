@@ -313,7 +313,7 @@
             letterSpacing: finiteNumber(input.letterSpacing, 0, -0.05, 0.3),
             paragraphSpacing: finiteNumber(input.paragraphSpacing, 1.05, 0, 3),
             pageMargin: finiteNumber(input.pageMargin, 48, 12, 160),
-            textWidth: finiteNumber(input.textWidth, 760, 420, 1400),
+            textWidth: finiteNumber(input.textWidth, 760, 320, 1400),
             textAlign,
             indent: input.indent !== false,
             reducedMotionOverride: reducedMotionOverride === null ? undefined : reducedMotionOverride,

@@ -405,7 +405,7 @@
         });
         elements.settingsToggle?.addEventListener('click', (event) => {
             const nextDrawer = readerState.drawer === 'right' ? '' : 'right';
-            if(nextDrawer)window.readerAppearanceStudioBeginSession?.(),window.setReaderAppearanceStudioSection?.('scheme');
+            if (nextDrawer) window.readerAppearanceStudioBeginSession?.();
             setReaderDrawer(nextDrawer, event.currentTarget);
         });
         document.querySelector('[data-reader-left-close]')?.addEventListener('click', () => setReaderDrawer(''));

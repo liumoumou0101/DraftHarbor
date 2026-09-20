@@ -178,7 +178,7 @@
         const quickFontFamily = document.querySelector('[data-reader-quick-font-family]');
         if (quickFontFamily && quickFontFamily.value !== (readerState.fontFamily || 'system')) quickFontFamily.value = readerState.fontFamily || 'system';
         const quickLayout = document.querySelector('[data-reader-quick-layout]');
-        if (quickLayout && quickLayout.value !== (readerState.layoutMode || 'double-page')) quickLayout.value = readerState.layoutMode || 'double-page';
+        if (quickLayout && quickLayout.value !== (readerState.layoutMode || 'auto')) quickLayout.value = readerState.layoutMode || 'auto';
         const quickFontSize = document.querySelector('[data-reader-quick-font-size]');
         if (quickFontSize) quickFontSize.textContent = `${readerState.fontSize} px`;
         const scope = document.querySelector('[data-reader-preference-scope]');
@@ -317,7 +317,7 @@
         bindReaderSetting('[data-reader-letter-spacing]', 'input', (control) => { readerState.letterSpacing = Number(control.value) || 0; });
         bindReaderSetting('[data-reader-page-margin]', 'input', (control) => { readerState.pageMargin = Number(control.value) || 48; });
         bindReaderSetting('[data-reader-text-align]', 'change', (control) => { readerState.textAlign = control.value || 'start'; }, { reflow: false });
-        bindReaderSetting('[data-reader-layout-mode]', 'change', (control) => { readerState.layoutMode = control.value || 'double-page'; }, { releaseFocus: true });
+        bindReaderSetting('[data-reader-layout-mode]', 'change', (control) => { readerState.layoutMode = control.value || 'auto'; }, { releaseFocus: true });
         bindReaderSetting('[data-reader-page-transition]', 'change', (control) => { readerState.pageTransition = control.value || 'none'; }, { reflow: false, releaseFocus: true });
         bindReaderSetting('[data-reader-reduced-motion]', 'change', (control) => {
             readerState.reducedMotionOverride = control.value === 'reduce' ? true : control.value === 'allow' ? false : undefined;

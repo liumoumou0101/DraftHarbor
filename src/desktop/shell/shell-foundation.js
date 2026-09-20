@@ -103,7 +103,7 @@
         focusMode: false,
         focusOwnsFullscreen: false,
         drawerReturnFocus: null,
-        layoutMode: 'double-page',
+        layoutMode: 'auto',
         effectiveLayoutMode: 'double-page',
         pageIndex: 0,
         pages: [],

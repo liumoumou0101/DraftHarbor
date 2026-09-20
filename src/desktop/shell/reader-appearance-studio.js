@@ -71,11 +71,11 @@
         const family = document.querySelector('[data-reader-quick-font-family]');
         if (family) family.value = readerState.fontFamily || 'system';
         const layout = document.querySelector('[data-reader-quick-layout]');
-        if (layout) layout.value = readerState.layoutMode || 'double-page';
+        if (layout) layout.value = readerState.layoutMode || 'auto';
         const size = document.querySelector('[data-reader-quick-font-size]');
         if (size) size.textContent = `${readerState.fontSize} px`;
         syncChipGroup('[data-reader-theme-chip]', themeId);
-        syncChipGroup('[data-reader-layout-chip]', readerState.layoutMode || 'double-page');
+        syncChipGroup('[data-reader-layout-chip]', readerState.layoutMode || 'auto');
         syncChipGroup('[data-reader-transition-chip]', readerState.pageTransition || 'fade');
         syncChipGroup('[data-reader-material-chip]', readerState.paperMaterial || 'flat');
         syncChipGroup('[data-reader-scope-chip]', readerState.preferenceScope || 'global');
@@ -193,13 +193,15 @@
         document.querySelector('[data-reader-font-decrease]')?.addEventListener('click', () => appearanceMutate(() => { readerState.fontSize = Math.max(15, readerState.fontSize - 1); }));
         document.querySelector('[data-reader-font-increase]')?.addEventListener('click', () => appearanceMutate(() => { readerState.fontSize = Math.min(26, readerState.fontSize + 1); }));
         document.querySelector('[data-reader-quick-more]')?.addEventListener('click', () => {
+            const quickTools = document.querySelector('[data-reader-quick-tools]');
+            if (quickTools) quickTools.open = false;
             appearanceBeginSession();
             if (typeof window.setReaderDrawer === 'function') window.setReaderDrawer('right');
         });
         document.querySelector('[data-reader-appearance-save]')?.addEventListener('click', () => saveReaderAppearanceProfile().catch((error) => appearanceSetStatus(`方案保存失败：${error.message || error}`)));
         document.querySelector('[data-reader-appearance-delete]')?.addEventListener('click', () => deleteReaderAppearanceProfile().catch((error) => appearanceSetStatus(`方案删除失败：${error.message || error}`)));
         document.querySelector('[data-reader-appearance-undo]')?.addEventListener('click', undoReaderAppearanceSession);
-        setReaderAppearanceStudioSection('scheme');
+        setReaderAppearanceStudioSection('typography');
         const previousSync = window.syncReaderSettingsControls;
         window.syncReaderSettingsControls = function syncReaderSettingsControlsWithChrome() {
             if (typeof previousSync === 'function') previousSync();

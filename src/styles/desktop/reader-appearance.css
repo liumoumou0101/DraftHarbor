@@ -43,9 +43,10 @@
 }
 
 .desktop-reader-reading-center {
-    display: grid;
-    justify-items: center;
-    gap: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
     min-width: 0;
 }
 
@@ -78,10 +79,14 @@
 }
 
 .desktop-reader-status-bar {
+    grid-column: 3;
     min-width: 0;
     color: var(--reader-mutedText, var(--desktop-faint));
     font-size: 11px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: right;
 }
 
 .desktop-reader-page-flip-host {
@@ -121,7 +126,7 @@
     box-sizing: border-box;
     width: 100%;
     height: 100%;
-    background: var(--reader-page, #f1eadb);
+    background-color: var(--reader-page, #f1eadb);
 }
 
 .desktop-reader-page-flip-host[data-reader-page-flip-spread="double"] .desktop-reader-page-flip-sheet.--simple.--left {
@@ -165,7 +170,7 @@
 }
 
 .desktop-reader-page-transition-layer > .desktop-reader-page-deck > .desktop-reader-page {
-    background: var(--reader-page, #f1eadb);
+    background-color: var(--reader-page, #f1eadb);
 }
 
 .desktop-reader-page-transition-layer > .desktop-reader-page-deck.is-reader-transitioning-in {
@@ -421,10 +426,44 @@
 
 .desktop-reader-topbar,
 .desktop-reader-reading-bar,
-.desktop-reader-bottombar,
-.desktop-reader-drawer {
+.desktop-reader-bottombar {
     background-color: color-mix(in srgb, var(--reader-material, var(--reader-control, #20242a)) 88%, transparent);
 }
+
+.desktop-reader-drawer {
+    background: var(--reader-chrome, #e4dccf);
+}
+
+.desktop-reader-quick-tools { position: relative; }
+.desktop-reader-quick-tools > summary { list-style: none; }
+.desktop-reader-quick-tools > summary::-webkit-details-marker { display: none; }
+.desktop-reader-quick-tools > summary::after { content: '⌄'; margin-left: 7px; }
+.desktop-reader-quick-tools[open] > summary { background: var(--reader-control); color: var(--reader-text); }
+.desktop-reader-quick-tools > summary:focus-visible { outline: 2px solid var(--reader-accent); outline-offset: 2px; }
+.desktop-reader-quick-menu {
+    position: absolute;
+    z-index: 6;
+    top: calc(100% + 10px);
+    right: 0;
+    display: grid;
+    gap: 10px;
+    width: min(320px, calc(100vw - 100px));
+    max-height: calc(100vh - 120px);
+    overflow: auto;
+    padding: 18px;
+    border: 1px solid var(--reader-line);
+    border-radius: 12px;
+    background: var(--reader-chrome);
+    box-shadow: 0 12px 32px color-mix(in srgb, var(--reader-effect) 20%, transparent);
+    text-align: left;
+}
+.desktop-reader-quick-menu .desktop-reader-field-label { margin-top: 4px; }
+.desktop-reader-quick-menu .desktop-reader-text-chip { min-height: 30px; padding: 5px 10px; }
+.desktop-reader-quick-menu .desktop-reader-theme-chip { width: 28px; height: 28px; }
+.desktop-reader-quick-menu-actions { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--reader-line); }
+.desktop-reader-quick-menu-actions .desktop-reader-tool { min-height: 32px; }
+.desktop-reader-quick-menu .desktop-reader-hint { margin: 0; }
+.desktop-reader-preference-status { padding: 12px 0 0; border-top: 1px solid var(--reader-line); }
 
 .desktop-reader-font-import {
     gap: 6px;
@@ -501,14 +540,6 @@
 @media (max-width: 860px) {
     .desktop-reader-quick-appearance {
         max-width: 100%;
-        overflow-x: auto;
         justify-content: start;
-    }
-}
-
-@media (max-width: 560px) {
-    .desktop-reader-quick-appearance [data-reader-layout-chips],
-    .desktop-reader-quick-appearance [data-reader-transition-chips] {
-        display: none;
     }
 }

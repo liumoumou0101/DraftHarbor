@@ -2,20 +2,44 @@ function readerHasTextSelection() {
     return !!String(window.getSelection && window.getSelection() || '').trim();
 }
 
+function readerIsEditableControl(element) {
+    if (!element || element === document.body) return false;
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName)) return true;
+    return !!element.isContentEditable || !!element.closest?.('[contenteditable]:not([contenteditable="false"])');
+}
+
+function readerIsQuickAppearanceButton(element) {
+    return element?.tagName === 'BUTTON' && !!element.closest?.('[data-reader-quick-appearance]');
+}
+
+function readerIsMenuControl(element) {
+    if (!element || element === document.body) return false;
+    if (element.tagName === 'SUMMARY') return true;
+    return !!element.closest?.('[role="menu"], [role="listbox"], [data-reader-quick-tools][open]');
+}
+
 function readerCanPageTurn(source = 'keyboard') {
     if (source === 'keyboard' && readerState.keyboardPageTurn === false) return false;
     if (source === 'pointer' && readerState.pointerPageTurn === false) return false;
     if (source === 'touch' && readerState.touchPageTurn === false) return false;
-    if (readerState.drawer || document.querySelector('dialog[open]')) return false;
+    if (readerState.drawer || document.querySelector('dialog[open]') || document.querySelector('[data-reader-quick-tools][open]')) return false;
     const selectionToolbar = document.querySelector('[data-reader-selection-toolbar]');
     if (selectionToolbar && !selectionToolbar.hidden) return false;
     const active = document.activeElement;
     const pageButton = active?.matches?.('[data-reader-page-prev], [data-reader-page-next], [data-reader-touch-prev], [data-reader-touch-next]');
     const chromeButton = active?.matches?.('[data-reader-settings-toggle], [data-reader-library-toggle], [data-reader-focus-toggle], [data-reader-exit]');
-    if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName) && active !== document.body) return false;
-    if (active?.tagName === 'BUTTON' && !pageButton && !chromeButton) return false;
+    const quickAppearanceButton = readerIsQuickAppearanceButton(active);
+    if (readerIsEditableControl(active) || readerIsMenuControl(active)) return false;
+    if (active?.tagName === 'BUTTON' && !pageButton && !chromeButton && !quickAppearanceButton) return false;
     return !readerHasTextSelection();
 }
+
+document.addEventListener('keydown', (event) => {
+    if (![' ', 'Enter'].includes(event.key)) return;
+    const control = event.target?.closest?.('button, summary');
+    if (!control || !control.closest?.('[data-reader-quick-appearance]')) return;
+    event.stopImmediatePropagation();
+});
 
 function bindReaderContinuousInput(content) {
     if (!content) return;

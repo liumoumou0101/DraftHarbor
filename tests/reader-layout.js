@@ -8,10 +8,19 @@ assert.strictEqual(Layout.effectiveLayoutMode('double-page', 700), 'double-page'
 assert.strictEqual(Layout.effectiveLayoutMode('double-page', 420), 'single-page');
 assert.strictEqual(Layout.effectiveLayoutMode('illustrated', 920), 'illustrated');
 assert.strictEqual(Layout.effectiveLayoutMode('illustrated', 420), 'single-page');
-assert.strictEqual(Layout.effectiveLayoutMode('auto', 920), 'double-page');
+assert.strictEqual(Layout.effectiveLayoutMode('auto', 920), 'single-page');
 assert.strictEqual(Layout.effectiveLayoutMode('auto', 700), 'single-page');
 assert.strictEqual(Layout.effectiveLayoutMode('single-page', 920, { viewportHeight: 180 }), 'flow');
 assert.strictEqual(Layout.effectiveLayoutMode('double-page', 920, { viewportHeight: 180 }), 'flow');
+
+const defaultTypography = { fontSize: 18, pageMargin: 48, textWidth: 760, gap: 28 };
+assert.strictEqual(Layout.effectiveLayoutMode('auto', 834, defaultTypography), 'single-page', 'a 960px window must not squeeze the default text into a spread');
+assert.strictEqual(Layout.effectiveLayoutMode('auto', 1154, defaultTypography), 'double-page', 'a 1280px window has room for a comfortable spread');
+assert.strictEqual(Layout.effectiveLayoutMode('auto', 1154, { ...defaultTypography, fontSize: 28 }), 'single-page', 'larger text needs wider lines before auto chooses a spread');
+assert.strictEqual(Layout.effectiveLayoutMode('auto', 1154, { ...defaultTypography, pageMargin: 120 }), 'single-page', 'auto must account for the width occupied by page margins');
+assert.strictEqual(Layout.effectiveLayoutMode('double-page', 834, defaultTypography), 'double-page', 'an explicit double-page request can use shorter readable lines');
+assert.strictEqual(Layout.effectiveLayoutMode('double-page', 534, defaultTypography), 'single-page', 'explicit spreads still need a usable text column');
+assert.strictEqual(Layout.effectiveLayoutMode('double-page', 834, { ...defaultTypography, fontSize: 32, pageMargin: 80 }), 'single-page', 'explicit spreads must fall back when typography leaves too little text width');
 
 const laptopSpread = Layout.pagedGeometry({
   viewportWidth: 1280, viewportHeight: 720, effectiveMode: 'double-page', gap: 28
@@ -22,13 +31,25 @@ assert.ok(laptopSpread.pageHeight >= 500, 'laptop double-page should still fill 
 const twoKSpread = Layout.pagedGeometry({
   viewportWidth: 2560, viewportHeight: 1440, effectiveMode: 'double-page', gap: 28
 });
-assert.ok(twoKSpread.spreadMax <= 1680, '2K double-page spread must not grow without a cap');
+assert.ok(twoKSpread.spreadMax <= 1800, '2K default double-page spread must not grow without a text-width cap');
 assert.strictEqual(twoKSpread.pageHeight, 1440, '2K double-page must use the available reading height');
 
 const twoKSingle = Layout.pagedGeometry({
   viewportWidth: 2560, viewportHeight: 1440, effectiveMode: 'single-page', gap: 28
 });
 assert.ok(twoKSingle.pageWidth <= 980, '2K single-page width stays capped');
+
+for (const effectiveMode of ['single-page', 'double-page', 'illustrated']) {
+  const narrow = Layout.pagedGeometry({ viewportWidth: 2560, viewportHeight: 1440, effectiveMode, textWidth: 620, pageMargin: 48 });
+  const wide = Layout.pagedGeometry({ viewportWidth: 2560, viewportHeight: 1440, effectiveMode, textWidth: 980, pageMargin: 48 });
+  assert.strictEqual(narrow.pageWidth, 718, 'page width includes the requested 620px text column, two margins and borders');
+  assert.strictEqual(wide.pageWidth, 1078, 'larger text width must enlarge every paginated layout when space allows');
+  assert.strictEqual(wide.spreadMax, effectiveMode === 'single-page' ? 1078 : 2184, 'deck width must match its pages and spine');
+}
+const compactSpread = Layout.pagedGeometry({ viewportWidth: 834, viewportHeight: 500, effectiveMode: 'double-page', textWidth: 980, pageMargin: 48 });
+assert.strictEqual(compactSpread.pageWidth, 403, 'text width is a maximum, never a reason to overflow the viewport');
+assert.strictEqual(compactSpread.spreadMax, 834);
+assert.ok(Layout.pagedGeometry({ viewportWidth: 240, effectiveMode: 'single-page' }).pageWidth <= 240, 'a single page must fit even a very narrow viewport');
 
 const twoKCapacity = Layout.estimatePageCapacity({
   pageWidth: twoKSpread.pageWidth,
@@ -98,6 +119,8 @@ assert.notStrictEqual(baseKey, Layout.layoutCacheKey({ ...JSON.parse(baseKey), a
 assert.notStrictEqual(baseKey, Layout.layoutCacheKey({ ...JSON.parse(baseKey), fontCatalogVersion: 2 }), 'font catalog changes must invalidate pagination cache');
 assert.notStrictEqual(baseKey, Layout.layoutCacheKey({ ...JSON.parse(baseKey), fontWeight: 700 }), 'font weight changes must invalidate pagination cache');
 assert.notStrictEqual(baseKey, Layout.layoutCacheKey({ ...JSON.parse(baseKey), bookSpine: 44 }), 'book spine changes must invalidate pagination cache');
+assert.notStrictEqual(baseKey, Layout.layoutCacheKey({ ...JSON.parse(baseKey), textWidth: 320 }), 'text width changes must invalidate pagination cache');
+assert.notStrictEqual(baseKey, Layout.layoutCacheKey({ ...JSON.parse(baseKey), pageHeight: 500 }), 'changing chrome insets must invalidate pagination even when the viewport is unchanged');
 
 const qualityText = '你好，世界。English words stay together，下一句继续！😀混合文本；“引用内容”结束。'.repeat(5);
 const qualityPages = Layout.buildReaderPages({ blocks: [{ blockId: 'quality', type: 'paragraph', text: qualityText }] }, {

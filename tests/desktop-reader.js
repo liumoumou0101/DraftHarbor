@@ -124,7 +124,7 @@ async function selectReaderStudioSection(page, section) {
         await page.waitForFunction(() => document.querySelector('[data-reader-import-dialog]').open);
         await page.click('[data-reader-import-confirm]');
         await page.waitForFunction(() => document.querySelector('[data-reader-title]').textContent.includes('Chapter One'));
-        await page.waitForFunction(() => readerState.layoutMode === 'double-page'
+        await page.waitForFunction(() => readerState.layoutMode === 'auto'
             && readerState.effectiveLayoutMode === 'double-page'
             && document.querySelector('[data-reader-content]').dataset.readerLayout === 'double-page');
         await page.evaluate(() => {
@@ -172,6 +172,7 @@ async function selectReaderStudioSection(page, section) {
             Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable: true, value: ReaderTestUtterance });
             window.initializeReaderTts();
         });
+        await page.click('[data-reader-quick-tools] > summary');
         await page.click('[data-reader-tts-toggle]');
         await page.waitForFunction(() => readerState.tts.status === 'speaking' && readerState.tts.blockId);
         assert.ok(await page.evaluate(() => window.__readerTtsUtterances.length > 0), 'Reader TTS should create a local utterance');
@@ -186,6 +187,7 @@ async function selectReaderStudioSection(page, section) {
         await page.waitForFunction(() => readerState.tts.status === 'paused');
         await page.click('[data-reader-tts-stop]');
         await page.waitForFunction(() => readerState.tts.status === 'stopped');
+        await page.keyboard.press('Escape');
         await page.evaluate(() => { readerState.transferSelection = null; document.dispatchEvent(new Event('selectionchange')); });
         await page.click('[data-reader-settings-toggle]');
         await selectReaderStudioSection(page, 'tts');
@@ -240,6 +242,7 @@ async function selectReaderStudioSection(page, section) {
         await page.click('[data-reader-settings-toggle]');
         assert.strictEqual(await page.locator('[data-reader-settings-drawer]').getAttribute('aria-hidden'), 'false', 'settings drawer should open from the reading stage');
         await page.waitForFunction(() => document.activeElement === document.querySelector('[data-reader-settings-close]'));
+        await selectReaderStudioSection(page, 'scheme');
         await page.selectOption('[data-reader-appearance-profile]', 'paper');
         await page.waitForFunction(() => readerState.appearanceProfileId === 'paper' && readerState.theme === 'paper');
         await selectReaderStudioSection(page, 'font');
@@ -247,6 +250,7 @@ async function selectReaderStudioSection(page, section) {
         await page.waitForFunction(() => document.querySelectorAll('[data-reader-font-list] [data-reader-font-item], .desktop-reader-font-item').length === 1);
         const userFontId = await page.locator('[data-reader-font-family] option[data-reader-user-font]').first().getAttribute('value');
         assert.ok(userFontId && userFontId.startsWith('user:'), 'installed font should receive a stable user fontId');
+        await selectReaderStudioSection(page, 'typography');
         await page.selectOption('[data-reader-font-family]', userFontId);
         try {
             await page.waitForFunction((fontId) => readerState.fontId === fontId, userFontId);
@@ -268,11 +272,12 @@ async function selectReaderStudioSection(page, section) {
         assert.strictEqual(fontCatalog.fileStatus, 200, 'installed font file should be served locally');
         assert.ok(fontCatalog.fileBytes > 4, 'installed font file should retain its bytes');
         await page.evaluate(() => { window.confirm = () => true; });
+        await selectReaderStudioSection(page, 'font');
         await page.locator('.desktop-reader-font-item').first().getByRole('button', { name: '删除' }).click();
         await page.waitForFunction((fontId) => !Array.from(document.querySelectorAll('[data-reader-font-family] option')).some((option) => option.value === fontId), userFontId);
         await page.waitForFunction(() => readerState.fontId === 'builtin:default');
-        await page.selectOption('[data-reader-font-family]', 'serif');
         await selectReaderStudioSection(page, 'typography');
+        await page.selectOption('[data-reader-font-family]', 'serif');
         await page.fill('[data-reader-font-size]', '22');
         await page.fill('[data-reader-line-height]', '2');
         await page.fill('[data-reader-width]', '840');
@@ -390,7 +395,7 @@ async function selectReaderStudioSection(page, section) {
             return shell.dataset.readerControlsVisible === 'true'
                 && root.dataset.readerFocusMode === 'false'
                 && getComputedStyle(document.querySelector('.desktop-rail')).visibility !== 'hidden'
-                && getComputedStyle(document.querySelector('.desktop-main > .desktop-topbar')).display !== 'none';
+                && getComputedStyle(document.querySelector('[data-reader-topbar]')).visibility !== 'hidden';
         });
         const restoredIllustrationControls = await page.evaluate(() => {
             const probe = document.querySelector('[data-reader-focus-readonly-probe]');
@@ -414,6 +419,8 @@ async function selectReaderStudioSection(page, section) {
             return hud && getComputedStyle(hud).opacity !== '0' && hud.getAttribute('aria-hidden') === 'false';
         });
         await page.mouse.move(520, 390);
+        assert.strictEqual(await page.locator('[data-reader-shell]').getAttribute('data-reader-hud-state'), 'idle', 'moving over prose should not reveal the reading controls');
+        await page.mouse.move(520, 8);
         await page.waitForFunction(() => document.querySelector('[data-reader-shell]').dataset.readerHudState === 'visible');
 
         await page.evaluate(async () => {
@@ -755,7 +762,6 @@ async function selectReaderStudioSection(page, section) {
         await page.fill('[data-reader-page-margin]', '64');
         await page.fill('[data-reader-width]', '900');
         await page.selectOption('[data-reader-text-align]', 'justify');
-        await selectReaderStudioSection(page, 'font');
         await page.selectOption('[data-reader-font-family]', 'kai');
         await selectReaderStudioSection(page, 'paper');
         await page.selectOption('select[data-reader-theme]', 'lamp');
@@ -795,7 +801,7 @@ async function selectReaderStudioSection(page, section) {
         await page.waitForFunction(() => readerState.apiMode && readerState.preferenceScope === 'document' && readerState.theme === 'lamp');
         await page.waitForFunction(() => document.querySelector('[data-reader-content]').dataset.readerLayout === 'single-page');
         await page.click('[data-reader-settings-toggle]');
-        await selectReaderStudioSection(page, 'font');
+        await selectReaderStudioSection(page, 'typography');
         assert.strictEqual(await page.locator('[data-reader-font-family]').inputValue(), 'kai', 'per-book font override should survive reload');
         await selectReaderStudioSection(page, 'typography');
         assert.strictEqual(await page.locator('[data-reader-page-margin]').inputValue(), '64', 'per-book page margin should survive reload');
@@ -1022,6 +1028,10 @@ async function selectReaderStudioSection(page, section) {
         await page.waitForFunction(() => document.querySelector('[data-reader-content]').dataset.readerLayout === 'single-page');
         assert.strictEqual(await page.locator('[data-reader-layout-mode]').inputValue(), 'auto', 'automatic fallback must not overwrite the saved auto choice');
         await page.selectOption('[data-reader-layout-mode]', 'double-page');
+        await page.waitForFunction(() => readerState.layoutMode === 'double-page'
+            && document.querySelector('[data-reader-content]').dataset.readerLayout === 'single-page');
+        assert.strictEqual(await page.locator('[data-reader-layout-mode]').inputValue(), 'double-page', 'a narrow fallback must preserve the explicit spread preference');
+        await page.setViewportSize({ width: 960, height: 820 });
         await page.waitForFunction(() => document.querySelector('[data-reader-content]').dataset.readerLayout === 'double-page'
             && document.querySelectorAll('.desktop-reader-page-deck > [data-reader-page]').length === 2);
         const narrowDoublePage = await page.evaluate(() => {
@@ -1029,7 +1039,7 @@ async function selectReaderStudioSection(page, section) {
             const [left, right] = pages.map((pageNode) => pageNode.getBoundingClientRect());
             return { aligned: Math.abs(left.top - right.top) < 2, ordered: left.right <= right.left, pageWidth: left.width };
         });
-        assert.ok(narrowDoublePage.aligned && narrowDoublePage.ordered && narrowDoublePage.pageWidth >= 220, 'explicit double-page mode must render two side-by-side pages at a 720px viewport');
+        assert.ok(narrowDoublePage.aligned && narrowDoublePage.ordered && narrowDoublePage.pageWidth >= 220, 'explicit double-page mode must resume side-by-side pages once the chosen font and margins fit');
         const layoutSwitchDurations = [];
         for (const mode of ['single-page', 'double-page', 'single-page', 'double-page']) {
             await page.focus('[data-reader-layout-mode]');
@@ -1237,6 +1247,7 @@ async function selectReaderStudioSection(page, section) {
             };
         });
         assert.deepStrictEqual(legacyDoublePage, { quickLayout: 'double-page', spread: 'double', aligned: true, ordered: true, hasVerticalOverflow: false }, 'legacy project fallback must visually render a true two-page spread');
+        await page.click('[data-reader-quick-tools] > summary');
         await page.focus('[data-reader-quick-layout]');
         await page.selectOption('[data-reader-quick-layout]', 'single-page');
         await page.waitForFunction(() => readerState.effectiveLayoutMode === 'single-page' && document.querySelectorAll('.desktop-reader-page-deck > [data-reader-page]').length === 1);
@@ -1244,6 +1255,8 @@ async function selectReaderStudioSection(page, section) {
         await page.selectOption('[data-reader-quick-layout]', 'double-page');
         await page.waitForFunction(() => readerState.effectiveLayoutMode === 'double-page' && document.querySelectorAll('.desktop-reader-page-deck > [data-reader-page]').length === 2);
         assert.strictEqual(await page.evaluate(() => document.activeElement?.matches('[data-reader-quick-layout]')), false, 'legacy project quick layout must release focus after switching');
+        await page.keyboard.press('Escape');
+        await page.focus('[data-reader-content]');
         const legacyPageIndex = await page.evaluate(() => readerState.pageIndex);
         await page.keyboard.press('ArrowRight');
         await page.waitForFunction((previous) => readerState.pageIndex > previous, legacyPageIndex);

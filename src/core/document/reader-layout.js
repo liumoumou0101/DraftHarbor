@@ -33,17 +33,17 @@
         const minimumPageWidth = finiteNumber(options.minimumPageWidth, 360, 240, 720);
         const minimumForcedPageWidth = finiteNumber(options.minimumForcedPageWidth, 220, 160, 480);
         const gap = finiteNumber(options.gap, 28, 0, 96);
-        if (requested === 'illustrated') {
-            return finiteNumber(viewportWidth, 0, 0, 100000) >= minimumForcedPageWidth * 2 + gap
-                ? 'illustrated'
-                : 'single-page';
-        }
-        if (requested === 'double-page') {
-            return finiteNumber(viewportWidth, 0, 0, 100000) >= minimumForcedPageWidth * 2 + gap
-                ? 'double-page'
-                : 'single-page';
-        }
-        const canShowSpread = finiteNumber(viewportWidth, 0, 0, 100000) >= minimumPageWidth * 2 + gap;
+        const fontSize = finiteNumber(options.fontSize, 18, 12, 48);
+        const pageMargin = finiteNumber(options.pageMargin, 48, 0, 160);
+        const textWidth = finiteNumber(options.textWidth, 760, 320, 1400);
+        const letterSpacing = finiteNumber(options.letterSpacing, 0, -0.05, 0.3);
+        const explicitSpread = requested === 'double-page' || requested === 'illustrated';
+        // Auto favors twenty full-width characters per line. Explicit spreads
+        // can use shorter lines, but still need space for ten characters.
+        const minimumTextWidth = Math.min(textWidth, fontSize * (1 + letterSpacing) * (explicitSpread ? 10 : 20));
+        const requiredPageWidth = Math.max(explicitSpread ? minimumForcedPageWidth : minimumPageWidth, minimumTextWidth + pageMargin * 2 + 2);
+        const canShowSpread = finiteNumber(viewportWidth, 0, 0, 100000) >= requiredPageWidth * 2 + gap;
+        if (explicitSpread) return canShowSpread ? requested : 'single-page';
         return canShowSpread ? 'double-page' : 'single-page';
     }
 
@@ -55,10 +55,12 @@
         const innerWidth = Math.max(240, viewportWidth);
         const innerHeight = Math.max(120, viewportHeight);
         const spread = effective === 'double-page' || effective === 'illustrated';
-        const spreadMax = spread ? Math.min(1680, innerWidth) : Math.min(980, innerWidth);
-        const pageWidth = spread
-            ? Math.max(220, (spreadMax - gap) / 2)
-            : Math.max(320, spreadMax);
+        const textWidth = finiteNumber(input.textWidth, 760, 320, 1400);
+        const pageMargin = finiteNumber(input.pageMargin, 48, 0, 160);
+        const maximumPageWidth = textWidth + pageMargin * 2 + 2;
+        const availablePageWidth = spread ? Math.max(0, (innerWidth - gap) / 2) : innerWidth;
+        const pageWidth = Math.min(maximumPageWidth, availablePageWidth);
+        const spreadMax = spread ? pageWidth * 2 + gap : pageWidth;
         const pageHeight = innerHeight;
         return { pageWidth, pageHeight, spreadMax, innerWidth, innerHeight };
     }
@@ -266,13 +268,15 @@
 
     function layoutCacheKey(input = {}) {
         const normalized = {
-            layoutVersion: 5,
+            layoutVersion: 6,
             revisionId: String(input.revisionId || ''),
             chapterId: String(input.chapterId || ''),
             requestedMode: cleanMode(input.requestedMode),
             effectiveMode: cleanMode(input.effectiveMode),
             viewportWidth: Math.round(finiteNumber(input.viewportWidth, 0, 0, 100000)),
             viewportHeight: Math.round(finiteNumber(input.viewportHeight, 0, 0, 100000)),
+            pageWidth: finiteNumber(input.pageWidth, 0, 0, 100000),
+            pageHeight: finiteNumber(input.pageHeight, 0, 0, 100000),
             actualFontFamily: String(input.actualFontFamily || ''),
             fontCatalogVersion: Math.max(1, Math.floor(Number(input.fontCatalogVersion) || 1)),
             fontWeight: finiteNumber(input.fontWeight, 400, 300, 900),
@@ -284,6 +288,7 @@
             letterSpacing: finiteNumber(input.letterSpacing, 0, -0.05, 0.3),
             paragraphSpacing: finiteNumber(input.paragraphSpacing, 1.05, 0, 3),
             pageMargin: finiteNumber(input.pageMargin, 48, 12, 160),
+            textWidth: finiteNumber(input.textWidth, 760, 320, 1400),
             textAlign: String(input.textAlign || 'start'),
             indent: input.indent !== false
         };

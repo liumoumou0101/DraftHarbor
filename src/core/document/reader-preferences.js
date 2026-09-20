@@ -18,7 +18,7 @@
     const STATUS_BAR_FIELDS = Object.freeze(['chapter', 'page', 'percent', 'characters', 'eta']);
 
     const DEFAULT_PREFERENCES = Object.freeze({
-        layoutMode: 'double-page',
+        layoutMode: 'auto',
         pageTransition: 'fade',
         themeId: 'paper',
         fontId: 'builtin:default',
@@ -151,7 +151,7 @@
             letterSpacing: finiteNumber(input.letterSpacing, DEFAULT_PREFERENCES.letterSpacing, -0.05, 0.3),
             paragraphSpacing: finiteNumber(input.paragraphSpacing, DEFAULT_PREFERENCES.paragraphSpacing, 0, 3),
             pageMargin: finiteNumber(input.pageMargin, DEFAULT_PREFERENCES.pageMargin, 12, 160),
-            textWidth: finiteNumber(input.textWidth, DEFAULT_PREFERENCES.textWidth, 420, 1400),
+            textWidth: finiteNumber(input.textWidth, DEFAULT_PREFERENCES.textWidth, 320, 1400),
             textAlign: enumValue(input.textAlign, TEXT_ALIGNMENTS, DEFAULT_PREFERENCES.textAlign, 'reader textAlign'),
             indent: input.indent !== false,
             paperMaterial: enumValue(input.paperMaterial, PAPER_MATERIALS, DEFAULT_PREFERENCES.paperMaterial, 'reader paperMaterial'),

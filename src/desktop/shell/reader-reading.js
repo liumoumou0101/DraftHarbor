@@ -81,6 +81,12 @@
         return (Number(node.dataset.readerStartOffset) || 0) + low;
     }
 
+    function readerFlowVisibleTop(content) {
+        // Flow padding reserves space for overlay chrome even when it is hidden.
+        const paddingTop = parseFloat(getComputedStyle(content).paddingTop) || 0;
+        return content.getBoundingClientRect().top + content.clientTop + paddingTop;
+    }
+
     function captureReaderPositionLocator() {
         if (!readerState.currentChapter) return null;
         if (readerState.effectiveLayoutMode !== 'flow') {
@@ -96,10 +102,10 @@
         }
         const content = document.querySelector('[data-reader-content]');
         if (!content || !content.clientWidth || !content.clientHeight) return null;
-        const contentTop = content.getBoundingClientRect().top;
+        const contentTop = readerFlowVisibleTop(content);
         const nodes = Array.from(content.querySelectorAll('[data-reader-block]'));
-        const visible = nodes.find((node) => node.getBoundingClientRect().bottom > contentTop + 8) || nodes[0];
-        return visible ? createReaderLocatorAt(visible.dataset.readerBlock, readerFlowVisibleOffset(visible, contentTop + 8)) : null;
+        const visible = nodes.find((node) => node.getBoundingClientRect().bottom > contentTop) || nodes[0];
+        return visible ? createReaderLocatorAt(visible.dataset.readerBlock, readerFlowVisibleOffset(visible, contentTop)) : null;
     }
 
     function readerActualFontFamily(content) {
@@ -118,26 +124,46 @@
 
     function readerLayoutMetrics() {
         const content = document.querySelector('[data-reader-content]');
+        // Read the target paged padding even when transitioning out of flow.
+        // The temporary attribute is restored synchronously before rendering.
+        const previousLayout = content && content.dataset.readerLayout;
+        if (content) content.dataset.readerLayout = 'single-page';
+        const style = content && getComputedStyle(content);
         const width = content ? content.clientWidth : 900;
         const height = content ? content.clientHeight : 700;
-        const effective = window.DraftHarborReaderLayout.effectiveLayoutMode(readerState.layoutMode, width, {
-            viewportHeight: height,
+        const horizontalPadding = style ? parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) : 48;
+        const verticalPadding = style ? parseFloat(style.paddingTop) + parseFloat(style.paddingBottom) : 36;
+        if (content) {
+            if (previousLayout === undefined) delete content.dataset.readerLayout;
+            else content.dataset.readerLayout = previousLayout;
+        }
+        const availableWidth = Math.max(240, width - horizontalPadding);
+        const availableHeight = Math.max(120, height - verticalPadding);
+        const pageMargin = Math.min(Number(readerState.pageMargin) || 48, window.innerHeight * 0.06);
+        const gap = Math.max(0, Math.min(96, Number(readerState.bookSpine) || 28));
+        const effective = window.DraftHarborReaderLayout.effectiveLayoutMode(readerState.layoutMode, availableWidth, {
+            viewportHeight: availableHeight,
             minimumPageHeight: 240,
             minimumPageWidth: 360,
             minimumForcedPageWidth: 220,
-            gap: readerState.bookSpine || 28
+            fontSize: readerState.fontSize,
+            letterSpacing: readerState.letterSpacing,
+            textWidth: readerState.textWidth,
+            pageMargin,
+            gap
         });
-        const gap = Math.max(0, Math.min(96, Number(readerState.bookSpine) || 28));
         const geometry = window.DraftHarborReaderLayout.pagedGeometry({
-            viewportWidth: Math.max(240, width - 48),
-            viewportHeight: Math.max(120, height - 36),
+            viewportWidth: availableWidth,
+            viewportHeight: availableHeight,
             effectiveMode: effective,
+            textWidth: readerState.textWidth,
+            pageMargin,
             gap
         });
         const pageWidth = geometry.pageWidth;
         const pageHeight = geometry.pageHeight;
         const actualFontFamily = readerActualFontFamily(content);
-        return { content, width, height, effective, gap, pageWidth, pageHeight, actualFontFamily };
+        return { content, width, height, effective, gap, pageWidth, pageHeight, pageMargin, deckWidth: geometry.spreadMax, actualFontFamily };
     }
 
     function readerLayoutKey(metrics) {
@@ -148,6 +174,8 @@
             effectiveMode: metrics.effective,
             viewportWidth: metrics.width,
             viewportHeight: metrics.height,
+            pageWidth: metrics.pageWidth,
+            pageHeight: metrics.pageHeight,
             actualFontFamily: metrics.actualFontFamily,
             fontCatalogVersion: readerState.fontCatalogVersion || 1,
             fontWeight: readerState.fontWeight || 400,
@@ -158,7 +186,8 @@
             lineHeight: readerState.lineHeight,
             letterSpacing: readerState.letterSpacing || 0,
             paragraphSpacing: readerState.paragraphSpacing,
-            pageMargin: readerState.pageMargin || 48,
+            pageMargin: metrics.pageMargin,
+            textWidth: readerState.textWidth,
             textAlign: readerState.textAlign || 'start',
             indent: readerState.indent
         });
@@ -241,7 +270,7 @@
                 if (!target) return;
                 const offset = Math.max(0, (Number(locator.offset) || 0) - (Number(target.dataset.readerStartOffset) || 0));
                 const rect = readerFlowTextGeometry(target).rectAt(offset);
-                const top = content.getBoundingClientRect().top + 8;
+                const top = readerFlowVisibleTop(content);
                 setReaderFlowScrollTop(content, content.scrollTop + rect.top - top);
             });
         } else {
@@ -282,10 +311,13 @@
             height: `${metrics.height}px`,
             visibility: 'hidden',
             pointerEvents: 'none',
+            // metrics.width already excludes the live content's scrollbar gutter.
+            scrollbarGutter: 'auto',
             contain: 'strict'
         });
         const deck = document.createElement('div');
         deck.className = 'desktop-reader-page-deck';
+        applyReaderDeckGeometry(deck, metrics);
         deck.dataset.readerSpread = metrics.effective === 'double-page' ? 'double' : 'single';
         const pageNode = document.createElement('section');
         pageNode.className = 'desktop-reader-page';
@@ -293,6 +325,12 @@
         host.appendChild(deck);
         (stage || document.body).appendChild(host);
         return { host, pageNode };
+    }
+
+    function applyReaderDeckGeometry(deck, metrics) {
+        deck.style.setProperty('--reader-layout-page-width', `${metrics.pageWidth}px`);
+        deck.style.setProperty('--reader-layout-deck-width', `${metrics.deckWidth}px`);
+        deck.style.setProperty('--reader-layout-gap', `${metrics.gap}px`);
     }
 
     function readerProbeTextFits(pageNode, node, text, startOffset, length) {
@@ -537,7 +575,7 @@
                 widowLines: readerState.widowLines || 2,
                 letterSpacing: readerState.letterSpacing || 0,
                 paragraphSpacing: readerState.paragraphSpacing,
-                pageMargin: readerState.pageMargin || 48
+                pageMargin: metrics.pageMargin
             });
             const capacity = Math.max(64, Math.floor(estimated * readerPageFitScale));
             pages = buildMeasuredReaderPages(metrics, capacity)
@@ -559,6 +597,7 @@
         content.replaceChildren();
         const deck = document.createElement('div');
         deck.className = 'desktop-reader-page-deck';
+        applyReaderDeckGeometry(deck, metrics);
         deck.dataset.readerSpread = metrics.effective === 'double-page' ? 'double' : 'single';
         deck.appendChild(renderReaderPage(pages[pageIndex], pageIndex));
         if (metrics.effective === 'double-page' && pages[pageIndex + 1]) deck.appendChild(renderReaderPage(pages[pageIndex + 1], pageIndex + 1));

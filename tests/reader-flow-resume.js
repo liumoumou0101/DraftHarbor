@@ -1,4 +1,4 @@
-/* global readerState setView openReaderLibraryDocument captureReaderPositionLocator saveReaderWorkspacePosition */
+/* global readerState readerReflowTimer setView openReaderLibraryDocument captureReaderPositionLocator saveReaderWorkspacePosition createReaderLocatorAt navigateReaderToLocator */
 const assert = require('assert');
 const fs = require('fs/promises');
 const os = require('os');
@@ -71,6 +71,69 @@ async function snapshot(page) {
     });
 }
 
+async function assertFlowDestinationClearOfChrome(page) {
+    const navigateToDestination = async () => {
+        const navigated = await page.evaluate(async () => {
+            const block = readerState.currentChapter.blocks.find(item => item.text.length > 600);
+            return navigateReaderToLocator(createReaderLocatorAt(block.blockId, 600));
+        });
+        assert.strictEqual(navigated, true, 'the same locator navigation used by bookmarks and search must succeed');
+    };
+    const readDestination = async () => {
+        let previous;
+        const deadline = Date.now() + 10000;
+        while (Date.now() < deadline) {
+            const current = await page.evaluate(async () => {
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                const block = readerState.currentChapter.blocks.find(item => item.text.length > 600);
+                const node = document.querySelector(`[data-reader-block="${CSS.escape(block.blockId)}"]`);
+                const range = document.createRange();
+                range.setStart(node.firstChild, 600);
+                range.setEnd(node.firstChild, 601);
+                const content = document.querySelector('[data-reader-content]');
+                return {
+                    targetTop: range.getBoundingClientRect().top,
+                    chromeBottom: Math.max(...Array.from(document.querySelectorAll('.desktop-reader-topbar, .desktop-reader-reading-bar'))
+                        .map(bar => bar.getBoundingClientRect().bottom)),
+                    origin: content.getBoundingClientRect().top + parseFloat(getComputedStyle(content).paddingTop),
+                    reflowPending: readerReflowTimer !== null,
+                    locator: captureReaderPositionLocator()
+                };
+            });
+            // Opening a saved flow book queues a preferences reflow. Sample the
+            // settled destination, never the frame between rebuilding its DOM
+            // and restoring its scroll position in the following RAF.
+            if (!current.reflowPending && Math.abs(current.targetTop - current.origin) < 1
+                && previous && !previous.reflowPending && current.targetTop === previous.targetTop
+                && current.locator.offset === previous.locator.offset) return current;
+            previous = current;
+        }
+        assert.fail(`flow destination did not settle at its reading origin: ${JSON.stringify(previous)}`);
+    };
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForFunction(() => readerReflowTimer === null);
+    await page.evaluate(() => window.readerHudShow());
+    await navigateToDestination();
+    const visible = await readDestination();
+    assert.ok(visible.targetTop >= visible.chromeBottom, 'flow navigation must reveal its destination below the overlay header');
+    await page.evaluate(() => window.readerHudHide());
+    const hidden = await readDestination();
+    assert.strictEqual(hidden.targetTop, visible.targetTop, 'hiding the HUD must retain the same flow destination origin');
+    assert.deepStrictEqual(hidden.locator, visible.locator, 'HUD visibility must not change the captured reading line');
+    await page.evaluate(() => {
+        window.draftHarborDesktop = { isFullscreen: async () => true };
+        window.readerHudToggleFocusMode();
+    });
+    await page.waitForFunction(() => readerState.focusMode);
+    await navigateToDestination();
+    const focused = await readDestination();
+    assert.ok(Math.abs(focused.targetTop - focused.origin) < 1, 'focus mode must preserve the reserved flow reading origin');
+    await page.evaluate(() => { window.readerHudToggleFocusMode(); delete window.draftHarborDesktop; });
+    await page.waitForFunction(() => !readerState.focusMode);
+    await navigateToDestination();
+    await readDestination();
+}
+
 (async () => {
     const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-flow-resume-'));
     let servers;
@@ -102,6 +165,7 @@ async function snapshot(page) {
             try {
                 await page.goto(`${servers.appUrl}/desktop.html`, { waitUntil: 'networkidle' });
                 await openReader(page);
+                await assertFlowDestinationClearOfChrome(page);
                 await page.evaluate(() => {
                     const content = document.querySelector('[data-reader-content]');
                     content.scrollTo({ top: 0, behavior: 'instant' });

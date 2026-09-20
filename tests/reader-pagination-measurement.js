@@ -120,6 +120,33 @@ async function assertMeasuredPages(page, snapshot, label) {
     const baseline = await paginationSnapshot(page);
     await assertMeasuredPages(page, baseline, 'default typography');
 
+    // Changing text width must alter the rendered leaf and measured boundaries
+    // without manually clearing the cache or losing the current reading anchor.
+    const widthSnapshots = [];
+    for (const textWidth of [320, 980, 760]) {
+      widthSnapshots.push(await page.evaluate((width) => {
+        const anchor = captureReaderPositionLocator();
+        readerState.textWidth = width;
+        applyReaderSettings({ reflow: false });
+        renderReaderReading({ locator: anchor });
+        const leaf = document.querySelector('[data-reader-page]');
+        const block = leaf.querySelector('[data-reader-block]');
+        return {
+          pageWidth: leaf.getBoundingClientRect().width,
+          textWidth: block.getBoundingClientRect().width,
+          boundaries: JSON.stringify(readerState.pages),
+          anchor,
+          restoredAnchor: captureReaderPositionLocator()
+        };
+      }, textWidth));
+      await assertMeasuredPages(page, await paginationSnapshot(page), `text width ${textWidth}`);
+    }
+    assert.ok(widthSnapshots[0].textWidth <= 321, 'the narrow text-width setting must cap the actual text column');
+    assert.ok(widthSnapshots[1].pageWidth > widthSnapshots[0].pageWidth + 200, 'widening text must visibly enlarge a single page');
+    assert.notStrictEqual(widthSnapshots[0].boundaries, widthSnapshots[1].boundaries, 'text width must invalidate measured pagination');
+    widthSnapshots.forEach((snapshot) => assert.deepStrictEqual(snapshot.restoredAnchor, snapshot.anchor, 'text width changes must preserve the exact reading anchor'));
+    assert.deepStrictEqual((await paginationSnapshot(page)).segments, baseline.segments, 'returning to the original width must restore the original measured boundaries');
+
     // Isolate focus layout changes from window resize / fullscreen events.
     await page.evaluate(() => {
       window.draftHarborDesktop = { isFullscreen: async () => true };
@@ -138,8 +165,8 @@ async function assertMeasuredPages(page, snapshot, label) {
       height: document.querySelector('[data-reader-page]').clientHeight,
       anchor: captureReaderPositionLocator()
     }));
-    assert.ok(focusState.height > beforeFocus.height + 100, 'focus must reclaim toolbar space');
-    assert.ok(focused.firstLength > baseline.firstLength, 'focus without window resize must repaginate to fit more text');
+    assert.strictEqual(focusState.height, beforeFocus.height, 'focus controls must overlay the stable reading surface');
+    assert.strictEqual(focused.firstLength, baseline.firstLength, 'focus must retain page boundaries when the text geometry is unchanged');
     assert.deepStrictEqual(focusState.anchor, beforeFocus.anchor, 'focus must preserve the exact reading anchor');
     await assertMeasuredPages(page, focused, 'focus typography');
     const focusedBoundaries = await page.evaluate(() => JSON.stringify(readerState.pages));
@@ -147,6 +174,20 @@ async function assertMeasuredPages(page, snapshot, label) {
     await page.waitForTimeout(350);
     assert.strictEqual(await page.evaluate(() => JSON.stringify(readerState.pages)), focusedBoundaries,
       'showing focus controls must not change pagination');
+    const textClearOfChrome = await page.evaluate(() => {
+      const leaves = Array.from(document.querySelectorAll('[data-reader-page]'));
+      const chrome = Array.from(document.querySelectorAll('.desktop-reader-topbar, .desktop-reader-reading-bar, .desktop-reader-bottombar'))
+        .filter((node) => getComputedStyle(node).visibility !== 'hidden' && Number(getComputedStyle(node).opacity) > 0)
+        .map((node) => node.getBoundingClientRect());
+      return leaves.every((leaf) => Array.from(leaf.querySelectorAll('[data-reader-block]')).every((block) => {
+        const range = document.createRange();
+        range.selectNodeContents(block);
+        return Array.from(range.getClientRects()).every((line) => chrome.every((bar) => (
+          line.bottom <= bar.top || line.top >= bar.bottom || line.right <= bar.left || line.left >= bar.right
+        )));
+      }));
+    });
+    assert.strictEqual(textClearOfChrome, true, 'visible focus controls must not cover a line of text');
     await page.screenshot({ path: path.join(os.tmpdir(), 'draftharbor-reader-focus-controls.png') });
     await page.evaluate(() => window.readerHudToggleFocusMode());
     await page.waitForTimeout(550);
@@ -208,6 +249,21 @@ async function assertMeasuredPages(page, snapshot, label) {
     assert.ok(taller.firstLength > tall.firstLength, 'extra large-window height must display more text');
     await assertMeasuredPages(page, taller, 'large-window spread');
 
+    const spreadWidths = [];
+    for (const textWidth of [620, 980]) {
+      spreadWidths.push(await page.evaluate((width) => {
+        const anchor = captureReaderPositionLocator();
+        readerState.textWidth = width;
+        applyReaderSettings({ reflow: false });
+        renderReaderReading({ locator: anchor });
+        const leaf = document.querySelector('[data-reader-page]');
+        return { width: leaf.getBoundingClientRect().width, anchor, restoredAnchor: captureReaderPositionLocator() };
+      }, textWidth));
+      await assertMeasuredPages(page, await paginationSnapshot(page), `spread text width ${textWidth}`);
+    }
+    assert.ok(spreadWidths[1].width > spreadWidths[0].width + 300, '620 to 980 text width must visibly widen a spread when the window has space');
+    spreadWidths.forEach((snapshot) => assert.deepStrictEqual(snapshot.restoredAnchor, snapshot.anchor, 'spread width changes must preserve the exact reading anchor'));
+
     await page.evaluate(() => { delete window.draftHarborDesktop; });
     await page.click('[data-reader-focus-toggle]');
     await page.waitForFunction(() => !!document.fullscreenElement && readerState.focusMode);
@@ -222,13 +278,28 @@ async function assertMeasuredPages(page, snapshot, label) {
     await page.waitForFunction(() => !readerState.focusMode);
     await page.waitForTimeout(350);
 
-    await page.setViewportSize({ width: 900, height: 500 });
+    await page.setViewportSize({ width: 960, height: 720 });
+    await page.evaluate(() => {
+      readerState.layoutMode = 'auto';
+      readerState.fontSize = 18;
+      readerState.pageMargin = 48;
+      readerState.textWidth = 760;
+      applyReaderSettings({ reflow: false });
+      renderReaderReading({ locator: readerState.anchorLocator });
+    });
+    await page.waitForFunction(() => readerState.effectiveLayoutMode === 'single-page');
+    await assertMeasuredPages(page, await paginationSnapshot(page), 'narrow automatic layout');
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.waitForFunction(() => readerState.effectiveLayoutMode === 'double-page');
+    await assertMeasuredPages(page, await paginationSnapshot(page), 'wide automatic layout');
+
+    await page.setViewportSize({ width: 900, height: 350 });
     await page.evaluate(() => {
       readerState.layoutMode = 'single-page';
       clearReaderLayoutCache();
       renderReaderReading({ locator: readerState.anchorLocator });
     });
-    await page.waitForFunction(() => readerState.effectiveLayoutMode === 'flow');
+    assert.strictEqual(await page.evaluate(() => readerState.effectiveLayoutMode), 'flow', 'a viewport with less than 240px remaining after chrome padding must use flow');
     const compact = await page.evaluate(() => ({
       pageCount: readerState.pages.length,
       layout: document.querySelector('[data-reader-content]')?.dataset.readerLayout,

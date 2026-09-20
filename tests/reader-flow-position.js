@@ -60,6 +60,35 @@ async function prepare(page, sources) {
 }
 
 const cases = [
+    ['flow capture and restore stay below overlay chrome when controls hide', async page => {
+        const result = await page.evaluate(async () => {
+            const content = document.querySelector('[data-reader-content]');
+            content.style.paddingTop = '112px';
+            const chrome = document.createElement('div');
+            chrome.style.cssText = 'position:fixed;top:36px;left:24px;width:444px;height:96px;background:white';
+            document.body.appendChild(chrome);
+            const locator = createReaderLocatorAt('long-block', 2000);
+            renderReaderFlow(locator);
+            await window.flowTestSettle();
+            const restored = window.flowTestCharacterRect(locator.offset);
+            const chromeBottom = chrome.getBoundingClientRect().bottom;
+            content.scrollTop = 1511;
+            const captured = captureReaderPositionLocator();
+            const capturedRect = window.flowTestCharacterRect(captured.offset);
+            const paddedTop = content.getBoundingClientRect().top + 112;
+            chrome.hidden = true;
+            readerState.focusMode = true;
+            const hiddenCapture = captureReaderPositionLocator();
+            renderReaderFlow(captured);
+            await window.flowTestSettle();
+            return { restored, chromeBottom, captured, capturedRect, paddedTop, hiddenCapture,
+                hiddenRestored: window.flowTestCharacterRect(captured.offset) };
+        });
+        assert.ok(result.restored.top >= result.chromeBottom, 'a requested flow destination must not land behind overlay chrome');
+        assert.ok(Math.abs(result.capturedRect.top - result.paddedTop) <= 32, 'capture must identify the line below the reserved chrome space');
+        assert.deepStrictEqual(result.hiddenCapture, result.captured, 'hiding controls or entering focus must not change the captured reading position');
+        assert.ok(Math.abs(result.hiddenRestored.top - result.paddedTop) <= 32, 'hidden chrome must retain the same flow restore origin');
+    }],
     ['scroll capture and rerender resume inside a long paragraph', async page => {
         const result = await page.evaluate(async () => {
             const content = document.querySelector('[data-reader-content]');

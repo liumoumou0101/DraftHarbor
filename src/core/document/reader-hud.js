@@ -28,7 +28,15 @@
         return !context.panelOpen
             && !context.selectionActive
             && !context.dialogOpen
+            && !context.menuOpen
             && !context.focusWithinInteractive;
+    }
+
+    function shouldRevealReaderHudForInput(input = {}) {
+        if (input.type === 'keyboard') return input.key === 'Tab';
+        if (input.type === 'pointer') return !!input.overChrome || !!input.nearEdge;
+        if (input.type === 'focus') return !!input.focusWithinInteractive;
+        return false;
     }
 
     function stableVisibleState(context = {}) {
@@ -78,6 +86,7 @@
         HUD_EVENTS,
         createReaderHudState,
         canAutoHide,
+        shouldRevealReaderHudForInput,
         transitionReaderHud
     };
 });

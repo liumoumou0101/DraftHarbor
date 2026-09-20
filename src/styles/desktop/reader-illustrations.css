@@ -1,6 +1,5 @@
 .desktop-reader-content[data-reader-layout="illustrated"] .desktop-reader-page-deck {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    max-width: min(1680px, 100%);
     margin: 0 auto;
 }
 
@@ -110,8 +109,3 @@
 .desktop-reader-illustration-remove { border: 0; background: transparent; color: var(--desktop-muted); cursor: pointer; font: inherit; }
 .desktop-reader-illustration-remove:hover { color: var(--desktop-danger, #c66); }
 .desktop-reader-illustration-trigger { margin: 12px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-@media (max-width: 760px) {
-    .desktop-reader-content[data-reader-layout="illustrated"] .desktop-reader-page-deck { grid-template-columns: minmax(0, 1fr); }
-    .desktop-reader-content[data-reader-layout="illustrated"] .desktop-reader-illustration-pane { display: none; }
-}

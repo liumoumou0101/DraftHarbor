@@ -11,6 +11,14 @@
         return document.querySelector('[data-reader-shell]');
     }
 
+    function readerHudCloseQuickTools(options = {}) {
+        const quickTools = readerHudShell()?.querySelector('[data-reader-quick-tools][open]');
+        if (!quickTools) return false;
+        quickTools.open = false;
+        if (options.restoreFocus) quickTools.querySelector('summary')?.focus({ preventScroll: true });
+        return true;
+    }
+
     function readerHudContract() {
         return window.DraftHarborReaderHud;
     }
@@ -21,11 +29,13 @@
         const content = shell && shell.querySelector('[data-reader-content]');
         const active = document.activeElement;
         const dialogOpen = !!(shell && shell.querySelector('dialog[open]'));
+        const menuOpen = !!(shell && shell.querySelector('[data-reader-quick-tools][open]'));
         const selectionActive = !!readerState.transferSelection || !!(toolbar && !toolbar.hidden);
-        const panelOpen = !!readerState.drawer || dialogOpen;
+        const panelOpen = !!readerState.drawer || dialogOpen || menuOpen;
         return {
             panelOpen,
             dialogOpen,
+            menuOpen,
             selectionActive,
             focusWithinInteractive: !!(active && shell && shell.contains(active) && (!content || !content.contains(active)))
         };
@@ -150,6 +160,59 @@
         readerHudSchedule();
     }
 
+    function readerHudShouldReveal(input) {
+        const contract = readerHudContract();
+        return contract && typeof contract.shouldRevealReaderHudForInput === 'function'
+            ? contract.shouldRevealReaderHudForInput(input)
+            : input.type === 'keyboard' ? input.key === 'Tab'
+                : input.type === 'focus' ? !!input.focusWithinInteractive
+                    : !!input.overChrome || !!input.nearEdge;
+    }
+
+    function readerHudPointerIntent(event) {
+        const shell = readerHudShell();
+        if (!shell) return;
+        const target = event.target;
+        const overChrome = !!target?.closest?.([
+            '[data-reader-topbar]', '.desktop-reader-reading-bar', '[data-reader-bottombar]',
+            '[data-reader-float-hud]', '[data-reader-touch-prev]', '[data-reader-touch-next]',
+            '[data-reader-selection-toolbar]', '[data-reader-left-drawer]', '[data-reader-settings-drawer]'
+        ].join(', '));
+        const rect = typeof shell.getBoundingClientRect === 'function' ? shell.getBoundingClientRect() : null;
+        const clientY = Number(event.clientY);
+        const nearEdge = !!(rect && Number.isFinite(clientY)
+            && (clientY <= rect.top + 28 || clientY >= rect.bottom - 28));
+        if (readerHudShouldReveal({ type: 'pointer', overChrome, nearEdge })) readerHudActivity();
+    }
+
+    function readerHudFocusIntent(event) {
+        const shell = readerHudShell();
+        const content = shell && shell.querySelector('[data-reader-content]');
+        const focusWithinInteractive = !!(event.target && shell && shell.contains(event.target)
+            && (!content || !content.contains(event.target)));
+        if (readerHudShouldReveal({ type: 'focus', focusWithinInteractive })) readerHudActivity();
+        else readerHudSchedule();
+    }
+
+    function readerHudHandleShellClick(event) {
+        const shell = readerHudShell();
+        const quickTools = shell && shell.querySelector('[data-reader-quick-tools][open]');
+        if (!quickTools || quickTools.contains(event.target)) return;
+        quickTools.open = false;
+        const content = shell.querySelector('[data-reader-content]');
+        const readingNavigation = !!(content && content.contains(event.target))
+            || !!event.target?.closest?.([
+                '[data-reader-page-prev]', '[data-reader-page-next]',
+                '[data-reader-touch-prev]', '[data-reader-touch-next]'
+            ].join(', '));
+        if (readingNavigation) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            content?.focus({ preventScroll: true });
+        }
+        readerHudSyncContext();
+    }
+
     function readerHudShow() {
         readerHudCancelTimer();
         readerHudTransition('show', readerHudContext());
@@ -162,6 +225,7 @@
     }
 
     function readerHudNotifyPanel(open) {
+        if (open) readerHudCloseQuickTools();
         const context = readerHudContext();
         if (open) {
             readerHudCancelTimer();
@@ -185,6 +249,10 @@
 
     function readerHudHandleEscape() {
         const shell = readerHudShell();
+        if (readerHudCloseQuickTools({ restoreFocus: true })) {
+            readerHudSyncContext();
+            return true;
+        }
         const dialog = shell && shell.querySelector('dialog[open]');
         if (dialog && typeof dialog.close === 'function') {
             dialog.close();
@@ -244,6 +312,7 @@
 
     function readerHudEnterFocusMode() {
         if (readerState.drawer && typeof setReaderDrawer === 'function') setReaderDrawer('');
+        readerHudCloseQuickTools();
         readerState.focusMode = true;
         readerState.focusOwnsFullscreen = false;
         if (typeof closeReaderAnnotationDialog === 'function') closeReaderAnnotationDialog();
@@ -281,6 +350,7 @@
     function readerHudLeaveReader() {
         const owned = !!readerState.focusOwnsFullscreen;
         readerHudCancelTimer();
+        readerHudCloseQuickTools();
         readerState.focusMode = false;
         readerState.focusOwnsFullscreen = false;
         const root = readerHudRoot();
@@ -298,14 +368,13 @@
         const shell = readerHudShell();
         if (!shell || bound) return;
         bound = true;
-        shell.addEventListener('pointermove', readerHudActivity, { passive: true });
-        shell.addEventListener('mousemove', readerHudActivity, { passive: true });
-        shell.addEventListener('touchstart', readerHudActivity, { passive: true });
-        shell.addEventListener('focusin', readerHudActivity);
+        shell.addEventListener('click', readerHudHandleShellClick, true);
+        shell.addEventListener('pointermove', readerHudPointerIntent, { passive: true });
+        shell.addEventListener('focusin', readerHudFocusIntent);
         document.addEventListener('keydown', (event) => {
             const root = readerHudRoot();
             if (!root || root.dataset.view !== 'reader' || event.key === 'Escape') return;
-            readerHudActivity();
+            if (readerHudShouldReveal({ type: 'keyboard', key: event.key })) readerHudActivity();
         });
         document.addEventListener('fullscreenchange', () => readerHudOnFullscreenChanged(readerIsDocumentFullscreen()));
         window.draftHarborDesktop?.onFullscreenChanged?.((on) => readerHudOnFullscreenChanged(!!on));

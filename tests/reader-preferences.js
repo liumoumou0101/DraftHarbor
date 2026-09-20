@@ -3,7 +3,7 @@ const Preferences = require('../src/core/document/reader-preferences');
 
 const defaults = Preferences.createReaderPreferencesV2({});
 assert.strictEqual(defaults.schemaVersion, 2);
-assert.strictEqual(defaults.layoutMode, 'double-page');
+assert.strictEqual(defaults.layoutMode, 'auto');
 assert.strictEqual(defaults.themeId, 'paper');
 assert.strictEqual(defaults.fontId, 'builtin:default');
 assert.strictEqual(Preferences.createReaderAppearanceProfile({ profileId: 'focus' }).preferences.themeId, 'lamp');
@@ -12,6 +12,8 @@ assert.strictEqual(defaults.statusBarMode, 'auto');
 assert.deepStrictEqual(defaults.statusBarFields, ['chapter', 'page', 'percent']);
 assert.strictEqual(defaults.statusBarAutoHide, true);
 assert.strictEqual(defaults.keyboardPageTurn, true);
+assert.strictEqual(Preferences.createReaderPreferencesV2({ textWidth: 320 }).textWidth, 320, 'narrow page widths must survive preference persistence');
+assert.strictEqual(Preferences.mergeReaderPreferenceLayers({ textWidth: 760 }, { textWidth: 360 }).textWidth, 360, 'book-specific narrow widths must survive merging');
 assert.strictEqual(Preferences.createReaderPreferencesV2({ pageTransition: 'cover' }).pageTransition, 'cover');
 assert.strictEqual(Preferences.createReaderPreferencesV2({ paperMaterial: 'xuan' }).paperMaterial, 'xuan');
 assert.strictEqual(Preferences.createReaderPreferencesV2({ paperMaterial: 'fiber' }).paperMaterial, 'fiber');
