@@ -2,6 +2,7 @@ const assert = require('assert');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
+const http = require('http');
 const { startDesktopServers } = require('../desktop/local-server');
 const settingsService = require('../desktop/services/settings-service');
 const SettingsSchema = require('../src/core/settings/settings-schema');
@@ -9,6 +10,7 @@ const SettingsSchema = require('../src/core/settings/settings-schema');
 (async () => {
   const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-settings-test-'));
   let servers = null;
+  let providerServer = null;
 
   try {
     const normalized = SettingsSchema.normalizeDesktopSettings({
@@ -104,6 +106,161 @@ const SettingsSchema = require('../src/core/settings/settings-schema');
     const check = await settingsService.testProvider(updated, { live: false });
     assert.strictEqual(check.ok, true);
     assert.strictEqual(check.checked, 'configuration');
+
+    const protocolSettings = SettingsSchema.normalizeDesktopSettings({
+      providerSettings: {
+        mode: 'api',
+        provider: 'opencode-go',
+        apiKey: 'protocol-key',
+        model: 'glm-5.2'
+      },
+      providerProfiles: [{
+        id: 'responses-profile',
+        name: 'Responses profile',
+        provider: 'opencode-go',
+        apiKey: 'profile-key',
+        model: 'gpt-5.6-luna'
+      }]
+    });
+    const inheritedRuntime = SettingsSchema.providerRuntimeConfig(protocolSettings, { model: undefined });
+    assert.strictEqual(inheritedRuntime.model, 'glm-5.2', 'undefined extras.model must not erase the stored model');
+    assert.ok(inheritedRuntime.endpoint.endsWith('/chat/completions'), 'the inherited stored model must select its chat endpoint');
+    const profiledRuntime = SettingsSchema.providerRuntimeConfig(protocolSettings, { profileId: 'responses-profile', model: undefined });
+    assert.strictEqual(profiledRuntime.model, 'gpt-5.6-luna', 'undefined extras.model must not erase a profile model');
+    assert.ok(profiledRuntime.endpoint.endsWith('/responses'), 'the effective profile model must select the Responses endpoint');
+    const explicitRuntime = SettingsSchema.providerRuntimeConfig(protocolSettings, { profileId: 'responses-profile', model: 'glm-5.2' });
+    assert.strictEqual(explicitRuntime.model, 'glm-5.2', 'an explicit model must override the profile model');
+    assert.ok(explicitRuntime.endpoint.endsWith('/chat/completions'), 'an explicit model override must also update the endpoint protocol');
+    const taskRuntime = SettingsSchema.providerRuntimeConfig(protocolSettings, {
+      model: undefined,
+      temperature: 0.25,
+      maxTokens: 345,
+      useProviderDefaults: true,
+      globalPrompt: 'task-specific prompt'
+    });
+    assert.strictEqual(taskRuntime.model, 'glm-5.2');
+    assert.strictEqual(taskRuntime.temperature, 0.25, 'defined task temperature must override generation defaults');
+    assert.strictEqual(taskRuntime.maxTokens, 345, 'defined task maxTokens must override generation defaults');
+    assert.strictEqual(taskRuntime.useProviderDefaults, true, 'defined task provider-default preference must survive');
+    assert.strictEqual(taskRuntime.globalPrompt, 'task-specific prompt', 'defined task global prompt must survive');
+
+    assert.strictEqual(typeof settingsService.validateLiveResponse, 'function', 'live response validation should be reusable and directly testable');
+    assert.strictEqual(settingsService.validateLiveResponse(JSON.stringify({
+      choices: [{ message: { content: 'partial' }, finish_reason: 'content_filter' }]
+    }), 'chat-completions').ok, false, 'Chat content_filter must not count as a successful connection test');
+    assert.strictEqual(settingsService.validateLiveResponse(JSON.stringify({
+      choices: [{ message: { content: 'partial', tool_calls: [{ id: 'call-1' }] }, finish_reason: 'tool_calls' }]
+    }), 'chat-completions').ok, false, 'Chat tool_calls must not count as a successful connection test');
+    assert.strictEqual(settingsService.validateLiveResponse(JSON.stringify({
+      content: [{ type: 'text', text: 'partial' }], stop_reason: 'tool_use'
+    }), 'anthropic-messages').ok, false, 'Messages tool_use must not count as a successful connection test');
+    assert.strictEqual(settingsService.validateLiveResponse(JSON.stringify({
+      content: [{ type: 'text', text: 'partial' }], stop_reason: 'refusal'
+    }), 'anthropic-messages').ok, false, 'Messages refusal must not count as a successful connection test');
+    assert.strictEqual(settingsService.validateLiveResponse(JSON.stringify({
+      content: [{ type: 'text', text: 'OK' }], stop_reason: 'end_turn'
+    }), 'anthropic-messages').ok, true, 'Messages end_turn with visible text should pass');
+    assert.strictEqual(settingsService.validateLiveResponse(JSON.stringify({
+      status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: 'OK' }] }]
+    }), 'responses').ok, true, 'Responses completed status with visible text should pass');
+    const failedResponses = settingsService.validateLiveResponse(JSON.stringify({
+      status: 'failed',
+      output_text: 'partial',
+      error: { message: 'Model is unavailable.', type: 'invalid_request_error', code: 'model_unavailable' }
+    }), 'responses');
+    assert.strictEqual(failedResponses.ok, false, 'Responses failed status must override partial visible content');
+    assert.ok(failedResponses.error.includes('Model is unavailable'), 'HTTP 200 error details should be preserved safely');
+    const sensitiveResponsesError = settingsService.validateLiveResponse(JSON.stringify({
+      status: 'failed',
+      output_text: 'partial',
+      error: { message: 'API key local-secret-value rejected', type: 'auth_error' }
+    }), 'responses');
+    assert.ok(!sensitiveResponsesError.error.includes('local-secret-value'), 'HTTP 200 error details must not expose credentials');
+
+    const providerRequests = [];
+    providerServer = http.createServer((request, response) => {
+      const chunks = [];
+      request.on('data', (chunk) => chunks.push(chunk));
+      request.on('end', () => {
+        const rawBody = Buffer.concat(chunks).toString('utf8');
+        const body = JSON.parse(rawBody || '{}');
+        providerRequests.push({ url: request.url, headers: request.headers, body, rawBody });
+        response.setHeader('Content-Type', 'application/json');
+        if (request.url === '/reason-only') {
+          response.end(JSON.stringify({ choices: [{ message: { content: '', reasoning_content: 'private reasoning' }, finish_reason: 'stop' }] }));
+          return;
+        }
+        if (request.url === '/truncated') {
+          response.end(JSON.stringify({ choices: [{ message: { content: 'O' }, finish_reason: 'length' }] }));
+          return;
+        }
+        if (request.url === '/long-reasoning') {
+          const serialized = JSON.stringify({ choices: [{ message: { reasoning_content: 'r'.repeat(4096), content: 'OK' }, finish_reason: 'stop' }] });
+          response.write(serialized.slice(0, 3000));
+          setImmediate(() => response.end(serialized.slice(3000)));
+          return;
+        }
+        if (request.url === '/unavailable') {
+          response.statusCode = 400;
+          response.end(JSON.stringify({ error: { message: 'Model is unavailable.', type: 'invalid_request_error', code: 'model_unavailable' } }));
+          return;
+        }
+        if (request.url === '/quota') {
+          response.statusCode = 400;
+          response.end(JSON.stringify({ error: { message: 'Request rejected.', type: 'invalid_request_error', code: 'insufficient_quota' } }));
+          return;
+        }
+        if (request.url === '/echo-key') {
+          response.statusCode = 400;
+          response.end(JSON.stringify({ error: { message: 'Request rejected for local-only-key', type: 'invalid_request_error' } }));
+          return;
+        }
+        response.end(JSON.stringify({ choices: [{ message: { content: 'OK' }, finish_reason: 'stop' }] }));
+      });
+    });
+    await new Promise((resolve) => providerServer.listen(0, '127.0.0.1', resolve));
+    const providerPort = providerServer.address().port;
+    const localProviderSettings = (pathname) => ({
+      providerSettings: {
+        mode: 'api',
+        provider: 'openai-compatible',
+        endpoint: `http://127.0.0.1:${providerPort}${pathname}`,
+        apiKey: 'local-only-key',
+        model: 'local-probe-model'
+      },
+      generationDefaults: { maxTokens: 1024, temperature: 0.2, useProviderDefaults: false }
+    });
+    const liveSuccess = await settingsService.testProvider(localProviderSettings('/success'), { live: true });
+    assert.strictEqual(liveSuccess.ok, true, 'a completed response with visible content should pass the live test');
+    assert.deepStrictEqual(providerRequests[0].body.messages, [{ role: 'user', content: 'Reply with OK.' }], 'connection tests should use the production request builder with the standard probe prompt');
+    assert.strictEqual(providerRequests[0].body.max_tokens, 1024, 'connection tests should use the configured reasonable output budget');
+    assert.strictEqual(providerRequests[0].body.stream, false, 'connection tests should request a non-streaming response');
+    const unicodeProviderSettings = localProviderSettings('/content-length');
+    unicodeProviderSettings.providerSettings.model = '模型-测试';
+    const unicodeLength = await settingsService.testProvider(unicodeProviderSettings, { live: true });
+    assert.strictEqual(unicodeLength.ok, true);
+    const unicodeRequest = providerRequests.find((item) => item.url === '/content-length');
+    assert.strictEqual(
+      Number(unicodeRequest.headers['content-length']),
+      Buffer.byteLength(unicodeRequest.rawBody, 'utf8'),
+      'connection tests should send the exact UTF-8 Content-Length'
+    );
+    assert.strictEqual(unicodeRequest.headers['transfer-encoding'], undefined, 'connection tests should not fall back to chunked request bodies');
+    const reasonOnly = await settingsService.testProvider(localProviderSettings('/reason-only'), { live: true });
+    assert.strictEqual(reasonOnly.ok, false, 'reasoning without visible content must not pass the live test');
+    const truncated = await settingsService.testProvider(localProviderSettings('/truncated'), { live: true });
+    assert.strictEqual(truncated.ok, false, 'a truncated response must not pass the live test');
+    const longReasoning = await settingsService.testProvider(localProviderSettings('/long-reasoning'), { live: true });
+    assert.strictEqual(longReasoning.ok, true, 'visible content after a long reasoning field should still be validated');
+    const unavailable = await settingsService.testProvider(localProviderSettings('/unavailable'), { live: true });
+    assert.strictEqual(unavailable.ok, false);
+    assert.ok(unavailable.error.includes('Model is unavailable'), 'safe upstream 400 details should survive connection testing');
+    assert.ok(!JSON.stringify(unavailable).includes('local-only-key'), 'connection test results must not expose the API key');
+    const quota = await settingsService.testProvider(localProviderSettings('/quota'), { live: true });
+    assert.strictEqual(quota.ok, false);
+    assert.ok(quota.error.includes('余额'), 'connection tests should classify quota errors from error.code');
+    const echoedKey = await settingsService.testProvider(localProviderSettings('/echo-key'), { live: true });
+    assert.ok(!JSON.stringify(echoedKey).includes('local-only-key'), 'connection tests must remove the exact configured key from HTTP error details');
 
     // Profile tests
     const profile1 = await settingsService.updateProviderProfile(dataRoot, {
@@ -228,6 +385,53 @@ const SettingsSchema = require('../src/core/settings/settings-schema');
     });
     const testBody = await testResponse.json();
     assert.ok(testResponse.ok && testBody.ok, 'provider configuration test should pass for local defaults');
+
+    await settingsService.updateSettings(dataRoot, {
+      providerSettings: {
+        mode: 'api',
+        provider: 'deepseek',
+        endpoint: 'https://api.deepseek.com/chat/completions',
+        apiKey: 'stored-deepseek-key',
+        model: 'deepseek-chat'
+      }
+    });
+    const sameBindingTestResponse = await fetch(servers.appUrl + '/api/settings/test-provider', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        live: false,
+        settings: {
+          providerSettings: {
+            mode: 'api',
+            provider: 'deepseek',
+            endpoint: 'https://api.deepseek.com/chat/completions/',
+            apiKey: '',
+            model: 'deepseek-chat'
+          }
+        }
+      })
+    });
+    const sameBindingTestBody = await sameBindingTestResponse.json();
+    assert.strictEqual(sameBindingTestBody.ok, true, 'testing the same normalized binding may retain the stored key');
+    const reboundTestResponse = await fetch(servers.appUrl + '/api/settings/test-provider', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        live: false,
+        settings: {
+          providerSettings: {
+            mode: 'api',
+            provider: 'openai-compatible',
+            endpoint: 'https://untrusted.invalid/v1/chat/completions',
+            apiKey: '',
+            model: 'foreign-model'
+          }
+        }
+      })
+    });
+    const reboundTestBody = await reboundTestResponse.json();
+    assert.strictEqual(reboundTestBody.ok, false, 'testing an unsaved rebound endpoint with a blank key must not inherit the stored key');
+    assert.ok(/API key is required/i.test(reboundTestBody.result.error), 'the rebound test should require a key before any network request');
 
     // Test deleting a profile
     var delResponse = await fetch(servers.appUrl + '/api/settings/delete-provider-profile', {
@@ -362,6 +566,7 @@ const SettingsSchema = require('../src/core/settings/settings-schema');
     console.log('Settings service test passed.');
   } finally {
     if (servers) servers.close();
+    if (providerServer) providerServer.close();
     await fs.rm(dataRoot, { recursive: true, force: true });
   }
 })().catch((error) => {

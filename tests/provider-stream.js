@@ -333,7 +333,7 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
     assert.strictEqual(modelCatalog.isThinkingAlwaysOn('opencode-go', 'kimi-k3'), true);
     assert.strictEqual(modelCatalog.isThinkingAlwaysOn('opencode-go', 'glm-5.3'), true);
     assert.strictEqual(modelCatalog.getThinkingControl('opencode-go', 'kimi-k2.6'), 'toggle');
-    assert.strictEqual(modelCatalog.getThinkingControl('opencode-go', 'glm-5.2'), 'toggle');
+    assert.strictEqual(modelCatalog.getThinkingControl('opencode-go', 'glm-5.2'), 'always-on');
     assert.strictEqual(modelCatalog.thinkingWillRun('opencode-go', 'kimi-k2.7-code', false), true, 'always-on models think even when the toggle is off');
     assert.strictEqual(modelCatalog.thinkingWillRun('opencode-zen', 'minimax-m3', false), false);
     assert.deepStrictEqual(modelCatalog.thinkingRequestPayload('toggle', true), { type: 'enabled' });
@@ -342,9 +342,9 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
     assert.strictEqual(modelCatalog.thinkingRequestPayload('always-on', false), null);
     assert.strictEqual(modelCatalog.getThinkingControl('openai', 'gpt-4o'), 'none');
     assert.strictEqual(modelCatalog.inferThinkingControl('openai-compatible/minimax-m3'), 'toggle-adaptive');
-    assert.strictEqual(modelCatalog.getThinkingControl('opencode-go', 'longcat-2.0'), 'always-on');
-    assert.strictEqual(modelCatalog.getThinkingControl('opencode-go', 'qwen3.6-plus'), 'always-on');
-    assert.strictEqual(modelCatalog.inferOpencodeTransport('qwen3.6-plus'), 'chat-completions');
+    assert.strictEqual(modelCatalog.getThinkingControl('opencode-go', 'longcat-2.0'), 'toggle');
+    assert.strictEqual(modelCatalog.getThinkingControl('opencode-go', 'qwen3.6-plus'), 'toggle');
+    assert.strictEqual(modelCatalog.inferOpencodeTransport('qwen3.6-plus'), 'anthropic-messages');
     assert.strictEqual(modelCatalog.inferOpencodeTransport('gpt-5.6-luna'), 'responses');
     assert.ok(modelCatalog.isOpencodeGatewayCallable(modelCatalog.getProviderModelEntry('opencode-go', 'longcat-2.0')));
     assert.ok(modelCatalog.isOpencodeGatewayCallable(modelCatalog.getProviderModelEntry('opencode-go', 'gpt-5.6-luna')));
@@ -552,7 +552,15 @@ assert.ok(chatML.includes('<|im_start|>assistant'), 'ChatML should have an assis
     }
 
     async function pingChat(config, inspect, chunks) {
-        globalThis.fetch = mockChatStream(inspect, chunks);
+        globalThis.fetch = modelCatalog.getModelTransport(config.provider, config.model) === 'anthropic-messages'
+            ? mockChatStream((body, url) => {
+                assert.ok(url.endsWith('/messages'));
+                inspect(body, url);
+            }, [
+                { type: 'content_block_delta', delta: { type: 'text_delta', text: 'ok' } },
+                { type: 'message_delta', delta: { stop_reason: 'end_turn' } }
+            ])
+            : mockChatStream(inspect, chunks);
         try {
             var tokens = [];
             var types = [];

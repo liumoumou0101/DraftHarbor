@@ -177,29 +177,57 @@
         const decoder = new TextDecoder();
         let pending = '';
         let completed = false;
-        while (true) {
-            const part = await reader.read();
-            if (part.value && part.value.length && typeof onActivity === 'function') onActivity();
-            pending += decoder.decode(part.value || new Uint8Array(), { stream: !part.done });
-            const lines = pending.split(/\r?\n/);
-            pending = lines.pop() || '';
-            for (const rawLine of lines) {
-                const line = rawLine.trim();
-                if (!line.startsWith('data:')) continue;
-                const data = line.slice(5).trim();
-                if (!data) continue;
-                if (data === '[DONE]') return true;
-                completed = visit(data) === true || completed;
+        let dataLines = [];
+        let doneMarker = false;
+        function dispatch() {
+            if (!dataLines.length) return;
+            const data = dataLines.join('\n');
+            dataLines = [];
+            if (data.trim() === '[DONE]') { completed = true; doneMarker = true; }
+            else if (data.trim()) completed = visit(data) === true || completed;
+        }
+        function consumeLine(rawLine) {
+            const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+            if (!line) dispatch();
+            else if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
+        }
+        try {
+            while (true) {
+                const part = await reader.read();
+                if (part.value && part.value.length && typeof onActivity === 'function') onActivity();
+                pending += decoder.decode(part.value || new Uint8Array(), { stream: !part.done });
+                const lines = pending.split('\n');
+                pending = lines.pop() || '';
+                for (const line of lines) {
+                    consumeLine(line);
+                    if (doneMarker) return true;
+                }
+                if (part.done) break;
             }
-            if (part.done) break;
+            if (pending) consumeLine(pending);
+            dispatch();
+            if (!completed) throw providerError('provider_stream_incomplete', '生成连接提前结束，已收到的内容可能不完整，请检查后重试。');
+            return true;
+        } finally {
+            try { if (typeof reader.cancel === 'function') await reader.cancel(); } catch (_) { /* stream may already be aborted */ }
+            if (typeof reader.releaseLock === 'function') reader.releaseLock();
         }
-        if (pending.trim().startsWith('data:')) {
-            const data = pending.trim().slice(5).trim();
-            if (data === '[DONE]') completed = true;
-            else if (data) completed = visit(data) === true || completed;
-        }
-        if (!completed) throw providerError('provider_stream_incomplete', '生成连接提前结束，已收到的内容可能不完整，请检查后重试。');
-        return true;
+    }
+
+    function isJsonResponse(response) {
+        const contentType = response.headers && response.headers.get ? response.headers.get('content-type') || '' : '';
+        return /(?:application\/json|[\w.-]+\+json)(?:\s*;|$)/i.test(contentType)
+            || !response.body || typeof response.body.getReader !== 'function';
+    }
+
+    function reasoningText(message) {
+        return typeof message.reasoning_content === 'string' && message.reasoning_content
+            ? message.reasoning_content : (typeof message.reasoning === 'string' ? message.reasoning : '');
+    }
+
+    function payloadError(error, fallback) {
+        const detail = String((error && error.message) || fallback).replace(/\s+/g, ' ').trim().slice(0, 180);
+        return providerError('provider_error', detail, { providerType: String((error && (error.type || error.code)) || '') });
     }
 
     function numeric(value, fallback) {
@@ -404,17 +432,9 @@
     function createChatRequest(messages, config) {
         const selection = resolveChatSelection(config);
         const capability = selection.capability || getModelCapability(selection.model) || {};
-        const catalog = resolveModelCatalog();
-        const payload = catalog && typeof catalog.thinkingRequestPayload === 'function'
-            ? catalog.thinkingRequestPayload(selection.thinkingControl, selection.requestedThinking)
-            : (selection.thinkingSupported
-                ? { type: selection.thinkingControl === 'toggle-adaptive'
-                    ? (selection.requestedThinking ? 'adaptive' : 'disabled')
-                    : (selection.requestedThinking ? 'enabled' : 'disabled') }
-                : null);
         const body = { model: selection.model, messages, stream: true };
         if (config.includeUsage) body.stream_options = { include_usage: true };
-        if (payload) body.thinking = payload;
+        Object.assign(body, thinkingRequestFields(config, selection, 'chat-completions'));
         if (!config.useProviderDefaults) {
             body.temperature = numeric(config.temperature, 0.8);
             body.max_tokens = numeric(config.maxTokens, 300);
@@ -436,16 +456,8 @@
     }
 
     async function requestChat(messages, emit, config, onActivity) {
-        const endpoint = resolveChatEndpoint(config);
-        if (!endpoint) throw new Error('API endpoint is required.');
-        const request = createChatRequest(messages, config);
-        const catalog = resolveModelCatalog();
-        const headers = catalog && typeof catalog.providerAuthHeaders === 'function'
-            ? catalog.providerAuthHeaders(config.provider, config.apiKey, config.sessionId)
-            : {
-                'Content-Type': 'application/json',
-                ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {})
-            };
+        const request = buildProviderRequest(messages, config);
+        const { endpoint, headers } = request;
         const response = await fetch(endpoint, {
             method: 'POST',
             headers,
@@ -474,13 +486,13 @@
         }
         if (typeof onActivity === 'function') onActivity();
 
-        if (!response.body || typeof response.body.getReader !== 'function') {
+        if (isJsonResponse(response)) {
             const payload = await response.json();
             if (typeof onActivity === 'function') onActivity();
-            if (payload && payload.error) throw providerError('provider_error', String(payload.error.message || '生成服务返回错误。'));
+            if (payload && payload.error) throw payloadError(payload.error, '生成服务返回错误。');
             const choice = payload && payload.choices && payload.choices[0] ? payload.choices[0] : {};
             const message = choice.message || {};
-            if (message.reasoning_content) emit(message.reasoning_content, { type: 'reasoning' });
+            if (reasoningText(message)) emit(reasoningText(message), { type: 'reasoning' });
             if (message.content) emit(message.content, { type: 'content' });
             if (choice.finish_reason) emit('', { type: 'finish', finishReason: choice.finish_reason });
             if (payload && payload.usage) emit('', { type: 'usage', usage: payload.usage });
@@ -489,11 +501,11 @@
 
         await consumeEventStream(response, (serialized) => {
             const payload = JSON.parse(serialized);
-            if (payload && payload.error) throw providerError('provider_error', String(payload.error.message || '生成服务返回错误。'));
+            if (payload && payload.error) throw payloadError(payload.error, '生成服务返回错误。');
             if (payload && payload.usage) emit('', { type: 'usage', usage: payload.usage });
             const choice = payload && payload.choices && payload.choices[0];
             const delta = choice && choice.delta ? choice.delta : {};
-            if (delta.reasoning_content) emit(delta.reasoning_content, { type: 'reasoning' });
+            if (reasoningText(delta)) emit(reasoningText(delta), { type: 'reasoning' });
             if (delta.content) emit(delta.content, { type: 'content' });
             if (choice && choice.finish_reason) emit('', { type: 'finish', finishReason: choice.finish_reason });
             return !!(choice && choice.finish_reason);
@@ -521,14 +533,22 @@
         return { system: systemParts.join('\n\n'), messages: rest };
     }
 
-    function visitAnthropicEvent(serialized, emit) {
+    function visitAnthropicEvent(serialized, emit, state) {
         if (!serialized || serialized === '[DONE]') return;
         const payload = JSON.parse(serialized);
         if (!payload || payload.type === 'ping') return;
         if (payload.type === 'message_stop') return true;
         if (payload.type === 'error') {
-            const detail = String((payload.error && payload.error.message) || 'Anthropic 返回错误。').replace(/\s+/g, ' ').trim().slice(0, 180);
-            throw providerError('provider_error', detail || 'Anthropic 返回错误。');
+            throw payloadError(payload.error, 'Anthropic 返回错误。');
+        }
+        if (payload.type === 'message_start' && payload.message && payload.message.usage) {
+            state.usage = { ...payload.message.usage };
+            emit('', { type: 'usage', usage: state.usage });
+        }
+        if (payload.type === 'content_block_start') {
+            const block = payload.content_block || {};
+            if (block.type === 'thinking' && block.thinking) emit(block.thinking, { type: 'reasoning' });
+            if (block.type === 'text' && block.text) emit(block.text, { type: 'content' });
         }
         if (payload.type === 'content_block_delta') {
             const delta = payload.delta || {};
@@ -539,36 +559,36 @@
         if (payload.type === 'message_delta') {
             const stop = payload.delta && payload.delta.stop_reason;
             if (stop) emit('', { type: 'finish', finishReason: stop === 'end_turn' ? 'stop' : stop });
-            if (payload.usage) emit('', { type: 'usage', usage: payload.usage });
+            if (payload.usage) {
+                state.usage = { ...state.usage, ...payload.usage };
+                emit('', { type: 'usage', usage: state.usage });
+            }
             return !!stop;
         }
     }
 
-    async function requestAnthropic(messages, emit, config, onActivity) {
-        const endpoint = resolveChatEndpoint(config) || 'https://api.anthropic.com/v1/messages';
-        if (!endpoint) throw new Error('API endpoint is required.');
-        const catalog = resolveModelCatalog();
-        const fallback = catalog && typeof catalog.getProviderMetadata === 'function'
-            ? (catalog.getProviderMetadata(config.provider).defaultModelHint || 'claude-sonnet-4-6')
-            : 'claude-sonnet-4-6';
+    function createAnthropicRequest(messages, config) {
+        const selection = resolveChatSelection(config);
         const converted = toAnthropicMessages(messages);
         const body = {
-            model: String(config.model || config.aiModel || fallback).trim() || fallback,
+            model: selection.model,
             messages: converted.messages,
             stream: true,
             max_tokens: numeric(config.maxTokens, 8000)
         };
+        Object.assign(body, thinkingRequestFields(config, selection, 'anthropic-messages'));
+        if (body.thinking && body.thinking.budget_tokens) {
+            body.max_tokens = Math.max(body.max_tokens, body.thinking.budget_tokens + 1);
+        }
         if (converted.system) body.system = converted.system;
-        if (!config.useProviderDefaults) {
+        if (!config.useProviderDefaults && !selection.thinking) {
             body.temperature = Math.max(0, Math.min(1, numeric(config.temperature, 0.8)));
         }
-        const headers = catalog && typeof catalog.providerAuthHeaders === 'function'
-            ? catalog.providerAuthHeaders(config.provider, config.apiKey, config.sessionId)
-            : {
-                'Content-Type': 'application/json',
-                'x-api-key': String(config.apiKey || ''),
-                'anthropic-version': '2023-06-01'
-            };
+        return { body };
+    }
+
+    async function requestAnthropic(messages, emit, config, onActivity) {
+        const { endpoint, headers, body } = buildProviderRequest(messages, config);
         const response = await fetch(endpoint, {
             method: 'POST',
             headers,
@@ -593,9 +613,10 @@
             });
         }
         if (typeof onActivity === 'function') onActivity();
-        if (!response.body || typeof response.body.getReader !== 'function') {
+        if (isJsonResponse(response)) {
             const payload = await response.json();
             if (typeof onActivity === 'function') onActivity();
+            if (payload && payload.error) throw payloadError(payload.error, 'Anthropic 返回错误。');
             const blocks = Array.isArray(payload && payload.content) ? payload.content : [];
             for (const block of blocks) {
                 if (block && block.type === 'thinking' && block.thinking) emit(block.thinking, { type: 'reasoning' });
@@ -605,7 +626,8 @@
             if (payload && payload.usage) emit('', { type: 'usage', usage: payload.usage });
             return;
         }
-        await consumeEventStream(response, (serialized) => visitAnthropicEvent(serialized, emit), onActivity);
+        const state = { usage: {} };
+        await consumeEventStream(response, (serialized) => visitAnthropicEvent(serialized, emit, state), onActivity);
     }
 
     function toResponsesInput(messages) {
@@ -633,7 +655,7 @@
         return {
             prompt_tokens: Number(usage.prompt_tokens || usage.input_tokens || 0),
             completion_tokens: Number(usage.completion_tokens || usage.output_tokens || 0),
-            total_tokens: Number(usage.total_tokens || 0),
+            total_tokens: Number(usage.total_tokens ?? (Number(usage.input_tokens || usage.prompt_tokens || 0) + Number(usage.output_tokens || usage.completion_tokens || 0))),
             input_tokens: Number(usage.input_tokens || usage.prompt_tokens || 0),
             output_tokens: Number(usage.output_tokens || usage.completion_tokens || 0),
             output_tokens_details: usage.output_tokens_details || null,
@@ -676,8 +698,7 @@
             const payload = JSON.parse(serialized);
             if (!payload || !payload.type) return;
             if (payload.type === 'error' || payload.type === 'response.failed') {
-                const detail = String((payload.error && payload.error.message) || payload.message || 'Responses 返回错误。').replace(/\s+/g, ' ').trim().slice(0, 180);
-                throw providerError('provider_error', detail || 'Responses 返回错误。');
+                throw payloadError(payload.error || (payload.response && payload.response.error) || payload, 'Responses 返回错误。');
             }
             const deltaText = typeof payload.delta === 'string'
                 ? payload.delta
@@ -710,7 +731,6 @@
 
     function createResponsesRequest(messages, config) {
         const selection = resolveChatSelection(config);
-        const catalog = resolveModelCatalog();
         const converted = toResponsesInput(messages);
         const body = {
             model: selection.model,
@@ -721,10 +741,7 @@
         if (!config.useProviderDefaults) {
             body.max_output_tokens = numeric(config.maxTokens, 800);
         }
-        const payload = catalog && typeof catalog.thinkingRequestPayload === 'function'
-            ? catalog.thinkingRequestPayload(selection.thinkingControl, selection.requestedThinking)
-            : null;
-        if (payload && payload.effort) body.reasoning = { effort: payload.effort };
+        Object.assign(body, thinkingRequestFields(config, selection, 'responses'));
         return {
             body,
             thinking: selection.thinking,
@@ -734,16 +751,8 @@
     }
 
     async function requestResponses(messages, emit, config, onActivity) {
-        const endpoint = resolveChatEndpoint(config);
-        if (!endpoint) throw new Error('API endpoint is required.');
-        const request = createResponsesRequest(messages, config);
-        const catalog = resolveModelCatalog();
-        const headers = catalog && typeof catalog.providerAuthHeaders === 'function'
-            ? catalog.providerAuthHeaders(config.provider, config.apiKey, config.sessionId)
-            : {
-                'Content-Type': 'application/json',
-                ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {})
-            };
+        const request = buildProviderRequest(messages, config);
+        const { endpoint, headers } = request;
         const response = await fetch(endpoint, {
             method: 'POST',
             headers,
@@ -768,9 +777,10 @@
             });
         }
         if (typeof onActivity === 'function') onActivity();
-        if (!response.body || typeof response.body.getReader !== 'function') {
+        if (isJsonResponse(response)) {
             const payload = await response.json();
             if (typeof onActivity === 'function') onActivity();
+            if (payload && (payload.error || payload.status === 'failed')) throw payloadError(payload.error, 'Responses 返回错误。');
             emitResponsesOutput(payload && payload.output, emit);
             if (payload && payload.usage) emit('', { type: 'usage', usage: responsesUsage(payload.usage) });
             emit('', { type: 'finish', finishReason: payload && payload.status === 'incomplete' ? ((payload.incomplete_details && payload.incomplete_details.reason) || 'incomplete') : 'stop' });
@@ -789,6 +799,35 @@
             return catalog.getProviderTransport(config.provider);
         }
         return config.provider === 'anthropic' ? 'anthropic-messages' : 'chat-completions';
+    }
+
+    function thinkingRequestFields(config, selection, transport) {
+        const catalog = resolveModelCatalog();
+        if (catalog && typeof catalog.getThinkingRequestFields === 'function') {
+            return catalog.getThinkingRequestFields(config.provider, selection.model, selection.requestedThinking, { transport });
+        }
+        const payload = catalog && typeof catalog.thinkingRequestPayload === 'function'
+            ? catalog.thinkingRequestPayload(selection.thinkingControl, selection.requestedThinking)
+            : (selection.thinkingSupported ? { type: selection.requestedThinking ? 'enabled' : 'disabled' } : null);
+        return payload ? (transport === 'responses' ? { reasoning: payload } : { thinking: payload }) : {};
+    }
+
+    // Connection checks and generation must use identical protocol selection and authentication.
+    function buildProviderRequest(messages, config = {}, options = {}) {
+        const selection = resolveChatSelection(config);
+        const effective = { ...config, model: selection.model, enableThinking: selection.requestedThinking };
+        const transport = resolveApiTransport(effective);
+        const request = transport === 'anthropic-messages' ? createAnthropicRequest(messages, effective)
+            : (transport === 'responses' ? createResponsesRequest(messages, effective) : createChatRequest(messages, effective));
+        const endpoint = resolveChatEndpoint(effective);
+        if (!endpoint) throw new Error('API endpoint is required.');
+        const catalog = resolveModelCatalog();
+        const headers = catalog && typeof catalog.providerAuthHeaders === 'function'
+            ? catalog.providerAuthHeaders(effective.provider, effective.apiKey, effective.sessionId, { model: selection.model, transport })
+            : { 'Content-Type': 'application/json', ...(effective.apiKey ? { Authorization: `Bearer ${effective.apiKey}` } : {}) };
+        request.body.stream = options.stream !== false;
+        if (!request.body.stream) delete request.body.stream_options;
+        return { endpoint, headers, body: request.body, transport };
     }
 
     async function streamGeneration(prompt, onToken, config) {
@@ -852,6 +891,11 @@
             return result;
         } catch (error) {
             splitter.finish();
+            const secret = String(activeSettings.apiKey || '');
+            if (secret && error && typeof error.message === 'string') {
+                error.message = error.message.split(secret).join('[redacted]');
+                if (typeof error.stack === 'string') error.stack = error.stack.split(secret).join('[redacted]');
+            }
             throw watchdog.error() || error;
         } finally {
             watchdog.finish();
@@ -868,6 +912,7 @@
         toAnthropicMessages,
         toResponsesInput,
         createInlineThinkSplitter,
+        buildProviderRequest,
         streamGeneration
     });
 });

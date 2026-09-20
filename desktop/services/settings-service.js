@@ -140,76 +140,132 @@ function sanitizeKey(value) {
   return String(value || '').trim().replace(/^Bearer\s+/i, '').trim();
 }
 
-function sanitizeProviderMessage(value) {
+function sanitizeProviderMessage(value, secrets = []) {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
   if (!text || /<\/?[a-z][\s\S]*>/i.test(text)) return '';
-  if (/api[_-]?key|authorization|bearer\s+\S+/i.test(text) && text.length > 80) return '';
+  const secretValues = (Array.isArray(secrets) ? secrets : [secrets]).map(sanitizeKey).filter(Boolean);
+  if (secretValues.some((secret) => text.includes(secret))) return '';
+  if (/\b(?:sk|pk|rk|key|token)-[a-z0-9._-]{8,}\b|(?:api[\s_-]?key|authorization|bearer|access[\s_-]?token|secret|password|credential)\s*(?:is\s*)?(?::|=)?\s*[a-z0-9._-]{6,}/i.test(text)) return '';
   return text.slice(0, 180);
 }
 
-function extractErrorMessage(raw) {
+function extractErrorDetails(raw, secrets = []) {
   const text = String(raw || '').trim();
-  if (!text) return '';
+  if (!text) return { message: '', type: '', code: '' };
   try {
     const parsed = JSON.parse(text);
-    const message = parsed && parsed.error && (parsed.error.message || parsed.error.code)
-      ? (parsed.error.message || parsed.error.code)
-      : (parsed.message || parsed.error || '');
-    return sanitizeProviderMessage(message);
+    const source = parsed && parsed.error && typeof parsed.error === 'object' ? parsed.error : parsed;
+    const message = source && (source.message || source.detail)
+      ? (source.message || source.detail)
+      : (typeof parsed.error === 'string' ? parsed.error : '');
+    return {
+      message: sanitizeProviderMessage(message, secrets),
+      type: String((source && source.type) || '').slice(0, 80),
+      code: String((source && source.code) || '').slice(0, 80)
+    };
   } catch (error) {
-    return sanitizeProviderMessage(text);
+    return { message: sanitizeProviderMessage(text, secrets), type: '', code: '' };
   }
 }
 
 function resolveLiveTest(config) {
-  const ModelCatalog = require('../../src/core/settings/model-catalog');
-  if (typeof ModelCatalog.buildLiveTestRequest === 'function') {
-    return ModelCatalog.buildLiveTestRequest(config);
+  const ProviderStream = require('../../src/core/generation/provider-stream');
+  if (typeof ProviderStream.buildProviderRequest !== 'function') {
+    throw new Error('Provider request builder is unavailable.');
   }
-  if (ModelCatalog.isOpencodeProvider(config.provider)) {
-    return {
-      model: ModelCatalog.defaultTestModel(config.provider, config.model),
-      endpoint: ModelCatalog.resolveProviderEndpoint(config.provider, config.endpoint),
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${sanitizeKey(config.apiKey)}`
-      },
-      body: JSON.stringify({
-        model: ModelCatalog.defaultTestModel(config.provider, config.model),
-        messages: [{ role: 'user', content: 'ping' }],
-        max_tokens: 1,
-        stream: false
-      })
-    };
-  }
+  const built = ProviderStream.buildProviderRequest(
+    [{ role: 'user', content: 'Reply with OK.' }],
+    { ...config, apiKey: sanitizeKey(config.apiKey), maxTokens: 1024, useProviderDefaults: false },
+    { stream: false }
+  );
   return {
-    model: config.model || 'model-check',
-    endpoint: config.endpoint,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${sanitizeKey(config.apiKey)}`
-    },
-    body: JSON.stringify({
-      model: config.model || 'model-check',
-      messages: [{ role: 'user', content: 'ping' }],
-      max_tokens: 1,
-      stream: false
-    })
+    model: (built.body && built.body.model) || config.model || 'model-check',
+    endpoint: built.endpoint,
+    headers: built.headers,
+    body: JSON.stringify(built.body || {}),
+    transport: built.transport || 'chat-completions'
   };
 }
 
+function textFromContent(value) {
+  if (typeof value === 'string') return value.trim();
+  if (!Array.isArray(value)) return '';
+  return value.map((item) => {
+    if (typeof item === 'string') return item;
+    return item && typeof item === 'object' ? String(item.text || item.output_text || '') : '';
+  }).join('').trim();
+}
+
+function validateLiveResponse(raw, transport, secrets = []) {
+  let payload;
+  try {
+    payload = JSON.parse(String(raw || ''));
+  } catch (error) {
+    return { ok: false, error: 'AI Provider 返回了无法解析的响应。' };
+  }
+  if (payload && payload.error) {
+    const details = extractErrorDetails(raw, secrets);
+    return { ok: false, error: details.message || 'AI Provider 返回了错误响应。' };
+  }
+  if (transport === 'responses') {
+    const status = String(payload && payload.status || '').toLowerCase();
+    if (status !== 'completed' || (payload && payload.incomplete_details)) {
+      return { ok: false, error: status ? `AI Provider 未正常完成测试响应（${status}）。` : 'AI Provider 响应缺少完成状态。' };
+    }
+    let content = textFromContent(payload && payload.output_text);
+    if (!content && Array.isArray(payload && payload.output)) {
+      content = payload.output.filter((item) => item && item.type !== 'reasoning').map((item) => {
+        if (item && item.type === 'message') return textFromContent(item.content);
+        return item && item.type === 'output_text' ? String(item.text || '') : '';
+      }).join('').trim();
+    }
+    return content
+      ? { ok: true }
+      : { ok: false, error: 'AI Provider 没有返回可见正文。' };
+  }
+  if (transport === 'anthropic-messages') {
+    const stopReason = String(payload && payload.stop_reason || '').toLowerCase();
+    const blocks = Array.isArray(payload && payload.content) ? payload.content : [];
+    const hasNonTextResult = blocks.some((item) => item && (item.type === 'tool_use' || item.type === 'refusal'));
+    if (!['end_turn', 'stop_sequence'].includes(stopReason) || hasNonTextResult) {
+      return { ok: false, error: stopReason ? `AI Provider 未正常结束测试响应（${stopReason}）。` : 'AI Provider 响应缺少正常结束状态。' };
+    }
+    return textFromContent(blocks.filter((item) => !item || !item.type || item.type === 'text'))
+      ? { ok: true }
+      : { ok: false, error: 'AI Provider 没有返回可见正文。' };
+  }
+  const choice = payload && Array.isArray(payload.choices) ? payload.choices[0] : null;
+  const finishReason = String(choice && choice.finish_reason || '').toLowerCase();
+  const message = choice && choice.message;
+  const hasToolCall = !!(message && Array.isArray(message.tool_calls) && message.tool_calls.length);
+  const hasRefusal = !!(message && (message.refusal || message.content_filter));
+  if (!['stop', 'end_turn', 'stop_sequence'].includes(finishReason) || hasToolCall || hasRefusal) {
+    return { ok: false, error: finishReason ? `AI Provider 未正常结束测试响应（${finishReason}）。` : 'AI Provider 响应缺少正常结束状态。' };
+  }
+  const content = textFromContent(message && message.content);
+  return content
+    ? { ok: true }
+    : { ok: false, error: 'AI Provider 没有返回可见正文。' };
+}
+
 function requestUrl(url, { method = 'GET', headers = {}, body = '', timeoutMs = 2500, readBody = false } = {}) {
+  const maxResponseBytes = 64 * 1024;
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const client = parsed.protocol === 'https:' ? https : http;
-    const request = client.request(parsed, { method, headers, timeout: timeoutMs }, (response) => {
+    const requestHeaders = body
+      ? { ...headers, 'Content-Length': Buffer.byteLength(body, 'utf8') }
+      : headers;
+    const request = client.request(parsed, { method, headers: requestHeaders, timeout: timeoutMs }, (response) => {
       const retryAfter = response.headers && response.headers['retry-after'];
       const chunks = [];
       let size = 0;
       response.on('data', (chunk) => {
-        if (!readBody || size > 2048) return;
-        size += chunk.length;
-        chunks.push(chunk);
+        if (!readBody || size >= maxResponseBytes) return;
+        const remaining = maxResponseBytes - size;
+        const accepted = chunk.length > remaining ? chunk.subarray(0, remaining) : chunk;
+        size += accepted.length;
+        chunks.push(accepted);
       });
       response.on('end', () => resolve({
         statusCode: response.statusCode || 0,
@@ -266,9 +322,11 @@ async function testProvider(settingsInput, options = {}) {
       timeoutMs: 15000,
       readBody: true
     });
-    const ok = result.statusCode >= 200 && result.statusCode < 300;
-    const detail = extractErrorMessage(result.body);
-    const classified = !ok ? require('./generation-bridge-service').classifyHttpStatus(result.statusCode, result.retryAfter, { message: detail }) : null;
+    const httpOk = result.statusCode >= 200 && result.statusCode < 300;
+    const details = extractErrorDetails(result.body, [config.apiKey]);
+    const classified = !httpOk ? require('./generation-bridge-service').classifyHttpStatus(result.statusCode, result.retryAfter, details) : null;
+    const validation = httpOk ? validateLiveResponse(result.body, liveTarget.transport, [config.apiKey]) : { ok: false };
+    const ok = httpOk && validation.ok;
     return {
       ok,
       mode: 'api',
@@ -276,10 +334,10 @@ async function testProvider(settingsInput, options = {}) {
       model,
       statusCode: result.statusCode,
       checked: 'live',
-      error: !ok ? ((classified && classified.message) || detail || `HTTP ${result.statusCode}`) : undefined
+      error: !ok ? ((classified && classified.message) || validation.error || details.message || `HTTP ${result.statusCode}`) : undefined
     };
   } catch (error) {
-    return { ok: false, mode: 'api', provider: config.provider, error: error.message };
+    return { ok: false, mode: 'api', provider: config.provider, error: sanitizeProviderMessage(error.message, [config.apiKey]) || 'AI Provider 请求失败。' };
   }
 }
 
@@ -323,9 +381,11 @@ async function testProviderProfile(dataRoot, profileId, options = {}) {
       timeoutMs: 15000,
       readBody: true
     });
-    const ok = result.statusCode >= 200 && result.statusCode < 300;
-    const detail = extractErrorMessage(result.body);
-    const classified = !ok ? require('./generation-bridge-service').classifyHttpStatus(result.statusCode, result.retryAfter, { message: detail }) : null;
+    const httpOk = result.statusCode >= 200 && result.statusCode < 300;
+    const details = extractErrorDetails(result.body, [config.apiKey]);
+    const classified = !httpOk ? require('./generation-bridge-service').classifyHttpStatus(result.statusCode, result.retryAfter, details) : null;
+    const validation = httpOk ? validateLiveResponse(result.body, liveTarget.transport, [config.apiKey]) : { ok: false };
+    const ok = httpOk && validation.ok;
     return {
       ok,
       mode: 'api',
@@ -334,10 +394,10 @@ async function testProviderProfile(dataRoot, profileId, options = {}) {
       model,
       statusCode: result.statusCode,
       checked: 'live',
-      error: !ok ? ((classified && classified.message) || detail || `HTTP ${result.statusCode}`) : undefined
+      error: !ok ? ((classified && classified.message) || validation.error || details.message || `HTTP ${result.statusCode}`) : undefined
     };
   } catch (error) {
-    return { ok: false, mode: 'api', provider: config.provider, profileId: profile.id, error: error.message };
+    return { ok: false, mode: 'api', provider: config.provider, profileId: profile.id, error: sanitizeProviderMessage(error.message, [config.apiKey]) || 'AI Provider 请求失败。' };
   }
 }
 
@@ -354,5 +414,6 @@ module.exports = {
   projectSaveRoot,
   backupRoot,
   testProvider,
-  testProviderProfile
+  testProviderProfile,
+  validateLiveResponse
 };

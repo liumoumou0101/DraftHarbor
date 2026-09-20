@@ -2,7 +2,7 @@
  * Live OpenCode Go smoke for thinkingControl.
  * Reads the local DraftHarbor key, never prints it, and is not part of npm test.
  *
- * Usage: node tests/opencode-go-thinking-smoke.js
+ * Usage: node tests/opencode-go-thinking-smoke.js --live
  */
 const assert = require('assert');
 const fs = require('fs/promises');
@@ -17,8 +17,8 @@ const GO_MODELS_URL = 'https://opencode.ai/zen/go/v1/models';
 const ZEN_MODELS_URL = 'https://opencode.ai/zen/v1/models';
 
 function redact(value, key) {
-  return String(value || '')
-    .replace(key, '[redacted]')
+  const text = String(value || '');
+  return (key ? text.split(key).join('[redacted]') : text)
     .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
     .replace(/sk-[A-Za-z0-9._-]{8,}/g, '[redacted]');
 }
@@ -47,9 +47,38 @@ async function fetchModelIds(url) {
 
 async function readSse(response) {
   const text = await response.text();
-  return text.split(/\n/).map((line) => line.trim()).filter((line) => line.startsWith('data:')).map((line) => {
-    try { return JSON.parse(line.slice(5).trim()); } catch (error) { return null; }
-  }).filter(Boolean);
+  return text.split(/\r\n\r\n|\n\n|\r\r/).map((event) => event.split(/\r?\n/)
+    .filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim()).join('\n'))
+    .filter((data) => data && data !== '[DONE]').map((data) => JSON.parse(data));
+}
+
+function evaluateGeneration(response, events) {
+  let content = '';
+  let reasoning = '';
+  let finishReason = '';
+  let done = false;
+  const failures = [];
+  if (!response.ok) failures.push(`HTTP ${response.status}`);
+  for (const event of events) {
+    if (event.type === 'error') failures.push(String(event.error && (event.error.message || event.error.code) || 'stream error'));
+    if (event.type === 'finish') {
+      finishReason = event.meta && event.meta.finishReason || '';
+      if (!['stop', 'end_turn', 'stop_sequence'].includes(finishReason)) failures.push(`Unsuccessful finish: ${finishReason || 'missing'}`);
+    }
+    if (event.type === 'done') done = true;
+    if (event.type === 'reasoning') reasoning += event.token || '';
+    if (event.type === 'content') content += event.token || '';
+  }
+  if (!content.trim()) failures.push('No answer content');
+  if (!finishReason) failures.push('Missing provider finish');
+  if (!done) failures.push('Missing generation done');
+  return { ok: failures.length === 0, content, reasoning, finishReason, done, error: failures.join('; ') };
+}
+
+function assertSmokeCalls(calls) {
+  assert.ok(calls.length > 0, 'No smoke calls completed');
+  const failed = calls.filter((row) => !row.ok);
+  assert.strictEqual(failed.length, 0, failed.map((row) => `${row.label}: ${row.error || 'generation failed'}`).join('\n'));
 }
 
 function catalogGap(provider, liveIds) {
@@ -64,11 +93,12 @@ function catalogGap(provider, liveIds) {
   return { missingBuiltin, thinking };
 }
 
-(async () => {
+async function main() {
   const key = await readLocalGoKey();
   if (!key) {
     console.error('No OpenCode Go API key in local settings or OPENCODE_API_KEY.');
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
 
   const [goIds, zenIds] = await Promise.all([
@@ -107,28 +137,21 @@ function catalogGap(provider, liveIds) {
       })
     });
     const events = await readSse(response);
-    let content = '';
-    let reasoning = '';
-    let error = null;
-    let finishReason = '';
-    events.forEach((event) => {
-      if (event.type === 'error') error = event.error || { message: 'stream error' };
-      if (event.type === 'finish') finishReason = (event.meta && event.meta.finishReason) || '';
-      if (event.type === 'reasoning') reasoning += event.token || '';
-      if (event.type === 'content') content += event.token || '';
-    });
+    const result = evaluateGeneration(response, events);
+    const { content, reasoning, finishReason } = result;
     const row = {
       label: extras.label || `${model}:${extras.enableThinking ? 'on' : 'off'}`,
       model,
       thinkingControl: ModelCatalog.getThinkingControl('opencode-go', model),
       enableThinking: !!extras.enableThinking,
       httpStatus: response.status,
-      ok: response.ok && !error && String(content || reasoning).trim().length > 0,
+      ok: result.ok,
       durationMs: Date.now() - started,
       contentCharacters: content.length,
       reasoningCharacters: reasoning.length,
       finishReason,
-      error: error ? redact(error.message || error.code || 'error', key) : '',
+      done: result.done,
+      error: redact(result.error, key),
       contentPreview: redact(content, key).replace(/\s+/g, ' ').trim().slice(0, 80),
       reasoningPreview: redact(reasoning, key).replace(/\s+/g, ' ').trim().slice(0, 80)
     };
@@ -153,11 +176,12 @@ function catalogGap(provider, liveIds) {
       revealPath: async () => ''
     });
 
-    const glmOff = await ping('glm-5.2', { enableThinking: false, label: 'glm-5.2-off' });
-    const glmOn = await ping('glm-5.2', { enableThinking: true, label: 'glm-5.2-on' });
+    await ping('glm-5.2', { enableThinking: true, label: 'glm-5.2-always-on', maxTokens: 1600 });
     const kimiOff = await ping('kimi-k2.6', { enableThinking: false, label: 'kimi-k2.6-off' });
-    const alwaysOn = await ping('kimi-k2.7-code', { enableThinking: false, label: 'kimi-k2.7-code-forced-off' });
+    const alwaysOn = await ping('kimi-k2.7-code', { enableThinking: false, label: 'kimi-k2.7-code-forced-off', maxTokens: 1600 });
     const miniOff = await ping('minimax-m3', { enableThinking: false, label: 'minimax-m3-off' });
+    await ping('minimax-m3', { enableThinking: true, label: 'minimax-m3-adaptive', maxTokens: 1600 });
+    const mimoOff = await ping('mimo-v2.5-pro', { enableThinking: false, label: 'mimo-v2.5-pro-off' });
 
     const report = {
       startedAt: new Date().toISOString(),
@@ -171,18 +195,11 @@ function catalogGap(provider, liveIds) {
     await fs.mkdir(path.dirname(OUTPUT_PATH), { recursive: true });
     await fs.writeFile(OUTPUT_PATH, `${JSON.stringify(report, null, 2)}\n`);
 
-    if (glmOff.ok && glmOn.ok) {
-      assert.ok(glmOn.reasoningCharacters > glmOff.reasoningCharacters, 'GLM 5.2 thinking on should emit more reasoning than off');
-    }
-    if (kimiOff.ok) {
-      assert.ok(kimiOff.reasoningCharacters === 0, `Kimi K2.6 with thinking off should not emit reasoning, got ${kimiOff.reasoningCharacters}`);
-    }
-    if (alwaysOn.ok) {
-      assert.ok(alwaysOn.reasoningCharacters > 0, 'Kimi K2.7 Code should still think when the toggle is off');
-    }
-    if (miniOff.ok) {
-      assert.ok(miniOff.reasoningCharacters === 0, `MiniMax M3 with thinking off should not emit reasoning, got ${miniOff.reasoningCharacters}`);
-    }
+    assertSmokeCalls(calls);
+    assert.strictEqual(kimiOff.reasoningCharacters, 0, 'Kimi K2.6 with thinking off should not emit reasoning');
+    assert.ok(alwaysOn.reasoningCharacters > 0, 'Kimi K2.7 Code should still think when the toggle is off');
+    assert.strictEqual(miniOff.reasoningCharacters, 0, 'MiniMax M3 with thinking off should not emit reasoning');
+    assert.strictEqual(mimoOff.reasoningCharacters, 0, 'MiMo V2.5 Pro with thinking off should not emit reasoning');
 
     console.log('OpenCode Go thinking smoke passed.');
     console.log(`Go live ${goIds.length} models; builtin missing ${goGap.missingBuiltin.length}: ${goGap.missingBuiltin.join(', ') || '(none)'}`);
@@ -191,13 +208,27 @@ function catalogGap(provider, liveIds) {
     }
     console.log(`report: ${OUTPUT_PATH}`);
   } catch (error) {
-    console.error('OpenCode Go thinking smoke failed:', error && error.stack ? error.stack : error);
+    console.error('OpenCode Go thinking smoke failed:', redact(error && error.stack ? error.stack : error, key));
     try {
       await fs.mkdir(path.dirname(OUTPUT_PATH), { recursive: true });
       await fs.writeFile(OUTPUT_PATH, `${JSON.stringify({ error: redact(error.message || error, key), calls, goMissingFromBuiltin: goGap.missingBuiltin }, null, 2)}\n`);
     } catch (_) { /* keep original error */ }
-    process.exit(1);
+    process.exitCode = 1;
   } finally {
     if (servers && servers.close) await servers.close();
   }
-})();
+}
+
+module.exports = { evaluateGeneration, assertSmokeCalls, redact };
+
+if (require.main === module) {
+  if (!process.argv.includes('--live')) {
+    console.log('Live OpenCode Go smoke skipped. Run with --live to read the local key and call the provider.');
+  } else {
+    main().catch(() => {
+      // Startup may fail before the key is available to the redactor.
+      console.error('OpenCode Go thinking smoke failed during setup.');
+      process.exitCode = 1;
+    });
+  }
+}

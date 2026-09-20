@@ -112,7 +112,7 @@ const desktopHtml = fs.readFileSync(path.join(root, 'desktop.html'), 'utf8');
 const desktopFragmentDir = path.join(root, 'desktop/fragments');
 const desktopFragments = listFiles(desktopFragmentDir).map((file) => fs.readFileSync(file, 'utf8')).join('\n');
 const desktopMarkup = `${desktopHtml}\n${desktopFragments}`;
-assert.ok(desktopHtml.split(/\r?\n/).length <= 120, 'desktop.html should remain a small composition shell');
+assert.ok(desktopHtml.replace(/\r?\n$/, '').split(/\r?\n/).length <= 120, 'desktop.html should remain a small composition shell');
 assert.ok(desktopHtml.includes('src/desktop/fragment-loader.js'), 'desktop.html should load view fragments before the desktop shell');
 assert.ok(!desktopMarkup.includes('legacy-writer-frame'), 'desktop markup should not contain the legacy writer iframe');
 assert.ok(!desktopMarkup.includes('data-native-open-legacy'), 'desktop markup should not contain the legacy writer button');
