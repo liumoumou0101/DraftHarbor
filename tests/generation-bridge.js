@@ -79,6 +79,45 @@ async function readSse(response) {
     }));
     assert.ok(!JSON.stringify(leaked).includes('zen-secret-key-should-not-leak'), '401 errors must not echo the API key');
     assert.ok(leaked.message.includes('认证') || leaked.message.includes('权限'));
+    const unavailableError = generationBridge.publicProviderError(Object.assign(new Error('Model is unavailable.'), {
+      status: 400,
+      providerType: 'invalid_request_error'
+    }));
+    assert.ok(unavailableError.message.includes('Model is unavailable'), 'safe model-unavailable details should survive HTTP 400 classification');
+    const unsupportedThinking = generationBridge.publicProviderError(Object.assign(new Error('This model does not support disabling thinking.'), {
+      status: 400,
+      providerType: 'invalid_request_error'
+    }));
+    assert.ok(unsupportedThinking.message.includes('does not support disabling thinking'), 'safe thinking compatibility details should survive HTTP 400 classification');
+    const credentialError = generationBridge.publicProviderError(Object.assign(new Error('Invalid credential sk-fixture123456789'), {
+      status: 400,
+      providerType: 'invalid_request_error'
+    }));
+    assert.ok(!credentialError.message.includes('sk-fixture123456789'), 'safe HTTP 400 details must not expose credential-shaped values');
+    assert.strictEqual(
+      generationBridge.classifyHttpStatus(400, null, { type: 'free_usage_limit_error', code: 'rate_limit' }).code,
+      'provider_rate_limited',
+      'error type/code should preserve rate-limit classification'
+    );
+    const genericQuota = generationBridge.classifyHttpStatus(400, null, { code: 'insufficient_quota' });
+    assert.strictEqual(genericQuota.code, 'provider_quota', 'error codes should preserve quota classification');
+    assert.ok(genericQuota.message.includes('所选服务商'), 'generic quota errors must not claim the request used Zen billing');
+    assert.strictEqual(
+      generationBridge.classifyHttpStatus(400, null, { type: 'unsupported_region' }).code,
+      'provider_region',
+      'error types should preserve region classification'
+    );
+
+    const inheritedResponses = generationBridge.resolveGenerationRequest({
+      providerSettings: {
+        mode: 'api',
+        provider: 'opencode-go',
+        apiKey: 'inherit-key',
+        model: 'gpt-5.6-luna'
+      }
+    }, {});
+    assert.strictEqual(inheritedResponses.config.model, 'gpt-5.6-luna');
+    assert.ok(inheritedResponses.config.endpoint.endsWith('/responses'), 'bridge endpoint selection must use the inherited effective model');
 
     const unknown = generationBridge.resolveGenerationRequest(await settingsService.readSettings(dataRoot), {
       model: 'totally-unknown-model-id'

@@ -8,10 +8,12 @@
     var ZEN_BASE_URL = 'https://opencode.ai/zen/v1';
     var ZEN_CHAT_ENDPOINT = 'https://opencode.ai/zen/v1/chat/completions';
     var ZEN_RESPONSES_ENDPOINT = 'https://opencode.ai/zen/v1/responses';
+    var ZEN_MESSAGES_ENDPOINT = 'https://opencode.ai/zen/v1/messages';
     var ZEN_MODELS_URL = 'https://opencode.ai/zen/v1/models';
     var GO_BASE_URL = 'https://opencode.ai/zen/go/v1';
     var GO_CHAT_ENDPOINT = 'https://opencode.ai/zen/go/v1/chat/completions';
     var GO_RESPONSES_ENDPOINT = 'https://opencode.ai/zen/go/v1/responses';
+    var GO_MESSAGES_ENDPOINT = 'https://opencode.ai/zen/go/v1/messages';
     var GO_MODELS_URL = 'https://opencode.ai/zen/go/v1/models';
     var ZEN_HOST = 'opencode.ai';
 
@@ -43,21 +45,26 @@
         if (id.indexOf('kimi-k2.6') === 0 || id.indexOf('kimi-k2.5') === 0) return 'toggle';
         if (id.indexOf('glm-5.3') === 0) return 'always-on';
         if (id === 'glm-5' || id.indexOf('glm-5.') === 0 || id.indexOf('glm-5-') === 0) return 'toggle';
-        if (id.indexOf('deepseek-v4') === 0 || id === 'deepseek-reasoner') return 'toggle';
-        if (id.indexOf('longcat-') === 0) return 'always-on';
-        if (id === 'hy3' || id.indexOf('hy3-') === 0) return 'always-on';
-        if (id.indexOf('qwen3') === 0) return 'always-on';
+        if (id.indexOf('deepseek-v4') === 0 || id === 'deepseek-reasoner' || id === 'deepseek-flash') return 'toggle';
+        if (id.indexOf('longcat-') === 0 || id.indexOf('mimo-v2.5') === 0) return 'toggle';
+        if (/^hy[34](?:-|$)/.test(id)) return 'toggle';
+        if (id.indexOf('qwen3') === 0) return 'toggle';
         if (id.indexOf('gpt-5') === 0) return 'responses-effort';
         if (id.indexOf('muse-') === 0) return 'always-on';
+        if (id.indexOf('grok-') === 0) return 'always-on';
         return 'none';
     }
 
     function inferOpencodeTransport(modelId) {
         var id = canonicalModelId(modelId);
         if (!id) return 'chat-completions';
-        if (id.indexOf('qwen') === 0) return 'chat-completions';
+        if (isAdaptedMessagesModel(id)) return 'anthropic-messages';
         var guessed = inferTransportFromModelId(id);
         return guessed === 'unknown' ? 'chat-completions' : guessed;
+    }
+
+    function isAdaptedMessagesModel(modelId) {
+        return /^(?:qwen|minimax-m[23])/.test(canonicalModelId(modelId));
     }
 
     function isThinkingToggleableControl(control) {
@@ -89,12 +96,38 @@
     }
 
     function getThinkingControl(provider, modelId, options) {
+        // Go currently routes these IDs to a thinking-only backend. Zen keeps the vendor toggle.
+        if (provider === 'opencode-go' && /^glm-5\.[12]$/.test(canonicalModelId(modelId))) return 'always-on';
         var entry = options && options.entry ? options.entry : getProviderModelEntry(provider, modelId, options);
         if (entry) return thinkingControlForEntry(entry);
         var inferred = inferThinkingControl(modelId);
         if (inferred !== 'none') return inferred;
         if (String(provider || '') === 'deepseek') return 'toggle';
         return 'none';
+    }
+
+    function getThinkingRequestFields(provider, modelId, enableThinking, options) {
+        var source = options || {};
+        var control = getThinkingControl(provider, modelId, source);
+        if (control === 'none' || control === 'always-on') return {};
+        var id = canonicalModelId(modelId);
+        var transport = source.transport || getModelTransport(provider, modelId, source);
+        if (id.indexOf('qwen3') === 0) {
+            if (transport === 'anthropic-messages') {
+                return { thinking: enableThinking ? { type: 'enabled', budget_tokens: 1024 } : { type: 'disabled' } };
+            }
+            return { enable_thinking: !!enableThinking };
+        }
+        // Go MiMo V2.5 can ignore thinking.disabled on multi-turn requests; Pro retains its vendor switch.
+        if (provider === 'opencode-go' && (/^hy[34](?:-|$)/.test(id) || id === 'mimo-v2.5')) {
+            return { reasoning_effort: enableThinking ? 'high' : 'none' };
+        }
+        if (provider === 'opencode-go' && id === 'deepseek-v4-flash' && !enableThinking) {
+            return { reasoning_effort: 'none' };
+        }
+        var payload = thinkingRequestPayload(control, enableThinking);
+        if (!payload) return {};
+        return control === 'responses-effort' ? { reasoning: payload } : { thinking: payload };
     }
 
     function isThinkingAlwaysOn(provider, modelId, options) {
@@ -106,7 +139,7 @@
         return Object.freeze({
             id: entry.id,
             label: entry.label,
-            transport: entry.transport || 'chat-completions',
+            transport: entry.transport || (isAdaptedMessagesModel(entry.id) ? 'anthropic-messages' : 'chat-completions'),
             availability: entry.availability || 'builtin',
             compatibility: entry.compatibility || 'supported',
             thinkingSupported: isThinkingToggleableControl(thinkingControl),
@@ -232,8 +265,8 @@
         zenModel({ id: 'x-preview-f-free', label: 'Ox Alpha Free', pricingClass: 'free', privacyClass: 'may-train', contextNote: '限时免费' }),
         zenModel({ id: 'gpt-5.4', label: 'GPT 5.4', transport: 'responses', pricingClass: 'paid' }),
         zenModel({ id: 'gpt-5.6-luna', label: 'GPT 5.6 Luna', transport: 'responses', pricingClass: 'paid' }),
-        zenModel({ id: 'grok-4.5', label: 'Grok 4.5', transport: 'responses', thinkingControl: 'none', pricingClass: 'paid' }),
-        zenModel({ id: 'grok-4.6', label: 'Grok 4.6', transport: 'responses', thinkingControl: 'none', pricingClass: 'paid' }),
+        zenModel({ id: 'grok-4.5', label: 'Grok 4.5', transport: 'responses', pricingClass: 'paid' }),
+        zenModel({ id: 'grok-4.6', label: 'Grok 4.6', transport: 'responses', pricingClass: 'paid' }),
         zenModel({ id: 'muse-spark-1.2', label: 'Muse Spark 1.2', transport: 'responses', pricingClass: 'paid' }),
         zenModel({ id: 'muse-spark-1.2-contributor-free', label: 'Muse Spark 1.2 Contributor Free', transport: 'responses', pricingClass: 'free', privacyClass: 'may-train' }),
         zenModel({ id: 'claude-opus-4-6', label: 'Claude Opus 4.6', transport: 'anthropic-messages', compatibility: 'unsupported-transport', pricingClass: 'paid', contextNote: '需 Anthropic Messages 协议' }),
@@ -244,9 +277,10 @@
     ]);
 
     var GO_BUILTIN_MODELS = Object.freeze([
-        zenModel({ id: 'glm-5.2', label: 'GLM 5.2', pricingClass: 'paid' }),
+        zenModel({ id: 'glm-5.2', label: 'GLM 5.2', thinkingControl: 'always-on', pricingClass: 'paid' }),
         zenModel({ id: 'glm-5.3', label: 'GLM 5.3', pricingClass: 'paid' }),
-        zenModel({ id: 'glm-5.1', label: 'GLM 5.1', pricingClass: 'paid' }),
+        zenModel({ id: 'glm-5.3-flash', label: 'GLM 5.3 Flash', pricingClass: 'paid' }),
+        zenModel({ id: 'glm-5.1', label: 'GLM 5.1', thinkingControl: 'always-on', pricingClass: 'paid' }),
         zenModel({ id: 'glm-5', label: 'GLM 5', pricingClass: 'paid' }),
         zenModel({ id: 'kimi-k3', label: 'Kimi K3', pricingClass: 'paid' }),
         zenModel({ id: 'kimi-k2.7-code', label: 'Kimi K2.7 Code', pricingClass: 'paid' }),
@@ -258,8 +292,11 @@
         zenModel({ id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', thinkingSupported: true, pricingClass: 'paid', contextNote: 'Go 上可能需在控制台开启中国区托管' }),
         zenModel({ id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', thinkingSupported: true, pricingClass: 'paid', contextNote: 'Go 上可能需在控制台开启中国区托管' }),
         zenModel({ id: 'deepseek-v4-flash-vision-exp', label: 'DeepSeek V4 Flash Vision Exp', thinkingSupported: true, pricingClass: 'paid' }),
+        zenModel({ id: 'deepseek-flash', label: 'DeepSeek Flash', pricingClass: 'paid' }),
+        zenModel({ id: 'deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash', pricingClass: 'paid' }),
         zenModel({ id: 'longcat-2.0', label: 'LongCat 2.0', pricingClass: 'paid' }),
         zenModel({ id: 'qwen3.8-max', label: 'Qwen3.8 Max', pricingClass: 'paid' }),
+        zenModel({ id: 'qwen3.8-flash', label: 'Qwen3.8 Flash', pricingClass: 'paid' }),
         zenModel({ id: 'qwen3.7-max', label: 'Qwen3.7 Max', pricingClass: 'paid' }),
         zenModel({ id: 'qwen3.7-plus', label: 'Qwen3.7 Plus', pricingClass: 'paid' }),
         zenModel({ id: 'qwen3.6-plus', label: 'Qwen3.6 Plus', pricingClass: 'paid' }),
@@ -269,11 +306,14 @@
         zenModel({ id: 'mimo-v2-pro', label: 'MiMo V2 Pro', pricingClass: 'paid' }),
         zenModel({ id: 'mimo-v2-omni', label: 'MiMo V2 Omni', pricingClass: 'paid' }),
         zenModel({ id: 'hy3', label: 'Hy3', pricingClass: 'paid' }),
+        zenModel({ id: 'hy4-preview', label: 'Hy4 Preview', pricingClass: 'paid' }),
         zenModel({ id: 'hy3-preview', label: 'Hy3 Preview', pricingClass: 'paid' }),
         zenModel({ id: 'ox-alpha-free', label: 'Ox Alpha Free', pricingClass: 'free', privacyClass: 'may-train', contextNote: '限时免费' }),
         zenModel({ id: 'gpt-5.6-luna', label: 'GPT 5.6 Luna', transport: 'responses', pricingClass: 'paid' }),
-        zenModel({ id: 'grok-4.6', label: 'Grok 4.6', transport: 'responses', thinkingControl: 'none', pricingClass: 'paid' }),
-        zenModel({ id: 'grok-4.5', label: 'Grok 4.5', transport: 'responses', thinkingControl: 'none', pricingClass: 'paid' }),
+        zenModel({ id: 'grok-4.6', label: 'Grok 4.6', transport: 'responses', pricingClass: 'paid' }),
+        zenModel({ id: 'grok-4.5', label: 'Grok 4.5', transport: 'responses', pricingClass: 'paid' }),
+        zenModel({ id: 'omen-alpha', label: 'Omen Alpha', pricingClass: 'unknown', privacyClass: 'unknown', contextNote: '在线目录模型，思考能力待确认' }),
+        zenModel({ id: 'muse-spark-1.3-contributor', label: 'Muse Spark 1.3 Contributor', transport: 'responses', privacyClass: 'may-train', pricingClass: 'paid', contextNote: '仅限部分地区' }),
         zenModel({ id: 'muse-spark-1.2-contributor', label: 'Muse Spark 1.2 Contributor', transport: 'responses', privacyClass: 'may-train', pricingClass: 'paid', contextNote: '仅限部分地区' })
     ]);
 
@@ -468,7 +508,9 @@
         if (!entry || entry.id === '__custom__') return true;
         if (entry.availability === 'offline' || entry.deprecated) return false;
         var transport = entry.transport || inferOpencodeTransport(entry.id);
-        return transport === 'chat-completions' || transport === 'responses';
+        if (entry.compatibility === 'unsupported-transport') return false;
+        return transport === 'chat-completions' || transport === 'responses'
+            || (transport === 'anthropic-messages' && isAdaptedMessagesModel(entry.id));
     }
 
     function modelOptionLabel(entry) {
@@ -552,7 +594,7 @@
 
     const opencodeSessions = new Map();
 
-    function providerAuthHeaders(provider, apiKey, sessionKey) {
+    function providerAuthHeaders(provider, apiKey, sessionKey, options) {
         var headers = { 'Content-Type': 'application/json' };
         if (isOpencodeProvider(provider)) {
             const identity = String(sessionKey || 'default');
@@ -564,7 +606,9 @@
             headers['User-Agent'] = 'DraftHarbor/1.2.6';
         }
         var key = String(apiKey || '');
-        if (isAnthropicMessagesProvider(provider)) {
+        var source = options || {};
+        var transport = source.transport || getModelTransport(provider, source.model || source.aiModel, source);
+        if (isAnthropicMessagesProvider(provider) || (isOpencodeProvider(provider) && transport === 'anthropic-messages')) {
             headers['x-api-key'] = key;
             headers['anthropic-version'] = '2023-06-01';
             return headers;
@@ -577,24 +621,22 @@
         var source = config && typeof config === 'object' ? config : {};
         var provider = String(source.provider || '');
         var model = defaultTestModel(provider, source.model);
-        var body = isAnthropicMessagesProvider(provider)
-            ? JSON.stringify({
-                model: model,
-                max_tokens: 1,
-                messages: [{ role: 'user', content: 'ping' }],
-                stream: false
-            })
-            : JSON.stringify({
-                model: model,
-                messages: [{ role: 'user', content: 'ping' }],
-                max_tokens: 1,
-                stream: false
-            });
+        var transport = getModelTransport(provider, model, source);
+        var requestOptions = Object.assign({}, source, { model: model, transport: transport });
+        var body = Object.assign({ model: model, stream: false },
+            getThinkingRequestFields(provider, model, !!source.enableThinking, requestOptions));
+        if (transport === 'responses') {
+            body.input = [{ role: 'user', content: 'ping' }];
+            body.max_output_tokens = 2048;
+        } else {
+            body.messages = [{ role: 'user', content: 'ping' }];
+            body.max_tokens = 2048;
+        }
         return {
             model: model,
-            endpoint: resolveProviderEndpoint(provider, source.endpoint, source),
-            headers: providerAuthHeaders(provider, source.apiKey),
-            body: body
+            endpoint: resolveProviderEndpoint(provider, source.endpoint, requestOptions),
+            headers: providerAuthHeaders(provider, source.apiKey, source.sessionKey, requestOptions),
+            body: JSON.stringify(body)
         };
     }
 
@@ -624,6 +666,9 @@
             var transport = resolveOpencodeTransport(provider, options);
             if (transport === 'responses') {
                 return provider === 'opencode-go' ? GO_RESPONSES_ENDPOINT : ZEN_RESPONSES_ENDPOINT;
+            }
+            if (transport === 'anthropic-messages') {
+                return provider === 'opencode-go' ? GO_MESSAGES_ENDPOINT : ZEN_MESSAGES_ENDPOINT;
             }
             return provider === 'opencode-go' ? GO_CHAT_ENDPOINT : ZEN_CHAT_ENDPOINT;
         }
@@ -699,7 +744,7 @@
                     label: humanizeModelId(id),
                     transport: transport,
                     availability: 'online',
-                    compatibility: (transport === 'chat-completions' || transport === 'responses') ? 'supported' : 'unsupported-transport',
+                    compatibility: (transport === 'chat-completions' || transport === 'responses' || isAdaptedMessagesModel(id)) ? 'supported' : 'unsupported-transport',
                     thinkingControl: inferThinkingControl(id),
                     pricingClass: 'unknown',
                     privacyClass: 'unknown',
@@ -708,7 +753,7 @@
                         ? '在线目录新增，经 OpenCode Chat Completions 调用'
                         : (transport === 'responses'
                             ? '在线目录新增，经 OpenCode Responses 调用'
-                            : '在线目录新增，协议待适配')
+                            : (isAdaptedMessagesModel(id) ? '在线目录新增，经 OpenCode Messages 调用' : '在线目录新增，协议待适配'))
                 }));
                 seen[id] = true;
                 added += 1;
@@ -736,10 +781,12 @@
         ZEN_BASE_URL: ZEN_BASE_URL,
         ZEN_CHAT_ENDPOINT: ZEN_CHAT_ENDPOINT,
         ZEN_RESPONSES_ENDPOINT: ZEN_RESPONSES_ENDPOINT,
+        ZEN_MESSAGES_ENDPOINT: ZEN_MESSAGES_ENDPOINT,
         ZEN_MODELS_URL: ZEN_MODELS_URL,
         GO_BASE_URL: GO_BASE_URL,
         GO_CHAT_ENDPOINT: GO_CHAT_ENDPOINT,
         GO_RESPONSES_ENDPOINT: GO_RESPONSES_ENDPOINT,
+        GO_MESSAGES_ENDPOINT: GO_MESSAGES_ENDPOINT,
         GO_MODELS_URL: GO_MODELS_URL,
         ZEN_HOST: ZEN_HOST,
         ZEN_BUILTIN_MODELS: ZEN_BUILTIN_MODELS,
@@ -764,6 +811,7 @@
         isThinkingSupported: isThinkingSupported,
         thinkingWillRun: thinkingWillRun,
         thinkingRequestPayload: thinkingRequestPayload,
+        getThinkingRequestFields: getThinkingRequestFields,
         isModelSelectable: isModelSelectable,
         isOpencodeGatewayCallable: isOpencodeGatewayCallable,
         modelOptionLabel: modelOptionLabel,

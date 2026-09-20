@@ -2,7 +2,7 @@ const ProviderStream = require('../../src/core/generation/provider-stream');
 const SettingsSchema = require('../../src/core/settings/settings-schema');
 const ModelCatalog = require('../../src/core/settings/model-catalog');
 
-const SENSITIVE_KEY = /api[_-]?key|authorization|token|secret|password/i;
+const SENSITIVE_VALUE = /\b(?:sk|pk|rk|key|token)-[a-z0-9._-]{8,}\b|(?:api[\s_-]?key|authorization|bearer|access[\s_-]?token|secret|password|credential)\s*(?:is\s*)?(?::|=)?\s*[a-z0-9._-]{6,}/i;
 const HTML_MARKUP = /<\/?[a-z][\s\S]*>/i;
 
 function providerError(code, message, details = {}) {
@@ -17,15 +17,18 @@ function sanitizeMessage(value) {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
   if (!text) return '';
   if (HTML_MARKUP.test(text)) return '';
-  if (SENSITIVE_KEY.test(text)) return '';
+  if (SENSITIVE_VALUE.test(text)) return '';
   return text.slice(0, 240);
 }
 
 function classifyHttpStatus(status, retryAfter, extras = {}) {
-  const type = String(extras.providerType || extras.type || '').toLowerCase();
+  const type = [extras.providerType, extras.type, extras.code].map((value) => String(value || '').toLowerCase()).join(' ');
   const detail = String(extras.message || extras.detail || '');
   if (type.includes('credit') || /insufficient balance|manage your billing/i.test(detail)) {
     return { code: 'provider_quota', message: 'Zen 按量余额不足。若你买的是 Go 月卡，需要走 Go 接口，不能走现在的 Zen 按量地址。' };
+  }
+  if (type.includes('quota')) {
+    return { code: 'provider_quota', message: '余额或套餐额度不足，请检查所选服务商的配额。' };
   }
   if (type.includes('freeusagelimit') || type.includes('rate')) {
     return { code: 'provider_rate_limited', message: '免费额度或频率限制已用尽，请稍后再试。' };
@@ -45,6 +48,10 @@ function classifyHttpStatus(status, retryAfter, extras = {}) {
   }
   if (status >= 500) {
     return { code: `provider_http_${status}`, message: `AI Provider 暂时不可用（HTTP ${status}）。` };
+  }
+  const safeDetail = sanitizeMessage(detail);
+  if (status === 400 && safeDetail) {
+    return { code: 'provider_http_400', message: safeDetail };
   }
   if (status) {
     return { code: `provider_http_${status}`, message: `AI Provider 返回 HTTP ${status}。` };
@@ -242,7 +249,10 @@ function resolveGenerationRequest(settingsInput, payload = {}, options = {}) {
   };
   const config = SettingsSchema.providerRuntimeConfig(settings, extras);
   if (ModelCatalog.isOpencodeProvider(config.provider)) {
-    config.endpoint = ModelCatalog.resolveProviderEndpoint(config.provider, '', extras);
+    config.endpoint = ModelCatalog.resolveProviderEndpoint(config.provider, '', {
+      ...extras,
+      model: config.model
+    });
     config.baseUrl = config.provider === 'opencode-go' ? ModelCatalog.GO_BASE_URL : ModelCatalog.ZEN_BASE_URL;
   }
   const catalog = payload.catalog || null;

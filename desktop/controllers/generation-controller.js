@@ -1,5 +1,6 @@
 const generationBridge = require('../services/generation-bridge-service');
 const modelCatalogService = require('../services/model-catalog-service');
+const SettingsSchema = require('../../src/core/settings/settings-schema');
 
 async function loadTrustedWorkflowPolicy(dataRoot, projectId, runId) {
   if (!projectId || !runId) return null;
@@ -121,10 +122,16 @@ function createGenerationController({ settingsService, readSettings, readJsonPay
         const stored = await readSettings(dataRoot);
         const incoming = payload.settings;
         const incomingKey = incoming && incoming.providerSettings && String(incoming.providerSettings.apiKey || '').trim();
+        const nextBinding = incoming
+          ? SettingsSchema.normalizeProviderSettings(Object.assign({}, stored.providerSettings || {}, incoming.providerSettings || {}))
+          : null;
+        const retainedKey = nextBinding && SettingsSchema.canRetainStoredApiKey(stored.providerSettings || {}, nextBinding)
+          ? ((stored.providerSettings && stored.providerSettings.apiKey) || '')
+          : '';
         const settings = incoming
           ? Object.assign({}, stored, incoming, {
               providerSettings: Object.assign({}, stored.providerSettings || {}, incoming.providerSettings || {}, {
-                apiKey: incomingKey || ((stored.providerSettings && stored.providerSettings.apiKey) || '')
+                apiKey: incomingKey || retainedKey
               })
             })
           : stored;

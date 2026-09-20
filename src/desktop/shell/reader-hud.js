@@ -370,6 +370,7 @@
         bound = true;
         shell.addEventListener('click', readerHudHandleShellClick, true);
         shell.addEventListener('pointermove', readerHudPointerIntent, { passive: true });
+        shell.addEventListener('touchstart', readerHudActivity, { passive: true });
         shell.addEventListener('focusin', readerHudFocusIntent);
         document.addEventListener('keydown', (event) => {
             const root = readerHudRoot();

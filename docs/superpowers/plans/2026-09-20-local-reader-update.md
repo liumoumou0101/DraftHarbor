@@ -30,9 +30,9 @@
 
 - [x] Back up the 43 existing working-tree files and record the initial commit and hashes under ignored `.ai_state/update-20260920/`.
 - [x] Correct `src/styles/desktop/reader.css`. Verify the reproduced failure becomes a pass for explicit visibility across the listed widths, including footer bounds. Reuse the existing reader regression suite.
-- [ ] Review and commit only the reader implementation, its 10 regression files, package.json test wiring, and this plan. Verify the unrelated 17 files remain untracked and unchanged.
-- [ ] Merge `origin/main`, retaining both reader and OpenCode test wiring. Run `npm test` and `npm run backup-test`; address actionable failures before building.
-- [ ] Run `npm run dist`, `npm run packaged-smoke` and `npm run installed-smoke`. Verify archive source matches the merged checkout, retain the earlier official package, and report the new local runnable paths and commit.
+- [x] Review and commit only the reader implementation, its 10 regression files, package.json test wiring, and this plan. Verify the unrelated 17 files remain untracked and unchanged.
+- [x] Merge `origin/main`, retaining both reader and OpenCode test wiring. Run `npm test` and `npm run backup-test`; address actionable failures before delivery.
+- [x] Run `npm run dist`, `npm run packaged-smoke` and `npm run installed-smoke`. Verify archive source matches the merged checkout and retain the earlier official package.
 
 ## Evidence
 
@@ -40,3 +40,10 @@
 - Existing reader-core, reader-shell, writer-truncation, lint and startup smoke checks passed during the inspection preceding this plan.
 - After correction, visible/auto/hidden preferences passed browser checks at all four widths; the footer remained 51px high without overlapping or overflowing controls. The complete reader-shell suite and lint passed again.
 - The pre-merge unit run passed its behavioral suites and failed only the existing `tests/release-config.js` line-count assertion, which counted the final newline as an extra line. Upstream `e9eb177` already corrects that assertion without changing its 120-line limit. The integrated full suite remains the release gate.
+- Independent reader review found no additional release blocker. A separate touch probe confirmed that removing `touchstart` had delayed HUD reveal in continuous reading; restoring the passive listener passed a new failing-then-passing regression and a real touch-event comparison with the original commit.
+- The integrated release gate also found the pre-existing foundation stylesheet above its 2200-line limit. Its final workflow guide/timeline rules were moved to the start of the immediately following workflow stylesheet; the concatenated stylesheet content and cascade order were verified unchanged. The release configuration test then passed.
+- The existing desktop library test used an obsolete hidden bulk-rule input path and save message. It now opens the disclosure, imports the rules, checks the resulting entries and retains its settings-persistence assertion. The corrected desktop library test passed.
+- Local NSIS/portable builds, packaged smoke, and temporary installation/startup/save/reload/backup/uninstall smoke passed. The archive's 265 application source/assets files matched the checkout and contained none of the local project, experiment, test, or settings directories.
+- Final `npm test` passed, including all lint, startup, core/storage/provider, writer, reader, compendium, workshop and workflow desktop suites. `npm run backup-test` passed. The packaged desktop entry and runtime package metadata matched the checkout; electron-builder intentionally omits development scripts from the packaged metadata.
+- Build work ran in parallel with the final UI-test corrections after application sources were stable; the full suite and packaged/installed tests all passed before the merge was committed or the build delivered. The final upstream reference was rechecked as `e9eb1774dd5fa83f6d6d59af7e4f8f171500f38a`.
+- All 17 excluded experiment files retained their original SHA-256 values. The original official installers remain in `release/github-v1.2.6/`; local build checksums are recorded in `release/SHA256SUMS-local-20260920.txt`.

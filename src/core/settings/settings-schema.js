@@ -372,8 +372,12 @@
 
     function providerRuntimeConfig(settingsInput = {}, extras = {}) {
         var settings = normalizeDesktopSettings(settingsInput);
+        var definedExtras = {};
+        Object.keys(extras || {}).forEach(function (key) {
+            if (extras[key] !== undefined) definedExtras[key] = extras[key];
+        });
         var profiles = settings.providerProfiles || [];
-        var profileId = extras.profileId;
+        var profileId = definedExtras.profileId;
         var selectedProfile = null;
         if (profileId && profileId !== 'inherit') {
             for (var i = 0; i < profiles.length; i++) {
@@ -387,51 +391,59 @@
         var defaults = settings.generationDefaults;
         var local = settings.localModelSettings;
         if (selectedProfile) {
+            var selectedModel = cleanString(definedExtras.model || definedExtras.aiModel || selectedProfile.model || provider.model);
             var selectedEndpoint = selectedProfile.endpoint;
             var selectedBaseUrl = selectedProfile.baseUrl;
             if (ModelCatalog && typeof ModelCatalog.isOpencodeProvider === 'function' && ModelCatalog.isOpencodeProvider(selectedProfile.provider)) {
-                selectedEndpoint = ModelCatalog.resolveProviderEndpoint(selectedProfile.provider, selectedProfile.endpoint, extras);
+                selectedEndpoint = ModelCatalog.resolveProviderEndpoint(selectedProfile.provider, selectedProfile.endpoint, {
+                    ...definedExtras,
+                    model: selectedModel
+                });
                 selectedBaseUrl = selectedProfile.provider === 'opencode-go' ? ModelCatalog.GO_BASE_URL : ModelCatalog.ZEN_BASE_URL;
             }
             return {
-                mode: 'api',
-                provider: selectedProfile.provider,
-                apiKey: selectedProfile.apiKey,
-                model: extras.model || selectedProfile.model || provider.model,
-                endpoint: selectedEndpoint,
-                baseUrl: selectedBaseUrl,
                 temperature: defaults.temperature,
                 maxTokens: defaults.maxTokens,
                 useProviderDefaults: defaults.useProviderDefaults,
                 globalPrompt: settings.globalPrompt.enabled ? settings.globalPrompt.content : '',
                 directiveStack: settings.directiveStack,
                 directiveStackMode: settings.directiveStack.mode,
-                ...extras,
+                ...definedExtras,
+                mode: 'api',
+                provider: selectedProfile.provider,
+                apiKey: selectedProfile.apiKey,
+                model: selectedModel,
+                endpoint: selectedEndpoint,
+                baseUrl: selectedBaseUrl,
                 profileId: selectedProfile.id
             };
         }
         var mode = provider.mode;
+        var effectiveModel = cleanString(definedExtras.model || definedExtras.aiModel || provider.model || local.model);
         var resolvedEndpoint = mode === 'local' ? (local.endpoint || provider.endpoint) : provider.endpoint;
         var resolvedBaseUrl = provider.baseUrl;
         if (mode === 'api' && ModelCatalog && typeof ModelCatalog.isOpencodeProvider === 'function' && ModelCatalog.isOpencodeProvider(provider.provider)) {
-            resolvedEndpoint = ModelCatalog.resolveProviderEndpoint(provider.provider, provider.endpoint, extras);
+            resolvedEndpoint = ModelCatalog.resolveProviderEndpoint(provider.provider, provider.endpoint, {
+                ...definedExtras,
+                model: effectiveModel
+            });
             resolvedBaseUrl = provider.provider === 'opencode-go' ? ModelCatalog.GO_BASE_URL : ModelCatalog.ZEN_BASE_URL;
         }
         return {
-            mode,
-            provider: provider.provider,
-            apiKey: provider.apiKey,
-            model: provider.model || local.model,
-            endpoint: resolvedEndpoint,
-            baseUrl: resolvedBaseUrl,
-            organization: provider.organization,
             temperature: defaults.temperature,
             maxTokens: defaults.maxTokens,
             useProviderDefaults: defaults.useProviderDefaults,
             globalPrompt: settings.globalPrompt.enabled ? settings.globalPrompt.content : '',
             directiveStack: settings.directiveStack,
             directiveStackMode: settings.directiveStack.mode,
-            ...extras
+            ...definedExtras,
+            mode,
+            provider: provider.provider,
+            apiKey: provider.apiKey,
+            model: effectiveModel,
+            endpoint: resolvedEndpoint,
+            baseUrl: resolvedBaseUrl,
+            organization: provider.organization
         };
     }
 

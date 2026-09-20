@@ -245,6 +245,12 @@ function element(tagName, options = {}) {
     idleCallback();
     assert.strictEqual(readerState.hudState, 'idle', 'the restarted timer eventually idles the HUD');
 
+    assert.strictEqual(typeof shellListeners.touchstart, 'function',
+        'flow reading binds touch activity so a tap can reveal an idle HUD');
+    shellListeners.touchstart({ target: content });
+    assert.strictEqual(readerState.hudState, 'visible',
+        'touching flow content must reveal the idle HUD');
+
     assert.strictEqual(typeof shellListeners.click, 'function',
         'the HUD binds a shell-level quick-tools outside-click handler');
     quickTools.open = true;

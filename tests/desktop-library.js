@@ -414,9 +414,15 @@ async function submitNativeName(page, value) {
         await clickMoreAction(page, '[data-native-style-guard]');
         await page.waitForFunction(() => document.querySelector('[data-style-guard-modal]') && !document.querySelector('[data-style-guard-modal]').hidden);
         await page.selectOption('[data-style-guard-scope]', 'global');
+        await page.locator('[data-style-guard-modal] details > summary').click();
         await page.fill('[data-style-guard-rules]', '冷月像银盘 | 避免陈旧比喻');
+        await page.click('[data-style-guard-import]');
+        await page.waitForFunction(() => {
+            const inputs = [...document.querySelectorAll('[data-style-guard-list] .desktop-style-guard-row input:not([type="checkbox"])')];
+            return inputs.some((input) => input.value === '冷月像银盘') && inputs.some((input) => input.value === '避免陈旧比喻');
+        });
         await page.locator('[data-style-guard-form] button[type="submit"]').click();
-        await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('全局避免写法规则'));
+        await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('避用规则已应用'));
         const globalRulesSettings = await fetch(`${servers.appUrl}/api/settings`).then((response) => response.json());
         assert.strictEqual(globalRulesSettings.settings.globalStyleGuardRules[0].text, '冷月像银盘', 'global avoidance rules should persist in desktop settings');
         await page.click('[data-view-target="compendium"]');
