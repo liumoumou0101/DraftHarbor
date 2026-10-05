@@ -18,10 +18,23 @@ const store = require('../desktop/storage/reader-illustration-store');
     assert.strictEqual(first.illustration.fileName, 'forest.png');
     const second = await store.importReaderIllustration(dataRoot, {
       documentId: 'project:test', chapterId: 'chapter-1', blockId: 'block-1', offset: 0,
+      revisionId: 'project-revision:fixture',
+      range: { start: { blockId: 'block-1', offset: 0 }, end: { blockId: 'block-2', offset: 12 } },
       fileName: 'forest-copy.png', bytes: png.toString('base64')
     });
     assert.strictEqual(second.record.illustrations.length, 2);
     assert.strictEqual(second.record.illustrations[0].assetId, second.record.illustrations[1].assetId, 'identical images should share one asset');
+    const reopened = await store.readReaderIllustrations(dataRoot, 'project:test');
+    assert.strictEqual(reopened.illustrations[1].revisionId, 'project-revision:fixture', 'a reloaded image must retain its bound revision');
+    assert.deepStrictEqual(reopened.illustrations[1].range, {
+      start: { blockId: 'block-1', offset: 0 }, end: { blockId: 'block-2', offset: 12 }
+    }, 'a reloaded image must retain the half-open content range');
+    assert.ok(!Object.hasOwn(reopened.illustrations[0], 'range') && !Object.hasOwn(reopened.illustrations[0], 'revisionId'), 'writing new images must preserve legacy records without inventing ranges');
+    await assert.rejects(() => store.importReaderIllustration(dataRoot, {
+      documentId: 'project:test', chapterId: 'chapter-1', blockId: 'block-1', bytes: png,
+      range: { start: { blockId: 'block-1', offset: 5 }, end: { blockId: 'block-1', offset: 2 } }
+    }), /range/i, 'an invalid image range must not be persisted');
+    assert.strictEqual((await store.readReaderIllustrations(dataRoot, 'project:test')).illustrations.length, 2);
     const file = await store.readReaderIllustrationFile(dataRoot, 'project:test', first.illustration.assetId);
     assert.deepStrictEqual(file.bytes, png);
     const removedOne = await store.deleteReaderIllustration(dataRoot, 'project:test', first.illustration.illustrationId);

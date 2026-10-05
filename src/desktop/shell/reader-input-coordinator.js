@@ -17,9 +17,17 @@ function readerCanPageTurn(source = 'keyboard') {
     return !readerHasTextSelection();
 }
 
+function readerIllustrationOwnsInput(event) {
+    return !!event.target?.closest?.('.desktop-reader-illustration-pane, [data-reader-illustration-viewer], [data-reader-illustration-input]');
+}
+
 function bindReaderContinuousInput(content) {
     if (!content) return;
     content.addEventListener('wheel', (event) => {
+        if (readerIllustrationOwnsInput(event)) {
+            readerState.wheelTurnAccumulator = 0;
+            return;
+        }
         if (readerState.effectiveLayoutMode === 'flow' || !readerCanPageTurn('pointer') || Math.abs(event.deltaY) < 8) return;
         event.preventDefault();
         readerState.wheelTurnAccumulator += event.deltaY;
@@ -32,13 +40,13 @@ function bindReaderContinuousInput(content) {
         if (event.pointerType !== 'touch') return;
         readerState.pointerGesture = {
             pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
-            blocked: !readerCanPageTurn('touch') || readerHasTextSelection()
+            blocked: readerIllustrationOwnsInput(event) || !readerCanPageTurn('touch') || readerHasTextSelection()
         };
     });
     content.addEventListener('pointerup', (event) => {
         const gesture = readerState.pointerGesture;
         readerState.pointerGesture = null;
-        if (!gesture || gesture.blocked || gesture.pointerId !== event.pointerId || readerState.effectiveLayoutMode === 'flow') return;
+        if (!gesture || gesture.blocked || readerIllustrationOwnsInput(event) || gesture.pointerId !== event.pointerId || readerState.effectiveLayoutMode === 'flow') return;
         const deltaX = event.clientX - gesture.startX;
         const deltaY = event.clientY - gesture.startY;
         if (Math.abs(deltaX) < 48 || Math.abs(deltaX) < Math.abs(deltaY) * 1.2 || readerHasTextSelection()) return;

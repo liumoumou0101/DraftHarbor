@@ -62,6 +62,7 @@
                                 <button class="desktop-primary-action" type="button" data-reader-empty-library>打开书库</button>
                             </div>
                         </div>
+                        <div class="desktop-reader-illustration-compact" data-reader-illustration-compact data-reader-illustration-input hidden><button class="desktop-reader-tool" type="button" data-reader-illustration-view>查看配图</button><button class="desktop-reader-tool" type="button" data-reader-illustration-compact-add>添加配图</button></div>
                         <div class="desktop-reader-page-flip-host" data-reader-page-flip-host data-reader-page-flip-engine="st-page-flip" data-reader-page-flip-state="idle" aria-hidden="true" inert hidden></div>
 
                         <footer class="desktop-reader-bottombar" data-reader-bottombar>
@@ -77,6 +78,7 @@
                             </div>
                             <span class="desktop-reader-status-bar" data-reader-status-bar aria-live="polite"></span>
                             <span class="desktop-reader-tts-status" data-reader-tts-status aria-live="polite">本机语音就绪。</span>
+                            <span data-reader-illustration-status aria-live="polite"></span>
                             <span class="desktop-reader-shortcuts">方向键翻页 · 方括号切章 · Esc 退出专注</span>
                         </footer>
                         <div class="desktop-reader-float-hud" data-reader-float-hud aria-hidden="true">
@@ -226,7 +228,7 @@
                             <section class="desktop-reader-settings-section" data-reader-studio-section="page" aria-labelledby="reader-page-title" hidden>
                             <h3 id="reader-page-title">页面</h3>
                             <label><span>布局</span><select data-reader-layout-mode aria-describedby="reader-layout-hint"><option value="flow">连续阅读</option><option value="single-page">单页</option><option value="double-page" selected>双页</option><option value="illustrated">带图阅读</option><option value="auto">自动</option></select></label>
-                            <p class="desktop-reader-hint" id="reader-layout-hint">带图模式左侧显示单页正文，右侧根据段落触发配图；空间不足时安全降为单页。</p>
+                            <p class="desktop-reader-hint" id="reader-layout-hint">带图模式左文右图；配图自动关联添加时的正文范围。空间不足时可打开大图查看。</p>
                             <h3 id="reader-status-title">状态栏</h3>
                             <label><span>显示方式</span><select data-reader-status-bar-mode><option value="auto">自动</option><option value="visible">始终显示</option><option value="hidden">隐藏</option></select></label>
                             <div class="desktop-reader-status-fields" role="group" aria-labelledby="reader-status-fields-label">
@@ -263,6 +265,17 @@
                         </div>
                     </aside>
 
+                    <dialog class="desktop-reader-illustration-viewer" data-reader-illustration-viewer data-reader-illustration-input aria-labelledby="reader-illustration-viewer-title">
+                        <header class="desktop-reader-illustration-viewer-header"><h2 id="reader-illustration-viewer-title">阅读配图</h2><button class="desktop-reader-tool" type="button" data-reader-illustration-viewer-close>关闭</button></header>
+                        <div class="desktop-reader-illustration-viewer-viewport" data-reader-illustration-viewer-viewport tabindex="0" aria-label="配图，可滚动查看放大后的图片"><img data-reader-illustration-viewer-image alt="阅读配图"></div>
+                        <p class="desktop-reader-illustration-viewer-caption" data-reader-illustration-viewer-caption></p>
+                        <div class="desktop-reader-illustration-viewer-controls">
+                            <button class="desktop-reader-tool" type="button" data-reader-illustration-viewer-prev>上一张</button><span data-reader-illustration-viewer-count aria-live="polite"></span><button class="desktop-reader-tool" type="button" data-reader-illustration-viewer-next>下一张</button>
+                            <button class="desktop-reader-tool" type="button" data-reader-illustration-zoom-out aria-label="缩小配图">−</button><output data-reader-illustration-zoom-value>100%</output><button class="desktop-reader-tool" type="button" data-reader-illustration-zoom-in aria-label="放大配图">＋</button><button class="desktop-reader-tool" type="button" data-reader-illustration-zoom-reset>重置</button>
+                            <button class="desktop-reader-tool" type="button" data-reader-illustration-viewer-remove>移除</button><button class="desktop-reader-tool" type="button" data-reader-illustration-viewer-retry hidden>重试</button>
+                        </div>
+                        <p data-reader-illustration-viewer-status aria-live="polite"></p>
+                    </dialog>
                     <dialog class="desktop-reader-detail-dialog" data-reader-detail-dialog aria-labelledby="reader-detail-title">
                         <header class="desktop-reader-transfer-header">
                             <div>

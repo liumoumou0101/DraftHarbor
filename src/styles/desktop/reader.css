@@ -274,6 +274,12 @@
     .desktop-reader-progress { display: grid; grid-template-columns: auto minmax(120px, 260px) auto; align-items: center; gap: 10px; padding: 0; border: 0; background: transparent; }
     .desktop-reader-progress input[type="range"] { width: 100%; height: 18px; margin: 0; accent-color: var(--desktop-accent); cursor: pointer; }
     .desktop-reader-progress input[type="range"]:disabled { cursor: default; opacity: 0.45; }
+    .desktop-reader-progress [data-reader-progress-percent] {
+        width: 4em;
+        white-space: nowrap;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
 
     .desktop-reader-drawer {
         position: absolute;
