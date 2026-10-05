@@ -132,6 +132,7 @@ const tests = [
     }],
     ['opening a book commits its identity and chapter atomically', async () => {
         const f = fixture();
+        f.state.illustrations = [{ documentId: 'book-a', illustrationId: 'old-image' }];
         const oldChapter = f.context.loadReaderWorkspaceChapter('a2');
         const opening = f.context.openReaderLibraryDocument('book-b');
         await tick();
@@ -145,6 +146,7 @@ const tests = [
         assert.strictEqual(await oldChapter, false);
         assert.strictEqual(f.state.activeDocumentId, 'book-b');
         assert.strictEqual(f.state.activeChapterId, 'b1');
+        assert.deepStrictEqual(Array.from(f.state.illustrations), [], 'new book must not render the previous book illustrations before its own assets load');
         assert.ok(f.renders.every(item => item.documentId === 'book-b' && item.revisionId === 'revision-b' && item.chapter.chapterId === 'b1'));
     }],
     ['a superseded book open cannot show an obsolete error over the latest book', async () => {
@@ -305,6 +307,21 @@ const tests = [
             const expectedChapter = change === 'chapter' ? 'new' : 'old';
             assert.ok(rendered[0].blockId.startsWith(`${expectedChapter}-`));
         }
+    }],
+    ['flow scrolling within the final virtual window does not redraw the same content', async () => {
+        const f = fixture();
+        vm.runInContext(source('reader-reading.js'), f.context, { filename: 'reader-reading.js' });
+        const blocks = Array.from({ length: 100 }, (_, index) => ({ blockId: `b${index}`, text: 'paragraph' }));
+        Object.assign(f.state, { currentChapter: { chapterId: 'a1', blocks }, effectiveLayoutMode: 'flow',
+            virtualWindow: Layout.flowWindowForAnchor(blocks.length, blocks.length - 1) });
+        let redraws = 0;
+        f.context.renderReaderFlow = () => { redraws += 1; f.content.scrollTop = 0; };
+        f.context.createReaderLocatorAt = (blockId, offset) => ({ blockId, offset });
+        f.content.scrollTop = 900;
+        f.context.maybeShiftReaderFlowWindow();
+        f.flushFrames();
+        assert.strictEqual(redraws, 0, 'a boundary scroll must not redraw an unchanged virtual window');
+        assert.strictEqual(f.content.scrollTop, 900, 'the final text position must remain stable');
     }],
     ['revision snapshots retain their captured document and do not evict a newer cache', async () => {
         const f = fixture();

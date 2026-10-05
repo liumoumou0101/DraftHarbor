@@ -11,6 +11,27 @@
         return String(value === undefined || value === null ? fallback : value).trim();
     }
 
+    function rangePosition(input) {
+        if (!input || typeof input !== 'object' || Array.isArray(input)
+            || typeof input.blockId !== 'string' || !input.blockId.trim()
+            || !Number.isSafeInteger(input.offset) || input.offset < 0) {
+            throw new Error('reader illustration range position is invalid');
+        }
+        return Object.freeze({ blockId: input.blockId.trim(), offset: input.offset });
+    }
+
+    function createRange(input) {
+        if (!input || typeof input !== 'object' || Array.isArray(input)) {
+            throw new Error('reader illustration range is invalid');
+        }
+        const start = rangePosition(input.start);
+        const end = rangePosition(input.end);
+        if (start.blockId === end.blockId && start.offset >= end.offset) {
+            throw new Error('reader illustration range must be nonempty and forward');
+        }
+        return Object.freeze({ start, end });
+    }
+
     function createReaderIllustration(input = {}) {
         const illustrationId = cleanString(input.illustrationId || input.id);
         const documentId = cleanString(input.documentId);
@@ -25,6 +46,8 @@
         const updatedAt = cleanString(input.updatedAt, createdAt);
         if (!createdAt || Number.isNaN(new Date(createdAt).getTime())) throw new Error('reader illustration createdAt is invalid');
         if (!updatedAt || Number.isNaN(new Date(updatedAt).getTime())) throw new Error('reader illustration updatedAt is invalid');
+        const revisionId = cleanString(input.revisionId);
+        const range = input.range === undefined ? undefined : createRange(input.range);
         return Object.freeze({
             illustrationId,
             documentId,
@@ -39,7 +62,9 @@
             fit: FIT_MODES.includes(input.fit) ? input.fit : 'contain',
             caption: cleanString(input.caption).slice(0, 240),
             createdAt: new Date(createdAt).toISOString(),
-            updatedAt: new Date(updatedAt).toISOString()
+            updatedAt: new Date(updatedAt).toISOString(),
+            ...(revisionId ? { revisionId } : {}),
+            ...(range ? { range } : {})
         });
     }
 
@@ -61,27 +86,42 @@
         });
     }
 
-    function activeIllustrationsForPage(illustrations, chapter, page) {
+    function activeIllustrationsForPage(illustrations, chapter, page, options = {}) {
         const blocks = Array.isArray(chapter && chapter.blocks) ? chapter.blocks : [];
         const segments = Array.isArray(page && page.segments) ? page.segments : [];
         if (!blocks.length || !segments.length) return [];
         const blockIndexes = new Map(blocks.map((block, index) => [String(block.blockId), index]));
-        const lastSegment = segments[segments.length - 1];
-        const pageEnd = {
-            blockId: String(lastSegment.blockId || ''),
-            offset: Math.max(0, Number(lastSegment.endOffset) || 0)
+        const revisionId = cleanString(options.revisionId);
+        const positionInChapter = (position) => {
+            const index = position && blockIndexes.get(position.blockId);
+            return index !== undefined && Number.isSafeInteger(position.offset) && position.offset >= 0
+                && position.offset <= String(blocks[index].text || '').length;
         };
-        const eligible = (Array.isArray(illustrations) ? illustrations : []).filter((item) => (
-            item && item.chapterId === chapter.chapterId
-            && blockIndexes.has(item.blockId)
-            // Page segment end offsets are exclusive. An anchor exactly at the
-            // end belongs to the following page and must not trigger early.
-            && compareAnchors(item, pageEnd, blockIndexes) < 0
-        ));
-        if (!eligible.length) return [];
-        eligible.sort((left, right) => compareAnchors(left, right, blockIndexes) || left.createdAt.localeCompare(right.createdAt));
-        const latest = eligible[eligible.length - 1];
-        return eligible.filter((item) => item.blockId === latest.blockId && item.offset === latest.offset);
+        const eligible = (Array.isArray(illustrations) ? illustrations : []).map((item, uploadOrder) => ({ item, uploadOrder }))
+            .filter(({ item }) => {
+                if (!item || item.chapterId !== chapter.chapterId || !blockIndexes.has(item.blockId)
+                    || (item.revisionId && item.revisionId !== revisionId)) return false;
+                if (!item.range) return positionInChapter(item) && pageContainsAnchor(page, item);
+                const { start, end } = item.range;
+                // Cross-block ordering and bounds require the actual chapter.
+                // Stale or invalid ranges remain stored but cannot bind to prose.
+                if (!positionInChapter(start) || !positionInChapter(end)
+                    || compareAnchors(start, end, blockIndexes) >= 0) return false;
+                return segments.some((segment) => {
+                    const segmentStart = { blockId: String(segment.blockId || ''), offset: Number(segment.startOffset || 0) };
+                    const segmentEnd = { blockId: segmentStart.blockId, offset: Number(segment.endOffset) };
+                    return positionInChapter(segmentStart) && positionInChapter(segmentEnd)
+                        && segmentStart.offset < segmentEnd.offset
+                        && compareAnchors(start, segmentEnd, blockIndexes) < 0
+                        && compareAnchors(end, segmentStart, blockIndexes) > 0;
+                });
+            });
+        const startFor = (item) => item.range ? item.range.start : item;
+        const endFor = (item) => item.range ? item.range.end : item;
+        eligible.sort((left, right) => compareAnchors(startFor(left.item), startFor(right.item), blockIndexes)
+            || compareAnchors(endFor(left.item), endFor(right.item), blockIndexes)
+            || left.uploadOrder - right.uploadOrder);
+        return eligible.map(({ item }) => item);
     }
 
     return { FIT_MODES, createReaderIllustration, compareAnchors, pageContainsAnchor, activeIllustrationsForPage };

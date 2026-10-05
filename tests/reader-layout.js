@@ -7,6 +7,7 @@ assert.strictEqual(Layout.effectiveLayoutMode('double-page', 920), 'double-page'
 assert.strictEqual(Layout.effectiveLayoutMode('double-page', 700), 'double-page');
 assert.strictEqual(Layout.effectiveLayoutMode('double-page', 420), 'single-page');
 assert.strictEqual(Layout.effectiveLayoutMode('illustrated', 920), 'illustrated');
+assert.strictEqual(Layout.effectiveLayoutMode('illustrated', 700), 'single-page', 'illustrated mode must retain usable text and image widths, using compact viewing below a full spread');
 assert.strictEqual(Layout.effectiveLayoutMode('illustrated', 420), 'single-page');
 assert.strictEqual(Layout.effectiveLayoutMode('auto', 920), 'double-page');
 assert.strictEqual(Layout.effectiveLayoutMode('auto', 700), 'single-page');

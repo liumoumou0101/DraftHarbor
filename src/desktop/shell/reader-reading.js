@@ -7,6 +7,7 @@
     let readerPageFitBaseKey = '';
     let readerPageFitFrame = 0;
     let readerDeckTransitionSession = null;
+    let readerIllustrationFlowFrame = 0;
 
     function createReaderBlockNode(block, startOffset = 0, endOffset) {
         const heading = block.type === 'heading' || block.type === 'scene-title';
@@ -81,6 +82,20 @@
         return (Number(node.dataset.readerStartOffset) || 0) + low;
     }
 
+    function readerFlowVisibleEndOffset(node, bottom) {
+        const geometry = readerFlowTextGeometry(node);
+        let low = 0;
+        let high = geometry.length;
+        // End positions are exclusive. Include a bottom line as soon as any
+        // of that line is visible, instead of reusing the top-edge lookup.
+        while (low < high) {
+            const middle = Math.floor((low + high) / 2);
+            if (geometry.rectAt(middle).top < bottom) low = middle + 1;
+            else high = middle;
+        }
+        return low;
+    }
+
     function captureReaderPositionLocator() {
         if (!readerState.currentChapter) return null;
         if (readerState.effectiveLayoutMode !== 'flow') {
@@ -136,6 +151,10 @@
         });
         const pageWidth = geometry.pageWidth;
         const pageHeight = geometry.pageHeight;
+        if (content) {
+            content.dataset.readerIllustratedRequested = readerState.layoutMode === 'illustrated' ? 'true' : 'false';
+            content.style.setProperty('--reader-illustrated-page-width', `${pageWidth}px`);
+        }
         const actualFontFamily = readerActualFontFamily(content);
         return { content, width, height, effective, gap, pageWidth, pageHeight, actualFontFamily };
     }
@@ -247,6 +266,25 @@
         } else {
             setReaderFlowScrollTop(content, 0);
         }
+        window.refreshReaderIllustrationFlow?.();
+        window.requestAnimationFrame(() => {
+            if (readerState.currentChapter === chapter && readerState.activeDocumentId === documentId
+                && readerState.activeRevisionId === revisionId && readerState.r === navigationRequest
+                && readerState.effectiveLayoutMode === 'flow') window.refreshReaderIllustrationFlow?.();
+        });
+        if (!content.dataset.readerIllustrationScrollBound) {
+            content.dataset.readerIllustrationScrollBound = 'true';
+            content.addEventListener('scroll', () => {
+                if (readerIllustrationFlowFrame || readerState.layoutMode !== 'illustrated'
+                    || readerState.effectiveLayoutMode !== 'flow') return;
+                readerIllustrationFlowFrame = window.requestAnimationFrame(() => {
+                    readerIllustrationFlowFrame = 0;
+                    if (readerState.layoutMode === 'illustrated' && readerState.effectiveLayoutMode === 'flow') {
+                        window.refreshReaderIllustrationFlow?.();
+                    }
+                });
+            }, { passive: true });
+        }
     }
 
     function renderReaderPage(page, pageNumber) {
@@ -272,6 +310,7 @@
         const host = document.createElement('div');
         host.className = 'desktop-reader-content desktop-reader-pagination-probe';
         host.dataset.readerLayout = metrics.effective;
+        host.style.setProperty('--reader-illustrated-page-width', `${metrics.pageWidth}px`);
         host.setAttribute('aria-hidden', 'true');
         Object.assign(host.style, {
             position: 'fixed',
@@ -287,6 +326,7 @@
         const deck = document.createElement('div');
         deck.className = 'desktop-reader-page-deck';
         deck.dataset.readerSpread = metrics.effective === 'double-page' ? 'double' : 'single';
+        if (readerState.layoutMode === 'illustrated') deck.dataset.readerIllustrations = 'empty';
         const pageNode = document.createElement('section');
         pageNode.className = 'desktop-reader-page';
         deck.appendChild(pageNode);
@@ -560,6 +600,7 @@
         const deck = document.createElement('div');
         deck.className = 'desktop-reader-page-deck';
         deck.dataset.readerSpread = metrics.effective === 'double-page' ? 'double' : 'single';
+        deck.style.setProperty('--reader-illustrated-page-width', `${metrics.pageWidth}px`);
         deck.appendChild(renderReaderPage(pages[pageIndex], pageIndex));
         if (metrics.effective === 'double-page' && pages[pageIndex + 1]) deck.appendChild(renderReaderPage(pages[pageIndex + 1], pageIndex + 1));
         window.appendReaderIllustrationPane?.(deck, pages[pageIndex], metrics.effective);
@@ -636,6 +677,8 @@
             const approximate = Math.max(0, Math.min(blocks.length - 1, Math.round(ratio * (blocks.length - 1))));
             const range = readerState.virtualWindow;
             if (approximate < range.start + 10 || approximate >= range.end - 10) {
+                const next = window.DraftHarborReaderLayout.flowWindowForAnchor(blocks.length, approximate);
+                if (next.start === range.start && next.end === range.end) return;
                 renderReaderFlow(createReaderLocatorAt(blocks[approximate].blockId, 0), { preserveRatio: true });
             }
         });
@@ -652,6 +695,10 @@
         const layoutMode = readerState.effectiveLayoutMode;
         readerState.pageTurnFrame = window.requestAnimationFrame(() => {
             readerState.pageTurnFrame = null;
+            if (document.querySelector('dialog[open]')) {
+                readerState.pendingPageDelta = 0;
+                return;
+            }
             if (readerState.currentChapter !== chapter || readerState.r !== navigationRequest
                 || readerState.effectiveLayoutMode !== layoutMode) {
                 readerState.pendingPageDelta = 0;

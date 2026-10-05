@@ -34,7 +34,7 @@
         const minimumForcedPageWidth = finiteNumber(options.minimumForcedPageWidth, 220, 160, 480);
         const gap = finiteNumber(options.gap, 28, 0, 96);
         if (requested === 'illustrated') {
-            return finiteNumber(viewportWidth, 0, 0, 100000) >= minimumForcedPageWidth * 2 + gap
+            return finiteNumber(viewportWidth, 0, 0, 100000) >= minimumPageWidth * 2 + gap
                 ? 'illustrated'
                 : 'single-page';
         }
