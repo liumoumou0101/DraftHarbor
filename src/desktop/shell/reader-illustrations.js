@@ -11,8 +11,11 @@
     let viewerImages = [];
     let viewerIndex = 0;
     let viewerDocumentId = '';
+    let viewerRevisionId = '';
     let viewerReturnFocus = null;
     let viewerZoom = 1;
+    let renderActivePane = null;
+    let resetViewerNavigation = () => {};
     let flowRefreshFrame = null;
     const documentChanges = new Map();
 
@@ -143,8 +146,134 @@
     }
 
     function isolateIllustrationInput(node) {
-        ['wheel', 'pointerdown', 'pointerup', 'pointercancel', 'touchstart', 'touchend', 'keydown', 'dblclick'].forEach(type => {
-            node.addEventListener(type, event => event.stopPropagation());
+        ['wheel', 'pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'touchstart', 'touchmove', 'touchend', 'touchcancel', 'keydown', 'dblclick'].forEach(type => {
+            node.addEventListener(type, event => {
+                readerState.wheelTurnAccumulator = 0;
+                readerState.pointerGesture = null;
+                readerState.pendingPageDelta = 0;
+                if (readerState.pageTurnFrame) {
+                    global.cancelAnimationFrame(readerState.pageTurnFrame);
+                    readerState.pageTurnFrame = null;
+                }
+                event.stopPropagation();
+            });
+        });
+    }
+
+    function bindImageNavigation(node, move, current, canGesture = () => true, gestureNode = node) {
+        let wheelAmount = 0;
+        let lastWheel = 0;
+        let wheelLocked = false;
+        let gesture = null;
+        let suppressClickUntil = 0;
+        const pointers = new Set();
+        node.addEventListener('keydown', event => {
+            if (!current() || event.ctrlKey || event.metaKey || event.altKey || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+            event.preventDefault();
+            move(event.key === 'ArrowRight' ? 1 : -1);
+        });
+        gestureNode.addEventListener('wheel', event => {
+            const now = performance.now();
+            if (!current() || !canGesture() || event.ctrlKey || event.metaKey) {
+                wheelAmount = 0;
+                wheelLocked = false;
+                return;
+            }
+            event.preventDefault();
+            if (now - lastWheel > 220) { wheelAmount = 0; wheelLocked = false; }
+            lastWheel = now;
+            if (wheelLocked) return;
+            const raw = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+            const delta = raw * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? gestureNode.clientHeight : 1);
+            if (wheelAmount * delta < 0) wheelAmount = 0;
+            wheelAmount += delta;
+            if (Math.abs(wheelAmount) < 80) return;
+            move(wheelAmount > 0 ? 1 : -1);
+            wheelAmount = 0;
+            wheelLocked = true;
+        }, { passive: false });
+        gestureNode.addEventListener('pointerdown', event => {
+            if (event.pointerType !== 'touch') return;
+            pointers.add(event.pointerId);
+            if (pointers.size > 1) { gesture = null; return; }
+            if (!current() || !canGesture()) return;
+            gesture = { id: event.pointerId, x: event.clientX, y: event.clientY,
+                documentId: readerState.activeDocumentId, revisionId: readerState.activeRevisionId };
+            try { gestureNode.setPointerCapture(event.pointerId); } catch (_) { /* Synthetic or cancelled pointer. */ }
+        });
+        gestureNode.addEventListener('pointermove', event => {
+            if (!gesture || gesture.id !== event.pointerId || !current() || !canGesture()) return;
+            const dx = event.clientX - gesture.x;
+            const dy = event.clientY - gesture.y;
+            if (Math.abs(dx) > 16 && Math.abs(dx) > Math.abs(dy) * 1.2) event.preventDefault();
+        }, { passive: false });
+        const finish = event => {
+            const started = gesture;
+            gesture = null;
+            pointers.delete(event.pointerId);
+            if (event.type === 'pointercancel' || !started || started.id !== event.pointerId || pointers.size
+                || !current() || !canGesture() || started.documentId !== readerState.activeDocumentId || started.revisionId !== readerState.activeRevisionId) return;
+            const dx = event.clientX - started.x;
+            const dy = event.clientY - started.y;
+            if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+            event.preventDefault();
+            move(dx < 0 ? 1 : -1);
+            suppressClickUntil = performance.now() + 400;
+        };
+        gestureNode.addEventListener('pointerup', finish);
+        gestureNode.addEventListener('pointercancel', finish);
+        gestureNode.addEventListener('lostpointercapture', () => { gesture = null; });
+        gestureNode.addEventListener('click', event => {
+            if (event.detail > 0 && performance.now() < suppressClickUntil) {
+                suppressClickUntil = 0;
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }
+        }, true);
+        return () => {
+            wheelAmount = 0;
+            lastWheel = 0;
+            wheelLocked = false;
+            gesture = null;
+            pointers.clear();
+            suppressClickUntil = 0;
+        };
+    }
+
+    function fillImageThumbnails(strip, images, select) {
+        if (!strip) return;
+        strip.hidden = images.length < 2;
+        strip.replaceChildren();
+        const context = { documentId: readerState.activeDocumentId, revisionId: readerState.activeRevisionId };
+        images.forEach((item, index) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'desktop-reader-illustration-thumbnail';
+            button.dataset.readerIllustrationThumbnail = item.illustrationId;
+            button.setAttribute('aria-label', `配图 ${index + 1}：${imageLabel(item)}`);
+            const image = document.createElement('img');
+            image.alt = '';
+            image.loading = 'lazy';
+            image.decoding = 'async';
+            image.src = illustrationAssetUrl(item);
+            button.appendChild(image);
+            button.addEventListener('click', () => {
+                if (button.isConnected && strip.contains(button) && contextCurrent(context)) select(index);
+            });
+            strip.appendChild(button);
+        });
+    }
+
+    function syncImageThumbnails(strip, id) {
+        if (!strip) return;
+        strip.querySelectorAll('[data-reader-illustration-thumbnail]').forEach(button => {
+            const selected = button.dataset.readerIllustrationThumbnail === id;
+            button.setAttribute('aria-current', selected ? 'true' : 'false');
+            if (!selected) return;
+            const bounds = button.getBoundingClientRect();
+            const viewport = strip.getBoundingClientRect();
+            if (bounds.left < viewport.left) strip.scrollLeft += bounds.left - viewport.left;
+            else if (bounds.right > viewport.right) strip.scrollLeft += bounds.right - viewport.right;
         });
     }
 
@@ -201,6 +330,9 @@
         pane.dataset.readerIllustrationPane = '';
         pane.dataset.readerIllustrationInput = '';
         pane.setAttribute('aria-label', '当前阅读配图');
+        pane.tabIndex = 0;
+        const context = { documentId: readerState.activeDocumentId, revisionId: readerState.activeRevisionId };
+        const current = () => pane.isConnected && contextCurrent(context);
         isolateIllustrationInput(pane);
         bindIllustrationDropTarget(pane, page);
         const stage = document.createElement('button');
@@ -222,6 +354,10 @@
         retry.className = 'desktop-reader-tool';
         const controls = document.createElement('div');
         controls.className = 'desktop-reader-illustration-controls';
+        const thumbnails = document.createElement('div');
+        thumbnails.className = 'desktop-reader-illustration-thumbnails';
+        thumbnails.dataset.readerIllustrationThumbnails = '';
+        thumbnails.setAttribute('aria-label', '配图缩略图');
         const makeButton = (hook, label) => {
             const button = document.createElement('button');
             button.type = 'button';
@@ -247,15 +383,33 @@
             count.textContent = `${index + 1} / ${images.length}`;
             remove.setAttribute('aria-label', `移除配图 ${imageLabel(item)}`);
             showImage(image, status, retry, item);
-            stage.onclick = () => openIllustrationViewer(images, index, stage);
-            remove.onclick = () => removeReaderIllustration(item);
+            syncImageThumbnails(thumbnails, item.illustrationId);
+            stage.onclick = () => { if (current()) openIllustrationViewer(images, index, stage); };
+            remove.onclick = () => { if (current()) removeReaderIllustration(item); };
         };
-        previous.onclick = () => { const index = images.findIndex(item => item.illustrationId === selectedImageId); selectedImageId = images[Math.max(0, index - 1)].illustrationId; render(); };
-        next.onclick = () => { const index = images.findIndex(item => item.illustrationId === selectedImageId); selectedImageId = images[Math.min(images.length - 1, index + 1)].illustrationId; render(); };
+        const select = index => {
+            if (!current() || index < 0 || index >= images.length || images[index].illustrationId === selectedImageId) return false;
+            const focused = document.activeElement;
+            selectedImageId = images[index].illustrationId;
+            render();
+            if ((focused === previous || focused === next) && focused.disabled && document.activeElement !== focused) {
+                stage.focus({ preventScroll: true });
+            }
+            return true;
+        };
+        const move = delta => select(images.findIndex(item => item.illustrationId === selectedImageId) + delta);
+        previous.onclick = () => move(-1);
+        next.onclick = () => move(1);
+        fillImageThumbnails(thumbnails, images, select);
+        bindImageNavigation(pane, move, current);
+        renderActivePane = () => { if (current()) render(); };
         add.onclick = () => chooseFiles(page);
         controls.append(previous, count, next, add, remove);
-        pane.append(stage, status, retry, controls);
+        pane.append(stage, status, retry, thumbnails, controls);
         render();
+        global.requestAnimationFrame(() => {
+            if (current()) syncImageThumbnails(thumbnails, selectedImageId);
+        });
         return pane;
     }
 
@@ -293,6 +447,7 @@
         const fit = Math.min(width / (image.naturalWidth || 1), height / (image.naturalHeight || 1));
         image.style.width = `${Math.max(1, (image.naturalWidth || width) * fit * viewerZoom)}px`;
         image.style.height = 'auto';
+        viewport.style.touchAction = viewerZoom <= 1 ? 'pan-y' : 'auto';
         if (scale) scale.textContent = `${Math.round(viewerZoom * 100)}%`;
     }
 
@@ -300,6 +455,10 @@
         const dialog = illustrationElements().viewer;
         const item = viewerImages[viewerIndex];
         if (!dialog || !item) return;
+        selectedImageId = item.illustrationId;
+        renderActivePane?.();
+        const thumbnails = dialog.querySelector('[data-reader-illustration-viewer-thumbnails]');
+        syncImageThumbnails(thumbnails, item.illustrationId);
         const image = dialog.querySelector('[data-reader-illustration-viewer-image]');
         const status = dialog.querySelector('[data-reader-illustration-viewer-status]');
         const retry = dialog.querySelector('[data-reader-illustration-viewer-retry]');
@@ -330,19 +489,49 @@
         viewerImages = [...images];
         viewerIndex = Math.max(0, Math.min(images.length - 1, index));
         viewerDocumentId = readerState.activeDocumentId;
+        viewerRevisionId = readerState.activeRevisionId;
         viewerReturnFocus = trigger;
+        resetViewerNavigation();
+        fillImageThumbnails(dialog.querySelector('[data-reader-illustration-viewer-thumbnails]'), viewerImages, selectViewerImage);
         renderIllustrationViewer();
         if (!dialog.open) dialog.showModal();
+        syncImageThumbnails(dialog.querySelector('[data-reader-illustration-viewer-thumbnails]'), selectedImageId);
         dialog.querySelector('[data-reader-illustration-viewer-close]')?.focus();
+    }
+
+    function viewerContextCurrent() {
+        return !!illustrationElements().viewer?.open && viewerDocumentId === readerState.activeDocumentId && viewerRevisionId === readerState.activeRevisionId;
+    }
+
+    function selectViewerImage(index) {
+        if (!viewerContextCurrent() || index < 0 || index >= viewerImages.length || index === viewerIndex) return false;
+        const dialog = illustrationElements().viewer;
+        const focused = document.activeElement;
+        const navigationFocused = focused === dialog.querySelector('[data-reader-illustration-viewer-prev]')
+            || focused === dialog.querySelector('[data-reader-illustration-viewer-next]');
+        viewerIndex = index;
+        renderIllustrationViewer();
+        if (navigationFocused && focused.disabled && document.activeElement !== focused) {
+            dialog.querySelector('[data-reader-illustration-viewer-viewport]')?.focus({ preventScroll: true });
+        }
+        return true;
     }
 
     function closeIllustrationViewer(restoreFocus = true) {
         const dialog = illustrationElements().viewer;
-        const target = viewerReturnFocus;
+        let target = viewerReturnFocus;
+        const sameContext = viewerDocumentId === readerState.activeDocumentId && viewerRevisionId === readerState.activeRevisionId;
+        if (restoreFocus && sameContext && !target?.isConnected) {
+            const hook = target?.matches('[data-reader-illustration-open]') ? '[data-reader-illustration-open]'
+                : target?.matches('[data-reader-illustration-view]') ? '[data-reader-illustration-view]' : '';
+            if (hook) target = document.querySelector(hook);
+        }
         viewerReturnFocus = null;
+        resetViewerNavigation();
         if (dialog?.open) dialog.close();
-        if (restoreFocus && target?.isConnected && !target.disabled) target.focus({ preventScroll: true });
-        else if (restoreFocus) document.querySelector('[data-reader-content]')?.focus({ preventScroll: true });
+        if (!restoreFocus || !sameContext) return;
+        if (target?.isConnected && !target.disabled) target.focus({ preventScroll: true });
+        else document.querySelector('[data-reader-content]')?.focus({ preventScroll: true });
     }
 
     async function loadReaderIllustrationDocument(documentId) {
@@ -440,7 +629,11 @@
             viewerImages = viewerImages.filter(image => image.illustrationId !== item.illustrationId);
             if (illustrationElements().viewer?.open) {
                 if (!viewerImages.length) closeIllustrationViewer();
-                else { viewerIndex = Math.min(viewerIndex, viewerImages.length - 1); renderIllustrationViewer(); }
+                else {
+                    viewerIndex = Math.min(viewerIndex, viewerImages.length - 1);
+                    fillImageThumbnails(illustrationElements().viewer.querySelector('[data-reader-illustration-viewer-thumbnails]'), viewerImages, selectViewerImage);
+                    renderIllustrationViewer();
+                }
             }
             refreshIllustrationPresentation();
             setIllustrationStatus('配图已移除。', context);
@@ -495,8 +688,10 @@
             dialog.addEventListener('keydown', event => {
                 if (event.key === 'Escape') { event.preventDefault(); closeIllustrationViewer(); }
             });
-            dialog.querySelector('[data-reader-illustration-viewer-prev]')?.addEventListener('click', () => { viewerIndex = Math.max(0, viewerIndex - 1); renderIllustrationViewer(); });
-            dialog.querySelector('[data-reader-illustration-viewer-next]')?.addEventListener('click', () => { viewerIndex = Math.min(viewerImages.length - 1, viewerIndex + 1); renderIllustrationViewer(); });
+            resetViewerNavigation = bindImageNavigation(dialog, delta => selectViewerImage(viewerIndex + delta), viewerContextCurrent,
+                () => viewerZoom <= 1, dialog.querySelector('[data-reader-illustration-viewer-viewport]'));
+            dialog.querySelector('[data-reader-illustration-viewer-prev]')?.addEventListener('click', () => selectViewerImage(viewerIndex - 1));
+            dialog.querySelector('[data-reader-illustration-viewer-next]')?.addEventListener('click', () => selectViewerImage(viewerIndex + 1));
             dialog.querySelector('[data-reader-illustration-zoom-in]')?.addEventListener('click', () => { viewerZoom = Math.min(8, viewerZoom * 1.25); applyViewerZoom(); });
             dialog.querySelector('[data-reader-illustration-zoom-out]')?.addEventListener('click', () => { viewerZoom = Math.max(0.25, viewerZoom / 1.25); applyViewerZoom(); });
             dialog.querySelector('[data-reader-illustration-zoom-reset]')?.addEventListener('click', () => { viewerZoom = 1; applyViewerZoom(); });

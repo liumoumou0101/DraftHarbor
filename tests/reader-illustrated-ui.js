@@ -1,4 +1,4 @@
-/* global readerState, renderReaderReading, createReaderLocatorAt */
+/* global readerState, renderReaderReading, createReaderLocatorAt, queueReaderPageTurn */
 
 const assert = require('assert');
 const fs = require('fs/promises');
@@ -81,6 +81,160 @@ async function setIllustrated(page) {
         assert.strictEqual(await page.evaluate(() => readerState.pageIndex), textPageIndex, 'switching images must leave the text page unchanged');
         const illustratedPageWidth = await page.locator('[data-reader-content] > .desktop-reader-page-deck > .desktop-reader-page').first().evaluate(node => node.getBoundingClientRect().width);
         assert.ok(Math.abs(illustratedPageWidth - emptyPageWidth) < 2, `adding images must not change text page geometry (${emptyPageWidth} -> ${illustratedPageWidth})`);
+
+        // These real PNG interactions catch image shortcuts leaking into text
+        // navigation, losing focus, or leaving either presentation out of sync.
+        const imagePosition = () => page.evaluate(() => ({ pageIndex: readerState.pageIndex,
+            locator: window.captureReaderPositionLocator(), scrollTop: document.querySelector('[data-reader-content]').scrollTop }));
+        const wheelImage = (selector, deltaY, options = {}) => page.locator(selector).dispatchEvent('wheel', { deltaY, bubbles: true, cancelable: true, ...options });
+        const swipeImage = (selector, { vertical = false, cancel = false, multi = false } = {}) => page.locator(selector).evaluate((node, options) => {
+            const send = (type, id, x, y) => node.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, cancelable: true }));
+            send('pointerdown', 91, 400, 300);
+            if (options.multi) send('pointerdown', 92, 420, 300);
+            send('pointermove', 91, options.vertical ? 390 : 220, options.vertical ? 480 : 305);
+            send(options.cancel ? 'pointercancel' : 'pointerup', 91, options.vertical ? 390 : 220, options.vertical ? 480 : 305);
+            if (options.multi) send('pointerup', 92, 220, 300);
+        }, { vertical, cancel, multi });
+        const paneSelector = '[data-reader-illustration-pane]';
+        const viewportSelector = '[data-reader-illustration-viewer-viewport]';
+        const imagePositionBefore = await imagePosition();
+        await page.evaluate(async () => {
+            queueReaderPageTurn(1);
+            document.querySelector('[data-reader-illustration-pane]').dispatchEvent(new WheelEvent('wheel', { deltaY: 1, bubbles: true, cancelable: true }));
+            await new Promise(resolve => requestAnimationFrame(resolve));
+        });
+        assert.deepStrictEqual(await imagePosition(), imagePositionBefore, 'image input must cancel a text page turn already queued for the next frame');
+        await page.locator('[data-reader-illustration-open]').focus();
+        await page.keyboard.press('ArrowRight');
+        assert.strictEqual(await page.locator('[data-reader-illustration-count]').textContent(), '3 / 5', 'focused image ArrowRight must select the next image');
+        assert.strictEqual(await page.evaluate(() => document.activeElement.matches('[data-reader-illustration-open]')), true);
+        assert.strictEqual(await page.locator(`${paneSelector} [data-reader-illustration-thumbnail]`).count(), 5);
+        await page.locator(`${paneSelector} [data-reader-illustration-thumbnail]`).first().click();
+        await page.keyboard.press('ArrowLeft');
+        assert.strictEqual(await page.locator('[data-reader-illustration-count]').textContent(), '1 / 5', 'image keys must stop at the first image');
+        assert.strictEqual(await page.locator(`${paneSelector} [data-reader-illustration-thumbnail]`).first().getAttribute('aria-current'), 'true');
+        await page.locator('[data-reader-illustration-next]').focus();
+        for (let index = 0; index < 4; index++) await page.keyboard.press('ArrowRight');
+        assert.strictEqual(await page.locator('[data-reader-illustration-count]').textContent(), '5 / 5');
+        await page.keyboard.press('ArrowLeft');
+        assert.strictEqual(await page.locator('[data-reader-illustration-count]').textContent(), '4 / 5', 'a focused next button reaching the last image must retain keyboard navigation');
+        await page.locator('[data-reader-illustration-prev]').focus();
+        for (let index = 0; index < 3; index++) await page.keyboard.press('ArrowLeft');
+        await page.keyboard.press('ArrowRight');
+        assert.strictEqual(await page.locator('[data-reader-illustration-count]').textContent(), '2 / 5', 'a focused previous button reaching the first image must retain keyboard navigation');
+        await page.locator(`${paneSelector} [data-reader-illustration-thumbnail]`).first().click();
+        await wheelImage(paneSelector, 20);
+        assert.strictEqual(await page.locator('[data-reader-illustration-count]').textContent(), '1 / 5', 'small wheel movement must accumulate before switching');
+        await wheelImage(paneSelector, 80);
+        await wheelImage(paneSelector, 120);
+        assert.strictEqual(await page.locator('[data-reader-illustration-count]').textContent(), '2 / 5', 'an inertia burst must switch only one image');
+        await page.waitForTimeout(300);
+        await wheelImage(paneSelector, 120, { ctrlKey: true });
+        await wheelImage(paneSelector, 120, { metaKey: true });
+        assert.strictEqual(await page.locator('[data-reader-illustration-count]').textContent(), '2 / 5', 'modified wheel gestures must not select images');
+        for (const options of [{ vertical: true }, { cancel: true }, { multi: true }]) await swipeImage(paneSelector, options);
+        assert.strictEqual(await page.locator('[data-reader-illustration-count]').textContent(), '2 / 5', 'vertical, cancelled and multi-touch gestures must keep the image');
+        await swipeImage('[data-reader-illustration-open]');
+        await page.locator('[data-reader-illustration-open]').dispatchEvent('click', { bubbles: true, cancelable: true, detail: 1 });
+        assert.strictEqual(await page.locator('[data-reader-illustration-count]').textContent(), '3 / 5');
+        assert.strictEqual(await page.evaluate(() => document.querySelector('[data-reader-illustration-viewer]').open), false, 'a completed swipe must suppress its following click');
+        await page.waitForTimeout(450);
+        await page.click('[data-reader-illustration-open]');
+        await page.waitForFunction(() => document.querySelector('[data-reader-illustration-viewer]').open);
+        assert.strictEqual(await page.locator('[data-reader-illustration-viewer-count]').textContent(), '3 / 5');
+        await page.keyboard.press('ArrowRight');
+        assert.strictEqual(await page.locator('[data-reader-illustration-viewer-count]').textContent(), '4 / 5');
+        await page.locator('[data-reader-illustration-viewer-next]').focus();
+        await page.keyboard.press('ArrowRight');
+        await page.keyboard.press('ArrowLeft');
+        assert.strictEqual(await page.locator('[data-reader-illustration-viewer-count]').textContent(), '4 / 5', 'viewer next at the last image must retain keyboard navigation');
+        await page.locator('[data-reader-illustration-viewer-prev]').focus();
+        for (let index = 0; index < 3; index++) await page.keyboard.press('ArrowLeft');
+        await page.keyboard.press('ArrowRight');
+        assert.strictEqual(await page.locator('[data-reader-illustration-viewer-count]').textContent(), '2 / 5', 'viewer previous at the first image must retain keyboard navigation');
+        await page.locator('[data-reader-illustration-viewer-thumbnails] [data-reader-illustration-thumbnail]').first().click();
+        assert.strictEqual(await page.locator('[data-reader-illustration-viewer-count]').textContent(), '1 / 5');
+        await page.evaluate(() => { window.__oldImageThumbnail = document.querySelector('[data-reader-illustration-viewer-thumbnails] [data-reader-illustration-thumbnail]'); });
+        assert.strictEqual(await page.evaluate(() => document.activeElement.matches('[data-reader-illustration-thumbnail]')), true);
+        await wheelImage(viewportSelector, 120);
+        assert.strictEqual(await page.locator('[data-reader-illustration-viewer-count]').textContent(), '2 / 5');
+        await swipeImage(viewportSelector);
+        assert.strictEqual(await page.locator('[data-reader-illustration-viewer-count]').textContent(), '3 / 5');
+        await page.click('[data-reader-illustration-zoom-in]');
+        await page.waitForTimeout(300);
+        await wheelImage(viewportSelector, 120);
+        await swipeImage(viewportSelector);
+        assert.strictEqual(await page.locator('[data-reader-illustration-viewer-count]').textContent(), '3 / 5', 'enlarged images must retain wheel and touch panning');
+        await page.click('[data-reader-illustration-zoom-reset]');
+        await page.locator('[data-reader-illustration-viewer-thumbnails] [data-reader-illustration-thumbnail]').last().click();
+        await page.keyboard.press('ArrowRight');
+        assert.strictEqual(await page.locator('[data-reader-illustration-viewer-count]').textContent(), '5 / 5', 'viewer selection must stop at the last image');
+        await page.keyboard.press('Escape');
+        assert.strictEqual(await page.locator('[data-reader-illustration-count]').textContent(), '5 / 5', 'closing the viewer must retain its selected image in the pane');
+        assert.strictEqual(await page.evaluate(() => document.activeElement.matches('[data-reader-illustration-open]')), true);
+        assert.deepStrictEqual(await imagePosition(), imagePositionBefore, 'image navigation must preserve the text locator and scroll position');
+        const thumbAssets = await page.locator(`${paneSelector} [data-reader-illustration-thumbnail] img`).evaluateAll(nodes => nodes.map(node => ({ loading: node.loading, decoding: node.decoding })));
+        assert.deepStrictEqual(thumbAssets, Array.from({ length: 5 }, () => ({ loading: 'lazy', decoding: 'async' })));
+        await page.locator(`${paneSelector} [data-reader-illustration-thumbnail]`).first().click();
+        await page.click('[data-reader-illustration-open]');
+        await page.keyboard.press('ArrowRight');
+        await page.evaluate(() => window.__oldImageThumbnail.click());
+        assert.strictEqual(await page.locator('[data-reader-illustration-viewer-count]').textContent(), '2 / 5', 'a detached thumbnail from a closed viewer session must not change the reopened viewer');
+        const selectedBeforePaneRebuild = await page.locator('[data-reader-illustration-viewer-image]').getAttribute('data-reader-illustration-id');
+        await page.evaluate(() => renderReaderReading({ locator: readerState.anchorLocator }));
+        await page.keyboard.press('Escape');
+        assert.strictEqual(await page.evaluate(() => document.activeElement.matches('[data-reader-illustration-open]')), true, 'closing a viewer after pane reflow must focus the current main image trigger');
+        assert.strictEqual(await page.locator('[data-reader-illustration-main]').getAttribute('data-reader-illustration-id'), selectedBeforePaneRebuild, 'pane reflow while viewing must preserve the selected image');
+        await page.locator(`${paneSelector} [data-reader-illustration-thumbnail]`).first().click();
+        await page.locator('[data-reader-illustration-thumbnails]').evaluate(node => { node.style.maxWidth = '110px'; });
+        await page.locator('[data-reader-illustration-open]').focus();
+        await page.evaluate(() => {
+            readerState.wheelTurnAccumulator = 39;
+            readerState.pointerGesture = { pointerId: 501, startX: 500, startY: 300 };
+        });
+        await page.keyboard.press('ArrowRight');
+        const residualInput = await page.evaluate(() => ({ wheel: readerState.wheelTurnAccumulator, pointer: readerState.pointerGesture }));
+        assert.deepStrictEqual(residualInput, { wheel: 0, pointer: null }, 'image input must discard residual text gestures');
+        for (let index = 0; index < 3; index++) await page.keyboard.press('ArrowRight');
+        const selectedVisible = await page.locator('[data-reader-illustration-thumbnails]').evaluate(strip => {
+            const bounds = strip.getBoundingClientRect();
+            const selected = strip.querySelector('[aria-current="true"]').getBoundingClientRect();
+            return strip.scrollLeft > 0 && selected.left >= bounds.left - 1 && selected.right <= bounds.right + 1;
+        });
+        assert.strictEqual(selectedVisible, true, 'keyboard selection must expose the thumbnail by scrolling its strip');
+        assert.deepStrictEqual(await imagePosition(), imagePositionBefore, 'thumbnail scrolling must not move the text');
+        await page.evaluate(async () => {
+            renderReaderReading({ locator: readerState.anchorLocator });
+            document.querySelector('[data-reader-illustration-thumbnails]').style.maxWidth = '110px';
+            await new Promise(resolve => requestAnimationFrame(resolve));
+        });
+        assert.ok(await page.locator('[data-reader-illustration-thumbnails]').evaluate(strip => strip.scrollLeft > 0), 'a rebuilt pane must expose its preserved selected thumbnail');
+        await page.evaluate(() => {
+            window.__allSwitchTestImages = readerState.illustrations;
+            readerState.illustrations = [readerState.illustrations[0]];
+            renderReaderReading({ locator: readerState.anchorLocator });
+        });
+        await page.locator('[data-reader-illustration-open]').focus();
+        await page.keyboard.press('ArrowRight');
+        await wheelImage(paneSelector, 120);
+        await swipeImage(paneSelector);
+        assert.strictEqual(await page.locator('[data-reader-illustration-count]').textContent(), '1 / 1', 'a lone image must remain selected for every shortcut');
+        assert.strictEqual(await page.locator('[data-reader-illustration-thumbnails]').isVisible(), false, 'a lone image must hide the pane thumbnail strip');
+        await page.locator('[data-reader-illustration-open]').dispatchEvent('click', { bubbles: true, cancelable: true, detail: 1 });
+        assert.strictEqual(await page.evaluate(() => document.querySelector('[data-reader-illustration-viewer]').open), false, 'a boundary swipe must suppress its click even without another image');
+        await page.waitForTimeout(450);
+        await page.click('[data-reader-illustration-open]');
+        assert.strictEqual(await page.locator('[data-reader-illustration-viewer-thumbnails]').isVisible(), false, 'a lone image must hide the viewer thumbnail strip');
+        await page.keyboard.press('ArrowRight');
+        await wheelImage(viewportSelector, 120);
+        await swipeImage(viewportSelector);
+        assert.strictEqual(await page.locator('[data-reader-illustration-viewer-count]').textContent(), '1 / 1');
+        await page.keyboard.press('Escape');
+        await page.evaluate(() => {
+            readerState.illustrations = window.__allSwitchTestImages;
+            delete window.__allSwitchTestImages;
+            renderReaderReading({ locator: readerState.anchorLocator });
+        });
 
         // A separate existing range on the same text page must join the viewer,
         // rather than replacing the group added at the beginning of that page.
@@ -258,7 +412,11 @@ async function setIllustrated(page) {
             await new Promise(resolve => { releaseSecondLoad = resolve; });
             await route.fulfill({ response });
         });
-        await page.evaluate(id => { window.__readerIllustrationSwitch = window.openReaderLibraryDocument(id); }, secondDocumentId);
+        await page.evaluate(id => {
+            window.__staleImagePane = document.querySelector('[data-reader-illustration-pane]');
+            window.__staleImagePane?.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 81, pointerType: 'touch', clientX: 500, clientY: 300, bubbles: true }));
+            window.__readerIllustrationSwitch = window.openReaderLibraryDocument(id);
+        }, secondDocumentId);
         await secondLoadFetched;
         releaseFirstUpload();
         await page.waitForFunction(() => !readerState.illustrationBusy);
@@ -270,6 +428,18 @@ async function setIllustrated(page) {
         assert.strictEqual((await readImages(secondDocumentId)).length, 0, 'remaining uploaded files must not move into the newly opened document');
         assert.strictEqual(await page.evaluate(() => readerState.illustrations.length), 0, 'old upload responses must not replace the new book state');
         assert.strictEqual(await page.evaluate(() => readerState.illustrationRecord?.documentId), secondDocumentId, 'successful writes to A must not invalidate B’s pending image load');
+        const newBookPosition = await imagePosition();
+        await page.evaluate(() => {
+            const pane = window.__staleImagePane;
+            pane?.dispatchEvent(new PointerEvent('pointerup', { pointerId: 81, pointerType: 'touch', clientX: 200, clientY: 300, bubbles: true }));
+            pane?.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true }));
+            pane?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+            pane?.querySelector('[data-reader-illustration-thumbnail]')?.click();
+            pane?.querySelector('[data-reader-illustration-open]')?.click();
+            delete window.__staleImagePane;
+        });
+        assert.deepStrictEqual(await imagePosition(), newBookPosition, 'old image gestures must not change the newly opened book');
+        assert.strictEqual(await page.evaluate(() => document.querySelector('[data-reader-illustration-viewer]').open), false, 'an old image click must not reopen the previous book viewer');
         await page.unroute('**/api/reader/illustrations');
 
         await page.evaluate(async id => { await window.openReaderLibraryDocument(id); }, firstDocumentId);
