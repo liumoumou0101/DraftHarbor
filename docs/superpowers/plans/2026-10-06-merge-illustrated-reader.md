@@ -21,8 +21,8 @@
 - [x] Save the original main commit, Git bundle, runnable packages and project/library/configuration data under `H:/soft/DraftHarbor/.ai_state/rollback-before-illustration-20261006/`; keep branch `codex/rollback-before-illustration-20261006`.
 - [x] Resolve seven merge conflicts, retaining both independent flow helpers/cases and both input protections. Layout/input and fragment/CSS workers own disjoint files; the coordinator owns rendering, range alignment, package wiring and flow/UI regression integration.
 - [x] Add a regression proving a flow image upload begins at the same visible line as the HUD-aware reading locator. Observe it fail, then align image range capture and verify it passes. Run reader illustrated, core/shell and full `npm test`, plus backup checks.
-- [ ] Perform a fresh independent review of the integrated tree, resolve important findings, commit the merge and fast-forward the original local checkout after checking its identity and experimental file hashes.
-- [x] Build NSIS/portable, run packaged and temporary installed smoke checks, compare shipped source to the checkout. Record delivery manifest/checksums after copying to the main checkout.
+- [x] Perform a fresh independent review of the integrated tree, resolve important findings, commit the merge and fast-forward the original local checkout after checking its identity and experimental file hashes.
+- [x] Build NSIS/portable, run packaged and temporary installed smoke checks, compare shipped source to the checkout, and copy verified packages/evidence into the original checkout. Delivery checksums and rollback references are saved beside the local packages.
 - [x] Prepare rollback launchers and instructions linking the saved old runtime and source commit. They run against copied old data with separate browser profiles; no live data restoration is performed.
 
 ## Evidence and decisions
@@ -38,3 +38,7 @@
 - One full run reported an unclassified local `fetch failed` in the unchanged workflow creation test. Its independent rerun passed; the final full `npm test` also passed, including that service and all desktop suites.
 - Final build, packaged smoke, installed smoke and backup checks passed. The 267 shipped application/asset files matched the integration checkout; the new viewer fragment was included, and no test/project/settings data was packaged.
 - Actual screenshots and metrics confirmed the same live/probe text width at 1280 and 1600 pixels, centered empty layouts and accessible 720px image viewing.
+- The merge was committed as `e15e20fca21fcd54ec755a478203626ef5d54f6a` with parents `8ed585c` and `cfa7464`, then fast-forwarded into the original local main after verifying its unchanged identity and all 17 experimental hashes.
+- The copied runtime passed startup/save/reload/backup smoke in the original checkout. All 267 shipped files matched the final application sources; checkout CRLF conversion accounted for 72 newline-only differences.
+- The local builder emitted no update metadata, so the old metadata was preserved with the rollback package and current installer size/SHA-512 metadata was regenerated. No public release was published.
+- Rollback launchers and instructions are in the original checkout's ignored backup directory and reference the exact merge to revert. The saved runtime uses copied pre-upgrade data, keeping newer live edits separate.
