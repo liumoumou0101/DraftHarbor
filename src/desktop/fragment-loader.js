@@ -1,19 +1,22 @@
 (function () {
     const fragmentSelector = '[data-desktop-fragment]';
 
-    async function loadFragment(placeholder) {
+    async function loadFragment(placeholder, ancestors = []) {
         const source = placeholder.getAttribute('data-desktop-fragment');
         if (!source) throw new Error('Desktop fragment source is missing.');
+        if (ancestors.includes(source)) throw new Error(`Desktop fragment recursively includes itself: ${source}`);
         const response = await fetch(source, { cache: 'no-store' });
         if (!response.ok) throw new Error(`Could not load desktop fragment: ${source} (${response.status})`);
         const template = document.createElement('template');
         template.innerHTML = await response.text();
+        const nested = Array.from(template.content.querySelectorAll(fragmentSelector));
+        await Promise.all(nested.map(child => loadFragment(child, [...ancestors, source])));
         placeholder.replaceWith(template.content);
     }
 
     async function loadDesktopFragments() {
         const placeholders = Array.from(document.querySelectorAll(fragmentSelector));
-        await Promise.all(placeholders.map(loadFragment));
+        await Promise.all(placeholders.map(placeholder => loadFragment(placeholder)));
         document.documentElement.dataset.fragmentsReady = 'true';
     }
 

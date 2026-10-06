@@ -41,7 +41,7 @@
         // Auto favors twenty full-width characters per line. Explicit spreads
         // can use shorter lines, but still need space for ten characters.
         const minimumTextWidth = Math.min(textWidth, fontSize * (1 + letterSpacing) * (explicitSpread ? 10 : 20));
-        const requiredPageWidth = Math.max(explicitSpread ? minimumForcedPageWidth : minimumPageWidth, minimumTextWidth + pageMargin * 2 + 2);
+        const requiredPageWidth = Math.max(requested === 'double-page' ? minimumForcedPageWidth : minimumPageWidth, minimumTextWidth + pageMargin * 2 + 2);
         const canShowSpread = finiteNumber(viewportWidth, 0, 0, 100000) >= requiredPageWidth * 2 + gap;
         if (explicitSpread) return canShowSpread ? requested : 'single-page';
         return canShowSpread ? 'double-page' : 'single-page';

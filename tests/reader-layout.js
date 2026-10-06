@@ -7,7 +7,9 @@ assert.strictEqual(Layout.effectiveLayoutMode('double-page', 920), 'double-page'
 assert.strictEqual(Layout.effectiveLayoutMode('double-page', 700), 'double-page');
 assert.strictEqual(Layout.effectiveLayoutMode('double-page', 420), 'single-page');
 assert.strictEqual(Layout.effectiveLayoutMode('illustrated', 920), 'illustrated');
+assert.strictEqual(Layout.effectiveLayoutMode('illustrated', 700), 'single-page', 'illustrated mode must retain usable text and image widths, using compact viewing below a full spread');
 assert.strictEqual(Layout.effectiveLayoutMode('illustrated', 420), 'single-page');
+assert.strictEqual(Layout.effectiveLayoutMode('illustrated', 600), 'single-page', 'illustrated mode needs wider pages than an explicit text spread');
 assert.strictEqual(Layout.effectiveLayoutMode('auto', 920), 'single-page');
 assert.strictEqual(Layout.effectiveLayoutMode('auto', 700), 'single-page');
 assert.strictEqual(Layout.effectiveLayoutMode('single-page', 920, { viewportHeight: 180 }), 'flow');
@@ -21,6 +23,7 @@ assert.strictEqual(Layout.effectiveLayoutMode('auto', 1154, { ...defaultTypograp
 assert.strictEqual(Layout.effectiveLayoutMode('double-page', 834, defaultTypography), 'double-page', 'an explicit double-page request can use shorter readable lines');
 assert.strictEqual(Layout.effectiveLayoutMode('double-page', 534, defaultTypography), 'single-page', 'explicit spreads still need a usable text column');
 assert.strictEqual(Layout.effectiveLayoutMode('double-page', 834, { ...defaultTypography, fontSize: 32, pageMargin: 80 }), 'single-page', 'explicit spreads must fall back when typography leaves too little text width');
+assert.strictEqual(Layout.effectiveLayoutMode('illustrated', 920, { ...defaultTypography, fontSize: 48, pageMargin: 80 }), 'single-page', 'illustrated mode must also fall back when large text and margins exceed its minimum page width');
 
 const laptopSpread = Layout.pagedGeometry({
   viewportWidth: 1280, viewportHeight: 720, effectiveMode: 'double-page', gap: 28

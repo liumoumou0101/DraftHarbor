@@ -58,6 +58,7 @@
                                     <button class="desktop-reader-tool" type="button" data-reader-quick-more>全部设置</button>
                                     </div>
                                     <span class="desktop-reader-tts-status" data-reader-tts-status aria-live="polite">本机语音就绪。</span>
+                                    <span class="desktop-reader-hint" data-reader-illustration-status aria-live="polite"></span>
                                     <p class="desktop-reader-hint">方向键翻页 · 方括号切章 · Esc 关闭面板</p>
                                     </div>
                                     </details>
@@ -74,6 +75,7 @@
                                 <button class="desktop-primary-action" type="button" data-reader-empty-library>打开书库</button>
                             </div>
                         </div>
+                        <div class="desktop-reader-illustration-compact" data-reader-illustration-compact data-reader-illustration-input hidden><button class="desktop-reader-tool" type="button" data-reader-illustration-view>查看配图</button><button class="desktop-reader-tool" type="button" data-reader-illustration-compact-add>添加配图</button></div>
                         <div class="desktop-reader-page-flip-host" data-reader-page-flip-host data-reader-page-flip-engine="st-page-flip" data-reader-page-flip-state="idle" aria-hidden="true" inert hidden></div>
 
                         <footer class="desktop-reader-bottombar" data-reader-bottombar>
@@ -236,7 +238,7 @@
                             <section class="desktop-reader-settings-section" data-reader-studio-section="page" aria-labelledby="reader-page-title" hidden>
                             <h3 id="reader-page-title">页面</h3>
                             <label><span>布局</span><select data-reader-layout-mode aria-describedby="reader-layout-hint"><option value="auto" selected>自动</option><option value="flow">连续阅读</option><option value="single-page">单页</option><option value="double-page">双页</option><option value="illustrated">带图阅读</option></select></label>
-                            <p class="desktop-reader-hint" id="reader-layout-hint">自动模式根据窗口、字号和页边距选择单页或双页。带图模式右侧显示配图，空间不足时使用单页。</p>
+                            <p class="desktop-reader-hint" id="reader-layout-hint">自动模式根据窗口、字号和页边距选择单页或双页。带图模式左文右图，配图关联添加时的正文范围；没有配图时正文居中，空间不足时可打开大图查看。</p>
                             <h3 id="reader-status-title">状态栏</h3>
                             <label><span>显示方式</span><select data-reader-status-bar-mode><option value="auto">自动</option><option value="visible">始终显示</option><option value="hidden">隐藏</option></select></label>
                             <div class="desktop-reader-status-fields" role="group" aria-labelledby="reader-status-fields-label">
@@ -274,6 +276,7 @@
                         </div>
                     </aside>
 
+                    <div data-desktop-fragment="desktop/fragments/reader-illustration-viewer.html"></div>
                     <dialog class="desktop-reader-detail-dialog" data-reader-detail-dialog aria-labelledby="reader-detail-title">
                         <header class="desktop-reader-transfer-header">
                             <div>

@@ -1135,6 +1135,20 @@ async function selectReaderStudioSection(page, section) {
         await page.waitForFunction(() => readerState.virtualWindow.end === readerState.currentChapter.blocks.length);
         assert.ok(await page.locator('[data-reader-block]').count() <= 73, 'shifting the flow window must not accumulate chapter DOM');
 
+        const progressLabelGeometry = await page.evaluate(() => {
+            const label = document.querySelector('[data-reader-progress-percent]');
+            const content = document.querySelector('[data-reader-content]');
+            const original = label.textContent;
+            label.textContent = '1%';
+            const startHeight = content.clientHeight;
+            label.textContent = '100%';
+            const endHeight = content.clientHeight;
+            label.textContent = original;
+            return { startHeight, endHeight };
+        });
+        assert.strictEqual(progressLabelGeometry.startHeight, progressLabelGeometry.endHeight,
+            'percent label changes must not resize the reading viewport and trigger a reflow');
+
         await page.evaluate(() => {
             const slider = document.querySelector('[data-reader-progress-slider]');
             slider.value = '0';
@@ -1149,14 +1163,21 @@ async function selectReaderStudioSection(page, section) {
             slider.dispatchEvent(new Event('change', { bubbles: true }));
         });
         await page.waitForFunction(() => readerState.activeChapterId === readerState.contents[readerState.contents.length - 1].chapterId);
-        await page.waitForTimeout(300);
+        await page.waitForFunction(() => {
+            const content = document.querySelector('[data-reader-content]');
+            return document.querySelector('[data-reader-progress-percent]').textContent === '100%'
+                && content.scrollTop >= content.scrollHeight - content.clientHeight - 1;
+        });
         const endProgress = await page.evaluate(() => {
             const content = document.querySelector('[data-reader-content]');
             return {
                 label: document.querySelector('[data-reader-progress-percent]').textContent,
                 slider: document.querySelector('[data-reader-progress-slider]').value,
                 scrollTop: content.scrollTop,
-                maxScroll: content.scrollHeight - content.clientHeight
+                maxScroll: content.scrollHeight - content.clientHeight,
+                layout: readerState.effectiveLayoutMode, chapter: readerState.activeChapterId,
+                window: readerState.virtualWindow, blocks: readerState.currentChapter.blocks.length,
+                dragging: readerState.progressDragging
             };
         });
         assert.strictEqual(endProgress.label, '100%', `book progress should end at 100% (${JSON.stringify(endProgress)})`);

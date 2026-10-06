@@ -324,6 +324,9 @@
             // Commit a complete document/chapter together. During loading the
             // previous document must not acquire the next document's identity.
             if (documentId !== readerState.activeDocumentId || revisionId !== readerState.activeRevisionId) {
+                readerState.illustrations = [];
+                readerState.illustrationRecord = null;
+                readerState.illustrationAnchor = null;
                 readerState.annotations = [];
                 readerState.annotationResolutions?.clear();
                 readerState.annotationRecordUpdatedAt = '';

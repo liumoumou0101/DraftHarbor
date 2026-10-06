@@ -89,6 +89,21 @@ const cases = [
         assert.deepStrictEqual(result.hiddenCapture, result.captured, 'hiding controls or entering focus must not change the captured reading position');
         assert.ok(Math.abs(result.hiddenRestored.top - result.paddedTop) <= 32, 'hidden chrome must retain the same flow restore origin');
     }],
+    ['visible flow end includes the partially visible bottom line', async page => {
+        const result = await page.evaluate(() => {
+            const node = document.querySelector('[data-reader-block]');
+            const offset = 117;
+            const character = window.flowTestCharacterRect(offset);
+            const bottom = (character.top + character.bottom) / 2;
+            const end = (window.readerFlowVisibleEndOffset || window.readerFlowVisibleOffset)(node, bottom);
+            return { offset, end, bottom,
+                previous: window.flowTestCharacterRect(Math.max(0, end - 1)),
+                next: window.flowTestCharacterRect(end) };
+        });
+        assert.ok(result.end > result.offset, 'a character on the partially visible bottom line must be included in the half-open range');
+        assert.ok(result.previous.top < result.bottom, 'the final included character must be visibly above the bottom edge');
+        assert.ok(result.next.top >= result.bottom, 'the exclusive end must start at the next invisible line');
+    }],
     ['scroll capture and rerender resume inside a long paragraph', async page => {
         const result = await page.evaluate(async () => {
             const content = document.querySelector('[data-reader-content]');
