@@ -444,8 +444,8 @@
         const viewport = dialog?.querySelector('[data-reader-illustration-viewer-viewport]');
         const scale = dialog?.querySelector('[data-reader-illustration-zoom-value]');
         if (!image || !viewport) return;
-        const width = Math.min(image.naturalWidth || viewport.clientWidth, Math.max(1, viewport.clientWidth - 24));
-        const height = Math.min(image.naturalHeight || viewport.clientHeight, Math.max(1, viewport.clientHeight - 24));
+        const width = Math.max(1, viewport.clientWidth - 24);
+        const height = Math.max(1, viewport.clientHeight - 24);
         const fit = Math.min(width / (image.naturalWidth || 1), height / (image.naturalHeight || 1));
         image.style.width = `${Math.max(1, (image.naturalWidth || width) * fit * viewerZoom)}px`;
         image.style.height = 'auto';
@@ -497,6 +497,7 @@
         fillImageThumbnails(dialog.querySelector('[data-reader-illustration-viewer-thumbnails]'), viewerImages, selectViewerImage);
         renderIllustrationViewer();
         if (!dialog.open) dialog.showModal();
+        applyViewerZoom();
         syncImageThumbnails(dialog.querySelector('[data-reader-illustration-viewer-thumbnails]'), selectedImageId);
         dialog.querySelector('[data-reader-illustration-viewer-close]')?.focus();
     }

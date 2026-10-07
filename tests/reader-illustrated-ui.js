@@ -273,7 +273,21 @@ async function setIllustrated(page) {
         // Real image inspection must preserve both the text position and focus.
         await page.click('[data-reader-illustration-open]');
         await page.waitForFunction(() => document.querySelector('[data-reader-illustration-viewer]')?.open);
-        const beforeZoom = await page.locator('[data-reader-illustration-viewer-image]').evaluate(node => node.getBoundingClientRect().width);
+        await page.waitForFunction(() => document.querySelector('[data-reader-illustration-viewer-image]').naturalWidth > 0);
+        const previewFit = await page.locator('[data-reader-illustration-viewer-image]').evaluate(node => {
+            const viewport = node.closest('[data-reader-illustration-viewer-viewport]');
+            const rect = node.getBoundingClientRect();
+            return { width: rect.width, height: rect.height, naturalWidth: node.naturalWidth, naturalHeight: node.naturalHeight,
+                availableWidth: viewport.clientWidth - 24, availableHeight: viewport.clientHeight - 24 };
+        });
+        assert.ok(previewFit.width > previewFit.naturalWidth * 1.5, 'small images should open as a large fitted preview, not stay at native pixel size');
+        assert.ok(previewFit.width <= previewFit.availableWidth + 1 && previewFit.height <= previewFit.availableHeight + 1,
+            'the default preview must show the complete image inside the available space');
+        assert.ok(Math.min(Math.abs(previewFit.availableWidth - previewFit.width), Math.abs(previewFit.availableHeight - previewFit.height)) < 2,
+            'the default preview must fill at least one available dimension');
+        assert.ok(Math.abs(previewFit.width / previewFit.height - previewFit.naturalWidth / previewFit.naturalHeight) < 0.01,
+            'fitting the preview must preserve the image aspect ratio');
+        const beforeZoom = previewFit.width;
         await page.click('[data-reader-illustration-zoom-in]');
         const afterZoom = await page.locator('[data-reader-illustration-viewer-image]').evaluate(node => node.getBoundingClientRect().width);
         assert.ok(afterZoom > beforeZoom, 'zoom must enlarge the decoded image');
