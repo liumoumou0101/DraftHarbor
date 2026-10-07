@@ -13,6 +13,10 @@
     pointer-events: none;
 }
 
+.desktop-reader-shell:has(.desktop-reader-illustration-compact:not([hidden])) > .desktop-reader-touch-zone-next {
+    bottom: 120px;
+}
+
 .desktop-reader-page [data-reader-block].is-reader-illustration-anchor {
     outline: 1px solid var(--reader-accent, var(--desktop-accent));
     outline-offset: 4px;

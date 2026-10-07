@@ -126,13 +126,15 @@
             elements.add.disabled = !available || !!readerState.illustrationBusy;
             elements.add.textContent = readerState.illustrationBusy ? '正在保存…' : '配图';
         }
-        if (elements.compact) elements.compact.hidden = !requestedIllustrations() || !compactIllustrations() || (!activeImages.length && !available);
+        if (elements.compact) elements.compact.hidden = !requestedIllustrations()
+            || (!compactIllustrations() && !!activeImages.length) || (!activeImages.length && !available);
         if (elements.view) {
+            elements.view.hidden = !activeImages.length;
             elements.view.disabled = !activeImages.length;
             elements.view.textContent = `查看配图${activeImages.length ? ` ${activeImages.length}` : ''}`;
         }
-        if (elements.compactAdd) elements.compactAdd.disabled = !available || !!readerState.illustrationBusy;
         syncReaderIllustrationReadonlyState();
+        if (elements.compactAdd) elements.compactAdd.disabled = !available || !!readerState.illustrationBusy;
         if (elements.viewer?.open && viewerDocumentId !== readerState.activeDocumentId) closeIllustrationViewer(false);
     }
 

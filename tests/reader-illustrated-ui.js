@@ -61,8 +61,19 @@ async function setIllustrated(page) {
         });
         const emptyPageWidth = await page.locator('[data-reader-content] > .desktop-reader-page-deck > .desktop-reader-page').first().evaluate(node => node.getBoundingClientRect().width);
 
-        // Catches silent four-file truncation and the old multi-card presentation.
-        await page.setInputFiles('[data-reader-illustration-file]', imageFiles(5));
+        // Start from a real visible entry: direct file injection cannot detect a missing upload button.
+        const emptyPageAdd = page.locator('[data-reader-illustration-compact-add]');
+        assert.strictEqual(await emptyPageAdd.isVisible(), true, 'wide pages without images must expose the right-side add entry');
+        assert.strictEqual(await emptyPageAdd.isEnabled(), true);
+        assert.strictEqual(await page.locator('[data-reader-illustration-view]').isVisible(), false, 'an empty page should offer adding rather than an unavailable viewer');
+        await page.locator('[data-reader-content]').focus();
+        const emptyPageIndex = await page.evaluate(() => readerState.pageIndex);
+        const nextTouchArea = await page.locator('[data-reader-touch-next]').boundingBox();
+        await page.mouse.click(nextTouchArea.x + nextTouchArea.width / 2, nextTouchArea.y + nextTouchArea.height / 2);
+        await page.waitForFunction(index => readerState.pageIndex === index + 1, emptyPageIndex, { timeout: 3000 });
+        await page.evaluate(start => renderReaderReading({ locator: createReaderLocatorAt(start.blockId, start.offset) }), firstPageRange.start);
+        const [imagePicker] = await Promise.all([page.waitForEvent('filechooser'), emptyPageAdd.click()]);
+        await imagePicker.setFiles(imageFiles(5));
         await page.waitForFunction(() => !readerState.illustrationBusy && readerState.illustrations.length > 0);
         assert.strictEqual(await page.evaluate(() => readerState.illustrations.length), 5, 'all five selected images must be saved instead of silently discarding the fifth');
         const captured = await page.evaluate(() => readerState.illustrations.map(item => ({ revisionId: item.revisionId, range: item.range })));
@@ -289,6 +300,11 @@ async function setIllustrated(page) {
         assert.strictEqual(await page.locator('[data-reader-illustration-pane]').count(), 0, 'images must stop outside their captured text range');
         assert.strictEqual(await page.locator('.desktop-reader-page-deck').first().getAttribute('data-reader-illustrations'), 'empty');
         assert.strictEqual(await page.locator('.desktop-reader-illustration-empty').count(), 0, 'empty pages must not reserve an editor panel');
+        assert.strictEqual(await emptyPageAdd.isVisible(), true, 'moving to another page without images must restore the add entry');
+        assert.strictEqual(await emptyPageAdd.isEnabled(), true);
+        assert.strictEqual(await page.locator('[data-reader-illustration-view]').isVisible(), false);
+        const [cancelledPicker] = await Promise.all([page.waitForEvent('filechooser'), emptyPageAdd.click()]);
+        await cancelledPicker.setFiles([]);
         await page.evaluate(() => { const block = readerState.currentChapter.blocks[0]; renderReaderReading({ locator: createReaderLocatorAt(block.blockId, 0) }); });
 
         await page.setViewportSize({ width: 720, height: 900 });
