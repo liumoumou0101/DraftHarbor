@@ -2191,18 +2191,3 @@ background:
     font-size: 11px;
     line-height: 1.45;
 }
-
-.desktop-workflow-step-mark {
-    display: grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    margin-right: 10px;
-    border-radius: 50%;
-    border: 2px solid var(--desktop-line-strong);
-    background: var(--desktop-panel);
-    color: var(--desktop-muted);
-    font-size: 12px;
-    font-weight: 700;
-    flex-shrink: 0;
-}

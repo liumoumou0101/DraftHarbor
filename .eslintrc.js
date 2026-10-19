@@ -80,6 +80,10 @@ insertNativeHistoryRecord
 deleteNativeHistoryRecord
 queueNativeGenerationLayer
 saveNativeSummaryDialog
+ensureNativeProjectSaved
+nativeProjectSaveContent
+syncNativeGenerationEditorLock
+nativeGenerationEditorLocked
 syncNativeSummaryDialogMeta
 flushNativeSummaryDialogFields
 countNativeWords

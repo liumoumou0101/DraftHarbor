@@ -1,9 +1,17 @@
     const nativeSummarySaveState = { pending: null, dialog: null, noteIds: new WeakMap() };
+    let nativeEditorContextMenuOrigin = null;
+
+    window.hideNativeEditorContextMenu = function hideNativeEditorContextMenu(options = {}) {
+        const menu = nativeEditorElements().contextMenu;
+        if (menu) menu.hidden = true;
+        if (options.restoreFocus && nativeEditorContextMenuOrigin) nativeEditorContextMenuOrigin.focus({ preventScroll: true });
+    };
 
     function openNativeEditorContextMenu(x, y) {
         const elements = nativeEditorElements();
         const scene = currentNativeScene();
         if (!elements.contextMenu || !scene) return;
+        nativeEditorContextMenuOrigin = elements.editor || document.activeElement;
         if (typeof rememberNativeRewriteSelection === 'function') rememberNativeRewriteSelection();
         const hasSelection = !!(elements.editor && elements.editor.selectionStart !== elements.editor.selectionEnd)
             || (nativeEditorState.rewrite.selectionEnd > nativeEditorState.rewrite.selectionStart);
@@ -14,7 +22,8 @@
         const rect = elements.contextMenu.getBoundingClientRect();
         elements.contextMenu.style.left = `${Math.max(8, Math.min(x + 2, window.innerWidth - rect.width - 8))}px`;
         elements.contextMenu.style.top = `${Math.max(8, Math.min(y + 2, window.innerHeight - rect.height - 8))}px`;
-        const firstAction = elements.contextMenu.querySelector('button:not([disabled])');
+        const firstAction = typeof window.nativeWriterMenuButtons === 'function'
+            ? window.nativeWriterMenuButtons(elements.contextMenu)[0] : elements.contextMenu.querySelector('button:not([disabled])');
         if (firstAction) firstAction.focus({ preventScroll: true });
     }
 

@@ -35,11 +35,7 @@
             setNativeSaveStatus('没有可导出的项目', 'error');
             return;
         }
-        if (nativeEditorState.dirty) {
-            await saveNativeScene();
-        } else {
-            flushNativeEditorFields();
-        }
+        if (!await ensureNativeProjectSaved() || currentProjectId() !== projectId) return;
         const extensionMap = { markdown: 'md', text: 'txt', html: 'html', epub: 'epub' };
         const extension = extensionMap[format] || format;
         const includeSceneTitles = elements.exportIncludeSceneTitles ? elements.exportIncludeSceneTitles.checked : true;

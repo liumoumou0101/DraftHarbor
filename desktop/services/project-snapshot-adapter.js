@@ -77,6 +77,7 @@ function projectToLegacySnapshot(project) {
     prompts: project.prompts || [],
     codex: [],
     promptHistory: project.promptHistory || [],
+    directiveStack: project.directiveStack || { schemaVersion: 1, layers: [] },
     workshopSessions: project.workshopSessions || [],
     workflowRuns: project.workflowRuns || []
     ,readerApplications: project.readerApplications || []
@@ -132,6 +133,7 @@ function legacySnapshotToProject(snapshot) {
     compendium: payload.compendium || [],
     prompts: payload.prompts || [],
     promptHistory: payload.promptHistory || [],
+    directiveStack: payload.directiveStack || { schemaVersion: 1, layers: [] },
     workshopSessions: payload.workshopSessions || [],
     workflowRuns: payload.workflowRuns || []
     ,readerApplications: payload.readerApplications || []

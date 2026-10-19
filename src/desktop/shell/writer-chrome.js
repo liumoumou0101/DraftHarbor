@@ -21,12 +21,31 @@
         chip.classList.toggle('is-active-chip', hasSelection);
     }
 
+    let nativeWriterChromePanel = null;
+
     function applyNativeWriterChrome() {
         const group = nativeWriterChromeGroup(nativeEditorState.assistantPanel);
+        nativeEditorState.assistantPanelByGroup = nativeEditorState.assistantPanelByGroup || {};
+        nativeEditorState.assistantPanelByGroup[group] = nativeEditorState.assistantPanel;
+        document.querySelectorAll('[data-native-assistant-group]').forEach((tab) => {
+            const selected = tab.dataset.nativeAssistantGroup === group;
+            tab.classList.toggle('is-active', selected);
+            tab.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        });
         document.querySelectorAll('[data-native-panel-tab]').forEach((tab) => {
             tab.hidden = tab.dataset.nativePanelGroup !== group;
+            const selected = tab.dataset.nativePanelTab === nativeEditorState.assistantPanel;
+            tab.classList.toggle('is-active', selected);
+            tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+            tab.tabIndex = selected && !tab.hidden ? 0 : -1;
         });
+        document.querySelectorAll('[data-native-panel]').forEach((panel) => {
+            panel.hidden = panel.dataset.nativePanel !== nativeEditorState.assistantPanel;
+            panel.classList.toggle('is-active', !panel.hidden);
+        });
+        nativeWriterChromePanel = nativeEditorState.assistantPanel;
         syncRewriteChip();
+        if (typeof window.syncNativeSidebarResizeA11y === 'function') window.syncNativeSidebarResizeA11y();
     }
 
     const renderNativeEditorUnwrapped = renderNativeEditor;
@@ -38,7 +57,8 @@
     const renderNativeRewriteUnwrapped = renderNativeRewrite;
     renderNativeRewrite = function renderNativeRewriteWithChrome() {
         renderNativeRewriteUnwrapped();
-        syncRewriteChip();
+        if (nativeWriterChromePanel !== nativeEditorState.assistantPanel) applyNativeWriterChrome();
+        else syncRewriteChip();
     };
 
     if (typeof closeNativeWriterPopovers !== 'function') {
@@ -47,9 +67,14 @@
 
     const closeNativeWriterPopoversUnwrapped = closeNativeWriterPopovers;
     closeNativeWriterPopovers = function closeNativeWriterPopoversWithChrome(options = {}) {
+        const contextMenu = document.querySelector('[data-native-context-menu]');
+        const contextWasOpen = contextMenu && !contextMenu.hidden;
         closeNativeWriterPopoversUnwrapped(options);
-        if (options.keep !== 'more') hideNativeMoreMenu();
-        if (options.keep !== 'outline') hideOutlineContextMenu();
+        if (options.keep !== 'more') hideNativeMoreMenu(options);
+        if (options.keep !== 'outline') hideOutlineContextMenu(options);
+        if (options.keep !== 'context-menu' && typeof window.hideNativeEditorContextMenu === 'function') {
+            window.hideNativeEditorContextMenu({ restoreFocus: options.restoreFocus && contextWasOpen });
+        }
     };
 
     let savedEditorSelection = null;
@@ -76,17 +101,45 @@
 
     function visibleMoreMenuButtons() {
         const menu = document.querySelector('[data-native-more-menu]');
-        if (!menu) return [];
-        return Array.from(menu.querySelectorAll('button')).filter((button) => !button.hidden && button.offsetParent);
+        return window.nativeWriterMenuButtons(menu);
     }
+
+    window.nativeWriterMenuButtons = function nativeWriterMenuButtons(menu) {
+        if (!menu) return [];
+        return Array.from(menu.querySelectorAll('button')).filter((button) => !button.disabled
+            && !button.hidden && !button.closest('[hidden]') && button.offsetParent !== null);
+    };
+
+    window.onNativeWriterMenuKeydown = function onNativeWriterMenuKeydown(event, menu, close) {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            close();
+            return;
+        }
+        if (event.key === 'Tab') {
+            closeNativeWriterPopovers();
+            return;
+        }
+        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+        const buttons = window.nativeWriterMenuButtons(menu);
+        if (!buttons.length) return;
+        event.preventDefault();
+        const current = buttons.indexOf(document.activeElement);
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
+            : event.key === 'ArrowDown' ? (current + 1) % buttons.length
+                : current < 0 ? buttons.length - 1 : (current - 1 + buttons.length) % buttons.length;
+        buttons[next].focus({ preventScroll: true });
+    };
 
     function hideNativeMoreMenu(options = {}) {
         const menu = document.querySelector('[data-native-more-menu]');
+        const wasOpen = menu && !menu.hidden;
         const btn = document.querySelector('[data-native-more-tools]');
         if (menu) menu.hidden = true;
         if (btn) {
             btn.setAttribute('aria-expanded', 'false');
-            if (options.restoreFocus) btn.focus({ preventScroll: true });
+            if (options.restoreFocus && wasOpen) btn.focus({ preventScroll: true });
         }
     }
 
@@ -102,34 +155,24 @@
     }
 
     function onMoreMenuKeydown(event) {
-        const buttons = visibleMoreMenuButtons();
-        if (!buttons.length) return;
-        if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
-            event.preventDefault();
-        }
-        const current = buttons.indexOf(document.activeElement);
-        if (event.key === 'Home') {
-            buttons[0].focus({ preventScroll: true });
-            return;
-        }
-        if (event.key === 'End') {
-            buttons[buttons.length - 1].focus({ preventScroll: true });
-            return;
-        }
-        if (event.key === 'ArrowDown') {
-            const next = current < 0 ? 0 : (current + 1) % buttons.length;
-            buttons[next].focus({ preventScroll: true });
-            return;
-        }
-        if (event.key === 'ArrowUp') {
-            const next = current < 0 ? buttons.length - 1 : (current - 1 + buttons.length) % buttons.length;
-            buttons[next].focus({ preventScroll: true });
-        }
+        window.onNativeWriterMenuKeydown(event, document.querySelector('[data-native-more-menu]'),
+            () => hideNativeMoreMenu({ restoreFocus: true }));
     }
 
     function bindNativeWriterChrome() {
         if (bindNativeWriterChrome.bound) return;
         bindNativeWriterChrome.bound = true;
+        // Generation rendering is loaded after this script. Bind only once all
+        // renderer scripts are ready, and sync a programmatic panel change
+        // without rewriting the manuscript or measuring layout on every token.
+        if (typeof renderNativeGeneration === 'function') {
+            const renderGeneration = renderNativeGeneration;
+            renderNativeGeneration = function renderNativeGenerationWithChrome() {
+                const result = renderGeneration();
+                if (nativeWriterChromePanel !== nativeEditorState.assistantPanel) applyNativeWriterChrome();
+                return result;
+            };
+        }
         const btn = document.querySelector('[data-native-more-tools]');
         const menu = document.querySelector('[data-native-more-menu]');
         if (btn) {
@@ -156,11 +199,23 @@
         bindNativeOutlineContextMenu();
     }
 
-    function hideOutlineContextMenu() {
+    let nativeOutlineMenuOrigin = null;
+
+    function hideOutlineContextMenu(options = {}) {
         const menu = document.querySelector('[data-native-outline-menu]');
+        const wasOpen = menu && !menu.hidden;
         if (menu) {
             menu.hidden = true;
             delete menu.dataset.nativeOutlineKind;
+        }
+        if (options.restoreFocus && wasOpen && nativeOutlineMenuOrigin) {
+            const sceneId = nativeOutlineMenuOrigin.dataset.nativeSceneId;
+            const chapterId = nativeOutlineMenuOrigin.dataset.nativeChapterId;
+            const selector = sceneId ? '[data-native-scene-id]' : '[data-native-chapter-id]';
+            const current = Array.from(document.querySelectorAll(selector)).find(node => sceneId
+                ? node.dataset.nativeSceneId === sceneId : node.dataset.nativeChapterId === chapterId);
+            const target = current || (nativeOutlineMenuOrigin.isConnected ? nativeOutlineMenuOrigin : null);
+            if (target) target.focus({ preventScroll: true });
         }
     }
 
@@ -192,18 +247,23 @@
     function selectOutlineTarget(kind, id) {
         const snapshot = nativeEditorState.snapshot;
         if (!snapshot || !id) return false;
+        if (typeof nativeGenerationEditorLocked === 'function' && nativeGenerationEditorLocked()) return false;
         if (kind === 'scene') {
             const scene = (snapshot.scenes || []).find((item) => item.id === id);
             if (!scene) return false;
+            if (typeof flushNativeEditorFields === 'function') flushNativeEditorFields();
             nativeEditorState.activeSceneId = scene.id;
             nativeEditorState.activeChapterId = scene.chapterId;
             nativeEditorState.expandedChapterIds.add(scene.chapterId);
+            renderNativeEditor();
             return true;
         }
         const chapter = (snapshot.chapters || []).find((item) => item.id === id);
         if (!chapter) return false;
+        if (typeof flushNativeEditorFields === 'function') flushNativeEditorFields();
         nativeEditorState.activeChapterId = chapter.id;
         nativeEditorState.expandedChapterIds.add(chapter.id);
+        renderNativeEditor();
         return true;
     }
 
@@ -222,6 +282,8 @@
         const menu = document.querySelector('[data-native-outline-menu]');
         if (!menu) return;
         closeNativeWriterPopovers({ keep: 'outline' });
+        nativeOutlineMenuOrigin = event.target && event.target.closest
+            ? event.target.closest('[data-native-scene-id], [data-native-chapter-id]') : document.activeElement;
         menu.dataset.nativeOutlineKind = kind;
         const bounds = outlineMoveBounds(kind);
         const up = menu.querySelector('[data-native-outline-action="move-up"]');
@@ -229,8 +291,10 @@
         if (up) up.disabled = bounds.up;
         if (down) down.disabled = bounds.down;
         menu.hidden = false;
-        positionOutlineContextMenu(event.clientX, event.clientY);
-        const first = menu.querySelector('button:not([disabled])');
+        const rect = nativeOutlineMenuOrigin ? nativeOutlineMenuOrigin.getBoundingClientRect() : { left: 8, bottom: 8 };
+        positionOutlineContextMenu(Number.isFinite(event.clientX) ? event.clientX : rect.left,
+            Number.isFinite(event.clientY) ? event.clientY : rect.bottom);
+        const first = window.nativeWriterMenuButtons(menu)[0];
         if (first) first.focus({ preventScroll: true });
     }
 
@@ -239,7 +303,7 @@
         const menu = document.querySelector('[data-native-outline-menu]');
         if (!list || !menu || bindNativeOutlineContextMenu.bound) return;
         bindNativeOutlineContextMenu.bound = true;
-        list.addEventListener('contextmenu', (event) => {
+        const openFromOutline = (event) => {
             const sceneNode = event.target && event.target.closest && event.target.closest('[data-native-scene-id]');
             const chapterNode = event.target && event.target.closest && event.target.closest('[data-native-chapter-id]');
             const kind = sceneNode ? 'scene' : (chapterNode ? 'chapter' : '');
@@ -249,13 +313,20 @@
             event.stopPropagation();
             if (!selectOutlineTarget(kind, id)) return;
             showOutlineContextMenu(kind, event);
+        };
+        list.addEventListener('contextmenu', openFromOutline);
+        list.addEventListener('keydown', (event) => {
+            if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+            openFromOutline(event);
         });
+        menu.addEventListener('keydown', (event) => window.onNativeWriterMenuKeydown(event, menu,
+            () => hideOutlineContextMenu({ restoreFocus: true })));
         menu.addEventListener('click', (event) => {
             const button = event.target && event.target.closest && event.target.closest('[data-native-outline-action]');
             if (!button || button.disabled) return;
             const action = button.dataset.nativeOutlineAction;
             const kind = menu.dataset.nativeOutlineKind || 'scene';
-            hideOutlineContextMenu();
+            hideOutlineContextMenu({ restoreFocus: true });
             if (action === 'rename') {
                 if (kind === 'chapter') renameNativeChapter();
                 else renameNativeScene();

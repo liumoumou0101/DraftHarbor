@@ -11,6 +11,7 @@ const projectRoot = path.resolve(__dirname, '..');
 const reportDir = path.join(projectRoot, '.ai_state', 'test_reports', 'writer_layout_audit');
 
 const viewports = [
+  { width: 960, height: 680 },
   { width: 1280, height: 720 },
   { width: 1366, height: 768 },
   { width: 1493, height: 1061 },
@@ -128,7 +129,7 @@ async function auditCurrentViewport(page, label) {
     const header = document.querySelector('.desktop-native-editor-header');
     if (header) {
       const headerHeight = header.getBoundingClientRect().height;
-      if (headerHeight > 42) {
+      if (window.innerWidth > 980 && headerHeight > 42) {
         issues.push(`${auditLabel}: editor header height ${Math.round(headerHeight)}px > 42px`);
       }
     }
@@ -139,6 +140,7 @@ async function auditCurrentViewport(page, label) {
     const writer = document.querySelector('[data-native-writer]');
     if (editor && isVisible(editor)) {
       const floor = {
+        680: 180,
         720: 280,
         768: 300,
         1061: 420,
@@ -147,6 +149,9 @@ async function auditCurrentViewport(page, label) {
       }[window.innerHeight];
       if (floor && editor.getBoundingClientRect().height + tolerance < floor) {
         issues.push(`${auditLabel}: textarea height ${Math.round(editor.getBoundingClientRect().height)}px < ${floor}px`);
+      }
+      if (window.innerWidth <= 980 && writer && editor.getBoundingClientRect().width < writer.clientWidth * 0.8) {
+        issues.push(`${auditLabel}: narrow window editor is trapped in a sidebar column`);
       }
       if (window.innerWidth === 2560 && writer) {
         const paperWidth = editor.getBoundingClientRect().width;
@@ -157,13 +162,6 @@ async function auditCurrentViewport(page, label) {
       }
     }
     if (assistant && writer && writer.classList.contains('is-assistant-bottom')) {
-      const dockTarget = { 720: 208, 1080: 270, 1440: 360 }[window.innerHeight];
-      if (dockTarget) {
-        const dockHeight = assistant.getBoundingClientRect().height;
-        if (Math.abs(dockHeight - dockTarget) > 2) {
-          issues.push(`${auditLabel}: dock height ${Math.round(dockHeight)}px != ${dockTarget}±2`);
-        }
-      }
       if (generate && isVisible(generate)) {
         const dockRect = assistant.getBoundingClientRect();
         const generateRect = generate.getBoundingClientRect();

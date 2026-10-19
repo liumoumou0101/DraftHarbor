@@ -1,4 +1,19 @@
 
+.desktop-workflow-step-mark {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    margin-right: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--desktop-line-strong);
+    background: var(--desktop-panel);
+    color: var(--desktop-muted);
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
 .desktop-workflow-step.is-active .desktop-workflow-step-mark {
     border-color: rgba(var(--desktop-accent-rgb), 0.68);
     background: rgba(var(--desktop-accent-rgb), 0.22);

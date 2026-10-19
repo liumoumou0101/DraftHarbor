@@ -10,9 +10,9 @@ function fixture() {
   const saveButton = { disabled: false };
   const snapshot = { project: { id: 'p', title: 'P' }, scenes: [{ id: 's' }], chapters: [], sceneContents: { s: 'Saved text.' }, writerRevision: 'old-revision' };
   const state = { snapshot, activeSceneId: 's', dirty: true, isSaving: false };
-  const requests = [], statuses = [];
+  const requests = [], statuses = [], timers = [];
   const context = vm.createContext({
-    window: {}, console: { error() {} }, nativeEditorState: state,
+    window: { setTimeout(callback) { timers.push(callback); return timers.length; }, clearTimeout() {} }, console: { error() {} }, nativeEditorState: state,
     nativeEditorElements: () => ({ editor, saveButton }),
     setNativeSaveStatus: (message, tone) => statuses.push({ message, tone }),
     loadReaderFromProjectSnapshot: async () => {}, loadProjectLibrary: async () => {},
@@ -26,17 +26,18 @@ function fixture() {
   context.flushNativeEditorFields = () => { state.snapshot.sceneContents[state.activeSceneId] = editor.value; };
   context.normalizeNativeOrders = () => {};
   context.currentNativeScene = () => state.snapshot.scenes.find(scene => scene.id === state.activeSceneId);
-  return { context, state, snapshot, editor, saveButton, requests, statuses };
+  return { context, state, snapshot, editor, saveButton, requests, statuses, timers };
 }
 
 (async () => {
   let env = fixture();
   let pending = env.context.saveNativeScene();
   assert.strictEqual(env.requests[0].payload.writerRevision, 'old-revision');
-  await env.context.saveNativeScene();
+  const duplicate = env.context.saveNativeScene();
   assert.strictEqual(env.requests.length, 1, 'saving twice must not submit twice');
   env.requests[0].finish();
   assert.strictEqual(await pending, true);
+  assert.strictEqual(await duplicate, true, 'a concurrent caller waits for the same save result');
   assert.strictEqual(env.snapshot.writerRevision, 'new-revision');
   assert.strictEqual(env.state.dirty, false);
   assert.strictEqual(env.saveButton.disabled, false);
@@ -47,6 +48,7 @@ function fixture() {
   env.requests[0].finish();
   await pending;
   assert.strictEqual(env.state.dirty, true);
+  assert.strictEqual(env.timers.length, 1, 'later input must be scheduled for a follow-up save');
   assert.strictEqual(env.snapshot.sceneContents.s, 'New input while saving.');
   assert.strictEqual(env.snapshot.writerRevision, 'new-revision', 'later input must use the saved version on its next save');
 
