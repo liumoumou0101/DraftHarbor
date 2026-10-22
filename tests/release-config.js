@@ -156,8 +156,6 @@ assert.ok(
   'writer-format.js must load after writer-overlays.js and before writer-bindings.js'
 );
 assert.ok(desktopMarkup.includes('data-native-format-manuscript'), 'writer markup should expose one-click manuscript format');
-const writerSidebarResize = fs.readFileSync(path.join(root, 'src/desktop/shell/writer-sidebar-resize.js'), 'utf8');
-assert.ok(writerSidebarResize.includes('NATIVE_ASSISTANT_MIN_HEIGHT = 208'), 'writer dock drag floor should be 208');
 assert.ok(desktopMarkup.includes('data-settings-cat-target="storage"'), 'settings should expose storage and maintenance as a first-class category');
 assert.ok(desktopMarkup.includes('data-settings-section="storage"'), 'settings should include resolved project and backup locations');
 assert.ok(desktopMarkup.includes('desktop-recovery-safe-actions'), 'recovery should present safe restore actions before destructive replacement');

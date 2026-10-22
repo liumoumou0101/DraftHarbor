@@ -1,19 +1,10 @@
 (function (root, factory) {
-    const api = factory();
+    const api = factory(typeof module === 'object' && module.exports
+        ? require('../knowledge/compendium-schema')
+        : root.DraftHarborCompendiumSchema);
     if (typeof module === 'object' && module.exports) module.exports = api;
     else root.DraftHarborPromptBuilder = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
-    const CHARACTER_FIELDS = Object.freeze([
-        ['role', '角色定位'],
-        ['goal', '目标'],
-        ['motivation', '动机'],
-        ['conflict', '冲突'],
-        ['voice', '语气/声音'],
-        ['currentState', '当前状态'],
-        ['knowledge', '已知信息'],
-        ['relationshipNotes', '关系备注']
-    ]);
-
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (CompendiumSchema) {
     function text(value) {
         return value === null || value === undefined ? '' : String(value);
     }
@@ -64,9 +55,7 @@
 
     function renderCharacterProfile(entry) {
         if (!entry || entry.type !== 'character' || !entry.characterProfile) return '';
-        const lines = CHARACTER_FIELDS
-            .map(([key, label]) => entry.characterProfile[key] ? `${label}: ${entry.characterProfile[key]}` : '')
-            .filter(Boolean);
+        const lines = CompendiumSchema.characterProfileLines(entry);
         return lines.length ? `[${entry.title || '人物'} 结构化约束]\n${lines.join('\n')}` : '';
     }
 
@@ -74,7 +63,7 @@
         const blocks = (Array.isArray(entries) ? entries : []).map((entry) => {
             const title = entry.title || (entry.id ? `entry ${entry.id}` : 'Untitled entry');
             const body = entry.body || entry.content || entry.description || '';
-            return [`-- ${title} --`, body, renderCharacterProfile(entry)].filter(Boolean).join('\n');
+            return [`-- ${title} --`, entry.summary, body, renderCharacterProfile(entry)].filter(Boolean).join('\n');
         }).filter(Boolean);
         return blocks.length ? ['COMPENDIUM REFERENCES:', ...blocks].join('\n\n') : '';
     }

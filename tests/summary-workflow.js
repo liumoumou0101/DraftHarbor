@@ -79,16 +79,21 @@ function snapshot() {
     assert.ok(sceneNotes.entries[0].title.includes('Summary Scene'), 'custom scene titles should stay in the summary note name');
     assert.strictEqual(sceneNotes.entries[0].contextPolicy.mode, 'mention', 'summary notes should default to mention injection');
     await page.click('[data-view-target="compendium"]');
-    await page.click('[data-compendium-type-chip="summary"]');
+    await page.selectOption('[data-compendium-type]', 'summary');
     await page.waitForFunction(() => {
       const items = Array.from(document.querySelectorAll('.desktop-compendium-item'));
-      return items.some((item) => item.textContent.includes('第 1 章 · 第 1 场'))
-        && items.some((item) => item.textContent.includes('提及时注入'));
+      return items.some((item) => item.textContent.includes('第 1 章 · 第 1 场'));
     });
-    await page.click('[data-compendium-type-chip="note"]');
+    await page.locator('.desktop-compendium-item').filter({ hasText: '第 1 章 · 第 1 场' }).click();
+    assert.strictEqual(await page.inputValue('[data-compendium-body]'), 'Scene summary.', 'saved scene summary should be readable in its compendium card');
+    const policyCaption = page.locator('[data-compendium-policy-caption]');
+    assert.ok(await policyCaption.isVisible(), 'selected summary card should show its AI usage policy');
+    assert.strictEqual(await policyCaption.innerText(), 'AI · 提及时参考', 'summary card should show mention injection status');
+    await page.selectOption('[data-compendium-type]', 'note');
     await page.waitForFunction(() => {
-      const items = Array.from(document.querySelectorAll('.desktop-compendium-item'));
-      return items.length === 1 && items[0].textContent.includes('没有匹配的资料');
+      const list = document.querySelector('[data-compendium-list]');
+      return list.querySelectorAll('.desktop-compendium-item').length === 0
+        && list.querySelector('.compendium-empty')?.textContent.includes('没有找到匹配的资料');
     });
     await page.click('[data-view-target="writer"]');
 

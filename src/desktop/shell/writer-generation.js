@@ -1,3 +1,61 @@
+    function nativeGenerationEditorLocked() {
+        const generation = nativeEditorState.generation;
+        const scene = currentNativeScene();
+        if (!generation || !generation.inProgress || !scene) return false;
+        const snapshot = nativeEditorState.snapshot;
+        const projectId = snapshot && snapshot.project && snapshot.project.id;
+        if (generation.task === 'fiction-prose') {
+            return generation.pendingSceneId === scene.id
+                && (!generation.pendingSnapshot || generation.pendingSnapshot === snapshot)
+                && (!generation.pendingProjectId || generation.pendingProjectId === projectId);
+        }
+        const target = generation.selectionTarget;
+        return (generation.task === 'rewrite' || generation.task === 'regenerate-selection')
+            && !!target && target.sceneId === scene.id && target.projectId === projectId;
+    }
+
+    function syncNativeGenerationEditorLock() {
+        const elements = nativeEditorElements();
+        const locked = nativeGenerationEditorLocked();
+        if (elements.editor) elements.editor.readOnly = locked;
+        if (elements.editorLockHint) {
+            elements.editorLockHint.hidden = !locked;
+            elements.editorLockHint.textContent = locked ? 'AI 正在生成正文，请先停止生成再编辑。' : '';
+        }
+        return locked;
+    }
+
+    function nativePendingInlineTargetCurrent(elements = nativeEditorElements()) {
+        const generation = nativeEditorState.generation;
+        const scene = currentNativeScene();
+        const snapshot = nativeEditorState.snapshot;
+        return !!(elements.editor && scene && generation.pendingSceneId === scene.id
+            && (!generation.pendingSnapshot || generation.pendingSnapshot === snapshot)
+            && (!generation.pendingProjectId || generation.pendingProjectId === (snapshot && snapshot.project && snapshot.project.id)));
+    }
+
+    function nativePendingInlineSnapshotStable() {
+        const generation = nativeEditorState.generation;
+        const contents = nativeEditorState.snapshot && nativeEditorState.snapshot.sceneContents;
+        if (!contents || generation.inlineSnapshotText === undefined) return true;
+        const current = contents[generation.pendingSceneId];
+        return current === generation.inlineSnapshotText || current === generation.inlineLastSyncedText;
+    }
+
+    function reportNativeGenerationEditorChanged() {
+        const generation = nativeEditorState.generation;
+        const elements = nativeEditorElements();
+        // Some entry points update the snapshot before the textarea rerenders.
+        // Bring that edit forward only while the textarea is still our own last
+        // value, so a later autosave cannot write the stale preview over it.
+        if (nativePendingInlineTargetCurrent(elements) && !nativePendingInlineSnapshotStable()
+            && elements.editor.value === generation.inlineLastSyncedText) {
+            elements.editor.value = nativeEditorState.snapshot.sceneContents[generation.pendingSceneId] || '';
+        }
+        generation.pendingEditorChanged = true;
+        setNativeSaveStatus('正文已修改，已保留编辑和生成结果。请复制结果，或关闭结果后重新生成。', 'info');
+    }
+
     function nativePendingInlineValue(generation) {
         if (!generation || !generation.pendingSceneId) return '';
         const base = generation.inlineBaseText || '';
@@ -7,9 +65,9 @@
 
     function isNativePendingInlineValueStable(elements = nativeEditorElements()) {
         const generation = nativeEditorState.generation;
-        const scene = currentNativeScene();
-        if (!elements.editor || !scene || !generation.pendingSceneId || generation.pendingSceneId !== scene.id) return false;
-        return elements.editor.value === nativePendingInlineValue(generation);
+        if (!nativePendingInlineTargetCurrent(elements) || generation.pendingEditorChanged || !nativePendingInlineSnapshotStable()) return false;
+        return elements.editor.value === (generation.inlineLastSyncedText === undefined
+            ? nativePendingInlineValue(generation) : generation.inlineLastSyncedText);
     }
 
     function hideNativeGenerationLayer(layer, content) {
@@ -139,10 +197,10 @@
             return false;
         }
         if (!isNativePendingInlineValueStable(elements)) {
-            generation.pendingEditorChanged = true;
+            reportNativeGenerationEditorChanged();
             hideNativeGenerationLayer(layer, content);
             if (elements.generationOutputStatus) {
-                elements.generationOutputStatus.textContent = '正文已修改，无法直接确认；请重新生成或撤回。';
+                elements.generationOutputStatus.textContent = '正文已修改，生成结果已单独保留。请复制结果，或关闭结果后重新生成。';
             }
             return false;
         }
@@ -192,7 +250,15 @@
     function insertNativeHistoryRecord(record) {
         const generation = nativeEditorState.generation;
         if (!record || !record.resultText) return;
-        if (generation.text && generation.inlineBaseText) restorePendingInlineGeneration();
+        if (generation.inProgress) {
+            setNativeSaveStatus('请先停止生成，再写入历史结果。', 'info');
+            return;
+        }
+        if (generation.pendingSceneId && !restorePendingInlineGeneration()) return;
+        if (generation.text && (generation.task === 'rewrite' || generation.task === 'regenerate-selection')) {
+            setNativeSaveStatus('请先保留或撤回当前重写结果，再写入历史结果。', 'info');
+            return;
+        }
         generation.beat = record.beat || '';
         generation.text = record.resultText || '';
         generation.reasoning = record.reasoning || '';
@@ -280,6 +346,10 @@
                 beat: nativeEditorState.generation.beat,
                 selection: {
                     currentSceneId: scene.id,
+                    povCharacter: scene.povCharacter || scene.pov,
+                    sceneCharacters: scene.characters || scene.participants,
+                    compendiumIds: nativeEditorState.context.compendiumIds,
+                    compendiumTags: nativeEditorState.context.compendiumTags,
                     recentSceneLimit: 6,
                     maxChars: 6000
                 }
@@ -407,6 +477,11 @@
         generation.insertionStart = start;
         generation.insertionEnd = end;
         generation.pendingSceneId = scene.id;
+        generation.pendingSnapshot = nativeEditorState.snapshot;
+        generation.pendingProjectId = nativeEditorState.snapshot && nativeEditorState.snapshot.project && nativeEditorState.snapshot.project.id;
+        generation.inlineLastSyncedText = current;
+        generation.inlineSnapshotText = nativeEditorState.snapshot && nativeEditorState.snapshot.sceneContents
+            ? nativeEditorState.snapshot.sceneContents[scene.id] : undefined;
         generation.task = task || 'fiction-prose';
         generation.pendingEditorChanged = false;
         return true;
@@ -430,10 +505,19 @@
         const elements = nativeEditorElements();
         const scene = currentNativeScene();
         const generation = nativeEditorState.generation;
-        if (!elements.editor || !scene || generation.pendingSceneId !== scene.id) return;
+        if (!elements.editor || !scene || !nativePendingInlineTargetCurrent(elements)) return false;
+        const previousValue = generation.inlineLastSyncedText === undefined ? generation.inlineBaseText : generation.inlineLastSyncedText;
+        if (generation.pendingEditorChanged || !nativePendingInlineSnapshotStable()
+            || elements.editor.value !== previousValue) {
+            reportNativeGenerationEditorChanged();
+            return false;
+        }
+        const contents = nativeEditorState.snapshot && nativeEditorState.snapshot.sceneContents;
+        if (contents) generation.inlineSnapshotText = contents[scene.id];
         const inserted = formatInlineGeneratedText(generation.text || '');
         const nextValue = nativePendingInlineValue(generation);
         elements.editor.value = nextValue;
+        generation.inlineLastSyncedText = nextValue;
         generation.pendingEditorChanged = false;
         const cursor = generation.insertionStart + inserted.length;
         if (generation.task === 'rewrite' || generation.task === 'regenerate-selection') {
@@ -449,21 +533,29 @@
         }
         if (!options.preserveFocus) elements.editor.focus();
         updateNativeStats();
+        return true;
     }
 
     function restorePendingInlineGeneration() {
         const elements = nativeEditorElements();
         const generation = nativeEditorState.generation;
-        if (!elements.editor || !generation.pendingSceneId || generation.pendingSceneId !== nativeEditorState.activeSceneId) return;
+        if (!generation.pendingSceneId) return true;
+        if (!isNativePendingInlineValueStable(elements)) {
+            reportNativeGenerationEditorChanged();
+            renderNativeGeneration();
+            return false;
+        }
         elements.editor.value = generation.inlineBaseText;
+        generation.inlineLastSyncedText = generation.inlineBaseText;
         elements.editor.selectionStart = generation.insertionStart;
         elements.editor.selectionEnd = generation.insertionEnd;
         flushNativeEditorFields();
+        return true;
     }
 
     function insertNativeSpecialChar(char) {
         const elements = nativeEditorElements();
-        if (!elements.editor || elements.editor.disabled) return;
+        if (!elements.editor || elements.editor.disabled || elements.editor.readOnly || nativeGenerationEditorLocked()) return;
         const value = elements.editor.value || '';
         const start = elements.editor.selectionStart || 0;
         const end = elements.editor.selectionEnd || start;
@@ -515,7 +607,7 @@
 
     function applyNativeAutoReplace() {
         const elements = nativeEditorElements();
-        if (!elements.editor || elements.editor.disabled) return;
+        if (!elements.editor || elements.editor.disabled || elements.editor.readOnly || nativeGenerationEditorLocked()) return;
         const cursor = elements.editor.selectionStart || 0;
         const value = elements.editor.value || '';
         if (!value.includes('--')) return;
@@ -547,15 +639,16 @@
             return { ok: false, reason: 'empty-beat' };
         }
         const generation = nativeEditorState.generation;
+        const isCurrentRequest = () => nativeEditorState.snapshot === snapshot && nativeEditorState.generation === generation;
         // Remove the pending draft before collecting context, otherwise a retry
         // asks the provider to continue the very result it is meant to replace.
         if (generation.pendingSceneId === scene.id && generation.task === 'fiction-prose') {
             if (!isNativePendingInlineValueStable(elements)
                 && !(generation.text === '' && elements.editor && elements.editor.value === generation.inlineBaseText)) {
-                setNativeSaveStatus('正文已修改，请先保留编辑内容或撤回，再重新生成。', 'error');
+                reportNativeGenerationEditorChanged();
                 return { ok: false, reason: 'editor-changed' };
             }
-            restorePendingInlineGeneration();
+            if (!restorePendingInlineGeneration()) return { ok: false, reason: 'editor-changed' };
         }
         const prompt = buildNativePrompt();
         if (!prompt) {
@@ -569,14 +662,16 @@
         generation.record = null;
         if (!prepareInlineGeneration('fiction-prose', prompt)) return { ok: false, reason: 'no-editor' };
         generation.inProgress = true;
+        syncNativeGenerationEditorLock();
         generation.abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
         renderNativeGeneration();
         setNativeSaveStatus('生成中...', 'info');
 
         const startedAt = new Date().toISOString();
         let failureMessage = '';
-        const requestConfig = { ...nativeGenerationConfig(generation.abortController && generation.abortController.signal), taskKind: 'writer-prose' };
+        let requestConfig = {};
         try {
+            requestConfig = { ...nativeGenerationConfig(generation.abortController && generation.abortController.signal), taskKind: 'writer-prose' };
             if (!desktopGenerationAvailable()) {
                 throw new Error('Native generation provider stream is not loaded.');
             }
@@ -592,10 +687,14 @@
                 if (meta && meta.type === 'reasoning') generation.reasoning += token;
                 else if (!meta || meta.type === 'content') {
                     generation.text += token;
-                    syncInlineGenerationToEditor({ preserveFocus: true });
+                    if (nativeEditorState.generation === generation && nativeEditorState.snapshot === snapshot) {
+                        syncInlineGenerationToEditor({ preserveFocus: true });
+                    }
                 }
-                renderNativeGeneration();
+                if (nativeEditorState.generation === generation) renderNativeGeneration();
             }, requestConfig);
+            if (nativeEditorState.generation === generation && nativePendingInlineTargetCurrent(elements)
+                && !isNativePendingInlineValueStable(elements)) reportNativeGenerationEditorChanged();
             if (!generation.text.trim()) {
                 generation.interruptReason = generation.reasoning ? 'empty' : 'failed';
                 throw new Error('AI provider returned an empty response.');
@@ -630,15 +729,24 @@
             snapshot.promptHistory.push(record);
             generation.record = record;
             const truncated = generation.finishReason === 'length';
-            flushNativeEditorFields();
-            markNativeDirty(truncated
-                ? '输出达到额度或上下文上限，已写入部分正文，未保存。请检查后重试'
-                : '生成结果已写入正文，未保存');
+            if (generation.pendingEditorChanged) {
+                if (isCurrentRequest()) {
+                    markNativeDirty('生成结果已保留到历史，正文编辑保持不变');
+                    reportNativeGenerationEditorChanged();
+                }
+                return { ok: false, reason: 'editor-changed', record };
+            }
+            if (isCurrentRequest()) {
+                if (nativePendingInlineTargetCurrent(elements)) flushNativeEditorFields();
+                markNativeDirty(truncated
+                    ? '输出达到额度或上下文上限，已写入部分正文，未保存。请检查后重试'
+                    : '生成结果已写入正文，未保存');
+            }
             return { ok: !truncated, reason: truncated ? 'truncated' : undefined, record };
         } catch (error) {
             if (error && error.name === 'AbortError') {
                 generation.interruptReason = 'cancelled';
-                setNativeSaveStatus('生成已取消', 'info');
+                if (isCurrentRequest()) setNativeSaveStatus('生成已取消', 'info');
             } else {
                 console.error('Native generation failed:', error);
                 const normalized = window.DraftHarborGenerationResult
@@ -647,7 +755,7 @@
                 failureMessage = normalized.message;
                 generation.errorMessage = normalized.message;
                 if (!generation.interruptReason) generation.interruptReason = 'failed';
-                setNativeSaveStatus(`生成失败：${normalized.message}`, 'error');
+                if (isCurrentRequest()) setNativeSaveStatus(`生成失败：${normalized.message}`, 'error');
             }
             if (window.DraftHarborGenerationHistory) {
                 const record = window.DraftHarborGenerationHistory.createGenerationRecord({
@@ -667,10 +775,23 @@
                 snapshot.promptHistory.push(record);
                 generation.record = record;
             }
+            if (isCurrentRequest() && (generation.text || generation.record)) {
+                if (nativePendingInlineTargetCurrent(elements)) {
+                    if (!isNativePendingInlineValueStable(elements)) reportNativeGenerationEditorChanged();
+                    flushNativeEditorFields();
+                }
+                markNativeDirty(generation.text ? '生成已中断，部分正文和历史已保留，未保存' : '生成已中断，历史记录未保存');
+                if (generation.pendingEditorChanged) reportNativeGenerationEditorChanged();
+                else if (generation.interruptReason === 'cancelled') setNativeSaveStatus('生成已取消，已收到的内容和历史将自动保存。', 'info');
+                else setNativeSaveStatus(`生成失败：${failureMessage}；已收到的内容和历史将自动保存。`, 'error');
+            }
         } finally {
+            if (nativeEditorState.generation === generation && nativePendingInlineTargetCurrent(elements)
+                && !isNativePendingInlineValueStable(elements)) reportNativeGenerationEditorChanged();
             generation.inProgress = false;
             generation.abortController = null;
-            renderNativeGeneration();
+            syncNativeGenerationEditorLock();
+            if (nativeEditorState.generation === generation) renderNativeGeneration();
         }
         return { ok: false, reason: 'failed', message: failureMessage };
     }
@@ -765,8 +886,8 @@
         };
         generation.selectionTarget = target;
         generation.selectionRequest = options.retry ? generation.selectionRequest : { ...prompt, messages: structuredClone(prompt.messages || []) };
-        const isCurrent = () => nativeEditorState.generation === generation && nativeEditorState.snapshot === snapshot
-            && currentNativeScene() && currentNativeScene().id === scene.id;
+        const isCurrentRequest = () => nativeEditorState.generation === generation && nativeEditorState.snapshot === snapshot;
+        const isCurrent = () => isCurrentRequest() && currentNativeScene() && currentNativeScene().id === scene.id;
         const retainPrevious = () => {
             if (!previous) return false;
             Object.assign(generation, previous);
@@ -784,33 +905,33 @@
         generation.inlineBaseText = '';
         generation.pendingSceneId = '';
         generation.inProgress = true;
+        syncNativeGenerationEditorLock();
         generation.abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-
-        const effectiveProfile = writerEffectiveProfile();
-        const task = {
-            projectId: snapshot.project && snapshot.project.id,
-            domain: 'prose',
-            action: options.action,
-            target: { type: 'scene', sceneId: scene.id },
-            scope: 'selection',
-            presetId: options.action === 'rewrite' ? nativeEditorState.rewrite.preset : '',
-            instruction: prompt.instruction,
-            providerProfileId: writerModelOverride.profileId !== 'inherit' ? writerModelOverride.profileId : '',
-            model: writerSelectedModelId(effectiveProfile),
-            outputContract: 'text',
-            beforeSnapshot: {
-                sceneId: scene.id,
-                selectionStart: target.start,
-                selectionEnd: target.end,
-                originalText: target.selectedText
-            }
-        };
-        generation.aiTaskTargetKey = window.DraftHarborAITaskContract.taskTargetKey(task);
-        renderNativeGeneration();
-        setNativeSaveStatus(options.startStatus, 'info');
 
         let result;
         try {
+            const effectiveProfile = writerEffectiveProfile();
+            const task = {
+                projectId: snapshot.project && snapshot.project.id,
+                domain: 'prose',
+                action: options.action,
+                target: { type: 'scene', sceneId: scene.id },
+                scope: 'selection',
+                presetId: options.action === 'rewrite' ? nativeEditorState.rewrite.preset : '',
+                instruction: prompt.instruction,
+                providerProfileId: writerModelOverride.profileId !== 'inherit' ? writerModelOverride.profileId : '',
+                model: writerSelectedModelId(effectiveProfile),
+                outputContract: 'text',
+                beforeSnapshot: {
+                    sceneId: scene.id,
+                    selectionStart: target.start,
+                    selectionEnd: target.end,
+                    originalText: target.selectedText
+                }
+            };
+            generation.aiTaskTargetKey = window.DraftHarborAITaskContract.taskTargetKey(task);
+            renderNativeGeneration();
+            setNativeSaveStatus(options.startStatus, 'info');
             result = await runner.run(task, {
                 prompt,
                 abortController: generation.abortController,
@@ -834,6 +955,7 @@
                     snapshot.promptHistory = snapshot.promptHistory || [];
                     snapshot.promptHistory.push(partialRecord);
                     generation.record = partialRecord;
+                    if (isCurrentRequest()) markNativeDirty('未完成的选区生成结果已保留到历史，未保存');
                 }
                 generation.interruptReason = result.status === 'cancelled' ? 'cancelled' : 'failed';
                 if (!retainPrevious() && isCurrent()) {
@@ -856,6 +978,7 @@
             generation.record = record;
             generation.aiTaskRecord = result.record;
             generation.lastAcceptedSceneId = scene.id;
+            if (isCurrentRequest()) markNativeDirty('选区生成结果已保留到历史，未保存');
             if (isCurrent()) setNativeSaveStatus(options.successStatus, 'ok');
             return { ok: true, record, aiTaskRecord: result.record };
         } catch (error) {
@@ -869,6 +992,7 @@
             generation.inProgress = false;
             generation.abortController = null;
             generation.aiTaskTargetKey = '';
+            syncNativeGenerationEditorLock();
             if (isCurrent()) renderNativeGeneration();
         }
     }
@@ -1095,11 +1219,10 @@
         const elements = nativeEditorElements();
         const scene = currentNativeScene();
         const generation = nativeEditorState.generation;
-        if (!scene || !generation.text || !elements.editor) return;
+        if (!scene || !generation.text || !elements.editor || generation.inProgress) return;
         if (!isNativePendingInlineValueStable(elements)) {
-            generation.pendingEditorChanged = true;
+            reportNativeGenerationEditorChanged();
             syncNativeGenerationLayer();
-            setNativeSaveStatus('正文已修改，无法安全确认，请重新生成或先撤回。', 'error');
             renderNativeGeneration();
             return;
         }
@@ -1122,20 +1245,36 @@
         const elements = nativeEditorElements();
         const generation = nativeEditorState.generation;
         if (generation.inProgress) return;
-        if (elements.editor && generation.pendingSceneId && generation.pendingSceneId === nativeEditorState.activeSceneId) {
+        const editorChanged = !!generation.pendingSceneId && !isNativePendingInlineValueStable(elements);
+        if (elements.editor && generation.pendingSceneId && !editorChanged) {
             elements.editor.value = generation.inlineBaseText;
             flushNativeEditorFields();
             markNativeDirty('已撤回生成内容，未保存');
+        }
+        // A changed manuscript is now owned by the user. Closing its result
+        // only releases the pending state; the complete output stays in history.
+        if (editorChanged && generation.text && !generation.record) {
+            const snapshot = generation.pendingSnapshot || nativeEditorState.snapshot;
+            if (snapshot) {
+                snapshot.promptHistory = snapshot.promptHistory || [];
+                snapshot.promptHistory.push({
+                    id: `generation-${Date.now()}`, sceneId: generation.pendingSceneId,
+                    task: generation.task, beat: generation.beat, resultText: generation.text,
+                    reasoning: generation.reasoning || '', createdAt: new Date().toISOString()
+                });
+            }
         }
         generation.text = '';
         resetNativeGenerationStreamFlags(generation);
         generation.inlineBaseText = '';
         generation.pendingSceneId = '';
+        generation.pendingSnapshot = null;
         generation.pendingEditorChanged = false;
         generation.task = '';
         generation.selectionTarget = null;
         renderNativeGeneration();
-        setNativeSaveStatus('已撤回生成内容', 'info');
+        if (editorChanged) markNativeDirty('已保留正文编辑，生成结果可在历史中找回');
+        setNativeSaveStatus(editorChanged ? '已保留正文编辑，生成结果可在历史中找回。' : '已撤回生成内容', 'info');
     }
 
     function acceptNativeRewrite() {
@@ -1198,6 +1337,8 @@
         if (controller) controller.abort();
     }
 
+    let nativeProjectOpenRequestId = 0;
+
     async function openDesktopProject(project, options) {
         if (window.WorkshopAgent && !window.WorkshopAgent.canLeave()) return;
         if (project && project.health === 'invalid') {
@@ -1205,19 +1346,50 @@
             return;
         }
 
+        const requestId = ++nativeProjectOpenRequestId;
+        const sourceSnapshot = nativeEditorState.snapshot;
+        const isLatestRequest = () => requestId === nativeProjectOpenRequestId;
+        if (sourceSnapshot && !await ensureNativeProjectSaved({ reason: 'switch-project' })) {
+            if (isLatestRequest()) setProjectLibraryStatus('未切换项目，请先处理当前稿件的保存提示。', 'error');
+            return;
+        }
+        if (!isLatestRequest() || nativeEditorState.snapshot !== sourceSnapshot) return;
+        if (sourceSnapshot && sourceSnapshot.project && project && project.id
+            && project.id === sourceSnapshot.project.id) {
+            // The current snapshot is already the freshest saved copy. Refetching
+            // it can race with a later edit and replace the editor with older text.
+            setView((options && options.view) || 'writer');
+            setProjectLibraryStatus('', 'ok');
+            return;
+        }
+
         setProjectLibraryStatus(`正在打开《${project.name || '未命名项目'}》...`, 'info');
         setView((options && options.view) || 'writer');
 
         const snapshot = await fetchProjectSnapshot(project);
+        if (!isLatestRequest() || nativeEditorState.snapshot !== sourceSnapshot) return;
         if (window.WorkshopAgent && !window.WorkshopAgent.canLeave()) return;
+        // Fetching the target can take long enough for another edit or save to
+        // begin. Drain the source again immediately before replacing its editor.
+        if (sourceSnapshot && !await ensureNativeProjectSaved({ reason: 'switch-project' })) {
+            if (isLatestRequest()) setProjectLibraryStatus('未切换项目，请先处理当前稿件的保存提示。', 'error');
+            return;
+        }
+        if (!isLatestRequest() || nativeEditorState.snapshot !== sourceSnapshot) return;
         loadNativeProjectEditor(snapshot, project || {});
         await loadReaderFromProjectSnapshot(snapshot);
+        if (!isLatestRequest()) return;
         await loadCompendium();
+        if (!isLatestRequest()) return;
         await loadPrompts();
+        if (!isLatestRequest()) return;
         await loadRewritePrompts();
+        if (!isLatestRequest()) return;
         await loadSummaryPrompts();
+        if (!isLatestRequest()) return;
         await loadWorkshopSessions();
+        if (!isLatestRequest()) return;
         await loadWorkflowRuns();
 
-        setProjectLibraryStatus('', 'ok');
+        if (isLatestRequest()) setProjectLibraryStatus('', 'ok');
     }

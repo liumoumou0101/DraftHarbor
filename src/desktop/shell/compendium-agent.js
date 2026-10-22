@@ -83,6 +83,7 @@
         const result = compendiumAgentState.result;
         if (!result) { if (elements.resultActions) elements.resultActions.hidden = true; syncCompendiumAgentControls(); return; }
         const operations = new Map((result.operations || []).map((operation) => [operation.id, operation]));
+        const displayedOperationIds = new Set();
         (result.findings || []).forEach((finding) => {
             const card = document.createElement('article');
             card.className = 'desktop-compendium-item';
@@ -113,7 +114,8 @@
             }
             (finding.operationIds || []).forEach((operationId) => {
                 const operation = operations.get(operationId);
-                if (!operation) return;
+                if (!operation || displayedOperationIds.has(operationId)) return;
+                displayedOperationIds.add(operationId);
                 const line = document.createElement('label');
                 line.className = 'desktop-settings-check';
                 const input = document.createElement('input');
@@ -134,6 +136,17 @@
         const operationCount = elements.results.querySelectorAll('[data-compendium-agent-operation]').length;
         if (elements.resultActions) elements.resultActions.hidden = !operationCount;
         syncCompendiumAgentControls();
+    }
+
+    function validateCompendiumAgentReview(result) {
+        const validation = window.DraftHarborCompendiumAgentPolicy?.validateAnalysisResult(result);
+        if (!validation?.ok) throw new Error('体检建议无法完整核对，请重新运行体检。');
+        return { ...result, ...validation.result };
+    }
+
+    function displayedCompendiumAgentOperationIds() {
+        return new Set(Array.from(compendiumAgentElements().results?.querySelectorAll('[data-compendium-agent-operation]') || [])
+            .map(input => input.dataset.compendiumAgentOperation));
     }
 
     function openCompendiumAgent() {
@@ -197,8 +210,10 @@
             if (!compendiumAgentRequestCurrent(requestId, projectId)) return;
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
             if (result.projectId && result.projectId !== projectId) throw new Error('体检结果与当前项目不匹配。');
-            compendiumAgentState.selected = new Set((result.operations || []).map(operation => operation.id));
-            compendiumAgentState.result = result; renderCompendiumAgentResults();
+            const reviewed = validateCompendiumAgentReview(result);
+            compendiumAgentState.result = reviewed;
+            compendiumAgentState.selected = new Set(reviewed.operations.map(operation => operation.id));
+            renderCompendiumAgentResults();
             setCompendiumAgentStatus(result.warning || `体检完成：${(result.findings || []).length} 项发现，${(result.operations || []).length} 条可应用建议。`, result.warning ? 'warn' : 'ok');
         } catch (error) { if (compendiumAgentRequestCurrent(requestId, projectId)) setCompendiumAgentStatus(`体检失败：${error.message || error}`, 'error'); }
         finally {
@@ -213,7 +228,11 @@
         const projectId = currentProjectId();
         if (!result || compendiumAgentState.running || compendiumAgentState.applying || !compendiumAgentRequestCurrent(compendiumAgentState.requestId, projectId)) return;
         if (compendiumState.dirty) { setCompendiumAgentStatus('当前资料有未保存修改，请先保存后再应用体检建议。', 'error'); return; }
-        const operations = (result.operations || []).filter((operation) => compendiumAgentState.selected.has(operation.id));
+        let reviewed;
+        try { reviewed = validateCompendiumAgentReview(result); }
+        catch (error) { setCompendiumAgentStatus(error.message, 'error'); return; }
+        const displayedIds = displayedCompendiumAgentOperationIds();
+        const operations = reviewed.operations.filter((operation) => displayedIds.has(operation.id) && compendiumAgentState.selected.has(operation.id));
         if (!operations.length) { setCompendiumAgentStatus('请至少勾选一条建议。', 'error'); return; }
         if (!window.confirm(`应用 ${operations.length} 条资料库建议？系统会先创建备份。`)) return;
         const captured = window.captureCompendiumDraft() || { projectId, snapshot: nativeEditorState.snapshot, entryId: '', version: -1 };
@@ -236,7 +255,7 @@
         const elements = compendiumAgentElements();
         if (elements.scope) elements.scope.addEventListener('change', renderCompendiumAgentScope);
         if (elements.run) elements.run.addEventListener('click', runCompendiumAgent);
-        if (elements.selectAll) elements.selectAll.addEventListener('click', () => { compendiumAgentState.selected = new Set((compendiumAgentState.result?.operations || []).map(operation => operation.id)); renderCompendiumAgentResults(); });
+        if (elements.selectAll) elements.selectAll.addEventListener('click', () => { compendiumAgentState.selected = displayedCompendiumAgentOperationIds(); renderCompendiumAgentResults(); });
         if (elements.selectNone) elements.selectNone.addEventListener('click', () => { compendiumAgentState.selected.clear(); renderCompendiumAgentResults(); });
         if (elements.apply) elements.apply.addEventListener('click', applyCompendiumAgent);
         if (elements.cancel) elements.cancel.addEventListener('click', closeCompendiumAgent);

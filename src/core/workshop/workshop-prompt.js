@@ -1,16 +1,21 @@
 (function (root, factory) {
     if (typeof module === 'object' && module.exports) {
-        module.exports = factory(require('../context/context-resolver'));
+        module.exports = factory(require('../context/context-resolver'), require('../knowledge/compendium-schema'));
     } else {
-        root.DraftHarborWorkshopPrompt = factory(root.DraftHarborContextResolver);
+        root.DraftHarborWorkshopPrompt = factory(root.DraftHarborContextResolver, root.DraftHarborCompendiumSchema);
     }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (ContextResolver) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (ContextResolver, CompendiumSchema) {
     const DEFAULT_SYSTEM = '你是具体的写作搭档。结合项目上下文说话，少空鼓励。先回答眼前的问题，再给可执行的下一步。';
 
     function contextBlock(context) {
         const parts = [];
         for (const entry of context.compendiumEntries || []) {
-            parts.push(`[${entry.type || entry.category || 'entry'}: ${entry.title}]\n${entry.summary ? `${entry.summary}\n` : ''}${entry.body || ''}`);
+            parts.push([
+                `[${entry.type || entry.category || 'entry'}: ${entry.title}]`,
+                entry.summary,
+                entry.body || entry.content || entry.description,
+                ...CompendiumSchema.characterProfileLines(entry)
+            ].filter(Boolean).join('\n'));
         }
         for (const scene of context.sceneSummaries || []) {
             parts.push(`[Scene: ${scene.title}]\n${scene.summary || ''}`);

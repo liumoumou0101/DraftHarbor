@@ -135,7 +135,7 @@ async function writeText(projectPath, projectId, runId, artifactId, revisionId, 
     }), /explicit confirmation/);
 
     const suggestionApply = await Transfer.applyConfirmedCompendiumSuggestions({
-      dataRoot, projectId: project.id, runId, applicationId: 'confirmed-suggestions', candidates,
+      dataRoot, projectId: project.id, runId, applicationId: 'confirmed-suggestions', preview: suggestionPreview,
       confirmedSuggestionIds: ['suggest-update', 'suggest-create']
     });
     assert.ok(suggestionApply.ok);

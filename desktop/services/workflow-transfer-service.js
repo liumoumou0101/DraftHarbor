@@ -199,8 +199,18 @@ function createCompendiumSuggestions(candidates = [], existingEntries = [], defa
   return (Array.isArray(candidates) ? candidates : []).map((candidate, index) => {
     const draft = clone(candidate.draft || candidate.entry || candidate);
     const names = new Set(candidateNames(draft));
-    const matched = existing.find((entry) => entry.id === clean(candidate.matchedEntryId)
-      || candidateNames(entry).some((name) => names.has(name)));
+    const targetId = clean(candidate.matchedEntryId);
+    let matched;
+    if (targetId) {
+      matched = existing.find((entry) => entry.id === targetId);
+      if (!matched) throw new Error(`compendium target not found: ${targetId}`);
+      if (clean(draft.type) && matched.type !== draft.type) throw new Error(`compendium target type does not match: ${targetId}`);
+    } else {
+      const matches = existing.filter((entry) => entry.type === clean(draft.type, 'note')
+        && candidateNames(entry).some((name) => names.has(name)));
+      if (matches.length > 1) throw new Error(`ambiguous compendium target for ${clean(draft.title)}; select an entry ID`);
+      matched = matches[0];
+    }
     const source = sourceReference(candidate.source || defaultSource, defaultSource.sourceRunId || defaultSource.runId);
     if (!clean(draft.title)) return null;
     if (!matched) {
@@ -239,9 +249,19 @@ async function previewCompendiumSuggestions(options = {}) {
 async function applyConfirmedCompendiumSuggestions(options = {}) {
   const confirmedIds = new Set((Array.isArray(options.confirmedSuggestionIds) ? options.confirmedSuggestionIds : []).map(clean));
   if (!confirmedIds.size) throw new Error('compendium suggestions require explicit confirmation');
-  const preview = await previewCompendiumSuggestions(options);
+  const preview = clone(options.preview);
+  if (!preview || preview.projectId !== clean(options.projectId) || preview.runId !== clean(options.runId)
+      || !Array.isArray(preview.suggestions)) throw new Error('confirmed compendium preview from this project and run is required');
+  const suggestionIds = preview.suggestions.map((suggestion) => clean(suggestion && suggestion.id));
+  if (suggestionIds.some((id) => !id) || new Set(suggestionIds).size !== suggestionIds.length) throw new Error('compendium preview suggestion IDs must be unique');
   const selected = preview.suggestions.filter((suggestion) => confirmedIds.has(suggestion.id));
-  if (!selected.length) throw new Error('no confirmed compendium suggestions were found');
+  if (selected.length !== confirmedIds.size) throw new Error('confirmed compendium suggestions were not found in the preview');
+  for (const suggestion of selected) {
+    if (!['create', 'update'].includes(suggestion.kind)) throw new Error('invalid compendium preview suggestion kind');
+    if (suggestion.kind === 'update' && (!suggestion.target || !clean(suggestion.target.entryId) || !clean(suggestion.target.expectedUpdatedAt))) {
+      throw new Error('compendium preview update requires its target and expected version');
+    }
+  }
   const operations = selected.map((suggestion, index) => suggestion.kind === 'create' ? {
     id: `${clean(options.applicationId)}-compendium-${index + 1}`,
     kind: 'compendium.create', target: { entryId: suggestion.entry.id }, source: suggestion.source, data: { entry: suggestion.entry }

@@ -35,10 +35,10 @@
                 container.append(label);
             });
         }
-        const update = () => {
+        const update = (event) => {
             const checked = Array.from(container.querySelectorAll('[data-compendium-reference]:checked'));
             if (checked.length > COMPENDIUM_REFERENCE_LIMIT) {
-                checked.at(-1).checked = false;
+                (event?.target || checked.at(-1)).checked = false;
                 return update();
             }
             if (count) count.textContent = checked.length ? `已选 ${checked.length}/${COMPENDIUM_REFERENCE_LIMIT} 张` : '未添加';

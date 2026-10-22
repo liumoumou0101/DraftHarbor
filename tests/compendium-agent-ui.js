@@ -69,6 +69,27 @@ async function reply(page, index, payload, qa, ok = true) {
 }
 
 const cases = [
+    ...['duplicate', 'unreviewed', 'unrelated'].map(kind => [`analysis refuses ${kind} operations before they can be selected or applied`, async page => {
+        await open(page, false); await run(page, false);
+        const result = analysis();
+        if (kind === 'unrelated') result.findings[0].entryIds = ['a'];
+        else result.operations.push({ ...result.operations[0], id: kind === 'duplicate' ? 'operation' : 'hidden-operation', entryId: 'a', patch: { summary: 'Unreviewed A change' } });
+        await reply(page, 0, result, false);
+        assert.strictEqual(await page.locator('[data-compendium-agent-apply]').isDisabled(), true);
+        assert.strictEqual(await page.locator('[data-compendium-agent-operation]').count(), 0);
+        assert.strictEqual(await page.locator('[data-compendium-agent-status]').getAttribute('data-tone'), 'error');
+        await page.evaluate(() => { window.__confirmResult = true; window.applyCompendiumAgent(); });
+        assert.strictEqual(await page.evaluate(() => window.__requests.length), 1, 'unreviewable results must never cause a write');
+    }]),
+    ['apply submits only suggestions that remain visible in the review', async page => {
+        await open(page, false); await run(page, false); await reply(page, 0, analysis(), false);
+        await page.evaluate(() => {
+            document.querySelector('[data-compendium-agent-operation]').closest('label').remove();
+            window.__confirmResult = true;
+        });
+        await page.locator('[data-compendium-agent-apply]').click();
+        assert.strictEqual(await page.evaluate(() => window.__requests.length), 1, 'a suggestion absent from the review must not be written');
+    }],
     ...[false, true].map(qa => [`${qa ? 'QA' : 'analysis'} source navigation preserves a rejected dirty draft and accepts the normal card switch`, async page => {
         await page.evaluate(() => { document.querySelector('[data-compendium-body]').value = 'A unsaved body'; markCompendiumDirty(); });
         await open(page, qa); await run(page, qa); await reply(page, 0, qa ? answer() : analysis(), qa);
@@ -211,7 +232,7 @@ const cases = [
     const fragment = await fs.readFile(path.join(root, 'desktop/fragments/compendium.html'), 'utf8');
     const dialogs = [...fragment.matchAll(/<dialog[^>]*data-compendium-agent(?:-qa)?-modal[\s\S]*?<\/dialog>/g)].map(match => match[0]).join('');
     assert.ok(dialogs.includes('data-compendium-agent-qa-modal'));
-    const sources = await Promise.all(['compendium.js', 'compendium-agent.js', 'compendium-agent-qa.js'].map(file => fs.readFile(path.join(root, 'src/desktop/shell', file), 'utf8')));
+    const sources = await Promise.all(['src/core/knowledge/compendium-schema.js', 'src/core/knowledge/compendium-agent-policy.js', 'src/desktop/shell/compendium.js', 'src/desktop/shell/compendium-agent.js', 'src/desktop/shell/compendium-agent-qa.js'].map(file => fs.readFile(path.join(root, file), 'utf8')));
     const browser = await chromium.launch({ headless: true });
     try {
         for (const [name, test] of cases) {

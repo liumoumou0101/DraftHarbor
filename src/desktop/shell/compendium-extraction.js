@@ -4,7 +4,7 @@
         return {
             modal: document.querySelector('[data-native-extract-modal]'), form: document.querySelector('[data-native-extract-form]'),
             type: document.querySelector('[data-native-extract-type]'), source: document.querySelector('[data-native-extract-source]'),
-            title: document.querySelector('[data-native-extract-title]'), tags: document.querySelector('[data-native-extract-tags]'),
+            title: document.querySelector('[data-native-extract-title]'), tags: document.querySelector('[data-native-extract-tags]'), aliases: document.querySelector('[data-native-extract-aliases]'),
             summary: document.querySelector('[data-native-extract-summary]'), body: document.querySelector('[data-native-extract-body]'),
             referenceList: document.querySelector('[data-native-extract-reference-list]'), referenceCount: document.querySelector('[data-native-extract-reference-count]'),
             character: document.querySelector('[data-native-extract-character]'), characterRole: document.querySelector('[data-native-extract-character-role]'), characterGoal: document.querySelector('[data-native-extract-character-goal]'), characterMotivation: document.querySelector('[data-native-extract-character-motivation]'), characterConflict: document.querySelector('[data-native-extract-character-conflict]'), characterVoice: document.querySelector('[data-native-extract-character-voice]'), characterCurrentState: document.querySelector('[data-native-extract-character-current-state]'), characterKnowledge: document.querySelector('[data-native-extract-character-knowledge]'), characterRelationship: document.querySelector('[data-native-extract-character-relationship]'),
@@ -61,6 +61,7 @@
         if (elements.source) elements.source.value = payload.selected;
         if (elements.title) elements.title.value = '';
         if (elements.tags) elements.tags.value = '';
+        if (elements.aliases) elements.aliases.value = '';
         if (elements.summary) elements.summary.value = '';
         if (elements.body) elements.body.value = '';
         if (elements.type) elements.type.value = 'character';
@@ -108,10 +109,16 @@
             });
             if (!currentCompendiumExtraction(requestId, source)) return;
             if (!result.ok) throw new Error(result.error?.message || '提取失败');
-            const draft = result.output[0] || {};
+            const draft = Array.isArray(result.output) ? result.output[0] : null;
+            if (!draft || typeof draft !== 'object' || Array.isArray(draft)) throw new Error('AI 未返回有效的资料卡草稿，请重试。');
+            const draftProfile = draft.characterProfile && typeof draft.characterProfile === 'object' && !Array.isArray(draft.characterProfile) ? draft.characterProfile : {};
+            if (![draft.title, draft.summary, draft.body, draft.content, ...Object.values(draftProfile)].some(value => typeof value === 'string' && value.trim())) {
+                throw new Error('AI 未返回有效的资料卡草稿，请重试。');
+            }
             if (elements.type && draft.type) elements.type.value = draft.type;
             if (elements.title) elements.title.value = draft.title || '';
             if (elements.tags) elements.tags.value = Array.isArray(draft.tags) ? draft.tags.join(', ') : '';
+            if (elements.aliases) elements.aliases.value = Array.isArray(draft.aliases) ? draft.aliases.join(', ') : '';
             if (elements.summary) elements.summary.value = draft.summary || '';
             if (elements.body) elements.body.value = draft.body || draft.content || '';
             setExtractionCharacterProfile(elements, draft.characterProfile || {});
@@ -135,7 +142,7 @@
         if (!source || !currentCompendiumExtraction(compendiumExtractionState.requestId, source) || compendiumExtractionState.running || compendiumExtractionState.saving) return;
         const entry = {
             type: elements.type.value, title: elements.title.value.trim(), summary: elements.summary.value.trim(), body: elements.body.value,
-            tags: parseCommaList(elements.tags.value), characterProfile: elements.type.value === 'character' ? extractionCharacterProfile(elements) : undefined, relatedSceneIds: [source.sceneId],
+            tags: parseCommaList(elements.tags.value), aliases: parseCommaList(elements.aliases ? elements.aliases.value : ''), characterProfile: elements.type.value === 'character' ? extractionCharacterProfile(elements) : undefined, relatedSceneIds: [source.sceneId],
             sourceReferences: [{ sceneId: source.sceneId, excerpt: source.excerpt }], contextPolicy: { mode: 'manual' }
         };
         if (!entry.title) { setCompendiumExtractionStatus('请填写资料卡标题', 'error'); return; }

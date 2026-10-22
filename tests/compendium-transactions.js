@@ -101,7 +101,7 @@ const cases = [
     const enteredBackup = deferred();
     const finishBackup = deferred();
     let backupEntries;
-    const applying = agent.applyOperations(root, projectId, [{ entryId: 'a', baseRevision: snapshot.revision, patch: { summary: 'AI A' } }], {
+    const applying = agent.applyOperations(root, projectId, [{ id: 'apply-a', entryId: 'a', baseRevision: snapshot.revision, patch: { summary: 'AI A' } }], {
       beforeWrite: async () => {
         backupEntries = (await service.listEntries(root, projectId)).entries;
         enteredBackup.resolve();
@@ -117,7 +117,7 @@ const cases = [
       service.saveEntriesBatch(root, projectId, [{ id: 'batch-1', title: 'Batch 1' }, { id: 'batch-2', title: 'Batch 2' }]),
       service.deleteEntry(root, projectId, 'delete-me'),
       service.saveEntry(root, projectId, { ...seeded[0], body: 'Stale full card', expectedUpdatedAt: seeded[0].updatedAt }),
-      agent.applyOperations(root, projectId, [{ entryId: 'a', baseRevision: snapshot.revision, patch: { summary: 'Stale AI' } }], {
+      agent.applyOperations(root, projectId, [{ id: 'stale-a', entryId: 'a', baseRevision: snapshot.revision, patch: { summary: 'Stale AI' } }], {
         beforeWrite: async () => { secondBackupCalls += 1; }
       })
     ].map(promise => promise.then(value => { finished += 1; return { ok: true, value }; }, error => { finished += 1; return { ok: false, error }; }));
@@ -144,7 +144,7 @@ const cases = [
   ['a failed backup leaves AI edits unapplied and releases the transaction for the next save', async (root, projectId) => {
     const entry = (await service.saveEntry(root, projectId, { id: 'a', summary: 'Before' })).entry;
     const snapshot = (await agent.readSnapshot(root, projectId, [entry.id])).snapshot.entries[0];
-    await assert.rejects(agent.applyOperations(root, projectId, [{ entryId: entry.id, baseRevision: snapshot.revision, patch: { summary: 'Must not persist' } }], {
+    await assert.rejects(agent.applyOperations(root, projectId, [{ id: 'blocked-apply', entryId: entry.id, baseRevision: snapshot.revision, patch: { summary: 'Must not persist' } }], {
       beforeWrite: async () => { throw new Error('simulated backup failure'); }
     }), /simulated backup failure/);
     assert.deepStrictEqual((await service.listEntries(root, projectId)).entries[0], entry);
@@ -184,7 +184,7 @@ const cases = [
     const stale = await api(handler, '/api/compendium', { projectId, entry: { ...entry, title: 'Stale', expectedUpdatedAt: entry.updatedAt } });
     assert.strictEqual(stale.status, 409);
     assert.strictEqual(stale.payload.ok, false);
-    const staleAgent = await api(handler, '/api/compendium-agent/apply', { projectId, operations: [{ entryId: entry.id, baseRevision: snapshot.revision, patch: { summary: 'Stale AI' } }] });
+    const staleAgent = await api(handler, '/api/compendium-agent/apply', { projectId, operations: [{ id: 'stale-api', entryId: entry.id, baseRevision: snapshot.revision, patch: { summary: 'Stale AI' } }] });
     assert.strictEqual(staleAgent.status, 409);
     assert.strictEqual((await service.listEntries(root, projectId)).entries[0].title, 'Current');
     assert.strictEqual((await service.listEntries(root, projectId)).entries[0].summary, 'Before');

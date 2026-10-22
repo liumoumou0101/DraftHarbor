@@ -1,7 +1,7 @@
 (function (root, factory) {
-    if (typeof module === 'object' && module.exports) module.exports = factory();
-    else root.DraftHarborWorkflowContextAssembly = factory();
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+    if (typeof module === 'object' && module.exports) module.exports = factory(require('../knowledge/compendium-schema'));
+    else root.DraftHarborWorkflowContextAssembly = factory(root.DraftHarborCompendiumSchema);
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (CompendiumSchema) {
     const DEFAULT_BUDGETS = Object.freeze({
         lastSceneEnding: 1200,
         previousBatchEnding: 800,
@@ -228,6 +228,8 @@
                 summary: clean(entry.summary).slice(0, 200),
                 aliases: list(entry.aliases).map(clean).filter(Boolean).slice(0, 6)
             };
+            const characterProfile = CompendiumSchema.pickCharacterProfile(entry);
+            if (Object.keys(characterProfile).length) compact.characterProfile = characterProfile;
             if (bodyCap > 0 && entry.body) {
                 compact.body = clean(entry.body).slice(0, bodyCap);
             }

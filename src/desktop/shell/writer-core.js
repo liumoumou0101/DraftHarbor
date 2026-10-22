@@ -17,10 +17,16 @@
     }
 
     function setNativeSaveStatus(message, tone = 'info') {
-        const { saveStatus, paperStatus } = nativeEditorElements();
+        const { saveStatus, paperStatus, saveNotice, saveNoticeMessage } = nativeEditorElements();
         if (!saveStatus) return;
+        if (tone === 'error') nativeEditorState.saveError = message || '';
         saveStatus.textContent = message || '';
         saveStatus.dataset.tone = tone;
+        saveStatus.title = message || '';
+        if (saveNotice && saveNoticeMessage) {
+            saveNotice.hidden = !nativeEditorState.saveError;
+            saveNoticeMessage.textContent = nativeEditorState.saveError || '';
+        }
         if (paperStatus) {
             paperStatus.textContent = message || (currentNativeScene() ? '本地草稿' : '未选择场景');
             paperStatus.dataset.tone = tone;
@@ -306,6 +312,7 @@
             window.clearTimeout(nativeEditorState.autosaveTimer);
         }
         nativeEditorState.autosaveTimer = window.setTimeout(() => {
+            nativeEditorState.autosaveTimer = null;
             if (nativeEditorState.dirty && nativeEditorState.snapshot) {
                 saveNativeScene({ reason: 'autosave' });
             }
@@ -508,7 +515,10 @@
             nativeEditorState.expandedChapterIds.add(activeChapterId);
         }
 
-        if (elements.projectTitle) elements.projectTitle.textContent = project.name || '未命名项目';
+        if (elements.projectTitle) {
+            elements.projectTitle.textContent = project.name || project.title || '未命名项目';
+            elements.projectTitle.title = elements.projectTitle.textContent;
+        }
         if (elements.projectSource) elements.projectSource.textContent = nativeEditorState.projectSource === 'project-directory' ? '项目目录' : '旧快照';
         if (elements.projectMeta) {
             elements.projectMeta.textContent = `${scenes.length} 场 / ${chapters.length} 章`;
@@ -601,7 +611,7 @@
                     if (scene.summary) detailParts.push('已有摘要');
                     if (nativeSceneTags(scene).length) detailParts.push(nativeSceneTags(scene).join('/'));
                     meta.textContent = wordCountLabel;
-                    button.title = detailParts.join(' · ');
+                    button.title = [scene.title || '未命名场景', ...detailParts].join(' · ');
                     button.append(title, meta);
                     button.addEventListener('click', () => {
                         finishNativeSceneTitleEdit();
@@ -642,6 +652,9 @@
         if (elements.paperTitle) elements.paperTitle.textContent = activeScene ? (activeScene.title || '未命名场景') : '选择一个场景';
         if (elements.editor) {
             elements.editor.disabled = !activeScene;
+            elements.editor.placeholder = activeScene
+                ? '从这里开始写作，或使用写作辅助续写。'
+                : snapshot && snapshot.project ? '从左侧选择一个场景开始写作。' : '从书库打开一个作品开始写作。';
             elements.editor.value = activeScene ? nativeSceneContent(activeScene.id) : '';
         }
         if (query && activeScene) {
@@ -670,7 +683,7 @@
             elements.tense.value = activeScene ? (activeScene.tense || '') : '';
         }
         updateNativeStats();
-        if (elements.saveButton) elements.saveButton.disabled = !activeScene;
+        if (elements.saveButton) elements.saveButton.disabled = !activeScene || nativeEditorState.isSaving;
         [elements.sendToWorkshop, elements.saveToCompendium].forEach((button) => {
             if (!button) return;
             button.hidden = !activeScene;
@@ -710,6 +723,7 @@
         renderNativeContext();
         renderWriterModelControl();
         renderNativeGeneration();
+        if (typeof syncNativeGenerationEditorLock === 'function') syncNativeGenerationEditorLock();
         renderContextStrip();
     }
 
@@ -733,6 +747,8 @@
         loadNativeContextPrefs();
         nativeEditorState.dirty = false;
         nativeEditorState.isSaving = false;
+        nativeEditorState.savePromise = null;
+        nativeEditorState.saveError = '';
         nativeEditorState.generation = {
             beat: '', lengthHint: (nativeEditorState.generation && nativeEditorState.generation.lengthHint) || 'natural',
             text: '', reasoning: '', finishReason: '', interruptReason: '', reasoningUserCollapsed: false,
@@ -750,7 +766,9 @@
             task: 'fiction-prose'
         };
         compendiumState.entries = Array.isArray(nativeEditorState.snapshot.compendium) ? nativeEditorState.snapshot.compendium : [];
-        compendiumState.selectedId = compendiumState.entries[0] ? compendiumState.entries[0].id : '';
+        const preferredCompendiumEntry = typeof window.preferredCompendiumWorkspaceEntryId === 'function'
+            ? window.preferredCompendiumWorkspaceEntryId(compendiumState.entries, nativeEditorState.snapshot.project?.id || '') : '';
+        compendiumState.selectedId = preferredCompendiumEntry || (compendiumState.entries[0] ? compendiumState.entries[0].id : '');
         compendiumState.query = '';
         compendiumState.type = '';
         compendiumState.dirty = false;
@@ -760,11 +778,32 @@
         renderCompendium();
     }
 
-    async function saveNativeScene(options = {}) {
+    function nativeProjectSaveContent(snapshot) {
+        const content = { ...snapshot };
+        ['writerRevision', 'filesystemSavedAt', 'filesystemSaveVersion', 'exportedAt'].forEach(key => delete content[key]);
+        return JSON.stringify(content);
+    }
+
+    function saveNativeScene(options = {}) {
         const elements = nativeEditorElements();
         const snapshot = nativeEditorState.snapshot;
         const scene = currentNativeScene();
-        if (!snapshot || !scene || !elements.editor || nativeEditorState.isSaving) return;
+        if (!snapshot || !scene || !elements.editor) return Promise.resolve(false);
+        if (nativeEditorState.isSaving) {
+            const pendingSave = nativeEditorState.savePromise;
+            if (!pendingSave) return Promise.resolve(false);
+            return pendingSave.then(saved => {
+                if (!saved || nativeEditorState.snapshot !== snapshot) return false;
+                const before = nativeProjectSaveContent(snapshot);
+                flushNativeEditorFields();
+                if (nativeProjectSaveContent(snapshot) !== before) nativeEditorState.dirty = true;
+                return nativeEditorState.dirty ? saveNativeScene(options) : true;
+            });
+        }
+        if (nativeEditorState.autosaveTimer) {
+            window.clearTimeout(nativeEditorState.autosaveTimer);
+            nativeEditorState.autosaveTimer = null;
+        }
 
         flushNativeEditorFields();
         normalizeNativeOrders();
@@ -777,13 +816,14 @@
         }
         scene.modified = now;
         scene.updatedAt = Date.now();
-        const contentAtSave = () => JSON.stringify([snapshot.project, snapshot.chapters, snapshot.scenes, snapshot.sceneContents, snapshot.styleGuardRules]);
-        const submittedContent = contentAtSave();
+        const submittedContent = nativeProjectSaveContent(snapshot);
 
         nativeEditorState.isSaving = true;
         setNativeSaveStatus(options.reason === 'autosave' ? '自动保存中...' : '保存中...', 'busy');
         if (elements.saveButton) elements.saveButton.disabled = true;
-        try {
+        let succeeded = false;
+        const pending = (async () => {
+          try {
             const response = await fetch('/api/save-project', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -791,7 +831,7 @@
             });
             const result = await response.json().catch(() => ({}));
             if (nativeEditorState.snapshot !== snapshot) return false;
-            if (response.status === 409) throw new Error('正文已在其他操作中更新，当前输入已保留。请重新打开项目核对后再保存。');
+            if (response.status === 409) throw new Error('磁盘稿已更新，当前输入已保留。请先复制草稿核对；也可备份当前作品后重新载入磁盘稿。');
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
             if (result.writerRevision) snapshot.writerRevision = result.writerRevision;
             nativeEditorState.projectSource = result.source || nativeEditorState.projectSource;
@@ -799,21 +839,51 @@
             await loadProjectLibrary();
             if (nativeEditorState.snapshot !== snapshot) return false;
             flushNativeEditorFields();
-            nativeEditorState.dirty = contentAtSave() !== submittedContent;
+            nativeEditorState.dirty = nativeProjectSaveContent(snapshot) !== submittedContent;
+            succeeded = true;
+            nativeEditorState.saveError = '';
             setNativeSaveStatus(nativeEditorState.dirty ? '已保存提交时的内容，后续输入尚未保存' : options.reason === 'autosave' ? '已自动保存' : '已保存', nativeEditorState.dirty ? 'warn' : 'ok');
             return true;
-        } catch (error) {
+          } catch (error) {
             if (nativeEditorState.snapshot !== snapshot) return false;
             console.error('Native editor save failed:', error);
             nativeEditorState.dirty = true;
             setNativeSaveStatus(`保存失败：${error.message || error}`, 'error');
             return false;
-        } finally {
+          } finally {
             if (nativeEditorState.snapshot === snapshot) {
                 nativeEditorState.isSaving = false;
+                nativeEditorState.savePromise = null;
                 if (elements.saveButton) elements.saveButton.disabled = false;
+                if (succeeded && nativeEditorState.dirty) scheduleNativeAutosave();
             }
+          }
+        })();
+        nativeEditorState.savePromise = pending;
+        return pending;
+    }
+
+    async function ensureNativeProjectSaved(options = {}) {
+        const snapshot = nativeEditorState.snapshot;
+        if (!snapshot) return false;
+        const action = options.reason === 'switch-project' ? '打开其他作品' : options.reason === 'directive-stack' ? '保存项目指令' : '导出当前稿件';
+        if (nativeEditorState.generation && nativeEditorState.generation.inProgress) {
+            setNativeSaveStatus(`请先停止生成，再${action}。`, 'warn');
+            return false;
         }
+        if (nativeEditorState.savePromise && !await nativeEditorState.savePromise) return false;
+        while (nativeEditorState.snapshot === snapshot) {
+            if (nativeEditorState.generation && nativeEditorState.generation.inProgress) {
+                setNativeSaveStatus(`请先停止生成，再${action}。`, 'warn');
+                return false;
+            }
+            const before = nativeProjectSaveContent(snapshot);
+            flushNativeEditorFields();
+            if (nativeProjectSaveContent(snapshot) !== before) nativeEditorState.dirty = true;
+            if (!nativeEditorState.dirty) return true;
+            if (!await saveNativeScene({ reason: options.reason || 'export' })) return false;
+        }
+        return false;
     }
 
     function nativeId(prefix) {
@@ -1203,6 +1273,10 @@
         const snapshot = nativeEditorState.snapshot;
         const query = nativeEditorState.searchQuery;
         if (!snapshot || !query) return;
+        if (nativeEditorState.generation && nativeEditorState.generation.inProgress) {
+            setNativeSaveStatus('请先停止生成，再替换正文。', 'warn');
+            return;
+        }
         const replacement = elements.replace ? elements.replace.value : '';
         flushNativeEditorFields();
         const pattern = new RegExp(escapeRegExp(query), 'gi');
@@ -1212,6 +1286,7 @@
             if (next !== current) {
                 snapshot.sceneContents = snapshot.sceneContents || {};
                 snapshot.sceneContents[scene.id] = next;
+                markNativeSummaryStale(scene);
                 scene.modified = new Date().toISOString();
                 scene.updatedAt = Date.now();
                 return 1;
@@ -1234,6 +1309,7 @@
                     if (next !== current) {
                         snapshot.sceneContents = snapshot.sceneContents || {};
                         snapshot.sceneContents[scene.id] = next;
+                        markNativeSummaryStale(scene);
                         scene.modified = new Date().toISOString();
                         scene.updatedAt = Date.now();
                         count = 1;

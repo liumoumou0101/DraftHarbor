@@ -153,8 +153,10 @@
     function validateOperation(input = {}) {
         const raw = input && typeof input === 'object' ? input : {};
         const errors = [];
+        const id = boundedString(raw.id, 160);
         const entryId = boundedString(raw.entryId, 160);
         const baseRevision = boundedString(raw.baseRevision, 80);
+        if (!id) errors.push('id is required');
         if (!entryId) errors.push('entryId is required');
         if (!baseRevision) errors.push('baseRevision is required');
         const patchResult = validatePatch(raw.patch);
@@ -162,7 +164,7 @@
         return {
             ok: errors.length === 0,
             errors,
-            operation: { id: boundedString(raw.id, 160), entryId, baseRevision, patch: patchResult.patch }
+            operation: { id, entryId, baseRevision, patch: patchResult.patch }
         };
     }
 
@@ -172,6 +174,7 @@
         const errors = [];
         const normalized = [];
         const seenEntryIds = new Set();
+        const seenOperationIds = new Set();
         if (!operations.length && options.requireOperation !== false) errors.push('at least one operation is required');
         if (operations.length > maxOperations) errors.push(`operation limit is ${maxOperations}`);
         operations.slice(0, maxOperations).forEach((operation, index) => {
@@ -179,6 +182,8 @@
             if (!result.ok) errors.push(...result.errors.map((error) => `operations[${index}]: ${error}`));
             if (seenEntryIds.has(result.operation.entryId)) errors.push(`operations[${index}]: duplicate entryId`);
             seenEntryIds.add(result.operation.entryId);
+            if (seenOperationIds.has(result.operation.id)) errors.push(`operations[${index}]: duplicate id`);
+            seenOperationIds.add(result.operation.id);
             normalized.push(result.operation);
         });
         return { ok: errors.length === 0, errors, operations: normalized };
@@ -215,14 +220,24 @@
         const operationResult = validateOperations(raw.operations, { ...options, requireOperation: false });
         const findings = (Array.isArray(raw.findings) ? raw.findings : []).slice(0, MAX_CARDS_PER_RUN).map(normalizeFinding);
         const errors = operationResult.errors.slice();
-        const operationIds = new Set(operationResult.operations.map((operation) => operation.id).filter(Boolean));
+        const operationsById = new Map(operationResult.operations.map((operation) => [operation.id, operation]));
+        const reviewedOperationIds = new Set();
+        const findingIds = new Set();
         findings.forEach((finding, index) => {
             if (!finding.id) errors.push(`findings[${index}]: id is required`);
+            if (findingIds.has(finding.id)) errors.push(`findings[${index}]: duplicate id`);
+            findingIds.add(finding.id);
             if (!finding.reason) errors.push(`findings[${index}]: reason is required`);
             if (!finding.entryIds.length) errors.push(`findings[${index}]: entryIds is required`);
             finding.operationIds.forEach((operationId) => {
-                if (!operationIds.has(operationId)) errors.push(`findings[${index}]: unknown operationId`);
+                const operation = operationsById.get(operationId);
+                if (!operation) errors.push(`findings[${index}]: unknown operationId`);
+                else if (!finding.entryIds.includes(operation.entryId)) errors.push(`findings[${index}]: operation entryId is not reviewed`);
+                reviewedOperationIds.add(operationId);
             });
+        });
+        operationResult.operations.forEach((operation, index) => {
+            if (!reviewedOperationIds.has(operation.id)) errors.push(`operations[${index}]: missing finding`);
         });
         return {
             ok: errors.length === 0,

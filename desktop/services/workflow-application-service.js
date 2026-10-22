@@ -4,6 +4,7 @@ const applicationStore = require('../storage/workflow-application-store');
 const paths = require('../storage/library-paths');
 const projectService = require('./project-service');
 const compendiumService = require('./compendium-service');
+const { withProjectWriteLock } = require('../storage/project-write-lock');
 
 const ALLOWED_CARD_FIELDS = new Set(['summary', 'tags', 'aliases', 'characterProfile']);
 
@@ -82,9 +83,17 @@ async function validateOperations(projectPath, project, entries, runId, operatio
   const sceneIds = new Set((project.scenes || []).map((scene) => scene.id));
   const chapterIds = new Set((project.chapters || []).map((chapter) => chapter.id));
   const entryById = new Map((entries || []).map((entry) => [entry.id, entry]));
+  const entryTargets = new Set();
   const planned = [];
   for (const operationInput of operations) {
     const operation = clonePlain(operationInput);
+    const entryTarget = operation.kind === 'compendium.create'
+      ? cleanString(operation.data && operation.data.entry && operation.data.entry.id)
+      : operation.kind === 'compendium.update' ? cleanString(operation.target && operation.target.entryId) : '';
+    if (entryTarget) {
+      if (entryTargets.has(entryTarget)) throw new Error(`duplicate compendium target in one application: ${entryTarget}`);
+      entryTargets.add(entryTarget);
+    }
     const revision = await validateSource(projectPath, runId, operation.source);
     if (operation.kind === 'writer.create-scene') {
       const chapterId = cleanString(operation.target && operation.target.chapterId);
@@ -241,12 +250,15 @@ async function applyOperation(dataRoot, projectPath, runId, operation) {
     return { targetType: 'scene', targetId: operation.target.sceneId };
   }
   if (operation.kind === 'compendium.create') {
-    const saved = await compendiumService.saveEntry(dataRoot, operation.data.projectId, operation.data.entry);
+    const saved = await compendiumService.saveEntry(dataRoot, operation.data.projectId, {
+      ...operation.data.entry, expectedUpdatedAt: ''
+    });
     return { targetType: 'compendium-entry', targetId: saved.entry.id };
   }
-  const entries = await compendiumService.listEntries(dataRoot, operation.data.projectId);
-  const existing = entries.entries.find((entry) => entry.id === operation.target.entryId);
-  const saved = await compendiumService.saveEntry(dataRoot, operation.data.projectId, { ...existing, ...(operation.data.patch || {}) });
+  const saved = await compendiumService.saveEntry(dataRoot, operation.data.projectId, {
+    ...(operation.data.patch || {}), id: operation.target.entryId,
+    expectedUpdatedAt: operation.data.expectedUpdatedAt
+  });
   return { targetType: 'compendium-entry', targetId: saved.entry.id };
 }
 
@@ -258,6 +270,11 @@ async function createBackup(dataRoot, projectPath, runId, applicationId, project
 }
 
 async function applyWorkflowApplication(options = {}) {
+  if (!options.projectPath) throw new Error('workflow application projectPath is required');
+  return withProjectWriteLock(options.projectPath, () => applyWorkflowApplicationLocked(options));
+}
+
+async function applyWorkflowApplicationLocked(options) {
   const dataRoot = options.dataRoot;
   const projectPath = options.projectPath;
   const runId = cleanString(options.runId);
@@ -288,6 +305,14 @@ async function applyWorkflowApplication(options = {}) {
 
   let operations = record.operations.slice();
   try {
+    if (existing) {
+      const pending = operations.filter((operation) => operation.status !== 'applied');
+      if (pending.length) {
+        const project = (await projectService.openProject(dataRoot, projectId)).project;
+        const entries = (await compendiumService.listEntries(dataRoot, projectId)).entries;
+        await validateOperations(projectPath, project, entries, runId, pending);
+      }
+    }
     for (let index = 0; index < operations.length; index += 1) {
       if (operations[index].status === 'applied') continue;
       const result = await applyOperation(dataRoot, projectPath, runId, operations[index]);
@@ -309,6 +334,11 @@ async function applyWorkflowApplication(options = {}) {
 }
 
 async function restoreWorkflowApplication(options = {}) {
+  if (!options.projectPath) throw new Error('workflow application projectPath is required');
+  return withProjectWriteLock(options.projectPath, () => restoreWorkflowApplicationLocked(options));
+}
+
+async function restoreWorkflowApplicationLocked(options) {
   const { dataRoot, projectPath } = options;
   const runId = cleanString(options.runId);
   const applicationId = cleanString(options.applicationId);

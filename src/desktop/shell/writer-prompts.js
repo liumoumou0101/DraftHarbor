@@ -4,11 +4,7 @@
             setNativeSaveStatus('没有可导出的项目', 'error');
             return;
         }
-        if (nativeEditorState.dirty) {
-            await saveNativeScene();
-        } else {
-            flushNativeEditorFields();
-        }
+        if (!await ensureNativeProjectSaved() || currentProjectId() !== projectId) return;
         triggerDownload(`/api/export-project-package?${new URLSearchParams({ projectId }).toString()}`);
         setNativeSaveStatus('已开始导出项目包', 'ok');
     }
@@ -42,7 +38,12 @@
             : [];
     }
 
+    function nativePromptLoadCurrent(snapshot, projectId) {
+        return nativeEditorState.snapshot === snapshot && currentProjectId() === projectId;
+    }
+
     async function loadSummaryPrompts() {
+        const snapshot = nativeEditorState.snapshot;
         const projectId = currentProjectId();
         if (!projectId) {
             summaryPromptState.prompts = defaultSummaryPromptTemplates();
@@ -53,12 +54,14 @@
         try {
             const response = await fetch(`/api/prompts?${new URLSearchParams({ projectId, category: 'summary' }).toString()}`, { cache: 'no-store' });
             const result = await response.json().catch(() => ({}));
+            if (!nativePromptLoadCurrent(snapshot, projectId)) return;
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
             summaryPromptState.prompts = result.prompts || [];
             if (summaryPromptState.selectedId !== 'auto' && !summaryPromptState.prompts.some((prompt) => prompt.id === summaryPromptState.selectedId)) {
                 summaryPromptState.selectedId = 'auto';
             }
         } catch (error) {
+            if (!nativePromptLoadCurrent(snapshot, projectId)) return;
             console.warn('Failed to load summary prompts:', error);
             summaryPromptState.prompts = defaultSummaryPromptTemplates();
         }
@@ -105,6 +108,7 @@
     }
 
     async function loadPrompts() {
+        const snapshot = nativeEditorState.snapshot;
         const projectId = currentProjectId();
         if (!projectId) {
             promptState.prompts = [];
@@ -115,6 +119,7 @@
         try {
             const response = await fetch(`/api/prompts?${new URLSearchParams({ projectId, category: 'prose' }).toString()}`, { cache: 'no-store' });
             const result = await response.json().catch(() => ({}));
+            if (!nativePromptLoadCurrent(snapshot, projectId)) return;
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
             promptState.prompts = result.prompts || [];
             if (!promptState.prompts.some((prompt) => prompt.id === promptState.selectedId)) {
@@ -122,10 +127,12 @@
             }
             if (nativeEditorState.snapshot) nativeEditorState.snapshot.prompts = promptState.prompts.filter((prompt) => !isNativeDefaultPrompt(prompt));
         } catch (error) {
+            if (!nativePromptLoadCurrent(snapshot, projectId)) return;
             console.warn('Failed to load prompts:', error);
             promptState.prompts = [{ id: 'default-prose', title: '均衡续写', category: 'prose', content: '', systemContent: '' }];
         }
         if (typeof loadWorkshopTemplates === 'function') await loadWorkshopTemplates();
+        if (!nativePromptLoadCurrent(snapshot, projectId)) return;
         renderNativeGeneration();
     }
 
@@ -314,10 +321,10 @@
             const summary = document.createElement('span');
             summary.textContent = entry.summary || entry.body || '暂无简介';
             item.append(title, summary);
+            item.dataset.nativeCharacterPeek = entry.id;
+            item.setAttribute('aria-label', `速览人物：${entry.title || '未命名人物'}`);
             item.addEventListener('click', () => {
-                compendiumState.selectedId = entry.id;
-                setView('compendium');
-                renderCompendium();
+                if (typeof window.openCompendiumPeek === 'function') window.openCompendiumPeek(entry.id, { trigger: item, source: 'writer' });
             });
             elements.characterList.appendChild(item);
         });
@@ -335,9 +342,29 @@
         } catch (error) { /* ignore */ }
     }
 
+    window.setNativeCompendiumReference = function setNativeCompendiumReference(entryId, included) {
+        const snapshot = nativeEditorState.snapshot;
+        const projectId = snapshot && snapshot.project && snapshot.project.id;
+        const entry = (compendiumState.entries || []).find(item => item.id === entryId);
+        if (!projectId || projectId !== currentProjectId() || !entry || entry.projectId && entry.projectId !== projectId
+            || nativeEditorState.generation && nativeEditorState.generation.inProgress) return false;
+        const context = nativeEditorState.context;
+        if (!context) return false;
+        const ids = new Set(context.compendiumIds || []);
+        if (included) ids.add(entryId); else ids.delete(entryId);
+        context.compendiumIds = Array.from(ids);
+        saveNativeContextPrefs();
+        document.querySelectorAll('[data-native-compendium-reference]').forEach(input => {
+            input.checked = ids.has(input.dataset.nativeCompendiumReference);
+        });
+        renderNativeContextSummary();
+        if (typeof window.refreshCompendiumPeek === 'function') window.refreshCompendiumPeek();
+        return true;
+    };
+
     function loadNativeContextPrefs() {
         const key = nativeContextStorageKey();
-        nativeEditorState.context = { compendiumIds: [], sceneModes: {} };
+        nativeEditorState.context = { compendiumIds: [], compendiumTags: [], chapterModes: {}, sceneModes: {} };
         if (!key) return;
         try {
             const parsed = JSON.parse(window.localStorage.getItem(key) || '{}');
@@ -371,22 +398,32 @@
             elements.contextCompendium.textContent = '暂无资料。';
         } else {
             compendium.forEach((entry) => {
-                const label = document.createElement('label');
-                label.className = 'desktop-native-context-row';
+                const row = document.createElement('div');
+                row.className = 'desktop-native-context-row desktop-native-compendium-reference-row';
                 const input = document.createElement('input');
                 input.type = 'checkbox';
+                input.dataset.nativeCompendiumReference = entry.id;
+                input.setAttribute('aria-label', `手动引用：${entry.title || '未命名资料'}`);
                 input.checked = nativeEditorState.context.compendiumIds.includes(entry.id);
                 input.addEventListener('change', () => {
-                    const set = new Set(nativeEditorState.context.compendiumIds);
-                    if (input.checked) set.add(entry.id); else set.delete(entry.id);
-                    nativeEditorState.context.compendiumIds = Array.from(set);
-                    saveNativeContextPrefs();
-                    renderNativeContextSummary();
+                    if (snapshot !== nativeEditorState.snapshot || !window.setNativeCompendiumReference(entry.id, input.checked)) {
+                        input.checked = nativeEditorState.context.compendiumIds.includes(entry.id);
+                    }
                 });
-                const text = document.createElement('span');
-                text.textContent = `${entry.title || '未命名资料'}${entry.type ? ` · ${entry.type}` : ''}`;
-                label.append(input, text);
-                elements.contextCompendium.appendChild(label);
+                const text = document.createElement('button');
+                text.type = 'button';
+                text.className = 'desktop-native-compendium-peek-link';
+                text.dataset.nativeCompendiumPeek = entry.id;
+                text.setAttribute('aria-label', `速览资料：${entry.title || '未命名资料'}`);
+                text.addEventListener('click', () => {
+                    if (snapshot === nativeEditorState.snapshot && typeof window.openCompendiumPeek === 'function') window.openCompendiumPeek(entry.id, { trigger: text, source: 'writer' });
+                });
+                const typeNames = { character: '人物', location: '地点', organization: '组织', item: '物品', lore: '设定', timeline: '时间线', note: '笔记' };
+                const always = entry.alwaysInContext || entry.contextPolicy && entry.contextPolicy.mode === 'always';
+                text.textContent = `${entry.title || '未命名资料'}${entry.type ? ` · ${typeNames[entry.type] || entry.type}` : ''}${always ? ' · 常驻引用' : ''}`;
+                if (always) row.title = '此资料会自动引用；勾选框用于额外手动引用。';
+                row.append(input, text);
+                elements.contextCompendium.appendChild(row);
             });
         }
         const tagSet = new Set();
@@ -430,13 +467,13 @@
                     const row = document.createElement('label');
                     row.className = 'desktop-native-context-row';
                     const select = document.createElement('select');
-                    select.value = nativeEditorState.context.chapterModes[chapter.id] || '';
                     [['', '不引用'], ['summary', '摘要'], ['full', '全文']].forEach(([value, label]) => {
                         const option = document.createElement('option');
                         option.value = value;
                         option.textContent = label;
                         select.appendChild(option);
                     });
+                    select.value = nativeEditorState.context.chapterModes[chapter.id] || '';
                     select.addEventListener('change', () => {
                         if (select.value) nativeEditorState.context.chapterModes[chapter.id] = select.value;
                         else delete nativeEditorState.context.chapterModes[chapter.id];
@@ -458,13 +495,13 @@
                 const row = document.createElement('label');
                 row.className = 'desktop-native-context-row';
                 const select = document.createElement('select');
-                select.value = nativeEditorState.context.sceneModes[scene.id] || '';
                 [['', '不引用'], ['summary', '摘要'], ['full', '全文']].forEach(([value, label]) => {
                     const option = document.createElement('option');
                     option.value = value;
                     option.textContent = label;
                     select.appendChild(option);
                 });
+                select.value = nativeEditorState.context.sceneModes[scene.id] || '';
                 select.addEventListener('change', () => {
                     if (select.value) nativeEditorState.context.sceneModes[scene.id] = select.value;
                     else delete nativeEditorState.context.sceneModes[scene.id];
@@ -489,8 +526,9 @@
             return;
         }
         const ctx = nativeEditorState.context;
-        const compendium = compendiumState.entries || snapshot.compendium || [];
-        const selectedEntryIds = new Set(ctx.compendiumIds || []);
+        const compendium = snapshot.compendium || [];
+        const entryIds = new Set(compendium.map((entry) => entry.id));
+        const selectedEntryIds = new Set((ctx.compendiumIds || []).filter((id) => entryIds.has(id)));
         const selectedTagSet = new Set(ctx.compendiumTags || []);
         const tagMatchedIds = new Set();
         const entryMap = new Map();
@@ -506,6 +544,30 @@
         const selectedChapters = Object.entries(chapterModes).filter(([, mode]) => mode);
         const selectedScenes = Object.entries(sceneModes).filter(([, mode]) => mode);
         const parts = [];
+        const scene = currentNativeScene();
+        const resolver = window.DraftHarborContextResolver;
+        const automatic = resolver && typeof resolver.resolveContext === 'function'
+            ? resolver.resolveContext({
+                project: { ...snapshot, currentSceneId: scene && scene.id },
+                beat: nativeEditorState.generation && nativeEditorState.generation.beat,
+                selection: {
+                    currentSceneId: scene && scene.id,
+                    povCharacter: scene && (scene.povCharacter || scene.pov),
+                    sceneCharacters: scene && (scene.characters || scene.participants),
+                    compendiumIds: ctx.compendiumIds,
+                    compendiumTags: ctx.compendiumTags,
+                    recentSceneLimit: 6,
+                    maxChars: 6000
+                }
+            })
+            : { compendiumEntries: compendium.filter(entry => entry.alwaysInContext || entry.contextPolicy && entry.contextPolicy.mode === 'always'), sceneSummaries: [] };
+        const autoEntries = (automatic.compendiumEntries || []).filter(entry => !selectedEntryIds.has(entry.id) && !tagMatchedIds.has(entry.id));
+        if (autoEntries.length) {
+            parts.push(`自动引用: ${autoEntries.map(entry => `${entry.title || '未命名资料'}（${entry.alwaysInContext || entry.contextPolicy && entry.contextPolicy.mode === 'always' ? '常驻' : '自动匹配'}）`).join('、')}`);
+        }
+        if ((automatic.sceneSummaries || []).length) {
+            parts.push(`自动引用 ${automatic.sceneSummaries.length} 条有效场景摘要`);
+        }
         const directCount = selectedEntryIds.size;
         const tagCount = tagMatchedIds.size;
         if (directCount > 0 || tagCount > 0) {
@@ -542,7 +604,7 @@
             parts.push(`场景引用: ${list}`);
         }
         if (parts.length === 0) {
-            elements.contextSummary.textContent = '未选择引用上下文。';
+            elements.contextSummary.textContent = '当前无额外资料或有效场景摘要；勾选资料可手动追加引用。';
             return;
         }
         elements.contextSummary.textContent = parts.join(' | ');
@@ -694,6 +756,7 @@
     }
 
     async function loadRewritePrompts() {
+        const snapshot = nativeEditorState.snapshot;
         const projectId = currentProjectId();
         if (!projectId) {
             rewritePromptState.prompts = [];
@@ -704,6 +767,7 @@
         try {
             const response = await fetch(`/api/prompts?${new URLSearchParams({ projectId, category: 'rewrite' }).toString()}`, { cache: 'no-store' });
             const result = await response.json().catch(() => ({}));
+            if (!nativePromptLoadCurrent(snapshot, projectId)) return;
             if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
             rewritePromptState.prompts = result.prompts || [];
             if (rewritePromptState.selectedId && !rewritePromptState.prompts.some(function (p) { return p.id === rewritePromptState.selectedId; })) {
@@ -711,6 +775,7 @@
                 nativeEditorState.rewrite.savedPromptId = '';
             }
         } catch (error) {
+            if (!nativePromptLoadCurrent(snapshot, projectId)) return;
             console.warn('Failed to load rewrite prompts:', error);
             rewritePromptState.prompts = [];
         }

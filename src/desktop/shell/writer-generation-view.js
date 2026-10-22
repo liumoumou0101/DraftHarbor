@@ -254,6 +254,8 @@
 
     function renderNativeGeneration() {
         const elements = nativeEditorElements();
+        if (typeof syncNativeGenerationEditorLock === 'function') syncNativeGenerationEditorLock();
+        if (typeof window.refreshCompendiumPeek === 'function') window.refreshCompendiumPeek({ referenceOnly: true });
         const generation = nativeEditorState.generation;
         const scene = currentNativeScene();
         const snapshot = nativeEditorState.snapshot;
@@ -330,7 +332,7 @@
         if (elements.editorBody) elements.editorBody.classList.toggle('has-generation-output', showGenerationOutput);
         if (elements.generationOutput) {
             elements.generationOutput.hidden = !showGenerationOutput;
-            elements.generationOutput.classList.toggle('is-inline-confirmation', showGenerationOutput && !isPreviewTask);
+            elements.generationOutput.classList.toggle('is-inline-confirmation', showGenerationOutput && !isPreviewTask && !generation.pendingEditorChanged);
             elements.generationOutput.dataset.reasoningPhase = reasoningPhase;
         }
         const outputTitle = document.querySelector('[data-native-generation-output-title]');
@@ -365,7 +367,9 @@
                 : '';
         }
         if (elements.generationOutputStatus) {
-            if (generation.inProgress) {
+            if (generation.pendingEditorChanged) {
+                elements.generationOutputStatus.textContent = '正文已修改，生成结果已单独保留。请复制结果，或关闭结果后重新生成。';
+            } else if (generation.inProgress) {
                 if (isSummaryTask && generation.summaryText) {
                     elements.generationOutputStatus.textContent = '正在整理摘要…';
                 } else if (generation.reasoning && !generation.text) {
@@ -379,6 +383,7 @@
                 } else {
                     elements.generationOutputStatus.textContent = '正在生成，完成后可保留、重试或撤回。';
                 }
+                if (!isSummaryTask) elements.generationOutputStatus.textContent += ' 请先停止生成再编辑正文。';
             } else if (generation.finishReason === 'length') {
                 elements.generationOutputStatus.textContent = '输出达到额度或上下文上限，结果不完整。已保留收到的内容；请检查后决定保留或重试。';
             } else if (generation.interruptReason) {
@@ -394,7 +399,7 @@
             }
         }
         if (elements.generationResult) {
-            elements.generationResult.hidden = !isPreviewTask;
+            elements.generationResult.hidden = !isPreviewTask && !generation.pendingEditorChanged;
             const resultText = generation.text || (generation.inProgress && isPreviewTask ? '生成中...' : '');
             if (elements.generationResult.textContent !== resultText) elements.generationResult.textContent = resultText;
         }
@@ -407,7 +412,7 @@
         if (reasoningElements.confirmActions) reasoningElements.confirmActions.hidden = !!generation.inProgress;
         if (elements.acceptGeneration) {
             elements.acceptGeneration.hidden = isSummaryTask;
-            elements.acceptGeneration.disabled = !generation.text || generation.inProgress;
+            elements.acceptGeneration.disabled = !generation.text || generation.inProgress || generation.pendingEditorChanged;
         }
         if (elements.retryGeneration) {
             const needsBeat = generation.genTask === 'beat';
@@ -415,7 +420,7 @@
         }
         if (elements.discardGeneration) {
             elements.discardGeneration.disabled = generation.inProgress || !showGenerationOutput;
-            elements.discardGeneration.textContent = !generation.text ? '关闭' : '撤回';
+            elements.discardGeneration.textContent = !generation.text || generation.pendingEditorChanged ? '关闭' : '撤回';
         }
         if (elements.insertMode) elements.insertMode.disabled = generation.inProgress || !generation.text;
         if (elements.lengthHint) {
@@ -518,8 +523,14 @@
                     const reuse = document.createElement('button');
                     reuse.type = 'button';
                     reuse.textContent = '复用提示';
+                    reuse.disabled = generation.inProgress || !!generation.pendingSceneId
+                        || (!!generation.text && isPreviewTask);
                     reuse.setAttribute('data-native-history-reuse', '');
                     reuse.addEventListener('click', () => {
+                        if (generation.inProgress || generation.pendingSceneId || (generation.text && isPreviewTask)) {
+                            setNativeSaveStatus('请先保留或关闭当前生成结果，再复用历史。', 'info');
+                            return;
+                        }
                         generation.beat = record.beat || '';
                         generation.text = record.resultText || '';
                         generation.reasoning = record.reasoning || '';
@@ -536,13 +547,13 @@
                     retry.type = 'button';
                     retry.textContent = '重试';
                     retry.setAttribute('data-native-history-retry', '');
-                    retry.disabled = !scene;
+                    retry.disabled = !scene || generation.inProgress;
                     retry.addEventListener('click', () => retryNativeHistoryRecord(record));
                     const insert = document.createElement('button');
                     insert.type = 'button';
                     insert.textContent = '写入';
                     insert.setAttribute('data-native-history-insert', '');
-                    insert.disabled = !scene || !record.resultText;
+                    insert.disabled = !scene || !record.resultText || generation.inProgress;
                     insert.addEventListener('click', () => insertNativeHistoryRecord(record));
                     const remove = document.createElement('button');
                     remove.type = 'button';

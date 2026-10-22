@@ -1,3 +1,118 @@
+    /* global compendiumEditorSession compendiumRewriteState compendiumExtractionState compendiumDrawState compendiumAgentState renderNativeContextSummary */
+    function nativeWriterShortcutsAvailable(event) {
+        const root = document.getElementById('desktop-root');
+        return !!(root && root.dataset.view === 'writer'
+            && !event.defaultPrevented && !event.isComposing && event.keyCode !== 229
+            && !document.querySelector('dialog[open]'));
+    }
+
+    function nativeWriterEditorLocked() {
+        if (typeof nativeGenerationEditorLocked === 'function') return nativeGenerationEditorLocked();
+        const editor = nativeEditorElements().editor;
+        return !!(editor && editor.readOnly);
+    }
+
+    async function copyNativeUnsavedDraft() {
+        const editor = nativeEditorElements().editor;
+        if (!editor) return;
+        try {
+            await navigator.clipboard.writeText(editor.value || '');
+            setNativeSaveStatus('当前完整草稿已复制；保存问题仍需处理', 'info');
+        } catch (_) {
+            editor.focus({ preventScroll: true });
+            editor.select();
+            setNativeSaveStatus('无法自动复制，已选中当前正文，请按 Ctrl+C 复制并另存草稿。', 'warn');
+        }
+    }
+
+    let nativeDraftRecoveryBusy = false;
+
+    async function reloadNativeSavedDraft() {
+        if (nativeDraftRecoveryBusy) return false;
+        const sourceSnapshot = nativeEditorState.snapshot;
+        const projectId = sourceSnapshot && sourceSnapshot.project && sourceSnapshot.project.id;
+        if (!projectId) return false;
+        const button = nativeEditorElements().reloadSavedDraft;
+        const wasDisabled = button && button.disabled;
+        let loadedSnapshot = null;
+        let phase = '准备备份';
+        const blockedReason = () => {
+            if (nativeEditorState.isSaving || (nativeEditorState.generation && nativeEditorState.generation.inProgress)) return '保存或生成仍在进行，请等待结束后重试。';
+            if (typeof compendiumState !== 'undefined' && compendiumState.dirty) return '资料表单有未保存修改，无法完整备份；请先保存或另行备份资料。';
+            if (nativeEditorState.titleEditing) return '标题仍在编辑，请先完成标题编辑后重试。';
+            return '';
+        };
+        nativeDraftRecoveryBusy = true;
+        if (button) button.disabled = true;
+        try {
+            if (blockedReason()) {
+                setNativeSaveStatus(`${blockedReason()}当前草稿已保留，未载入磁盘版本。`, 'warn');
+                return false;
+            }
+            if (window.WorkshopAgent && !window.WorkshopAgent.canLeave()) return false;
+            if (!window.confirm('将完整当前作品草稿以 JSON 复制到剪贴板，可粘贴保存为 .json 后导入恢复；然后载入磁盘版本。\n\n请在完成后立即粘贴保存这份备份。是否继续？')) return false;
+            if (nativeEditorState.snapshot !== sourceSnapshot) return false;
+            flushNativeEditorFields();
+            const capturedContent = JSON.stringify(sourceSnapshot);
+            const backup = JSON.stringify(sourceSnapshot, null, 2);
+            const source = nativeEditorState.projectSource;
+            const unchanged = () => {
+                if (nativeEditorState.snapshot !== sourceSnapshot) return false;
+                flushNativeEditorFields();
+                return JSON.stringify(sourceSnapshot) === capturedContent;
+            };
+            const reportChanged = () => {
+                if (nativeEditorState.snapshot === sourceSnapshot) {
+                    setNativeSaveStatus('备份期间草稿有新修改，已保留当前输入，未载入磁盘版本。请重新点击“备份并重新载入”。', 'warn');
+                }
+            };
+            phase = '读取磁盘版本';
+            setNativeSaveStatus('正在读取磁盘版本，当前草稿仍保留…', 'info');
+            const savedSnapshot = await fetchProjectSnapshot({ id: projectId });
+            if (!unchanged()) { reportChanged(); return false; }
+            if (blockedReason()) {
+                setNativeSaveStatus(`${blockedReason()}当前草稿已保留，未载入磁盘版本。`, 'warn');
+                return false;
+            }
+            if (!savedSnapshot || !savedSnapshot.project || savedSnapshot.project.id !== projectId) {
+                throw new Error('返回的作品与当前作品不一致，请核对后重试');
+            }
+            phase = '复制完整作品备份';
+            setNativeSaveStatus('正在把完整作品备份复制到剪贴板，当前草稿仍保留…', 'info');
+            await navigator.clipboard.writeText(backup);
+            if (window.WorkshopAgent && !window.WorkshopAgent.canLeave()) {
+                if (nativeEditorState.snapshot === sourceSnapshot) setNativeSaveStatus('备份已复制，但讨论任务仍需处理，未载入磁盘版本。当前草稿已保留。', 'warn');
+                return false;
+            }
+            if (!unchanged()) { reportChanged(); return false; }
+            if (blockedReason()) {
+                setNativeSaveStatus(`${blockedReason()}备份已复制，但未载入磁盘版本。当前草稿已保留。`, 'warn');
+                return false;
+            }
+            loadNativeProjectEditor(savedSnapshot, { id: projectId, source });
+            loadedSnapshot = nativeEditorState.snapshot;
+            if (loadedSnapshot === sourceSnapshot || loadedSnapshot?.project?.id !== projectId) return false;
+            phase = '刷新辅助资料';
+            for (const refresh of [() => loadReaderFromProjectSnapshot(loadedSnapshot), loadCompendium, loadPrompts, loadRewritePrompts, loadSummaryPrompts]) {
+                if (nativeEditorState.snapshot !== loadedSnapshot) return false;
+                await refresh();
+            }
+            if (nativeEditorState.snapshot !== loadedSnapshot) return false;
+            setNativeSaveStatus(`磁盘版本已重新载入；完整旧草稿已在剪贴板，请立即粘贴保存为 .json${nativeEditorState.dirty ? '；新输入尚未保存' : ''}。`, nativeEditorState.dirty ? 'warn' : 'info');
+            return true;
+        } catch (error) {
+            if (nativeEditorState.snapshot === (loadedSnapshot || sourceSnapshot)) {
+                setNativeSaveStatus(loadedSnapshot
+                    ? `磁盘版本已载入，但${phase}失败：${error.message || error}。旧草稿备份仍在剪贴板，请先粘贴保存为 .json。`
+                    : `${phase}失败：${error.message || error}。当前草稿已保留，未载入磁盘版本。请保留草稿后重试。`, 'error');
+            }
+            return false;
+        } finally {
+            nativeDraftRecoveryBusy = false;
+            if (button) button.disabled = wasDisabled;
+        }
+    }
+
     function bindNativeEditor() {
         const elements = nativeEditorElements();
         if (typeof bindNativeSidebarResize === 'function') bindNativeSidebarResize();
@@ -12,6 +127,8 @@
                 saveNativeScene();
             });
         }
+        if (elements.copyUnsavedDraft) elements.copyUnsavedDraft.addEventListener('click', copyNativeUnsavedDraft);
+        if (elements.reloadSavedDraft) elements.reloadSavedDraft.addEventListener('click', reloadNativeSavedDraft);
         if (elements.sendToWorkshop) elements.sendToWorkshop.addEventListener('click', sendNativeSelectionToWorkshop);
         if (elements.saveToCompendium) elements.saveToCompendium.addEventListener('click', openNativeCompendiumExtraction);
         if (elements.readAloud) elements.readAloud.addEventListener('click', readNativeSceneAloud);
@@ -54,11 +171,11 @@
         document.addEventListener('click', (event) => {
             const target = event.target;
             if (!target || !target.closest) return;
-            if (target.closest('[data-native-typography], [data-native-specials], [data-native-toggle-typography], [data-native-toggle-specials], [data-native-more-menu], [data-native-more-tools], [data-native-outline-menu]')) return;
+            if (target.closest('[data-native-typography], [data-native-specials], [data-native-toggle-typography], [data-native-toggle-specials], [data-native-more-menu], [data-native-more-tools], [data-native-outline-menu], [data-native-context-menu]')) return;
             closeNativeWriterPopovers();
         });
         document.addEventListener('keydown', (event) => {
-            if (event.key !== 'Escape') return;
+            if (event.key !== 'Escape' || !nativeWriterShortcutsAvailable(event)) return;
             const elements = nativeEditorElements();
             const moreMenu = document.querySelector('[data-native-more-menu]');
             const outlineMenu = document.querySelector('[data-native-outline-menu]');
@@ -71,8 +188,7 @@
                 || outlineWasOpen;
             if (!hasOpenPopover) return;
             event.preventDefault();
-            closeNativeWriterPopovers();
-            if (moreWasOpen && typeof hideNativeMoreMenu === 'function') hideNativeMoreMenu({ restoreFocus: true });
+            closeNativeWriterPopovers({ restoreFocus: true });
         });
         [
             ['editorFontSize', 'fontSize'],
@@ -110,6 +226,7 @@
         }
         elements.specialButtons.forEach((button) => {
             button.addEventListener('click', () => {
+                if (nativeWriterEditorLocked()) return;
                 insertNativeSpecialChar(button.dataset.nativeSpecialChar || button.textContent || '');
                 if (elements.specials) elements.specials.hidden = true;
             });
@@ -155,6 +272,18 @@
                     loadSummaryPrompts();
                 }
             });
+            tab.addEventListener('keydown', (event) => {
+                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) || event.isComposing) return;
+                const tabs = elements.panelTabs.filter(item => !item.hidden && !item.disabled
+                    && item.dataset.nativePanelGroup === tab.dataset.nativePanelGroup);
+                const index = tabs.indexOf(tab);
+                if (index < 0) return;
+                event.preventDefault();
+                const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+                    : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+                tabs[next].click();
+                tabs[next].focus({ preventScroll: true });
+            });
         });
         const assistantGroupDefaults = {
             writing: 'generate',
@@ -190,13 +319,17 @@
                 renderNativeEditor();
             });
         }
-        if (elements.replaceCurrent) elements.replaceCurrent.addEventListener('click', () => replaceNativeText('current'));
-        if (elements.replaceAll) elements.replaceAll.addEventListener('click', () => replaceNativeText('all'));
+        if (elements.replaceCurrent) elements.replaceCurrent.addEventListener('click', () => { if (!nativeWriterEditorLocked()) replaceNativeText('current'); });
+        if (elements.replaceAll) elements.replaceAll.addEventListener('click', () => { if (!nativeWriterEditorLocked()) replaceNativeText('all'); });
         if (elements.searchPrev) elements.searchPrev.addEventListener('click', () => navigateNativeSearchMatch(-1));
         if (elements.searchNext) elements.searchNext.addEventListener('click', () => navigateNativeSearchMatch(1));
         if (elements.editor) {
+            elements.editor.addEventListener('beforeinput', (event) => {
+                if (nativeWriterEditorLocked()) event.preventDefault();
+            });
             elements.editor.addEventListener('input', () => {
                 if (!nativeEditorState.snapshot || !nativeEditorState.activeSceneId) return;
+                if (nativeWriterEditorLocked()) return;
                 applyNativeAutoReplace();
                 markNativeDirty();
                 if (nativeEditorState.searchQuery.trim()) updateNativeSearchMatchState();
@@ -210,6 +343,17 @@
                 event.preventDefault();
                 openNativeEditorContextMenu(event.clientX, event.clientY);
             });
+            elements.editor.addEventListener('keydown', (event) => {
+                if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+                if (!currentNativeScene()) return;
+                event.preventDefault();
+                const rect = elements.editor.getBoundingClientRect();
+                openNativeEditorContextMenu(rect.left + 20, rect.top + 20);
+            });
+        }
+        if (elements.contextMenu && typeof window.onNativeWriterMenuKeydown === 'function') {
+            elements.contextMenu.addEventListener('keydown', (event) => window.onNativeWriterMenuKeydown(event, elements.contextMenu,
+                () => closeNativeWriterPopovers({ restoreFocus: true })));
         }
         if (elements.summaryDialogClose) elements.summaryDialogClose.addEventListener('click', closeNativeSummaryDialog);
         if (elements.summaryDialogCopy) elements.summaryDialogCopy.addEventListener('click', copyNativeSummaryDialog);
@@ -259,6 +403,7 @@
                 nativeEditorState.generation.beat = elements.beatInput.value;
                 if (typeof autosizeNativeBeatInput === 'function') autosizeNativeBeatInput();
                 renderNativeGeneration();
+                renderNativeContextSummary();
             });
             elements.beatInput.addEventListener('focus', () => {
                 if (typeof syncNativeComposerExpansion === 'function') syncNativeComposerExpansion(true);
@@ -562,7 +707,8 @@
             const action = event.target && event.target.closest ? event.target.closest('[data-native-context-action]') : null;
             if (action) {
                 const key = action.dataset.nativeContextAction;
-                closeNativeWriterPopovers();
+                if (key === 'format-manuscript' && nativeWriterEditorLocked()) return;
+                closeNativeWriterPopovers({ restoreFocus: true });
                 if (key === 'regenerate-selection') {
                     openNativeRegenerateSettings();
                     return;
@@ -602,12 +748,16 @@
             if (menu && !menu.hidden && !(event.target && event.target.closest && event.target.closest('[data-native-context-menu]'))) closeNativeWriterPopovers();
         });
         window.addEventListener('keydown', (event) => {
-            if (!nativeEditorState.snapshot) return;
-            const isSave = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's';
+            if (!nativeEditorState.snapshot || !nativeWriterShortcutsAvailable(event)) return;
+            const isSave = (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's';
             if (isSave) {
                 event.preventDefault();
                 saveNativeScene();
+                return;
             }
+            const target = event.target && event.target.closest ? event.target : document.activeElement;
+            if (target && target.closest && target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')) return;
+            if (nativeWriterEditorLocked()) return;
             const isNewScene = (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'n';
             if (isNewScene) {
                 event.preventDefault();
@@ -623,7 +773,14 @@
             }
         });
         window.addEventListener('beforeunload', (event) => {
-            if (!nativeEditorState.dirty) return;
+            const compendiumDirty = typeof compendiumState !== 'undefined' && compendiumState.dirty;
+            const compendiumWriting = (typeof compendiumEditorSession !== 'undefined'
+                && (compendiumEditorSession.saves.size || compendiumEditorSession.creating || compendiumEditorSession.deleting))
+                || (typeof compendiumRewriteState !== 'undefined' && compendiumRewriteState.saving)
+                || (typeof compendiumExtractionState !== 'undefined' && compendiumExtractionState.saving)
+                || (typeof compendiumDrawState !== 'undefined' && compendiumDrawState.saving)
+                || (typeof compendiumAgentState !== 'undefined' && compendiumAgentState.applying);
+            if (!nativeEditorState.dirty && !nativeEditorState.isSaving && !compendiumDirty && !compendiumWriting) return;
             event.preventDefault();
             event.returnValue = '';
         });

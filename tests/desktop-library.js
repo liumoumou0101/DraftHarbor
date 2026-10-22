@@ -37,9 +37,11 @@ async function acceptNextConfirm(page) {
 }
 
 async function openCompendiumPolicyDetails(page) {
-    await page.locator('[data-compendium-policy-details]').evaluate((element) => {
-        element.open = true;
-    });
+    if (!await page.locator('[data-compendium-pane="settings"]').isVisible()) {
+        await page.locator('[data-compendium-pane-toggle="settings"]').last().click();
+    }
+    const details = page.locator('[data-compendium-policy-details]');
+    if (!await details.evaluate((element) => element.open)) await details.locator('summary').click();
 }
 
 async function submitNativeName(page, value) {
@@ -296,6 +298,7 @@ async function submitNativeName(page, value) {
         await page.waitForSelector('[data-compendium-new]:not([disabled])');
         await page.click('[data-compendium-new]');
         await page.waitForSelector('.desktop-compendium-item.is-active');
+        await openCompendiumPolicyDetails(page);
         await page.selectOption('[data-compendium-entry-type]', 'character');
         await page.fill('[data-compendium-title]', 'Ada Navigator');
         await page.fill('[data-compendium-summary]', 'A pilot with a careful memory.');
@@ -303,7 +306,8 @@ async function submitNativeName(page, value) {
         await openCompendiumPolicyDetails(page);
         await page.fill('[data-compendium-tags]', 'pilot, protagonist');
         await page.fill('[data-compendium-aliases]', 'Ada, Navigator');
-        await page.check('[data-compendium-always]');
+        await page.selectOption('[data-compendium-policy-mode]', 'always');
+        await page.click('[data-compendium-inspector-close]');
         const firstScreen = await page.evaluate(() => {
             const list = document.querySelector('.desktop-compendium-list');
             const tools = document.querySelector('.desktop-compendium-tools');
@@ -414,7 +418,7 @@ async function submitNativeName(page, value) {
         await clickMoreAction(page, '[data-native-style-guard]');
         await page.waitForFunction(() => document.querySelector('[data-style-guard-modal]') && !document.querySelector('[data-style-guard-modal]').hidden);
         await page.selectOption('[data-style-guard-scope]', 'global');
-        await page.locator('[data-style-guard-modal] details > summary').click();
+        await page.locator('[data-style-guard-modal] summary').filter({ hasText: '批量添加' }).click();
         await page.fill('[data-style-guard-rules]', '冷月像银盘 | 避免陈旧比喻');
         await page.click('[data-style-guard-import]');
         await page.waitForFunction(() => {
@@ -426,8 +430,9 @@ async function submitNativeName(page, value) {
         const globalRulesSettings = await fetch(`${servers.appUrl}/api/settings`).then((response) => response.json());
         assert.strictEqual(globalRulesSettings.settings.globalStyleGuardRules[0].text, '冷月像银盘', 'global avoidance rules should persist in desktop settings');
         await page.click('[data-view-target="compendium"]');
+        await page.locator('.compendium-entry-actions > summary').click();
         await page.waitForSelector('[data-compendium-ai-rewrite]:not([disabled])');
-        const compendiumEditorScroll = await page.locator('.desktop-compendium-form-grid').evaluate((element) => ({
+        const compendiumEditorScroll = await page.locator('[data-compendium-scroll]').evaluate((element) => ({
             clientHeight: element.clientHeight,
             scrollHeight: element.scrollHeight,
             overflowY: getComputedStyle(element).overflowY
@@ -791,14 +796,15 @@ async function submitNativeName(page, value) {
             return document.querySelector('[data-view-panel="writer"]') && document.querySelector('[data-view-panel="writer"]').classList.contains('is-active');
         });
 
-        // Compendium injection status labels
+        // Compendium AI usage status
         await page.click('[data-view-target="compendium"]');
-        await page.waitForSelector('.desktop-compendium-injection-badge');
-        var badges = await page.$$eval('.desktop-compendium-injection-badge', function (els) {
-            return els.map(function (el) { return el.textContent.trim(); });
-        });
-        assert.ok(badges.length >= 1, 'compendium entries should show injection badges');
-        assert.ok(badges.some(function (b) { return b === '总是注入'; }), 'always-in-context entry should show 总是注入 badge');
+        await page.locator('.desktop-compendium-item').filter({ hasText: 'Ada Navigator' }).click();
+        const policyCaption = page.locator('[data-compendium-policy-caption]');
+        assert.ok(await policyCaption.isVisible(), 'selected compendium entry should show its AI usage status');
+        assert.strictEqual(await policyCaption.innerText(), 'AI · 始终参考', 'always-in-context entry should show 始终参考 status');
+        await openCompendiumPolicyDetails(page);
+        assert.strictEqual(await page.locator('[data-compendium-policy-mode]').inputValue(), 'always', 'always-in-context entry should keep its saved usage policy');
+        await page.click('[data-compendium-inspector-close]');
 
         // Writer handoff: Save to compendium
         await page.click('[data-view-target="writer"]');

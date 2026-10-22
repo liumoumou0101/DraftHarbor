@@ -55,6 +55,22 @@ async function finishSave(page, index = 0) {
 }
 
 const cases = [
+  ['local search finds every saved character constraint without discarding the current draft', async page => {
+    const fields = ['role', 'goal', 'motivation', 'conflict', 'voice', 'currentState', 'knowledge', 'relationshipNotes'];
+    await page.evaluate(keys => {
+      compendiumState.entries[0].characterProfile = Object.fromEntries(keys.map((key, index) => [key, `Constraint-${index}`]));
+      renderCompendium();
+    }, fields);
+    await page.fill('[data-compendium-body]', 'Unsaved body must survive searching.');
+    for (const [index, field] of fields.entries()) {
+      await page.fill('[data-compendium-search]', `constraint-${index}`);
+      assert.strictEqual(await page.locator('[data-compendium-list] button').count(), 1, `${field} must be searchable`);
+      assert.ok((await page.locator('[data-compendium-list]').textContent()).includes('Captain A'));
+    }
+    assert.strictEqual(await page.inputValue('[data-compendium-body]'), 'Unsaved body must survive searching.');
+    assert.strictEqual(await page.evaluate(() => compendiumState.dirty), true);
+    assert.strictEqual(await page.evaluate(() => window.confirmCalls), 0);
+  }],
   ['normal saving retains hidden metadata and sends the captured optimistic version', async page => {
     await page.fill('[data-compendium-title]', 'Revised captain');
     await beginSave(page);
@@ -194,7 +210,7 @@ const cases = [
     assert.strictEqual(await page.evaluate(() => compendiumState.entries.length), 2);
   }],
   ['new-card clicks use the active category and clear a search that would hide the new card', async page => {
-    await page.click('[data-compendium-type-chip="location"]');
+    await page.selectOption('[data-compendium-type]', 'location');
     await page.fill('[data-compendium-search]', 'No new card could match');
     await page.click('[data-compendium-new]');
     const request = await page.evaluate(() => window.requests[0].body);
@@ -204,7 +220,7 @@ const cases = [
     assert.strictEqual(await page.inputValue('[data-compendium-search]'), '');
     assert.strictEqual(await page.locator('[data-compendium-list] .is-active').count(), 1);
     assert.strictEqual(await page.inputValue('[data-compendium-entry-type]'), 'location');
-    await page.click('[data-compendium-type-chip="summary"]');
+    await page.selectOption('[data-compendium-type]', 'summary');
     await page.click('[data-compendium-new]');
     await page.evaluate(() => window.requests[1].resolve({ ok: true, entry: { ...window.requests[1].body.entry, id: 'new-note', updatedAt: '2026-09-13T00:00:02.000Z' } }));
     await page.waitForFunction(() => compendiumState.selectedId === 'new-note');
@@ -213,6 +229,7 @@ const cases = [
   }],
   ['search and filter keep dirty text and the current edited character type visible', async page => {
     await page.evaluate(() => selectCompendiumEntry('b'));
+    await page.locator('[data-compendium-pane-toggle="settings"]').last().click();
     await page.selectOption('[data-compendium-entry-type]', 'character');
     await page.fill('[data-compendium-body]', 'Typed character body.');
     await page.fill('[data-compendium-search]', 'Nothing');
@@ -224,9 +241,11 @@ const cases = [
 
 (async () => {
   const root = path.resolve(__dirname, '..');
-  const [fragment, source] = await Promise.all([
+  const [fragment, schema, source, workspace] = await Promise.all([
     fs.readFile(path.join(root, 'desktop/fragments/compendium.html'), 'utf8'),
-    fs.readFile(path.join(root, 'src/desktop/shell/compendium.js'), 'utf8')
+    fs.readFile(path.join(root, 'src/core/knowledge/compendium-schema.js'), 'utf8'),
+    fs.readFile(path.join(root, 'src/desktop/shell/compendium.js'), 'utf8'),
+    fs.readFile(path.join(root, 'src/desktop/shell/compendium-workspace.js'), 'utf8')
   ]);
   const browser = await chromium.launch({ headless: true });
   try {
@@ -237,7 +256,7 @@ const cases = [
       page.on('pageerror', error => errors.push(error.message));
       page.setDefaultTimeout(5000);
       try {
-        await setup(page, fragment, source);
+        await setup(page, fragment, `${schema}\n${source}\n${workspace}`);
         await run(page);
         assert.deepStrictEqual(errors, []);
         console.log(`PASS ${name}`);

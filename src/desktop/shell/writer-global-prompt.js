@@ -43,6 +43,7 @@
 
     async function saveNativeGlobalPrompt(event) {
         if (event) event.preventDefault();
+        const projectSnapshot = nativeEditorState.snapshot;
         const elements = nativeGlobalPromptElements();
         const globalPrompt = {
             enabled: !!(elements.enabled && elements.enabled.checked),
@@ -76,13 +77,16 @@
             settingsState.settings = normalizeDesktopSettings(result.settings || {});
             settingsState.runtimeProvider = result.runtimeProvider || runtimeProviderConfig();
             settingsState.runtimeProviderProfiles = result.runtimeProviderProfiles || settingsState.runtimeProviderProfiles;
-            if (nativeEditorState.snapshot) {
-                nativeEditorState.snapshot.directiveStack = {
+            if (nativeEditorState.snapshot !== projectSnapshot) throw new Error('作品已切换，请重新打开项目指令后再保存。');
+            if (projectSnapshot) {
+                projectSnapshot.directiveStack = {
                     schemaVersion: 1,
                     layers: projectDirective.content || projectDirective.enabled ? [projectDirective] : []
                 };
                 nativeEditorState.dirty = true;
-                await saveNativeScene({ reason: 'directive-stack' });
+                if (!await ensureNativeProjectSaved({ reason: 'directive-stack' })) {
+                    throw new Error('项目指令尚未保存，当前输入已保留。请处理写作区提示后重试。');
+                }
             }
             closeNativeGlobalPromptDialog();
             setNativeSaveStatus(globalPrompt.enabled ? '用户全局创作指令已启用' : '用户全局创作指令已关闭', 'ok');

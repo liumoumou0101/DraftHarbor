@@ -259,7 +259,8 @@
     grid-template-rows: minmax(0, 1fr);
     flex: 1 1 0;
     min-height: 0;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 .desktop-native-writer .desktop-native-assistant-panel.is-active[data-native-panel="rewrite"] {
@@ -277,14 +278,14 @@
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
-    min-height: 0;
-    height: 100%;
+    height: auto;
+    min-height: 100%;
 }
 
 .desktop-native-writer .desktop-native-generation > .desktop-native-composer,
 .desktop-native-writer .desktop-native-rewrite > .desktop-native-composer {
-    flex: 1 1 0;
-    min-height: 0;
+    flex: 1 0 auto;
+    min-height: 11em;
 }
 
 .desktop-native-writer:not(.is-assistant-bottom) .desktop-native-generation > .desktop-native-composer,
@@ -356,7 +357,7 @@
 
 .desktop-native-writer:not(.is-assistant-bottom) .desktop-native-composer textarea,
 .desktop-native-writer:not(.is-assistant-bottom) [data-native-rewrite-instruction] {
-    min-height: 12.4em;
+    min-height: 2.8em;
 }
 
 .desktop-native-composer-model {
@@ -397,27 +398,41 @@
     margin-left: auto;
 }
 
-/* Keep right-docked actions close to the task controls, above long instructions. */
-.desktop-native-writer:not(.is-assistant-bottom) .desktop-native-composer {
-    grid-template-rows: auto auto minmax(2.8em, 1fr);
-}
-
-.desktop-native-writer:not(.is-assistant-bottom) .desktop-native-composer-model {
+/* Instructions precede parameters and actions in either dock position. */
+.desktop-native-writer .desktop-native-composer textarea {
     grid-column: 1;
     grid-row: 1;
-    padding-top: 8px;
 }
 
-.desktop-native-writer:not(.is-assistant-bottom) .desktop-native-composer-footer {
+.desktop-native-writer .desktop-native-composer-settings {
     grid-column: 1;
     grid-row: 2;
-    border-top: 0;
-    border-bottom: 1px solid var(--desktop-line);
 }
 
-.desktop-native-writer:not(.is-assistant-bottom) .desktop-native-composer textarea {
+.desktop-native-writer .desktop-native-composer-footer {
     grid-column: 1;
     grid-row: 3;
+}
+
+/* Reserve the lower dock's action rows; only the direction text scrolls. */
+@media (min-width: 981px) {
+    .desktop-native-writer.is-assistant-bottom:not(.is-focus-mode):not(.is-assistant-collapsed):not(.is-composer-expanded) {
+        grid-template-rows: minmax(280px, 1fr) minmax(280px, var(--native-assistant-height, clamp(280px, 30vh, 360px)));
+    }
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-generation {
+    height: 100%;
+    min-height: 0;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-generation > .desktop-native-copilot-tasks {
+    flex: 0 0 auto;
+}
+
+.desktop-native-writer.is-assistant-bottom .desktop-native-generation > .desktop-native-composer {
+    flex: 1 1 0;
+    min-height: 0;
 }
 
 .desktop-native-writer.is-assistant-bottom .desktop-native-composer-footer {
@@ -613,7 +628,8 @@
 }
 
 .desktop-native-outline-actions {
-    grid-template-columns: 1fr 1fr;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     min-width: 0;
     gap: 6px;
     padding: 8px 10px;
@@ -622,9 +638,93 @@
 .desktop-native-outline-actions button {
     min-width: 0;
     padding-inline: 6px;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.desktop-native-project-heading {
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.desktop-native-project-heading > div:first-child {
+    flex: 1 1 100%;
+}
+
+.desktop-native-project-heading h2 {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.desktop-native-chapter > span:first-of-type {
+    display: inline-block;
+    max-width: calc(100% - 4em);
+    vertical-align: bottom;
+}
+
+.desktop-native-scene small,
+.desktop-native-scene:hover small,
+.desktop-native-scene.is-active small {
+    max-width: none;
+    overflow: visible;
+    opacity: 1;
+}
+
+.desktop-native-editor-chrome {
+    min-width: 0;
+    background: var(--desktop-panel-soft);
+}
+
+.desktop-native-save-notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    padding: 10px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--desktop-danger) 45%, var(--desktop-line));
+    background: color-mix(in srgb, var(--desktop-danger) 9%, var(--desktop-panel));
+    color: var(--desktop-text);
+}
+
+.desktop-native-save-notice [data-native-save-notice-message] {
+    flex: 1 1 280px;
+    min-width: 0;
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.desktop-native-save-notice button {
+    flex: 0 0 auto;
+    min-height: 30px;
+}
+
+.desktop-native-save-notice[data-tone="warn"] {
+    border-bottom-color: color-mix(in srgb, var(--desktop-warning) 45%, var(--desktop-line));
+    background: color-mix(in srgb, var(--desktop-warning) 9%, var(--desktop-panel));
+}
+
+.desktop-native-editor-lock-hint {
+    margin: 0;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--desktop-line);
+    color: var(--desktop-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.desktop-native-save-notice[hidden],
+.desktop-native-editor-lock-hint[hidden] {
+    display: none !important;
+}
+
+.desktop-native-editor-header .desktop-native-editor-actions [data-native-save-status][data-tone="error"] {
+    color: var(--desktop-danger);
+}
+
+.desktop-native-editor-header .desktop-native-editor-actions [data-native-save-status][data-tone="warn"] {
+    color: var(--desktop-warning);
 }
 
 .desktop-native-outline-menu {
@@ -893,6 +993,111 @@
     min-height: 9em;
 }
 
+/* A narrow window uses one explicit column. Reset every child's placement so
+   the two-column dock rules cannot create an implicit outline-sized column. */
+@media (max-width: 980px) {
+    .desktop-app[data-view="writer"] .desktop-native-writer:not(.is-focus-mode) {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: 260px minmax(320px, 1fr) minmax(320px, 36vh);
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+
+    .desktop-app[data-view="writer"] .desktop-native-writer:not(.is-focus-mode) .desktop-native-outline {
+        grid-column: 1;
+        grid-row: 1;
+        grid-template-rows: auto auto minmax(100px, 1fr);
+        min-height: 260px;
+        max-height: 260px;
+        overflow: hidden;
+    }
+
+    .desktop-native-outline .desktop-native-project {
+        padding-block: 8px;
+    }
+
+    .desktop-native-outline .desktop-native-project-heading {
+        flex-wrap: nowrap;
+        align-items: center;
+    }
+
+    .desktop-native-outline .desktop-native-project-heading > div:first-child {
+        flex: 1 1 0;
+    }
+
+    .desktop-app[data-view="writer"] .desktop-native-writer:not(.is-focus-mode) .desktop-native-editor {
+        grid-column: 1;
+        grid-row: 2;
+        min-height: 320px;
+    }
+
+    .desktop-app[data-view="writer"] .desktop-native-writer:not(.is-focus-mode) .desktop-native-paper-heading {
+        display: none;
+    }
+
+    .desktop-app[data-view="writer"] .desktop-native-writer:not(.is-focus-mode) .desktop-native-editor-body {
+        grid-template-rows: minmax(0, 1fr) auto;
+        padding-block: 8px;
+    }
+
+    .desktop-app[data-view="writer"] .desktop-native-writer:not(.is-focus-mode) .desktop-native-editor-body > textarea {
+        grid-row: 1;
+    }
+
+    .desktop-app[data-view="writer"] .desktop-native-writer:not(.is-focus-mode) .desktop-native-paper-footer {
+        grid-row: 2;
+    }
+
+    .desktop-app[data-view="writer"] .desktop-native-writer:not(.is-focus-mode) .desktop-native-assistant {
+        grid-column: 1;
+        grid-row: 3;
+        min-height: 0;
+        border-left: 0;
+        border-top: 1px solid var(--desktop-line);
+    }
+
+    .desktop-app[data-view="writer"] .desktop-native-writer:not(.is-focus-mode) .desktop-native-generation {
+        height: 100%;
+        min-height: 0;
+    }
+
+    .desktop-app[data-view="writer"] .desktop-native-writer:not(.is-focus-mode) .desktop-native-generation > .desktop-native-composer {
+        flex: 1 1 0;
+        min-height: 0;
+    }
+
+    .desktop-app[data-view="writer"] .desktop-native-writer.is-outline-collapsed:not(.is-focus-mode) {
+        grid-template-rows: minmax(320px, 1fr) minmax(320px, 36vh);
+    }
+
+    .desktop-app[data-view="writer"] .desktop-native-writer.is-outline-collapsed:not(.is-focus-mode) .desktop-native-editor {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .desktop-app[data-view="writer"] .desktop-native-writer.is-outline-collapsed:not(.is-focus-mode) .desktop-native-assistant {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .desktop-app[data-view="writer"] .desktop-native-writer.is-assistant-collapsed:not(.is-focus-mode) {
+        grid-template-rows: 260px minmax(320px, 1fr);
+    }
+
+    .desktop-app[data-view="writer"] .desktop-native-writer.is-outline-collapsed.is-assistant-collapsed:not(.is-focus-mode) {
+        grid-template-rows: minmax(0, 1fr);
+    }
+
+    .desktop-app[data-view="writer"] .desktop-native-writer .desktop-native-sidebar-resizer {
+        display: none;
+    }
+
+    .desktop-native-editor-header,
+    :root[data-desktop-theme] .desktop-native-editor-header {
+        flex-direction: row;
+    }
+}
+
 .desktop-native-rewrite-tools {
     display: grid;
     gap: 8px;
@@ -935,6 +1140,31 @@
 .desktop-native-writer-settings-dialog {
     width: min(560px, calc(100vw - 48px));
     max-height: min(80vh, calc(100vh - 48px));
+    box-sizing: border-box;
+}
+
+.desktop-native-writer-settings-dialog[open],
+.desktop-native-prompt-preview-dialog[open] {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 12px;
+    overflow: hidden;
+}
+
+.desktop-native-writer-settings-dialog > .desktop-native-generation-actions {
+    margin-top: 0;
+    padding-bottom: 0;
+}
+
+.desktop-native-prompt-preview-dialog > pre {
+    min-height: 0;
+    margin: 0;
+    overflow: auto;
+    overflow-wrap: anywhere;
+}
+
+.desktop-native-prompt-preview-dialog > button {
+    justify-self: end;
 }
 
 .desktop-native-writer-settings-body {

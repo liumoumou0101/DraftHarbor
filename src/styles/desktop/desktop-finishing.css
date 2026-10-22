@@ -280,7 +280,7 @@
     border-top: 1px solid #4b5767;
 }
 
-@media (max-width: 1360px) {
+@media (min-width: 981px) and (max-width: 1360px) {
     .desktop-native-writer:not(.is-focus-mode):not(.is-assistant-bottom) {
         grid-template-columns: var(--native-outline-width, 220px) minmax(420px, 1fr) var(--native-assistant-width, 320px);
     }
