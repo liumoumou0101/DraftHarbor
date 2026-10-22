@@ -61,6 +61,6 @@ Files: new scoped `src/styles/desktop/writer-literary-desk.css`, licensed font a
 - [x] Run writer reasoning/save/interaction tests, capability test and full repository checks; investigate failures without relaxing safety assertions.
 - [x] Independent code review and browser QA using isolated project/server data.
 - [x] Package to `release/writer-desk-20261022/`, verify packaged resources and isolated packaged smoke.
-- [ ] Integrate the validated commit to local main, update `启动新版稿湾.cmd`, preserve previous package and record rollback instructions. No push or external publication.
+- [x] Integrate the validated commit to local main, update `启动新版稿湾.cmd`, preserve previous package and record rollback instructions. No push or external publication.
 
 Baseline at `0120d908`: writer-reasoning-test and writer-save-test passed before changes.
