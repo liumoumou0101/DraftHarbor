@@ -10,6 +10,18 @@ const PANEL_GROUP = {
 };
 
 async function openNativePanel(page, tab) {
+  const desk = await page.locator('[data-native-writer]').evaluate(el => el.classList.contains('is-literary-desk'));
+  if (desk) {
+    if (tab === 'generate' || tab === 'rewrite') {
+      await page.locator(`[data-native-desk-mode="${tab === 'rewrite' ? 'revise' : 'write'}"]`).click();
+      const composerToggle = page.locator('[data-native-desk-composer-toggle]');
+      if (await composerToggle.isVisible() && await composerToggle.getAttribute('aria-expanded') === 'false') await composerToggle.click();
+    } else {
+      await page.locator('[data-native-desk-tool]').selectOption(tab);
+    }
+    await page.locator(`[data-native-panel="${tab}"]`).waitFor({ state: 'visible' });
+    return;
+  }
   await page.click(`[data-native-assistant-group="${PANEL_GROUP[tab]}"]`);
   await page.click(`[data-native-panel-tab="${tab}"]`);
 }
@@ -19,7 +31,9 @@ async function openGenerationAdvanced(page) {
   if (await dialog.count()) {
     const open = await dialog.evaluate((el) => el.open);
     if (!open) {
-      await page.locator('[data-native-open-writer-settings]').first().click();
+      const composerToggle = page.locator('[data-native-desk-composer-toggle]');
+      if (await composerToggle.isVisible() && await composerToggle.getAttribute('aria-expanded') === 'false') await composerToggle.click();
+      await page.locator('[data-native-open-writer-settings]:visible').first().click();
       await page.waitForFunction(() => {
         const el = document.querySelector('[data-native-writer-settings-dialog]');
         return el && el.open;
@@ -27,18 +41,18 @@ async function openGenerationAdvanced(page) {
     }
     return;
   }
-  await page.locator('[data-native-generation-advanced]').evaluate((el) => {
-    el.open = true;
-  });
+  const advanced = page.locator('[data-native-generation-advanced]');
+  if (!await advanced.evaluate(el => el.open)) await advanced.locator('summary').click();
 }
 
 async function closeGenerationAdvanced(page) {
-  await page.evaluate(() => {
-    const dialog = document.querySelector('[data-native-writer-settings-dialog]');
-    if (dialog && dialog.open && typeof dialog.close === 'function') dialog.close();
-    const advanced = document.querySelector('[data-native-generation-advanced]');
-    if (advanced && !(advanced instanceof HTMLDialogElement)) advanced.open = false;
-  });
+  const dialog = page.locator('[data-native-writer-settings-dialog]');
+  if (await dialog.count()) {
+    if (await dialog.evaluate(el => el.open)) await page.locator('[data-native-close-writer-settings]').click();
+    return;
+  }
+  const advanced = page.locator('[data-native-generation-advanced]');
+  if (await advanced.count() && await advanced.evaluate(el => el.open)) await advanced.locator('summary').click();
 }
 
 async function openMoreMenu(page) {
@@ -68,6 +82,8 @@ async function openOutlineMenu(page, selector) {
 }
 
 async function setAssistantPlacement(page, placement) {
+  const desk = await page.locator('[data-native-writer]').evaluate(el => el.classList.contains('is-literary-desk'));
+  if (desk) await page.locator('[data-native-desk-layout]').click();
   const wantBottom = placement === 'bottom';
   const isBottom = await page.evaluate(() => document.querySelector('[data-native-writer]').classList.contains('is-assistant-bottom'));
   if (isBottom === wantBottom) return;

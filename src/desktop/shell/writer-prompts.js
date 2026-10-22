@@ -664,8 +664,21 @@
             && !!(generation.text || generation.inProgress);
     }
 
+    function captureNativeRewriteSelection(editor, start, end) {
+        const rewrite = nativeEditorState.rewrite;
+        rewrite.selectionSceneId = currentNativeScene() && currentNativeScene().id;
+        rewrite.selectionProjectId = currentProjectId();
+        rewrite.selectionStart = start;
+        rewrite.selectionEnd = end;
+        rewrite.originalText = editor.value.slice(start, end);
+        // Offsets alone are unsafe after an edit elsewhere in the manuscript.
+        rewrite.selectionBaseText = editor.value;
+        rewrite.selectionInvalidated = false;
+    }
+
     function rememberNativeRewriteSelection() {
         const editor = nativeEditorElements().editor;
+        if (nativeEditorState.rewrite.selectionInvalidated) return false;
         if (nativeRewritePreviewPending()) {
             return nativeEditorState.rewrite.selectionEnd > nativeEditorState.rewrite.selectionStart;
         }
@@ -673,11 +686,7 @@
         const start = Number(editor.selectionStart) || 0;
         const end = Number(editor.selectionEnd) || 0;
         if (end > start) {
-            nativeEditorState.rewrite.selectionSceneId = currentNativeScene() && currentNativeScene().id;
-            nativeEditorState.rewrite.selectionProjectId = currentProjectId();
-            nativeEditorState.rewrite.selectionStart = start;
-            nativeEditorState.rewrite.selectionEnd = end;
-            nativeEditorState.rewrite.originalText = editor.value.slice(start, end);
+            captureNativeRewriteSelection(editor, start, end);
             return true;
         }
         return nativeEditorState.rewrite.selectionEnd > nativeEditorState.rewrite.selectionStart;
@@ -686,14 +695,15 @@
     function restoreNativeRewriteSelection() {
         const editor = nativeEditorElements().editor;
         if (!editor) return false;
+        if (nativeEditorState.rewrite.selectionInvalidated) return false;
         const liveStart = Number(editor.selectionStart) || 0;
         const liveEnd = Number(editor.selectionEnd) || 0;
         if (liveEnd > liveStart && !nativeRewritePreviewPending()) {
-            nativeEditorState.rewrite.selectionSceneId = currentNativeScene() && currentNativeScene().id;
-            nativeEditorState.rewrite.selectionProjectId = currentProjectId();
-            nativeEditorState.rewrite.selectionStart = liveStart;
-            nativeEditorState.rewrite.selectionEnd = liveEnd;
-            nativeEditorState.rewrite.originalText = editor.value.slice(liveStart, liveEnd);
+            const remembered = nativeEditorState.rewrite;
+            if (typeof remembered.selectionBaseText === 'string'
+                && remembered.selectionStart === liveStart && remembered.selectionEnd === liveEnd
+                && remembered.selectionBaseText !== editor.value) return false;
+            captureNativeRewriteSelection(editor, liveStart, liveEnd);
             return true;
         }
         const start = Number(nativeEditorState.rewrite.selectionStart) || 0;
@@ -702,6 +712,7 @@
         const rewrite = nativeEditorState.rewrite;
         if ((rewrite.selectionSceneId && rewrite.selectionSceneId !== (currentNativeScene() && currentNativeScene().id))
             || (rewrite.selectionProjectId && rewrite.selectionProjectId !== currentProjectId())
+            || rewrite.selectionBaseText !== editor.value
             || end > editor.value.length || editor.value.slice(start, end) !== rewrite.originalText) return false;
         editor.focus({ preventScroll: true });
         editor.setSelectionRange(start, end);

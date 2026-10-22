@@ -86,6 +86,38 @@ const exePath = process.env.DRAFTHARBOR_PACKAGED_EXE || path.join(root, 'release
       'saved project content should persist in packaged app data root'
     );
 
+    // Open the isolated project through the packaged UI so this also verifies
+    // that the new fragment, controller, stylesheet and revision module ship.
+    await window.reload({ waitUntil: 'domcontentloaded' });
+    await window.locator('.desktop-project-card').filter({ hasText: 'Packaged Smoke Project' }).click();
+    const writer = window.locator('[data-native-writer]');
+    const editor = window.locator('[data-native-scene-editor]');
+    await window.waitForFunction(() => document.querySelector('[data-native-scene-editor]')?.value === 'Packaged persistence line.');
+    assert.strictEqual(await writer.evaluate(node => node.classList.contains('is-literary-desk')), true, 'packaged projects should open in the literary desk');
+    assert.strictEqual(await editor.evaluate(node => getComputedStyle(node).fontSize), '24px', 'packaged prose should use the actual 24px default');
+    for (const mode of ['write', 'conceive', 'revise']) {
+      assert.strictEqual(await window.locator(`[data-native-desk-mode="${mode}"]`).isVisible(), true, `packaged ${mode} mode should be reachable`);
+    }
+    await window.locator('[data-native-desk-mode="conceive"]').click();
+    assert.strictEqual(await window.locator('[data-native-gen-task="beat"]').evaluate(node => node.classList.contains('is-active')), true, 'conceive should route to the real beat control');
+    await window.locator('[data-native-desk-mode="write"]').click();
+    assert.strictEqual(await window.locator('[data-native-gen-task="continue"]').evaluate(node => node.classList.contains('is-active')), true, 'write should route to the real continuation control');
+
+    // Select exactly "Packaged" with native keyboard input. No model is called.
+    await editor.focus();
+    await window.keyboard.press('Control+Home');
+    await window.keyboard.down('Shift');
+    for (let index = 0; index < 'Packaged'.length; index += 1) await window.keyboard.press('ArrowRight');
+    await window.keyboard.up('Shift');
+    await window.locator('[data-native-desk-mode="revise"]').click();
+    await window.locator('[data-native-panel="rewrite"]').waitFor({ state: 'visible' });
+    await window.locator('[data-native-revision-layer]').waitFor({ state: 'visible' });
+    assert.strictEqual(await window.locator('[data-native-revision-mark]').textContent(), 'Packaged', 'packaged revision highlight should retain the exact selection');
+    assert.strictEqual(await window.locator('[data-native-revision-excerpt]').textContent(), 'Packaged', 'packaged revision context should match the highlighted original');
+    await window.locator('[data-native-revision-locate]').click();
+    assert.deepStrictEqual(await editor.evaluate(node => [node.selectionStart, node.selectionEnd]), [0, 8], 'locate should restore the same native selection');
+    assert.strictEqual(await editor.inputValue(), 'Packaged persistence line.', 'opening revision must preserve the manuscript');
+
     const backup = await window.evaluate(async (projectData) => {
       const response = await fetch('/api/create-backup', {
         method: 'POST',
@@ -114,7 +146,7 @@ const exePath = process.env.DRAFTHARBOR_PACKAGED_EXE || path.join(root, 'release
     console.log('Packaged smoke test passed.');
   } catch (error) {
     console.error('Packaged smoke test failed:', error && error.stack ? error.stack : error);
-    process.exit(1);
+    process.exitCode = 1;
   } finally {
     if (electronApp) {
       try { await electronApp.close(); } catch { /* ignore */ }

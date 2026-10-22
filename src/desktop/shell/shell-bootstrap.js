@@ -15,6 +15,8 @@
         bindProjectEditor();
         bindContextStrip();
         bindNativeEditor();
+        if (typeof window.bindNativeWriterDesk === 'function') window.bindNativeWriterDesk();
+        if (typeof window.bindNativeWriterRevisionRange === 'function') window.bindNativeWriterRevisionRange();
         bindNativeCompendiumExtraction();
         bindRecovery();
         bindReader();

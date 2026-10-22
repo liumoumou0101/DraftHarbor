@@ -27,7 +27,7 @@
         "desktop-mainline-test": "npm run compendium-experience-test && node tests/desktop-library.js && npm run workshop-experience-test && npm run reader-shell-test && node tests/summary-workflow.js && node tests/workflow-guided-ui.js && node tests/workflow-creation-guided-ui.js && node tests/workflow-rewrite-guided-ui.js && node tests/workflow-graph-ui.js",
         "writer-audit": "node tests/writer-button-audit.js",
         "writer-reasoning-test": "node tests/writer-generation-position.js && node tests/writer-reasoning-state.js && node tests/writer-retry.js && node tests/writer-selection-safety.js && node tests/writer-generation-protection.js",
-        "writer-save-test": "node tests/writer-save-state.js && node tests/writer-save-export-consistency.js && node tests/writer-project-switch-protection.js && node tests/writer-context-consistency.js && node tests/writer-prompt-load-safety.js && node tests/writer-interactions.js && node tests/style-guard-state.js",
+        "writer-save-test": "node tests/writer-save-state.js && node tests/writer-save-export-consistency.js && node tests/writer-project-switch-protection.js && node tests/writer-context-consistency.js && node tests/writer-prompt-load-safety.js && node tests/writer-interactions.js && node tests/style-guard-state.js && npm run writer-desk-test",
         "workshop-agent-test": "node tests/workshop-project-reader.js && node tests/workshop-edit-service.js && node tests/workshop-agent-service.js && node tests/workshop-agent-controller.js && node tests/workshop-write-integration.js",
         "workshop-experience-test": "node tests/workshop-ui.js && node tests/workshop-agent-ui.js && node tests/workshop-agent-integration.js",
         "writer-layout-audit": "node tests/writer-layout-audit.js",
@@ -60,7 +60,8 @@
         "workflow-stream-20k-real-provider-acceptance": "node tests/workflow-stream-20k-real-provider-acceptance.js",
         "ui": "npm run desktop-mainline-test",
         "test": "npm run lint && npm run smoke && npm run unit && npm run desktop-mainline-test",
-        "opencode-compatibility-test": "node tests/opencode-model-capabilities.js && node tests/opencode-provider-compatibility.js && node tests/opencode-go-thinking-smoke-validation.js"
+        "opencode-compatibility-test": "node tests/opencode-model-capabilities.js && node tests/opencode-provider-compatibility.js && node tests/opencode-go-thinking-smoke-validation.js",
+        "writer-desk-test": "node tests/writer-capability-preservation.js && node tests/writer-revision-range.js && node tests/writer-desk.js && node tests/writer-desk-generation.js"
     },
     "main": "desktop/main.js",
     "build": {

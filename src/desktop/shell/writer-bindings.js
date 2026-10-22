@@ -200,7 +200,7 @@
             if (!field) return;
             field.addEventListener('input', () => {
                 const limits = {
-                    fontSize: [15, 24, 18],
+                    fontSize: [18, 32, 24],
                     lineHeight: [1.45, 2.2, 1.9],
                     textWidth: [620, 1040, 760],
                     paragraphSpacing: [0, 1.5, 0]

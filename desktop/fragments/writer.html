@@ -11,6 +11,18 @@
                     </div>
                 </section>
                 <div class="desktop-native-writer" data-native-writer>
+                    <header class="writer-desk-toolbar" data-native-desk-toolbar>
+                        <div class="writer-desk-modes" role="group" aria-label="写作模式" data-native-desk-modes>
+                            <button type="button" data-native-desk-mode="write" aria-pressed="true">写作</button>
+                            <button type="button" data-native-desk-mode="conceive" aria-pressed="false">构思</button>
+                            <button type="button" data-native-desk-mode="revise" aria-pressed="false">修订</button>
+                        </div>
+                        <div class="writer-desk-toolbar-actions">
+                            <button type="button" data-native-desk-focus-exit hidden>退出专注</button>
+                            <button type="button" data-native-desk-appearance-toggle aria-haspopup="dialog">Aa · 外观</button>
+                            <button type="button" data-native-desk-layout aria-pressed="true" title="切换文学书桌与经典布局">经典布局</button>
+                        </div>
+                    </header>
                     <aside class="desktop-native-outline">
                         <div class="desktop-native-sidebar-resizer desktop-native-outline-resizer" data-native-resize-outline role="separator" aria-orientation="vertical" aria-label="调整结构栏宽度" tabindex="0"></div>
                         <div class="desktop-native-project">
@@ -130,8 +142,8 @@
                                 <p class="desktop-native-typography-format-hint">整理段首缩进、标点和多余空行。有选区则只处理选区。</p>
                                 <label>
                                     字号
-                                    <input type="range" data-native-editor-font-size min="15" max="24" step="1">
-                                    <span data-native-editor-font-size-value>18</span>
+                                    <input type="range" data-native-editor-font-size min="18" max="32" step="1">
+                                    <span data-native-editor-font-size-value>24</span>
                                 </label>
                                 <label>
                                     行距
@@ -233,8 +245,44 @@
                                 </div>
                             </div>
                         </div>
+                        <section class="writer-desk-dock" data-native-desk-dock aria-label="写作助手" hidden>
+                            <div class="writer-desk-dock-heading">
+                                <span class="writer-desk-dock-mark" aria-hidden="true">✦</span>
+                                <strong data-native-desk-dock-title>把故事往前写</strong>
+                                <span data-native-desk-dock-hint>从这一刻，写下下一段。</span>
+                                <button type="button" data-native-desk-composer-toggle aria-expanded="false" hidden>调整要求</button>
+                            </div>
+                            <div data-native-desk-range-host></div>
+                        </section>
                     </main>
                     <aside class="desktop-native-assistant">
+                        <div class="writer-desk-sidebar-toolbar" data-native-desk-sidebar-toolbar hidden>
+                            <label for="writer-desk-tool">场景与工具</label>
+                            <select id="writer-desk-tool" data-native-desk-tool aria-label="打开写作工具">
+                                <option value="overview">当前场景</option>
+                                <option value="characters">人物</option>
+                                <option value="context">资料与引用</option>
+                                <option value="metadata">场景信息与摘要</option>
+                                <option value="structure">结构与导出</option>
+                                <option value="search">查找与替换</option>
+                                <option value="history">调用历史</option>
+                            </select>
+                        </div>
+                        <section class="writer-desk-overview" data-native-desk-overview aria-label="当前场景概览" hidden>
+                            <div class="writer-desk-scene-card">
+                                <p class="writer-desk-eyebrow">这一场</p>
+                                <h3 data-native-desk-scene-title>选择一个场景</h3>
+                                <p data-native-desk-scene-meta></p>
+                                <p class="writer-desk-scene-summary" data-native-desk-scene-summary>打开场景后，在这里查看摘要和叙事视角。</p>
+                                <button type="button" data-native-desk-open-tool="metadata">编辑场景信息 <span aria-hidden="true">↗</span></button>
+                            </div>
+                            <div class="writer-desk-reference-section">
+                                <div class="writer-desk-section-heading"><h3>手边的资料</h3><button type="button" data-native-desk-open-tool="context">管理引用</button></div>
+                                <p class="writer-desk-reference-note" data-native-desk-reference-note></p>
+                                <div class="writer-desk-reference-list" data-native-desk-references></div>
+                                <button class="writer-desk-reference-more" type="button" data-native-desk-open-tool="characters">查看人物卡</button>
+                            </div>
+                        </section>
                         <div class="desktop-native-sidebar-resizer desktop-native-assistant-resizer" data-native-resize-assistant role="separator" aria-orientation="vertical" aria-label="拖动调整辅助栏大小，双击恢复默认" title="拖动调整高度，双击恢复默认" tabindex="0"></div>
                         <div class="desktop-native-assistant-header">
                             <span class="desktop-native-assistant-header-label">写作辅助</span>
@@ -515,6 +563,17 @@
                             <div class="desktop-native-generation-history" data-native-generation-history></div>
                         </section>
                     </aside>
+                    <dialog class="desktop-native-prompt-dialog writer-desk-appearance-dialog" data-native-desk-appearance aria-labelledby="writer-desk-appearance-title">
+                        <header class="desktop-native-summary-dialog-header"><h2 id="writer-desk-appearance-title">书桌外观</h2></header>
+                        <div class="writer-desk-appearance-fields">
+                            <label><span>正文字号 <output data-native-desk-font-size-value>24 px</output></span><input type="range" min="18" max="32" step="1" data-native-desk-font-size aria-label="正文字号"></label>
+                            <label><span>正文字体</span><select data-native-desk-font-family><option value="serif">宋体 / 衬线</option><option value="system">系统默认</option><option value="yahei">微软雅黑</option></select></label>
+                            <label class="writer-desk-check"><input type="checkbox" data-native-desk-night><span>夜间书桌</span></label>
+                            <label class="writer-desk-check"><input type="checkbox" data-native-desk-reduce-motion><span>减少动态效果</span></label>
+                            <p>更多行距、正文宽度、段距与目标字数设置，可在「更多 → 排版」中调整。</p>
+                        </div>
+                        <div class="desktop-native-generation-actions"><button class="desktop-primary-action" type="button" data-native-desk-appearance-close>完成</button></div>
+                    </dialog>
                     <dialog class="desktop-reader-writer-dialog" data-reader-writer-dialog aria-labelledby="reader-writer-title">
                         <header class="desktop-reader-writer-header">
                             <div><p class="desktop-section-kicker">阅读快照</p><h2 id="reader-writer-title">将阅读快照接入写作</h2></div>

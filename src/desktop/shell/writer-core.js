@@ -41,17 +41,17 @@
 
     function loadNativeEditorPrefs() {
         try {
-            const saved = JSON.parse(window.localStorage.getItem(NATIVE_EDITOR_PREFS_STORAGE_KEY) || '{}');
+            const saved = JSON.parse(window.localStorage.getItem(NATIVE_EDITOR_PREFS_STORAGE_KEY) || '{}') || {};
             nativeEditorState.editorPrefs = {
-                fontSize: clampNumber(saved.fontSize, 15, 24, nativeEditorState.editorPrefs.fontSize),
+                fontSize: saved.fontSize == null ? 24 : clampNumber(saved.fontSize, 15, 32, 24),
                 lineHeight: clampNumber(saved.lineHeight, 1.45, 2.2, nativeEditorState.editorPrefs.lineHeight),
                 textWidth: clampNumber(saved.textWidth, 620, 1040, nativeEditorState.editorPrefs.textWidth),
                 paragraphSpacing: clampNumber(saved.paragraphSpacing, 0, 1.5, nativeEditorState.editorPrefs.paragraphSpacing),
-                fontFamily: ['system', 'serif', 'yahei'].includes(saved.fontFamily) ? saved.fontFamily : nativeEditorState.editorPrefs.fontFamily,
+                fontFamily: ['system', 'serif', 'yahei'].includes(saved.fontFamily) ? saved.fontFamily : 'serif',
                 wordGoal: clampNumber(saved.wordGoal, 0, 999999, nativeEditorState.editorPrefs.wordGoal)
             };
         } catch (error) {
-            nativeEditorState.editorPrefs = { fontSize: 18, lineHeight: 1.9, textWidth: 760, paragraphSpacing: 0, fontFamily: 'system', wordGoal: 0 };
+            nativeEditorState.editorPrefs = { fontSize: 24, lineHeight: 1.9, textWidth: 760, paragraphSpacing: 0, fontFamily: 'serif', wordGoal: 0 };
         }
     }
 
@@ -107,7 +107,10 @@
             elements.root.style.setProperty('--native-editor-paragraph-spacing', `${prefs.paragraphSpacing}em`);
             elements.root.style.setProperty('--native-editor-font-family', editorFontStack());
         }
-        if (elements.editorFontSize) elements.editorFontSize.value = String(prefs.fontSize);
+        if (elements.editorFontSize) {
+            elements.editorFontSize.min = String(Math.min(18, prefs.fontSize));
+            elements.editorFontSize.value = String(prefs.fontSize);
+        }
         if (elements.editorFontSizeValue) elements.editorFontSizeValue.textContent = String(prefs.fontSize);
         if (elements.editorLineHeight) elements.editorLineHeight.value = String(prefs.lineHeight);
         if (elements.editorLineHeightValue) elements.editorLineHeightValue.textContent = prefs.lineHeight.toFixed(2);
@@ -127,6 +130,7 @@
         if (elements.toggleSpecials) {
             elements.toggleSpecials.setAttribute('aria-pressed', elements.specials && !elements.specials.hidden ? 'true' : 'false');
         }
+        if (typeof window.syncNativeWriterRevisionRange === 'function') window.syncNativeWriterRevisionRange();
     }
 
     function closeNativeWriterPopovers(options = {}) {
@@ -751,6 +755,7 @@
         nativeEditorState.saveError = '';
         nativeEditorState.generation = {
             beat: '', lengthHint: (nativeEditorState.generation && nativeEditorState.generation.lengthHint) || 'natural',
+            genTask: 'continue',
             text: '', reasoning: '', finishReason: '', interruptReason: '', reasoningUserCollapsed: false,
             prompt: null,
             record: null,

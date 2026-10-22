@@ -186,6 +186,7 @@ function snapshot() {
 
     await page.evaluate(() => { window.__draftHarborGenerationStub = async () => { throw new Error('summary provider failure'); }; });
     await openNativePanel(page, 'metadata');
+    assert.strictEqual(await page.isDisabled('[data-native-generate-chapter-summary]'), false, 'reopening metadata after completed requests must restore chapter summary generation');
     await page.waitForSelector('[data-native-generate-chapter-summary]:not([disabled])');
     await page.click('[data-native-generate-chapter-summary]');
     await page.waitForFunction(() => document.querySelector('[data-native-save-status]').textContent.includes('summary provider failure'));

@@ -176,10 +176,12 @@ async function generateAndApprove(page, title) {
       'UI-WORKFLOW-GLOBAL-PROMPT-SENTINEL',
       'creation start request must include the frozen global prompt'
     );
-    await page.waitForFunction(() =>
+    // The list refresh briefly replaces detailed runs with list summaries.
+    // Assert the exact persisted snapshot observed by the readiness wait.
+    const launchSnapshotHandle = await page.waitForFunction(() =>
       workflowState.runs.find((item) => item.id === workflowState.selectedId)?.settings?.generationPolicy?.snapshot);
-    const storedLaunchSnapshot = await page.evaluate(() =>
-      workflowState.runs.find((item) => item.id === workflowState.selectedId)?.settings?.generationPolicy?.snapshot);
+    const storedLaunchSnapshot = await launchSnapshotHandle.jsonValue();
+    await launchSnapshotHandle.dispose();
     assert.strictEqual(
       storedLaunchSnapshot?.globalPrompt,
       'UI-WORKFLOW-GLOBAL-PROMPT-SENTINEL',

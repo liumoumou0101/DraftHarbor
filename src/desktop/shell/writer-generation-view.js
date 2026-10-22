@@ -262,6 +262,10 @@
         const activeChapter = scene && snapshot && Array.isArray(snapshot.chapters)
             ? snapshot.chapters.find((chapter) => chapter.id === scene.chapterId)
             : null;
+        // Summary completion updates this view without rebuilding the editor.
+        // Restore its actions here as soon as the request releases the lock.
+        if (elements.generateSceneSummary) elements.generateSceneSummary.disabled = !scene || generation.inProgress;
+        if (elements.generateChapterSummary) elements.generateChapterSummary.disabled = !activeChapter || generation.inProgress;
         const currentText = scene
             ? (elements.editor ? String(elements.editor.value || '') : nativeSceneContent(scene.id))
             : '';
