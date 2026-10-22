@@ -9,7 +9,32 @@ const compendiumStore = require('../desktop/storage/compendium-store');
 const paths = require('../desktop/storage/library-paths');
 const CompendiumSchema = require('../src/core/knowledge/compendium-schema');
 
+async function testCharacterProfileSearch() {
+  const fields = ['role', 'goal', 'motivation', 'conflict', 'voice', 'currentState', 'knowledge', 'relationshipNotes'];
+  const entries = fields.map(field => CompendiumSchema.createCompendiumEntry({
+    id: field, type: 'character', title: '林岚', characterProfile: { [field]: `PROFILE_${field}_FACT` }
+  }));
+  const originalLocation = projectService.projectLocation;
+  const originalList = compendiumStore.listEntries;
+  projectService.projectLocation = async () => 'isolated-search-input';
+  compendiumStore.listEntries = async () => entries;
+  try {
+    for (const field of fields) {
+      const result = await compendiumService.listEntries('isolated-search-input', 'project', { query: `PROFILE_${field}_FACT`, type: 'character' });
+      assert.deepStrictEqual(result.entries.map(entry => entry.id), [field], `${field} must be searchable without repeating it in the body`);
+      assert.deepStrictEqual(result.summaries.map(entry => entry.id), [field]);
+    }
+    assert.strictEqual((await compendiumService.listEntries('isolated-search-input', 'project', { query: 'PROFILE_role_FACT', type: 'location' })).entries.length, 0, 'profile search must preserve the type filter');
+    console.log('Compendium character profile search tests passed (in-memory storage input).');
+  } finally {
+    projectService.projectLocation = originalLocation;
+    compendiumStore.listEntries = originalList;
+  }
+}
+
 (async () => {
+  await testCharacterProfileSearch();
+  if (process.argv.includes('--unit-only')) return;
   const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'draftharbor-compendium-test-'));
   let servers = null;
 

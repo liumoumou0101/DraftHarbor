@@ -15,6 +15,32 @@
         'note'
     ]);
 
+    const CHARACTER_PROFILE_FIELDS = Object.freeze([
+        ['role', '角色定位'],
+        ['goal', '目标'],
+        ['motivation', '动机'],
+        ['conflict', '冲突'],
+        ['voice', '语气/声音'],
+        ['currentState', '当前状态'],
+        ['knowledge', '已知信息'],
+        ['relationshipNotes', '关系备注']
+    ].map(Object.freeze));
+
+    function pickCharacterProfile(entry) {
+        const profile = entry && entry.type === 'character' && entry.characterProfile;
+        if (!profile || typeof profile !== 'object') return {};
+        return Object.fromEntries(CHARACTER_PROFILE_FIELDS
+            .map(([key]) => [key, cleanString(profile[key])])
+            .filter(([, value]) => value));
+    }
+
+    function characterProfileLines(entry) {
+        const profile = pickCharacterProfile(entry);
+        return CHARACTER_PROFILE_FIELDS
+            .filter(([key]) => profile[key])
+            .map(([key, label]) => `${label}: ${profile[key]}`);
+    }
+
     function nowIso() {
         return new Date().toISOString();
     }
@@ -38,16 +64,7 @@
     }
 
     function defaultCharacterProfile() {
-        return {
-            role: '',
-            goal: '',
-            motivation: '',
-            conflict: '',
-            voice: '',
-            currentState: '',
-            knowledge: '',
-            relationshipNotes: ''
-        };
+        return Object.fromEntries(CHARACTER_PROFILE_FIELDS.map(([key]) => [key, '']));
     }
 
     function normalizeContextPolicy(input) {
@@ -227,6 +244,9 @@
 
     return {
         ENTRY_TYPES,
+        CHARACTER_PROFILE_FIELDS,
+        pickCharacterProfile,
+        characterProfileLines,
         createCompendiumEntry,
         normalizeCompendiumEntries,
         compendiumEntrySummary,

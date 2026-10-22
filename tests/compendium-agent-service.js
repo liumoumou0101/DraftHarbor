@@ -41,7 +41,7 @@ const { createController: createKnowledgeController } = require('../desktop/cont
     assert.strictEqual(after.entries[0].aliases[0], '阿岚');
     await assert.rejects(
       () => compendiumAgentService.applyOperations(dataRoot, 'agent-project', [{
-        entryId: entry.id, baseRevision: revision, patch: { body: '越权内容' }
+        id: 'forbidden-op', entryId: entry.id, baseRevision: revision, patch: { body: '越权内容' }
       }], { agentSettings: { maxCardsPerRun: 3 } }),
       /field is not editable/
     );
@@ -112,7 +112,7 @@ const { createController: createKnowledgeController } = require('../desktop/cont
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         projectId: 'agent-project',
-        operations: [{ entryId: entry.id, baseRevision: apiEntry.revision, patch: { summary: '通过 API 更新的摘要' } }]
+        operations: [{ id: 'api-apply-op', entryId: entry.id, baseRevision: apiEntry.revision, patch: { summary: '通过 API 更新的摘要' } }]
       })
     });
     const apiApply = await apiApplyResponse.json();
@@ -125,7 +125,7 @@ const { createController: createKnowledgeController } = require('../desktop/cont
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         projectId: 'agent-project',
-        operations: [{ entryId: entry.id, baseRevision: apiEntry.revision, patch: { body: '仍然越权' } }]
+        operations: [{ id: 'api-forbidden-op', entryId: entry.id, baseRevision: apiEntry.revision, patch: { body: '仍然越权' } }]
       })
     });
     const apiForbidden = await apiForbiddenResponse.json();

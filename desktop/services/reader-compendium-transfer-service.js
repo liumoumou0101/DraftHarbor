@@ -2,6 +2,8 @@ const crypto = require('crypto');
 const Extraction = require('../../src/core/knowledge/reader-compendium-extraction');
 const CompendiumSchema = require('../../src/core/knowledge/compendium-schema');
 const defaultBatchStore = require('../storage/reader-compendium-batch-store');
+const { projectDir } = require('../storage/library-paths');
+const { withProjectWriteLock } = require('../storage/project-write-lock');
 
 function clean(value) { return String(value === undefined || value === null ? '' : value).trim(); }
 function stableId(prefix, value) { return `${prefix}-${crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 16)}`; }
@@ -48,6 +50,7 @@ function createReaderCompendiumTransferService(dependencies = {}) {
     const merged = Extraction.mergeCards(rawCards, Math.min(80, Math.max(1, Number(request.maxCards) || 80)));
     const candidates = Extraction.compareCandidates(merged, existing).map((candidate) => ({
       ...candidate,
+      existingEntryVersions: Object.fromEntries(candidate.suspectedEntryIds.map((id) => [id, (existing.find((entry) => entry.id === id) || {}).updatedAt || ''])),
       existingUpdatedAt: candidate.existingEntryId ? (existing.find((entry) => entry.id === candidate.existingEntryId) || {}).updatedAt || '' : ''
     }));
     const now = clean(request.createdAt) || new Date().toISOString();
@@ -103,6 +106,10 @@ function createReaderCompendiumTransferService(dependencies = {}) {
 
   async function apply(dataRoot, request = {}) {
     if (request.confirmed !== true) throw new Error('reader compendium save requires explicit confirmation');
+    return withProjectWriteLock(projectDir(dataRoot, clean(request.projectId)), () => applyLocked(dataRoot, request));
+  }
+
+  async function applyLocked(dataRoot, request) {
     const projectId = clean(request.projectId); const batchId = clean(request.batchId);
     const batch = await batches.readBatch(dataRoot, projectId, batchId);
     if (!batch) throw new Error('reader compendium review batch was not found');
@@ -124,8 +131,12 @@ function createReaderCompendiumTransferService(dependencies = {}) {
       const targetId = clean(candidate.targetEntryId || candidate.existingEntryId);
       const existing = targetId ? entries.find((entry) => entry.id === targetId) : null;
       if (targetId && !existing) throw new Error(`target compendium entry no longer exists: ${targetId}`);
-      if (existing && candidate.existingUpdatedAt && existing.updatedAt !== candidate.existingUpdatedAt) throw new Error(`target compendium entry changed after extraction: ${targetId}`);
-      return CompendiumSchema.createCompendiumEntry({
+      const expectedUpdatedAt = targetId
+        ? candidate.existingEntryVersions && candidate.existingEntryVersions[targetId]
+          || (targetId === candidate.existingEntryId ? candidate.existingUpdatedAt : '')
+        : '';
+      if (existing && (!expectedUpdatedAt || existing.updatedAt !== expectedUpdatedAt)) throw new Error(`target compendium entry changed after extraction; extract again: ${targetId}`);
+      return { ...CompendiumSchema.createCompendiumEntry({
         ...(existing || {}), ...card,
         id: existing ? existing.id : stableId(card.type, `${batchId}:${candidate.candidateId}`), projectId,
         summary: card.summary || existing && existing.summary || '',
@@ -138,7 +149,7 @@ function createReaderCompendiumTransferService(dependencies = {}) {
         } : undefined,
         sourceReferences: [...(existing && existing.sourceReferences || []), ...sourceReferences(batch, transfer, candidate, now)],
         createdAt: existing && existing.createdAt || now, updatedAt: now
-      });
+      }), expectedUpdatedAt };
     });
     const backup = (await createBackup(dataRoot, projectId, `Before saving Reader compendium batch ${batchId}`, 'before-reader-compendium-application')).backup;
     const saved = writes.length ? (await compendiumService.saveEntriesBatch(dataRoot, projectId, writes)).entries : [];

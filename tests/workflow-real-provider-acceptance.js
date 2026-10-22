@@ -245,7 +245,7 @@ async function acceptanceProjectState() {
 
   const analysisArtifact = details.run.artifacts.find((artifact) => artifact.nodeId === 'analysis' && artifact.revision.reviewState === 'approved');
   const candidates = Array.isArray(analysis.characterCandidates) ? analysis.characterCandidates.map((draft, index) => ({
-    id: `real-provider-card-${index + 1}`, draft,
+    id: `real-provider-card-${index + 1}`, draft: { ...draft, type: 'character' },
     source: { runId, artifactId: analysisArtifact.id, revisionId: analysisArtifact.revision.id }
   })) : [];
   let suggestionCount = 0;
@@ -253,7 +253,7 @@ async function acceptanceProjectState() {
     const preview = await Transfer.previewCompendiumSuggestions({ dataRoot: DATA_ROOT, projectId: PROJECT_ID, runId, candidates });
     suggestionCount = preview.suggestions.length;
     if (suggestionCount) await Transfer.applyConfirmedCompendiumSuggestions({
-      dataRoot: DATA_ROOT, projectId: PROJECT_ID, runId, applicationId: 'real-provider-compendium-transfer', candidates,
+      dataRoot: DATA_ROOT, projectId: PROJECT_ID, runId, applicationId: 'real-provider-compendium-transfer', preview,
       confirmedSuggestionIds: preview.suggestions.map((suggestion) => suggestion.id)
     });
   }

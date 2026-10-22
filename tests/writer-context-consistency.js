@@ -5,7 +5,8 @@ const vm = require('vm');
 const resolver = require('../src/core/context/context-resolver');
 
 class Element {
-  constructor(tag = 'div') { this.tag = tag; this.children = []; this._value = ''; }
+  constructor(tag = 'div') { this.tag = tag; this.children = []; this._value = ''; this.dataset = {}; }
+  setAttribute(name, value) { this[name] = String(value); }
   set value(value) { this._value = this.tag === 'select' && !this.children.some(option => option.value === value) ? '' : value; }
   get value() { return this._value; }
   appendChild(child) { this.children.push(child); if (this.tag === 'select' && this.children.length === 1) this._value = child.value; }
@@ -44,6 +45,31 @@ test('context summary explains automatically included references', () => {
   e.context.renderNativeContext();
   assert.ok(e.elements.contextSummary.textContent.includes('林舟'));
   assert.ok(e.elements.contextSummary.textContent.includes('自动') || e.elements.contextSummary.textContent.includes('常驻'));
+});
+test('typing a beat immediately updates automatic references in the context preview', () => {
+  const e = fixture();
+  e.snapshot.compendium[0].alwaysInContext = false;
+  e.snapshot.compendium[0].contextPolicy = { mode: 'mention' };
+  const beatInput = new EventTarget();
+  beatInput.value = '';
+  Object.assign(e.elements, { beatInput, specialButtons: [], panelTabs: [], assistantGroupTabs: [] });
+  delete e.elements.editor;
+  Object.assign(e.context.document, { querySelector: () => null, addEventListener() {} });
+  e.context.window.addEventListener = () => {};
+  e.context.renderNativeGeneration = () => {};
+  vm.runInContext(source('writer-bindings.js'), e.context);
+  e.context.bindNativeEditor();
+  e.context.renderNativeContextSummary();
+  assert.ok(!e.elements.contextSummary.textContent.includes('林舟'));
+
+  beatInput.value = '林舟收到一封来信。';
+  beatInput.dispatchEvent(new Event('input'));
+  assert.strictEqual(e.context.nativeEditorState.generation.beat, beatInput.value);
+  assert.ok(e.elements.contextSummary.textContent.includes('林舟'), 'mentioning a card must update the preview on the input event');
+
+  beatInput.value = '描述港口天气。';
+  beatInput.dispatchEvent(new Event('input'));
+  assert.ok(!e.elements.contextSummary.textContent.includes('林舟'), 'removing the mention must remove the stale automatic reference');
 });
 for (const scope of ['all', 'current']) test(scope + ' replace invalidates both levels of summary', () => {
   const e = fixture();

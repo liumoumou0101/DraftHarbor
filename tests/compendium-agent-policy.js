@@ -54,6 +54,9 @@ const validOperation = {
   }
 };
 assert.strictEqual(Policy.validateOperation(validOperation).ok, true);
+assert.strictEqual(Policy.validateOperation({ ...validOperation, id: '   ' }).ok, false, 'a writable operation requires an ID');
+assert.strictEqual(Policy.validateOperations([validOperation, { ...validOperation, entryId: 'another-entry' }]).ok, false,
+  'apply requests must reject duplicate operation IDs even without findings');
 assert.strictEqual(Policy.validateOperationsAgainstEntries([validOperation], [entry]).ok, true);
 
 const forbiddenField = Policy.validateOperation({ ...validOperation, patch: { body: '越权修改' } });
@@ -91,5 +94,16 @@ assert.strictEqual(Policy.validateAnalysisResultAgainstEntries({
   findings: [{ id: 'finding-1', severity: 'low', reason: '越权引用。', entryIds: ['missing-entry'] }],
   operations: []
 }, [entry]).ok, false);
+
+const reviewFinding = { id: 'review', reason: 'Review the proposed change.', entryIds: [entry.id], operationIds: [validOperation.id] };
+const invalidReviews = [
+  ['missing operation ID', { findings: [], operations: [{ ...validOperation, id: '' }] }],
+  ['duplicate operation IDs', { findings: [reviewFinding], operations: [validOperation, { ...validOperation, entryId: 'another-entry' }] }],
+  ['unreviewed operation', { findings: [{ ...reviewFinding, operationIds: [] }], operations: [validOperation] }],
+  ['operation targeting an unrelated card', { findings: [{ ...reviewFinding, entryIds: ['another-entry'] }], operations: [validOperation] }],
+  ['duplicate finding IDs', { findings: [reviewFinding, { ...reviewFinding, operationIds: [] }], operations: [validOperation] }]
+];
+const acceptedInvalidReviews = invalidReviews.filter(([, result]) => Policy.validateAnalysisResult(result).ok).map(([name]) => name);
+assert.deepStrictEqual(acceptedInvalidReviews, [], 'every writable suggestion must have an unambiguous visible review');
 
 console.log('Compendium agent policy test passed.');

@@ -255,6 +255,7 @@
     function renderNativeGeneration() {
         const elements = nativeEditorElements();
         if (typeof syncNativeGenerationEditorLock === 'function') syncNativeGenerationEditorLock();
+        if (typeof window.refreshCompendiumPeek === 'function') window.refreshCompendiumPeek({ referenceOnly: true });
         const generation = nativeEditorState.generation;
         const scene = currentNativeScene();
         const snapshot = nativeEditorState.snapshot;

@@ -15,7 +15,8 @@
         "playwright": "^1.40.0"
     },
     "scripts": {
-        "precore-test": "node tests/writer-truncation.js",
+        "precore-test": "node tests/writer-truncation.js && npm run compendium-integrity-test",
+        "compendium-integrity-test": "node tests/compendium-context-regression.js && node tests/compendium-transfer-safety.js && node tests/compendium-unload-protection.js",
         "writer-truncation-test": "node tests/writer-truncation.js",
         "desktop": "electron .",
         "pack": "electron-builder --dir",
@@ -31,7 +32,9 @@
         "workshop-experience-test": "node tests/workshop-ui.js && node tests/workshop-agent-ui.js && node tests/workshop-agent-integration.js",
         "writer-layout-audit": "node tests/writer-layout-audit.js",
         "compendium-layout-audit": "node tests/compendium-layout-audit.js",
-        "compendium-experience-test": "node tests/compendium-editor-state.js && node tests/compendium-agent-ui.js && node tests/compendium-ai-dialogs.js",
+        "compendium-experience-test": "node tests/compendium-editor-state.js && node tests/compendium-agent-ui.js && node tests/compendium-ai-dialogs.js && npm run compendium-reading-room-test",
+        "compendium-reading-room-test": "node tests/compendium-insights.js && node tests/compendium-workspace.js && node tests/compendium-peek.js",
+        "compendium-reading-room-visual": "node tests/compendium-reading-room-visual.js",
         "writer-realistic-visual-audit": "node tests/writer-realistic-visual-audit.js",
         "desktop-test": "npm run desktop-mainline-test",
         "core-test": "node tests/core-project.js && node tests/core-generation.js && node tests/instruction-stack.js && node tests/provider-stream.js && npm run opencode-compatibility-test && node tests/ai-task-contract.js && node tests/ai-task-runner.js && node tests/compendium-agent-policy.js && npm run reader-core-test && node tests/workflow-v2-schema.js && node tests/workflow-artifact-schema.js && node tests/workflow-capability-registry.js && node tests/workflow-builtin-catalog.js && node tests/workflow-constraint-schema.js && node tests/workflow-quality-metrics.js && node tests/workflow-lock-service.js && node tests/workflow-creation-schema.js && node tests/workflow-generation-batch-schema.js && node tests/workflow-chapter-assembly.js && node tests/workflow-context-assembly.js && node tests/workflow-rewrite-schema.js && node tests/workflow-variant-schema.js && node tests/workflow-analysis-service.js && node tests/workflow-planning-service.js && node tests/workflow-longform-service.js && node tests/workflow-review-service.js && npm run storage-test && npm run reader-protocol-test",

@@ -1,0 +1,289 @@
+/* Reading room. Scoped tokens leave the rest of the application's theme intact. */
+#desktop-root[data-view="compendium"] {
+    --compendium-bg: #f4f3ed;
+    --compendium-panel: #fcfbf7;
+    --compendium-directory: #efefe8;
+    --compendium-text: #303b32;
+    --compendium-muted: #5e695c;
+    --compendium-line: #dedfd5;
+    --compendium-accent: #536d50;
+    --compendium-accent-soft: #e4eadc;
+    --compendium-hover: #e9ece2;
+    --compendium-input: #f1f3ea;
+    --compendium-shadow: 0 12px 40px #27352416;
+    --desktop-bg: var(--compendium-bg);
+    --desktop-panel: var(--compendium-panel);
+    --desktop-surface: var(--compendium-bg);
+    --desktop-surface-raised: var(--compendium-hover);
+    --desktop-text: var(--compendium-text);
+    --desktop-muted: var(--compendium-muted);
+    --desktop-faint: var(--compendium-muted);
+    --desktop-line: var(--compendium-line);
+    --desktop-line-strong: var(--compendium-line);
+    --desktop-accent: var(--compendium-accent);
+    --desktop-accent-rgb: 83, 109, 80;
+    --desktop-accent-soft: var(--compendium-accent-soft);
+    --desktop-focus-ring: var(--compendium-accent);
+    --desktop-shadow-soft: var(--compendium-shadow);
+    color: var(--compendium-text);
+    background: var(--compendium-bg);
+    grid-template-columns: 68px minmax(0, 1fr);
+}
+#desktop-root[data-view="compendium"][data-compendium-appearance="ink"] {
+    color-scheme: dark;
+    --compendium-bg: #20271f;
+    --compendium-panel: #252c24;
+    --compendium-directory: #1d241d;
+    --compendium-text: #e3e7dc;
+    --compendium-muted: #aebaa8;
+    --compendium-line: #394335;
+    --compendium-accent: #b0c89d;
+    --compendium-accent-soft: #394733;
+    --compendium-hover: #303a2d;
+    --compendium-input: #2c3629;
+    --compendium-shadow: 0 12px 40px #0005;
+    --desktop-accent-rgb: 176, 200, 157;
+}
+#desktop-root[data-view="compendium"][data-compendium-appearance="paper"] { color-scheme: light; }
+#desktop-root[data-view="compendium"].is-rail-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
+#desktop-root[data-view="compendium"] .desktop-main { min-width: 0; gap: 0; background: var(--compendium-panel); }
+#desktop-root[data-view="compendium"] .desktop-topbar {
+    min-height: 56px; padding: 9px 24px; border-bottom: 1px solid var(--compendium-line);
+    box-shadow: none; background: var(--compendium-bg);
+}
+#desktop-root[data-view="compendium"] .desktop-topbar .desktop-eyebrow { display: none; }
+#desktop-root[data-view="compendium"] .desktop-topbar h1 { font-size: 15px; letter-spacing: .05em; font-weight: 600; }
+#desktop-root[data-view="compendium"] .desktop-topbar-actions { gap: 8px; }
+#desktop-root[data-view="compendium"] .desktop-topbar-actions button { min-height: 30px; font-size: 12px; }
+#desktop-root[data-view="compendium"] .desktop-rail { background: var(--compendium-bg); border-color: var(--compendium-line); }
+#desktop-root[data-view="compendium"] .desktop-brand { padding-left: 0; padding-right: 0; }
+#desktop-root[data-view="compendium"] .desktop-brand-text { display: none; }
+#desktop-root[data-view="compendium"] .desktop-compendium-view.is-active {
+    display: grid; grid-template-columns: 264px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
+    height: 100%; min-height: 0; min-width: 0; padding: 0; gap: 0; overflow: hidden;
+    color: var(--compendium-text); background: var(--compendium-panel);
+}
+#desktop-root[data-view="compendium"] .desktop-compendium-view:has(> [data-reader-source-bar]:not([hidden])) {
+    grid-template-rows: auto minmax(0, 1fr);
+}
+#desktop-root .desktop-compendium-view > [data-reader-source-bar] { grid-column: 1 / -1; }
+#desktop-root .desktop-compendium-view [hidden] { display: none !important; }
+#desktop-root .desktop-compendium-view button,
+#desktop-root .desktop-compendium-view input,
+#desktop-root .desktop-compendium-view select,
+#desktop-root .desktop-compendium-view textarea { font-family: inherit; }
+#desktop-root .desktop-compendium-view button { cursor: pointer; }
+#desktop-root .desktop-compendium-view button:disabled { cursor: default; opacity: .48; }
+#desktop-root .desktop-compendium-view :is(button, summary, input, select, textarea):focus-visible {
+    outline: 2px solid var(--compendium-accent); outline-offset: 3px;
+}
+#desktop-root .desktop-compendium-view :is(button, summary) { -webkit-tap-highlight-color: transparent; }
+#desktop-root .desktop-compendium-view button:not(:disabled):active { transform: translateY(1px); }
+#desktop-root .desktop-compendium-sidebar {
+    display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 0;
+    padding: 26px 15px 13px; min-width: 0; min-height: 0;
+    background: var(--compendium-directory); border: 0; border-right: 1px solid var(--compendium-line);
+}
+#desktop-root .desktop-compendium-sidebar-head { display: block; padding: 0 9px; }
+#desktop-root .desktop-compendium-sidebar > .desktop-compendium-sidebar-head { grid-row: 1; }
+#desktop-root .desktop-compendium-sidebar > .desktop-compendium-tools { grid-row: 2; }
+#desktop-root .desktop-compendium-sidebar > .desktop-compendium-list { grid-row: 3; }
+#desktop-root .desktop-compendium-sidebar > .compendium-directory-footer { grid-row: 4; }
+#desktop-root .compendium-eyebrow { margin: 0 0 10px; color: var(--compendium-muted); font-size: 10px; letter-spacing: .18em; }
+#desktop-root .compendium-directory-heading { display: flex; justify-content: space-between; align-items: center; }
+#desktop-root .compendium-directory-heading h2 { margin: 0; font-size: 25px; font-weight: 600; letter-spacing: .04em; }
+#desktop-root .compendium-new-button {
+    display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--compendium-line);
+    border-radius: 8px; background: var(--compendium-panel); color: var(--compendium-accent); font-size: 23px; line-height: 1;
+    transition: background 130ms ease, border-color 130ms ease;
+}
+#desktop-root .compendium-new-button:hover { border-color: var(--compendium-accent); background: var(--compendium-accent-soft); }
+#desktop-root .desktop-compendium-sidebar-head .compendium-project-name {
+    margin: 10px 0 22px; font-size: 12px; font-weight: 400; color: var(--compendium-muted); line-height: 1.7;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#desktop-root .desktop-compendium-tools { display: grid; gap: 12px; padding: 0 4px 4px; border: 0; border-radius: 0; background: transparent; }
+#desktop-root .compendium-search-wrap {
+    display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 9px;
+    border: 1px solid var(--compendium-line); border-radius: 7px; background: var(--compendium-panel);
+    transition: border-color 130ms ease, box-shadow 130ms ease;
+}
+#desktop-root .compendium-search-wrap:focus-within { border-color: var(--compendium-accent); box-shadow: 0 0 0 2px var(--compendium-accent-soft); }
+#desktop-root .compendium-icon { width: 18px; height: 18px; flex-shrink: 0; }
+#desktop-root .compendium-search-wrap .compendium-icon { width: 15px; height: 15px; color: var(--compendium-muted); }
+#desktop-root .compendium-search-wrap input {
+    width: 100%; min-width: 0; padding: 9px 0; border: 0; background: transparent; color: var(--compendium-text); font-size: 11px;
+    box-shadow: none; outline: none;
+}
+#desktop-root .compendium-search-wrap input:focus-visible { outline: none; }
+#desktop-root .compendium-search-wrap input::placeholder { color: var(--compendium-muted); opacity: 1; }
+#desktop-root .compendium-search-wrap kbd { color: var(--compendium-muted); font: 11px inherit; border: 1px solid var(--compendium-line); border-radius: 3px; padding: 0 4px; }
+#desktop-root .compendium-directory-filters { display: flex; gap: 3px; align-items: center; }
+#desktop-root .compendium-directory-filters :is(select, button) {
+    display: block; width: auto; flex-shrink: 0; white-space: nowrap;
+    min-width: 0; min-height: 29px; padding: 4px 5px; border: 0; border-radius: 5px;
+    background: transparent; color: var(--compendium-muted); font-size: 11px; line-height: 1.5;
+}
+#desktop-root .compendium-directory-filters select:first-child { display: block; flex: 1 0 80px; color: var(--compendium-text); }
+#desktop-root .compendium-directory-filters [aria-pressed="true"] { background: var(--compendium-accent-soft); color: var(--compendium-accent); }
+#desktop-root .compendium-directory-filters :is(select,button):hover { background: var(--compendium-hover); }
+#desktop-root .compendium-list-status { display: flex; justify-content: space-between; align-items: center; min-height: 18px; padding: 0 5px; color: var(--compendium-muted); font-size: 10px; }
+#desktop-root .compendium-list-status button { padding: 0; border: 0; background: transparent; color: var(--compendium-accent); font-size: 10px; }
+#desktop-root .desktop-compendium-list { overflow: auto; min-height: 0; padding: 5px 0 20px; scrollbar-width: thin; scrollbar-color: var(--compendium-line) transparent; }
+#desktop-root .compendium-list-group { margin: 11px 0 18px; }
+#desktop-root .compendium-list-group-title { display: flex; gap: 8px; margin: 0 0 7px; padding: 0 10px; color: var(--compendium-muted); font-size: 10px; font-weight: 500; letter-spacing: .12em; }
+#desktop-root .desktop-compendium-item {
+    display: block; width: 100%; margin: 2px 0; padding: 11px 12px; border: 1px solid transparent;
+    border-radius: 7px; background: transparent; color: var(--compendium-text); text-align: left;
+    transition: background 130ms ease, border-color 130ms ease; position: relative;
+}
+#desktop-root .desktop-compendium-item:hover { background: var(--compendium-hover); }
+#desktop-root .desktop-compendium-item.is-active { border-color: transparent; background: var(--compendium-accent-soft); }
+#desktop-root .desktop-compendium-item.is-active::before { content: ""; position: absolute; top: 14px; bottom: 14px; left: 0; width: 3px; border-radius: 0 3px 3px 0; background: var(--compendium-accent); }
+#desktop-root .compendium-item-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#desktop-root .desktop-compendium-item .compendium-item-title { font-size: 14px; font-weight: 550; line-height: 1.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#desktop-root .compendium-item-pin { flex-shrink: 0; color: var(--compendium-accent); font-size: 11px; }
+#desktop-root .compendium-item-summary { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; color: var(--compendium-muted); font-size: 12px; line-height: 1.7; }
+#desktop-root .compendium-item-meta { display: block; margin-top: 5px; color: var(--compendium-muted); font-size: 11px; }
+#desktop-root .compendium-empty { padding: 28px 12px; color: var(--compendium-muted); font-size: 12px; line-height: 1.9; }
+#desktop-root .compendium-directory-footer { display: grid; grid-template-columns: 1fr auto; gap: 7px; align-items: center; padding: 12px 5px 0; border-top: 1px solid var(--compendium-line); }
+#desktop-root .compendium-directory-footer .desktop-compendium-status { grid-column: 1 / -1; margin: 0; color: var(--compendium-muted); font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
+#desktop-root .compendium-quiet-button,
+#desktop-root .compendium-icon-button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 32px;
+    padding: 6px 9px; border: 1px solid transparent; border-radius: 6px;
+    background: transparent; color: var(--compendium-muted); font-size: 12px; line-height: 1.4;
+    transition: color 130ms ease, background 130ms ease;
+}
+#desktop-root .compendium-icon-button { width: 32px; padding: 5px; font-size: 18px; }
+#desktop-root :is(.compendium-quiet-button,.compendium-icon-button):hover,
+#desktop-root .compendium-quiet-button[aria-pressed="true"],
+#desktop-root .compendium-quiet-button[aria-expanded="true"] { color: var(--compendium-accent); background: var(--compendium-accent-soft); }
+#desktop-root .compendium-directory-footer .desktop-compendium-more-menu { top: auto; bottom: calc(100% + 8px); left: 0; right: auto; padding: 5px; background: var(--compendium-panel); border-color: var(--compendium-line); box-shadow: var(--compendium-shadow); }
+#desktop-root .desktop-compendium-editor { position: relative; height: 100%; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 0; overflow: hidden; background: var(--compendium-panel); box-shadow: none; }
+#desktop-root .desktop-compendium-editor > form { display: grid; grid-template-rows: 56px minmax(0, 1fr); gap: 0; height: 100%; min-height: 0; min-width: 0; padding: 0; margin: 0; }
+#desktop-root .compendium-editor-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 25px 10px 19px; border-bottom: 1px solid var(--compendium-line); }
+#desktop-root :is(.compendium-toolbar-start,.compendium-toolbar-end) { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#desktop-root .compendium-toolbar-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--compendium-muted); font-size: 12px; }
+#desktop-root .desktop-compendium-save-status { margin: 0; font-size: 11px; line-height: 1.4; color: var(--compendium-muted); white-space: nowrap; }
+#desktop-root .desktop-compendium-save-status[data-tone="warn"] { color: var(--compendium-accent); }
+#desktop-root .desktop-compendium-save-status[data-tone="error"] { color: #a84435; }
+#desktop-root[data-compendium-appearance="ink"] .desktop-compendium-save-status[data-tone="error"] { color: #efaa9b; }
+#desktop-root .compendium-save-button { min-height: 31px; padding: 5px 18px; border: 1px solid var(--compendium-accent); border-radius: 6px; background: var(--compendium-accent); color: var(--compendium-panel); font-size: 12px; font-weight: 500; }
+#desktop-root .compendium-save-button:disabled { opacity: .5; }
+#desktop-root .compendium-entry-actions { position: relative; border: 0; padding: 0; margin: 0; }
+#desktop-root .compendium-entry-actions > summary { list-style: none; cursor: pointer; letter-spacing: .1em; }
+#desktop-root .compendium-entry-actions > summary::-webkit-details-marker { display: none; }
+#desktop-root .compendium-entry-menu { position: absolute; top: 40px; right: 0; z-index: 25; display: grid; gap: 3px; width: 178px; padding: 6px; border: 1px solid var(--compendium-line); border-radius: 9px; background: var(--compendium-panel); box-shadow: var(--compendium-shadow); }
+#desktop-root .compendium-entry-menu button { padding: 9px 10px; text-align: left; border: 0; border-radius: 5px; background: transparent; color: var(--compendium-text); font-size: 12px; }
+#desktop-root .compendium-entry-menu button:hover { background: var(--compendium-hover); }
+#desktop-root .compendium-entry-menu hr { width: 100%; margin: 2px 0; border: 0; border-top: 1px solid var(--compendium-line); }
+#desktop-root .compendium-entry-menu .compendium-danger { color: #b06253; }
+#desktop-root .compendium-page-scroll { min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--compendium-line) transparent; }
+#desktop-root .compendium-page { max-width: 760px; width: calc(100% - 112px); margin: 0 auto; padding: 44px 0 46px; }
+#desktop-root .compendium-page-heading { padding-bottom: 27px; border-bottom: 1px solid var(--compendium-line); }
+#desktop-root .compendium-page-kicker { display: flex; align-items: center; gap: 13px; color: var(--compendium-accent); font-size: 11px; letter-spacing: .14em; }
+#desktop-root .compendium-heading-rule { flex: 0 1 40px; height: 1px; background: var(--compendium-line); }
+#desktop-root .compendium-page-kicker button { display: flex; align-items: center; gap: 8px; padding: 3px 0; border: 0; color: var(--compendium-muted); background: transparent; font-size: 10px; letter-spacing: 0; }
+#desktop-root .compendium-page-kicker button:hover { color: var(--compendium-accent); }
+#desktop-root .compendium-title-field, #desktop-root .compendium-summary-field, #desktop-root .compendium-prose-field { display: block; margin: 0; }
+#desktop-root .compendium-title-field { margin: 20px -8px 8px; }
+#desktop-root .compendium-title-field :is(input,textarea),
+#desktop-root .compendium-summary-field textarea,
+#desktop-root .compendium-prose-field textarea,
+#desktop-root .compendium-character-grid textarea {
+    display: block; box-sizing: border-box; width: 100%; max-width: none; border: 1px solid transparent; border-radius: 5px;
+    padding: 5px 7px; color: var(--compendium-text); background: transparent; box-shadow: none; resize: none;
+    overflow: hidden; transition: background 130ms ease, border-color 130ms ease; font-weight: 400;
+}
+#desktop-root .compendium-title-field :is(input,textarea) { min-height: 55px; height: auto; font-family: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "SimSun", serif; font-size: 36px; font-weight: 600; letter-spacing: .045em; line-height: 1.35; }
+#desktop-root .compendium-summary-field { margin: 0 -8px; }
+#desktop-root .compendium-summary-field textarea { min-height: 40px; height: auto; color: var(--compendium-muted); font-size: 16px; line-height: 1.85; }
+#desktop-root .compendium-heading-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 17px; }
+#desktop-root .compendium-meta-chip { padding: 3px 7px; border: 1px solid var(--compendium-line); border-radius: 4px; font-size: 10px; color: var(--compendium-muted); line-height: 1.5; }
+#desktop-root .compendium-prose-section { margin: 27px 0 24px; }
+#desktop-root .compendium-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 15px; margin-bottom: 12px; }
+#desktop-root .compendium-section-heading h3 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .06em; }
+#desktop-root .compendium-section-heading > span { color: var(--compendium-muted); font-size: 11px; }
+#desktop-root .compendium-prose-field { margin: 0 -8px; }
+#desktop-root .compendium-prose-field textarea { height: auto; min-height: 130px; font-size: 16px; line-height: 1.95; letter-spacing: .025em; }
+#desktop-root :is(.compendium-title-field,.compendium-summary-field,.compendium-prose-field,.compendium-character-grid) :is(input,textarea):hover { background: var(--compendium-input); }
+#desktop-root :is(.compendium-title-field,.compendium-summary-field,.compendium-prose-field,.compendium-character-grid) :is(input,textarea):focus {
+    outline: none; background: var(--compendium-input); border-color: var(--compendium-line); border-left-color: var(--compendium-accent);
+}
+#desktop-root .compendium-page textarea::placeholder, #desktop-root .compendium-page input::placeholder { color: var(--compendium-muted); opacity: 1; }
+#desktop-root .compendium-character-section { padding: 23px 0 0; margin: 0; border: 0; border-top: 1px solid var(--compendium-line); border-radius: 0; background: transparent; }
+#desktop-root .compendium-character-section > summary { display: flex; align-items: center; gap: 12px; padding: 0; margin: 0 0 20px; color: var(--compendium-text); font-size: 12px; font-weight: 600; cursor: pointer; list-style: none; }
+#desktop-root .compendium-character-section > summary::after { content: "+"; margin-left: auto; font-size: 17px; font-weight: 400; color: var(--compendium-muted); }
+#desktop-root .compendium-character-section[open] > summary::after { content: "−"; }
+#desktop-root .compendium-character-section > summary::-webkit-details-marker { display: none; }
+#desktop-root .compendium-character-section > summary::before { display: none; }
+#desktop-root .compendium-section-note { color: var(--compendium-muted); font-size: 10px; font-weight: 400; }
+#desktop-root .compendium-character-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px 36px; min-width: 0; padding: 0; margin: 0; border: 0; background: transparent; }
+#desktop-root .compendium-character-grid > label { display: grid; align-content: start; gap: 6px; margin: 0; min-width: 0; }
+#desktop-root .compendium-character-grid > label > span { color: var(--compendium-muted); font-size: 11px; letter-spacing: .04em; }
+#desktop-root .compendium-character-grid textarea { width: calc(100% + 16px); margin-left: -8px; min-height: 35px; height: auto; color: var(--compendium-text); font-size: 14px; line-height: 1.85; }
+#desktop-root .compendium-text-button { padding: 6px 0; margin-top: 17px; border: 0; background: transparent; color: var(--compendium-accent); font-size: 11px; }
+#desktop-root .compendium-text-button:hover { text-decoration: underline; text-underline-offset: 4px; }
+#desktop-root .compendium-page-footer { display: flex; flex-wrap: wrap; gap: 8px 15px; padding-top: 24px; margin-top: 30px; border-top: 1px solid var(--compendium-line); color: var(--compendium-muted); font-size: 11px; }
+#desktop-root .compendium-page-footer > :last-child { margin-left: auto; }
+#desktop-root .desktop-compendium-editor-empty { display: grid; place-items: center; height: 100%; min-height: 0; padding: 40px; background: transparent; }
+#desktop-root .desktop-compendium-empty-content { max-width: 400px; text-align: center; }
+#desktop-root .compendium-empty-kicker { color: var(--compendium-accent); font-size: 11px; letter-spacing: .22em; }
+#desktop-root .desktop-compendium-empty-content h3 { margin: 24px 0 15px; font-family: "Noto Serif CJK SC", "SimSun", serif; font-size: 28px; font-weight: 500; color: var(--compendium-text); }
+#desktop-root .desktop-compendium-empty-content p { margin: 0; font-size: 13px; line-height: 2; color: var(--compendium-muted); }
+#desktop-root .compendium-empty-rule { display: block; width: 36px; height: 1px; background: var(--compendium-accent); margin: 28px auto 0; opacity: .6; }
+#desktop-root .compendium-inspector { position: absolute; top: 56px; bottom: 0; right: 0; z-index: 15; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(340px,92%); min-width: 0; padding: 0; border: 0; border-left: 1px solid var(--compendium-line); background: var(--compendium-panel); box-shadow: -12px 0 36px #1726150c; animation: compendium-inspector-in 180ms ease-out both; }
+#desktop-root .compendium-inspector-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 16px 19px 12px; border-bottom: 1px solid var(--compendium-line); }
+#desktop-root .compendium-inspector-header h3 { margin: 0; font-size: 14px; font-weight: 550; }
+#desktop-root .compendium-inspector-content { padding: 20px; overflow: auto; min-height: 0; scrollbar-width: thin; scrollbar-color: var(--compendium-line) transparent; }
+#desktop-root .compendium-inspector-intro { margin: 0 0 24px; color: var(--compendium-muted); font-size: 11px; line-height: 1.9; }
+#desktop-root .compendium-inspector-section { margin: 0 0 28px; }
+#desktop-root .compendium-inspector-section h4 { margin: 0 0 12px; font-size: 11px; font-weight: 600; color: var(--compendium-text); }
+#desktop-root .compendium-insight-card { display: block; width: 100%; margin: 0 0 9px; padding: 12px; text-align: left; border: 1px solid var(--compendium-line); border-radius: 7px; background: transparent; overflow-wrap: anywhere; }
+#desktop-root button.compendium-insight-card:hover { background: var(--compendium-hover); border-color: var(--compendium-accent); }
+#desktop-root .compendium-insight-title { display: block; margin: 0; color: var(--compendium-text); font-size: 12px; line-height: 1.7; font-weight: 550; }
+#desktop-root .compendium-insight-meta { display: block; margin-top: 4px; color: var(--compendium-accent); font-size: 10px; line-height: 1.6; }
+#desktop-root .compendium-insight-excerpt { display: block; margin: 7px 0 0; color: var(--compendium-muted); font-size: 11px; line-height: 1.9; white-space: pre-wrap; }
+#desktop-root .compendium-insight-empty { margin: 0; color: var(--compendium-muted); font-size: 11px; line-height: 1.9; }
+#desktop-root .compendium-insight-action { margin: 10px 0 0; padding: 5px 7px; border: 1px solid var(--compendium-line); border-radius: 4px; color: var(--compendium-accent); background: transparent; font-size: 11px; }
+#desktop-root .compendium-settings-pane > label, #desktop-root .desktop-compendium-policy > label { display: grid; gap: 8px; margin-bottom: 22px; color: var(--compendium-text); font-size: 12px; }
+#desktop-root .compendium-settings-pane :is(input[type="text"],select) { box-sizing: border-box; width: 100%; min-width: 0; min-height: 36px; padding: 8px 9px; border: 1px solid var(--compendium-line); border-radius: 5px; background: var(--compendium-bg); color: var(--compendium-text); font-size: 12px; }
+#desktop-root .compendium-settings-pane :is(small,.compendium-field-help) { color: var(--compendium-muted); font-size: 10px; line-height: 1.8; }
+#desktop-root .compendium-policy-settings { border-top: 1px solid var(--compendium-line); padding-top: 18px; }
+#desktop-root .compendium-policy-settings > summary { font-size: 12px; cursor: pointer; }
+#desktop-root .desktop-compendium-policy { display: block; margin: 20px 0 0; padding: 0; border: 0; background: transparent; }
+#desktop-root .desktop-compendium-triggers { display: grid; gap: 12px; padding: 8px 0; }
+#desktop-root .desktop-compendium-triggers > label { display: flex; align-items: center; gap: 8px; color: var(--compendium-text); font-size: 12px; }
+#desktop-root .desktop-compendium-triggers input { accent-color: var(--compendium-accent); width: 14px; height: 14px; margin: 0; }
+#desktop-root .compendium-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+#desktop-root[data-view="compendium"] .desktop-compendium-view.is-active[data-directory-collapsed="true"] { grid-template-columns: 0 minmax(0, 1fr); }
+#desktop-root .desktop-compendium-view[data-directory-collapsed="true"] .desktop-compendium-sidebar { visibility: hidden; overflow: hidden; padding-left: 0; padding-right: 0; border: 0; }
+@keyframes compendium-inspector-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+@media (min-width: 1100px) {
+    #desktop-root .desktop-compendium-view[data-inspector-open="true"] .compendium-page-scroll { padding-right: 340px; }
+    #desktop-root .desktop-compendium-view[data-inspector-open="true"] .compendium-page { width: calc(100% - 72px); }
+}
+@media (min-width: 1700px) { #desktop-root[data-view="compendium"] .desktop-compendium-view.is-active { grid-template-columns: 288px minmax(0,1fr); } #desktop-root .compendium-page { padding-top: 56px; } }
+@media (max-width: 1120px) {
+    #desktop-root[data-view="compendium"] .desktop-compendium-view.is-active { grid-template-columns: 238px minmax(0,1fr); }
+    #desktop-root .compendium-page { width: calc(100% - 64px); padding-top: 32px; }
+    #desktop-root .compendium-editor-toolbar { padding-right: 15px; padding-left: 10px; }
+    #desktop-root .compendium-toolbar-name { max-width: 110px; }
+    #desktop-root .compendium-toolbar-end { gap: 3px; }
+}
+@media (max-width: 860px) {
+    #desktop-root[data-view="compendium"] .desktop-compendium-view.is-active { grid-template-columns: 216px minmax(0,1fr); }
+    #desktop-root .desktop-compendium-sidebar { padding-left: 10px; padding-right: 10px; }
+    #desktop-root .compendium-directory-filters :is(select,button) { padding-left: 2px; padding-right: 2px; }
+    #desktop-root .compendium-toolbar-name { display: none; }
+    #desktop-root .compendium-page { width: calc(100% - 44px); }
+    #desktop-root .compendium-character-grid { grid-template-columns: minmax(0,1fr); gap: 17px; }
+    #desktop-root .compendium-title-field :is(input,textarea) { font-size: 29px; }
+    #desktop-root .compendium-section-heading > span { display: none; }
+    #desktop-root .compendium-page-footer > :last-child { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    #desktop-root .desktop-compendium-view *, #desktop-root .desktop-compendium-view *::before,
+    #desktop-root .desktop-compendium-view *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

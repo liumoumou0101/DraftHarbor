@@ -346,6 +346,10 @@
                 beat: nativeEditorState.generation.beat,
                 selection: {
                     currentSceneId: scene.id,
+                    povCharacter: scene.povCharacter || scene.pov,
+                    sceneCharacters: scene.characters || scene.participants,
+                    compendiumIds: nativeEditorState.context.compendiumIds,
+                    compendiumTags: nativeEditorState.context.compendiumTags,
                     recentSceneLimit: 6,
                     maxChars: 6000
                 }

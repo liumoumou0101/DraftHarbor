@@ -95,7 +95,13 @@
             });
             if (!currentCompendiumDraw(requestId)) return;
             if (!result.ok) throw new Error(result.error?.message || '抽取失败');
-            const draft = { ...(result.output[0] || {}), ...locked };
+            const generated = Array.isArray(result.output) ? result.output[0] : null;
+            if (!generated || typeof generated !== 'object' || Array.isArray(generated)) throw new Error('AI 未返回有效的资料卡草稿，请重试。');
+            const generatedProfile = generated.characterProfile && typeof generated.characterProfile === 'object' && !Array.isArray(generated.characterProfile) ? generated.characterProfile : {};
+            if (![generated.title, generated.summary, generated.body, generated.content, ...Object.values(generatedProfile)].some(value => typeof value === 'string' && value.trim())) {
+                throw new Error('AI 未返回有效的资料卡草稿，请重试。');
+            }
+            const draft = { ...generated, ...locked };
             if (elements.type && draft.type) { elements.type.value = draft.type; syncDrawTypeChips(draft.type); }
             if (elements.title) elements.title.value = draft.title || '';
             if (elements.tags) elements.tags.value = Array.isArray(draft.tags) ? draft.tags.join(', ') : '';

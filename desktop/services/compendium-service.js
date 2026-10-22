@@ -18,6 +18,7 @@ function filterEntries(entries, options = {}) {
       entry.summary,
       entry.body,
       entry.category,
+      ...CompendiumSchema.characterProfileLines(entry),
       ...(entry.tags || []),
       ...(entry.aliases || [])
     ].join('\n').toLowerCase();

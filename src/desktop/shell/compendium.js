@@ -64,6 +64,7 @@
         compendiumEditorSession.error = '';
         compendiumState.dirty = true;
         renderCompendiumSaveStatus();
+        if (typeof window.compendiumWorkspaceDraftChanged === 'function') window.compendiumWorkspaceDraftChanged();
     }
 
     function renderCompendiumSaveStatus() {
@@ -73,6 +74,7 @@
         const disabled = !selected || saving || !!matchesCurrentCompendiumDraft(compendiumEditorSession.deleting);
         if (save) save.disabled = disabled;
         if (deleteButton) deleteButton.disabled = disabled;
+        if (typeof window.refreshCompendiumWorkspaceSaveStatus === 'function') window.refreshCompendiumWorkspaceSaveStatus();
         if (!saveStatus) return;
         if (!selected) {
             saveStatus.textContent = '';
@@ -246,7 +248,9 @@
             setCompendiumStatus('未打开项目', 'info');
             return;
         }
-        setCompendiumStatus(`${filteredCompendiumEntries().length} / ${compendiumState.entries.length} 条资料`, 'ok');
+        const filtered = filteredCompendiumEntries();
+        const count = typeof window.compendiumWorkspaceFilteredCount === 'function' ? window.compendiumWorkspaceFilteredCount(filtered) : filtered.length;
+        setCompendiumStatus(`${count} / ${compendiumState.entries.length} 条资料`, 'ok');
     }
 
     function parseCommaList(value) {
@@ -270,6 +274,7 @@
                 entry.summary,
                 entry.body,
                 entry.category,
+                ...(window.DraftHarborCompendiumSchema?.characterProfileLines(entry) || []),
                 ...(entry.tags || []),
                 ...(entry.aliases || [])
             ].join('\n').toLowerCase();
@@ -327,6 +332,7 @@
     }
 
     function renderCompendium() {
+        if (typeof window.syncCompendiumWorkspaceProject === 'function') window.syncCompendiumWorkspaceProject();
         const identityChanged = syncCompendiumDraftIdentity();
         const elements = compendiumElements();
         const projectId = currentProjectId();
@@ -364,7 +370,7 @@
         const compendiumTools = document.querySelector('.desktop-compendium-tools');
         if (compendiumTools) compendiumTools.hidden = !hasProject;
 
-        if (elements.list) {
+        if (elements.list && !(typeof window.renderCompendiumWorkspaceList === 'function' && window.renderCompendiumWorkspaceList(filteredCompendiumEntries()))) {
             elements.list.replaceChildren();
             const entries = filteredCompendiumEntries();
             if (!hasProject) {
@@ -464,7 +470,7 @@
             if (elements.triggerTags) elements.triggerTags.checked = triggers.tags !== false;
             if (elements.triggerPov) elements.triggerPov.checked = triggers.pov !== false;
             if (elements.triggerSceneCharacters) elements.triggerSceneCharacters.checked = triggers.sceneCharacters !== false;
-            if (elements.characterDetails) elements.characterDetails.open = isCharacter && characterProfileHasContent(characterProfile);
+            if (elements.characterDetails && identityChanged) elements.characterDetails.open = !!isCharacter;
             if (elements.characterRole) elements.characterRole.value = characterProfile.role || '';
             if (elements.characterGoal) elements.characterGoal.value = characterProfile.goal || '';
             if (elements.characterMotivation) elements.characterMotivation.value = characterProfile.motivation || '';
@@ -486,7 +492,9 @@
             });
         }
         renderCompendiumSaveStatus();
+        if (typeof window.renderCompendiumWorkspace === 'function') window.renderCompendiumWorkspace({ identityChanged });
         renderContextStrip();
+        if (typeof window.refreshCompendiumPeek === 'function') window.refreshCompendiumPeek();
     }
 
     async function loadCompendium() {
@@ -525,7 +533,9 @@
                 compendiumEditorSession.error = '该资料已在磁盘删除，当前草稿仍保留。请另存或核对来源。';
             }
             if (!compendiumState.entries.some((entry) => entry.id === compendiumState.selectedId)) {
-                compendiumState.selectedId = compendiumState.entries[0] ? compendiumState.entries[0].id : '';
+                const preferred = typeof window.preferredCompendiumWorkspaceEntryId === 'function'
+                    ? window.preferredCompendiumWorkspaceEntryId(compendiumState.entries) : '';
+                compendiumState.selectedId = preferred || (compendiumState.entries[0] ? compendiumState.entries[0].id : '');
                 compendiumState.dirty = false;
             }
         } catch (error) {
@@ -772,7 +782,9 @@
                     elements.characterDetails.hidden = !isCharacter;
                     if (isCharacter) elements.characterDetails.open = true;
                 }
+                if (typeof window.compendiumWorkspaceDraftChanged === 'function') window.compendiumWorkspaceDraftChanged();
             });
         }
+        if (typeof window.bindCompendiumWorkspace === 'function') window.bindCompendiumWorkspace();
         renderCompendium();
     }

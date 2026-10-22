@@ -766,7 +766,9 @@
             task: 'fiction-prose'
         };
         compendiumState.entries = Array.isArray(nativeEditorState.snapshot.compendium) ? nativeEditorState.snapshot.compendium : [];
-        compendiumState.selectedId = compendiumState.entries[0] ? compendiumState.entries[0].id : '';
+        const preferredCompendiumEntry = typeof window.preferredCompendiumWorkspaceEntryId === 'function'
+            ? window.preferredCompendiumWorkspaceEntryId(compendiumState.entries, nativeEditorState.snapshot.project?.id || '') : '';
+        compendiumState.selectedId = preferredCompendiumEntry || (compendiumState.entries[0] ? compendiumState.entries[0].id : '');
         compendiumState.query = '';
         compendiumState.type = '';
         compendiumState.dirty = false;

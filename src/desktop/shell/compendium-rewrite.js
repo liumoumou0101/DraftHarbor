@@ -119,7 +119,16 @@
         setCompendiumRewriteStatus('以当前编辑内容生成建议，确认后与当前草稿一起保存。');
         const patchDetails = document.querySelector('[data-compendium-rewrite-patch]');
         if (patchDetails) patchDetails.open = false;
-        if (elements.modal) { elements.modal.hidden = false; elements.modal.showModal(); }
+        if (elements.modal) {
+            const actions = document.querySelector('.compendium-entry-actions[open]');
+            if (actions) {
+                actions.open = false;
+                // The native dialog returns focus here, rather than to the now-hidden menu action.
+                actions.querySelector('summary')?.focus({ preventScroll: true });
+            }
+            elements.modal.hidden = false;
+            elements.modal.showModal();
+        }
     }
 
     function compendiumRewritePrompt(entry, fields, instruction) {

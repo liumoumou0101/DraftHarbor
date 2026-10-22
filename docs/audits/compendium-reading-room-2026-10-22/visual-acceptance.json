@@ -1,0 +1,113 @@
+{
+  "fixture": "Nine synthetic 无渡 cards; no user project or model provider.",
+  "checks": [
+    "Paper layout at 1280×720, 1440×900 and 1920×1080; title, body opening and save control accessible; original reader dialog hidden.",
+    "Directory collapse releases the full sidebar width at 1024px and 1920px, then restores accessible controls.",
+    "Ink appearance; live scene mentions, historical source excerpts, inspector close and save controls at both desktop sizes.",
+    "Reduced motion is honored by visible compendium controls.",
+    "Real input auto-grows long title and body; Ctrl+S preserves complete saved values; save remains available at the bottom.",
+    "500 entries remain keyboard navigable, End reaches the last entry, and zero-result search can restore the directory.",
+    "Real writer reference button opens the peek; reference state/checkbox stay consistent; Escape preserves editor text, selection and scroll.",
+    "No-project empty state hides the editor/inspector and disables creation.",
+    "No page errors, HTTP requests, real project changes, or provider calls."
+  ],
+  "screenshots": [
+    "01-paper-1440x900.png",
+    "02-paper-1280x720.png",
+    "03-paper-1920x1080.png",
+    "03b-directory-collapsed-1024x720.png",
+    "04-ink-1440x900.png",
+    "05-references-inspector-1440x900.png",
+    "05b-historical-sources-1440x900.png",
+    "06-references-inspector-1280x720.png",
+    "06b-long-title-1280x720.png",
+    "07-long-entry-end-1280x720.png",
+    "08-search-empty-1280x720.png",
+    "09-directory-500-1280x720.png",
+    "10-writer-peek-1440x900.png",
+    "11-no-project-1440x900.png"
+  ],
+  "stylesheets": [
+    "src/styles/desktop/desktop-foundation.css",
+    "src/styles/desktop/workflow-graph.css",
+    "src/styles/desktop/workflow-artifacts.css",
+    "src/styles/desktop/workflow-stream.css",
+    "src/styles/desktop/desktop-components.css",
+    "src/styles/desktop/desktop-workspaces.css",
+    "src/styles/desktop/reader.css",
+    "src/styles/desktop/reader-library.css",
+    "src/styles/desktop/reader-illustrations.css",
+    "src/styles/desktop/reader-hud.css",
+    "src/styles/desktop/reader-appearance.css",
+    "src/styles/desktop/reader-annotations.css",
+    "src/styles/desktop/reader-import.css",
+    "src/styles/desktop/reader-writer-transfer.css",
+    "src/styles/desktop/reader-compendium-transfer.css",
+    "src/styles/desktop/reader-workflow-transfer.css",
+    "src/styles/desktop/desktop-polish.css",
+    "src/styles/desktop/desktop-release.css",
+    "src/styles/desktop/desktop-finishing.css",
+    "src/styles/desktop/desktop-writer-chrome.css",
+    "src/styles/desktop/desktop-compendium-chrome.css",
+    "src/styles/desktop/desktop-workshop-chrome.css",
+    "src/styles/desktop/desktop-workshop-agent.css",
+    "src/styles/desktop/desktop-recovery-chrome.css",
+    "src/styles/desktop/desktop-settings-chrome.css",
+    "src/styles/desktop/desktop-writer-reasoning.css",
+    "src/styles/desktop/desktop-writer-tools.css",
+    "src/styles/desktop/compendium-reading-room.css",
+    "src/styles/desktop/desktop-compendium-peek.css"
+  ],
+  "contrast": {
+    "paper": [
+      {
+        "selector": "compendium-item-summary",
+        "color": "rgb(94, 105, 92)",
+        "background": "rgb(228, 234, 220)",
+        "contrast": 4.683888881653672
+      },
+      {
+        "selector": "compendium-item-meta",
+        "color": "rgb(94, 105, 92)",
+        "background": "rgb(228, 234, 220)",
+        "contrast": 4.683888881653672
+      },
+      {
+        "selector": "compendium-project-name",
+        "color": "rgb(94, 105, 92)",
+        "background": "rgb(239, 239, 232)",
+        "contrast": 4.979853653874637
+      }
+    ],
+    "ink": [
+      {
+        "selector": "compendium-item-summary",
+        "color": "rgb(174, 186, 168)",
+        "background": "rgb(57, 71, 51)",
+        "contrast": 4.8932569640464925
+      },
+      {
+        "selector": "compendium-item-meta",
+        "color": "rgb(174, 186, 168)",
+        "background": "rgb(57, 71, 51)",
+        "contrast": 4.8932569640464925
+      },
+      {
+        "selector": "compendium-project-name",
+        "color": "rgb(174, 186, 168)",
+        "background": "rgb(29, 36, 29)",
+        "contrast": 7.856354174029268
+      }
+    ]
+  },
+  "appearanceColors": {
+    "paper": {
+      "background": "rgb(252, 251, 247)",
+      "text": "rgb(48, 59, 50)"
+    },
+    "ink": {
+      "background": "rgb(37, 44, 36)",
+      "text": "rgb(227, 231, 220)"
+    }
+  }
+}

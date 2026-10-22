@@ -9,7 +9,7 @@ const dialogs = {
   rewrite: { modal: '[data-compendium-rewrite-modal]', generate: '[data-compendium-rewrite-generate]',
     status: '[data-compendium-rewrite-status]', output: '[data-compendium-rewrite-preview]',
     generateFunction: 'generateCompendiumRewrite', saveFunction: 'applyCompendiumRewrite',
-    save: '[data-compendium-rewrite-apply]', trigger: '[data-compendium-ai-rewrite]' },
+    save: '[data-compendium-rewrite-apply]', trigger: '[data-compendium-ai-rewrite]', returnTrigger: '.compendium-entry-actions > summary' },
   extract: { modal: '[data-native-extract-modal]', generate: '[data-native-extract-generate]',
     status: '[data-native-extract-status]', output: '[data-native-extract-title]',
     generateFunction: 'generateNativeCompendiumDraft', saveFunction: 'saveNativeCompendiumDraft',
@@ -82,11 +82,16 @@ async function prepare(page, fragments, sources) {
 }
 
 async function open(page, name) {
-  if (name === 'draw') {
+  if (name === 'rewrite') {
+    const menu = page.locator('.compendium-entry-actions');
+    if (!await menu.evaluate(details => details.open)) await menu.locator('summary').click();
+    await page.click(dialogs.rewrite.trigger);
+  } else if (name === 'draw') {
     if (await page.locator('[data-compendium-more-menu]').isHidden()) await page.click('[data-compendium-more]');
     await page.click('[data-compendium-draw]');
   } else await page.click(dialogs[name].trigger);
   await page.waitForFunction(selector => document.querySelector(selector).open, dialogs[name].modal);
+  if (name === 'rewrite') assert.strictEqual(await page.locator('.compendium-entry-actions').evaluate(details => details.open), false, 'opening rewrite must close its action menu');
 }
 
 async function complete(page, name, index, value = 'Current result') {
@@ -98,6 +103,39 @@ async function complete(page, name, index, value = 'Current result') {
 }
 
 const cases = [
+  ['extracted aliases can be reviewed, edited, and saved with the card', async page => {
+    await open(page, 'extract');
+    await page.click(dialogs.extract.generate);
+    await page.evaluate(() => window.calls[0].finish([{ type: 'character', title: 'Captain A', aliases: ['Captain', 'Old Salt'], body: 'Extracted evidence.' }]));
+    await page.waitForFunction(() => !document.querySelector('[data-native-extract-generate]').disabled);
+    assert.strictEqual(await page.locator('[data-native-extract-aliases]').count(), 1, 'extracted aliases need a reviewable field');
+    assert.strictEqual(await page.inputValue('[data-native-extract-aliases]'), 'Captain, Old Salt');
+    await page.fill('[data-native-extract-aliases]', 'Captain, Revised alias');
+    await page.click(dialogs.extract.save);
+    assert.deepStrictEqual(await page.evaluate(() => window.writes[0].body.entry.aliases), ['Captain', 'Revised alias']);
+    await page.evaluate(() => window.writes[0].finish());
+    await page.waitForFunction(() => !document.querySelector('[data-native-extract-modal]').open);
+    await open(page, 'extract');
+    assert.strictEqual(await page.inputValue('[data-native-extract-aliases]'), '', 'a new extraction must clear the previous aliases');
+  }],
+  ['a sixth reference selection preserves the five cards already chosen', async page => {
+    await page.evaluate(() => {
+      for (const id of ['c', 'd', 'e', 'f']) compendiumState.entries.push({ id, type: 'lore', title: `Reference ${id}`, body: `Evidence ${id}` });
+    });
+    await open(page, 'draw');
+    const references = page.locator('[data-compendium-draw-reference-list]');
+    await references.evaluate(list => { list.closest('details').open = true; });
+    for (const id of ['b', 'c', 'd', 'e', 'f']) await references.locator(`input[value="${id}"]`).check();
+    await references.locator('input[value="a"]').click();
+    assert.deepStrictEqual(await references.locator('input:checked').evaluateAll(inputs => inputs.map(input => input.value)), ['b', 'c', 'd', 'e', 'f']);
+    assert.strictEqual(await page.locator('[data-compendium-draw-reference-count]').textContent(), '已选 5/5 张');
+    await references.locator('input[value="b"]').uncheck();
+    await references.locator('input[value="a"]').check();
+    await page.click(dialogs.draw.generate);
+    const prompt = await page.evaluate(() => window.calls[0].prompt);
+    assert.ok(prompt.includes('"id":"a"'));
+    assert.ok(!prompt.includes('"id":"b"'), 'generation must use the current checked references');
+  }],
   ['rewrite captures unsaved body and summary-only application preserves metadata with CAS', async page => {
     await page.fill('[data-compendium-body]', 'Visible unsaved manuscript facts.');
     await open(page, 'rewrite');
@@ -153,6 +191,30 @@ const cases = [
     }
   }]
 ];
+
+for (const name of ['extract', 'draw']) {
+  cases.push([`${name}: invalid card output preserves the edited draft and reports failure`, async page => {
+    const config = dialogs[name];
+    const prefix = name === 'extract' ? 'native-extract' : 'compendium-draw';
+    await open(page, name);
+    await page.click(config.generate);
+    await complete(page, name, 0, 'Original draft');
+    await page.fill(`[data-${prefix}-title]`, 'Reviewed title');
+    await page.fill(`[data-${prefix}-summary]`, 'Reviewed summary.');
+    await page.fill(`[data-${prefix}-body]`, 'Reviewed body must survive.');
+    await page.fill(`[data-${prefix}-character-goal]`, 'Reviewed goal.');
+    const before = await page.locator(config.modal).locator('input, textarea, select').evaluateAll(fields => fields.map(field => ({ value: field.value, checked: field.checked })));
+    const invalidOutputs = [[], [null], [[]], ['not a card'], [{}], [{ type: 'character', title: '  ', body: '' }]];
+    for (const [index, output] of invalidOutputs.entries()) {
+      await page.click(config.generate);
+      await page.evaluate(({ position, value }) => window.calls[position].finish(value), { position: index + 1, value: output });
+      await page.waitForFunction(selector => !document.querySelector(selector).disabled, config.generate);
+      assert.deepStrictEqual(await page.locator(config.modal).locator('input, textarea, select').evaluateAll(fields => fields.map(field => ({ value: field.value, checked: field.checked }))), before, 'invalid output must not erase the reviewed draft');
+      assert.strictEqual(await page.locator(config.status).getAttribute('data-tone'), 'error');
+      assert.strictEqual(await page.isDisabled(config.save), false, 'the previous draft must remain saveable');
+    }
+  }]);
+}
 
 for (const name of Object.keys(dialogs)) {
   const config = dialogs[name];
@@ -225,7 +287,7 @@ for (const name of Object.keys(dialogs)) {
     }
     await page.keyboard.press('Escape');
     await page.waitForFunction(selector => !document.querySelector(selector).open, config.modal);
-    assert.strictEqual(await page.locator(config.trigger).evaluate(trigger => document.activeElement === trigger), true);
+    assert.strictEqual(await page.locator(config.returnTrigger || config.trigger).evaluate(trigger => document.activeElement === trigger), true);
   }]);
 }
 

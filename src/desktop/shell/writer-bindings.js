@@ -1,3 +1,4 @@
+    /* global compendiumEditorSession compendiumRewriteState compendiumExtractionState compendiumDrawState compendiumAgentState renderNativeContextSummary */
     function nativeWriterShortcutsAvailable(event) {
         const root = document.getElementById('desktop-root');
         return !!(root && root.dataset.view === 'writer'
@@ -402,6 +403,7 @@
                 nativeEditorState.generation.beat = elements.beatInput.value;
                 if (typeof autosizeNativeBeatInput === 'function') autosizeNativeBeatInput();
                 renderNativeGeneration();
+                renderNativeContextSummary();
             });
             elements.beatInput.addEventListener('focus', () => {
                 if (typeof syncNativeComposerExpansion === 'function') syncNativeComposerExpansion(true);
@@ -771,7 +773,14 @@
             }
         });
         window.addEventListener('beforeunload', (event) => {
-            if (!nativeEditorState.dirty) return;
+            const compendiumDirty = typeof compendiumState !== 'undefined' && compendiumState.dirty;
+            const compendiumWriting = (typeof compendiumEditorSession !== 'undefined'
+                && (compendiumEditorSession.saves.size || compendiumEditorSession.creating || compendiumEditorSession.deleting))
+                || (typeof compendiumRewriteState !== 'undefined' && compendiumRewriteState.saving)
+                || (typeof compendiumExtractionState !== 'undefined' && compendiumExtractionState.saving)
+                || (typeof compendiumDrawState !== 'undefined' && compendiumDrawState.saving)
+                || (typeof compendiumAgentState !== 'undefined' && compendiumAgentState.applying);
+            if (!nativeEditorState.dirty && !nativeEditorState.isSaving && !compendiumDirty && !compendiumWriting) return;
             event.preventDefault();
             event.returnValue = '';
         });

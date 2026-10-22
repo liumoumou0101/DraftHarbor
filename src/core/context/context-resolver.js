@@ -1,10 +1,10 @@
 (function (root, factory) {
     if (typeof module === 'object' && module.exports) {
-        module.exports = factory();
+        module.exports = factory(require('../knowledge/compendium-schema'));
     } else {
-        root.DraftHarborContextResolver = factory();
+        root.DraftHarborContextResolver = factory(root.DraftHarborCompendiumSchema);
     }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (CompendiumSchema) {
     function cleanString(value) {
         return String(value || '').trim();
     }
@@ -68,6 +68,7 @@
     function sceneSummary(scene, content = '') {
         return {
             id: scene.id,
+            chapterId: scene.chapterId,
             title: scene.title || '未命名场景',
             summary: (!scene.summaryStale && scene.summary) || String(content || '').slice(0, 500)
         };
@@ -120,30 +121,55 @@
 
     function applyBudget(context, maxChars) {
         if (!Number.isFinite(Number(maxChars)) || Number(maxChars) <= 0) return context;
-        let remaining = Number(maxChars);
-        const compendiumEntries = [];
-        for (const entry of context.compendiumEntries) {
-            const cost = textLength(entry.title) + textLength(entry.summary) + textLength(entry.body);
-            if (cost > remaining && compendiumEntries.length) continue;
-            compendiumEntries.push(entry);
+        const reasons = context.includedEntryReasons || {};
+        const selected = context.selected || {};
+        const entries = context.compendiumEntries || [];
+        const summaries = context.sceneSummaries || [];
+        const entryCost = (entry) => textLength(entry.title) + textLength(entry.summary)
+            + textLength(entry.body || entry.content || entry.description)
+            + CompendiumSchema.characterProfileLines(entry).join('\n').length;
+        const sceneCost = (scene) => textLength(scene.title) + textLength(scene.summary);
+        // This is a soft content budget: always/manual cards and explicit scene
+        // references survive in full, even above the cap. Reserve them first.
+        const forced = (entry) => getPolicy(entry) === 'always'
+            || (selected.compendiumIds || []).includes(entry.id)
+            || (entry.tags || []).some((tag) => (selected.compendiumTags || []).includes(tag))
+            || (reasons[entry.id] || []).some((reason) => ['always', 'manual', 'tag'].includes(reason));
+        const includedIds = new Set(entries.filter(forced).map((entry) => entry.id));
+        const includedScenes = new Set(summaries.filter((scene) =>
+            (selected.sceneIds || []).includes(scene.id)
+            || (selected.chapterIds || []).includes(scene.chapterId)));
+        let remaining = Number(maxChars) - textLength(context.manualText)
+            - entries.filter((entry) => includedIds.has(entry.id)).reduce((total, entry) => total + entryCost(entry), 0)
+            - [...includedScenes].reduce((total, scene) => total + sceneCost(scene), 0);
+        for (const entry of entries) {
+            if (includedIds.has(entry.id)) continue;
+            const cost = entryCost(entry);
+            if (cost > remaining) continue;
+            includedIds.add(entry.id);
             remaining -= cost;
-            if (remaining <= 0) break;
         }
-        const sceneSummaries = [];
-        for (const scene of context.sceneSummaries) {
-            const cost = textLength(scene.title) + textLength(scene.summary);
-            if (cost > remaining && sceneSummaries.length) continue;
-            sceneSummaries.push(scene);
+        const compendiumEntries = entries.filter((entry) => includedIds.has(entry.id));
+        for (const scene of summaries) {
+            if (includedScenes.has(scene)) continue;
+            const cost = sceneCost(scene);
+            if (cost > remaining) continue;
+            includedScenes.add(scene);
             remaining -= cost;
-            if (remaining <= 0) break;
         }
+        const sceneSummaries = summaries.filter((scene) => includedScenes.has(scene));
         return {
             ...context,
             compendiumEntries,
             sceneSummaries,
+            includedEntryReasons: Object.fromEntries(compendiumEntries
+                .filter((entry) => reasons[entry.id])
+                .map((entry) => [entry.id, reasons[entry.id]])),
             budget: {
                 maxChars: Number(maxChars),
-                remaining: Math.max(0, remaining)
+                remaining: Math.max(0, remaining),
+                usedChars: Number(maxChars) - remaining,
+                overBudgetChars: Math.max(0, -remaining)
             }
         };
     }
@@ -154,14 +180,18 @@
         const beat = input.beat || '';
         const currentSceneId = cleanString(selection.currentSceneId || input.currentSceneId || project.currentSceneId);
         const maxChars = selection.maxChars || input.maxChars || 5000;
-        const povCharacter = cleanString(selection.povCharacter || input.povCharacter || '');
-        const sceneCharacters = Array.isArray(selection.sceneCharacters || input.sceneCharacters)
-            ? (selection.sceneCharacters || input.sceneCharacters)
-            : (typeof (selection.sceneCharacters || input.sceneCharacters) === 'string'
-                ? String(selection.sceneCharacters || input.sceneCharacters).split(',').map((s) => s.trim()).filter(Boolean)
+        const scenes = Array.isArray(project.scenes) ? project.scenes : [];
+        const currentSceneObj = scenes.find((scene) => scene.id === currentSceneId);
+        const povCharacter = cleanString(selection.povCharacter || input.povCharacter
+            || currentSceneObj && (currentSceneObj.povCharacter || currentSceneObj.pov) || '');
+        const rawSceneCharacters = selection.sceneCharacters || input.sceneCharacters
+            || currentSceneObj && (currentSceneObj.characters || currentSceneObj.participants);
+        const sceneCharacters = Array.isArray(rawSceneCharacters)
+            ? rawSceneCharacters
+            : (typeof rawSceneCharacters === 'string'
+                ? rawSceneCharacters.split(',').map((s) => s.trim()).filter(Boolean)
                 : []);
         const compendium = Array.isArray(project.compendium) ? project.compendium : [];
-        const scenes = Array.isArray(project.scenes) ? project.scenes : [];
         const sceneContents = project.sceneContents && typeof project.sceneContents === 'object' ? project.sceneContents : {};
         const context = {
             compendiumEntries: [],
@@ -176,7 +206,6 @@
             }
         };
 
-        const currentSceneObj = scenes.find((scene) => scene.id === currentSceneId);
         const currentSceneContent = (currentSceneObj && currentSceneObj.content) || sceneContents[currentSceneId] || '';
         const mentionText = [beat, currentSceneContent].filter(Boolean).join('\n\n');
 
