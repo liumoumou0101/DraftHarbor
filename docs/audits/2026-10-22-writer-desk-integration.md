@@ -33,11 +33,11 @@
 
 - 启动脚本：`H:\soft\DraftHarbor\启动新版稿湾.cmd`
 - 新程序：`H:\soft\DraftHarbor\release\writer-desk-20261022\win-unpacked\DraftHarbor.exe`
-- 数据位置仍为 `%APPDATA%\draftharbor-desktop`。
+- 后续入口排查已将作品数据根修正为 `H:\soft\DraftHarbor`，与原 `start.bat` 一致；浏览器配置仍使用 `%APPDATA%\draftharbor-desktop`。详见 [启动入口与数据目录修复](2026-10-22-writer-entry-data-root.md)。
 - 旧目录保留：`H:\soft\DraftHarbor\release\merged-20261022\win-unpacked`。
 - 备份：`H:\soft\DraftHarbor\.ai_state\backups\writer-integration-2026-10-22T14-58-23-328Z`，含 Git bundle、原启动脚本、原未跟踪文件及原项目/配置备份。
 
-需要回退时，先退出稿湾，再将上述备份内的 `launcher-before.cmd` 复制覆盖项目根目录的 `启动新版稿湾.cmd`，便会重新启动旧包。这个操作只切换程序；通常无需覆盖作品数据。原 17 个未跟踪文件保留，未推送远程。
+需要回退界面时，先退出稿湾，将当前 `启动新版稿湾.cmd` 中的程序目录 `writer-desk-20261022` 改为 `merged-20261022`，保留当前作品数据根与浏览器配置目录。原 17 个未跟踪文件保留，未推送远程。
 
 ## 验收证据
 
