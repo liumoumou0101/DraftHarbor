@@ -35,3 +35,5 @@
 原程序 `release/preview-fit-20261007/win-unpacked/DraftHarbor.exe` 保留。将备份中的 `launcher-before.cmd` 复制回根目录作为 `启动新版稿湾.cmd` 即可恢复旧启动入口。代码回退点为 `codex/backup-before-github-merge-20261022-210130`；恢复个人数据前应先保存恢复时的最新资料。
 
 验证日志保存在备份目录的 `verification/` 中。
+
+本地主目录 `main` 已快进到验证过的集成分支。合并后再次逐文件核对：17 个原未跟踪文件、232 个 profile 文件及 1,251 个仓库数据文件全部保持原哈希。原 reader-polish 工作树未修改。
