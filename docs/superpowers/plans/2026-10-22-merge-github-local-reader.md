@@ -23,7 +23,7 @@
 
 - [x] Back up all Git refs, uncommitted files in both workspaces, launcher, and user profile; verify hashes and bundle.
 - [x] Merge the remote branch, resolve the two known conflicts, verify reader preservation, and run the complete `npm test` suite.
-- [ ] Review integration, build to a new release directory, compare packaged source, and run packaged Electron smoke with isolated data.
+- [x] Review integration, build to a new release directory, compare packaged source, and run packaged Electron smoke with isolated data.
 - [ ] Update the launcher to the verified package, record results and rollback, commit and fast-forward local main; verify original untracked files remain intact.
 
 ## Commands and expected evidence

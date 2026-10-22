@@ -1,7 +1,7 @@
 @echo off
 setlocal
 set "DRAFTHARBOR_DATA_ROOT=%APPDATA%\draftharbor-desktop"
-set "DRAFTHARBOR_PROGRAM=%~dp0release\preview-fit-20261007\win-unpacked\DraftHarbor.exe"
+set "DRAFTHARBOR_PROGRAM=%~dp0release\merged-20261022\win-unpacked\DraftHarbor.exe"
 
 if not exist "%DRAFTHARBOR_PROGRAM%" (
     echo [ERROR] The latest DraftHarbor build was not found.
